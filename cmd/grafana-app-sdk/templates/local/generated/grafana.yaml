@@ -4,7 +4,23 @@ metadata:
   name: grafana
   namespace: default
 ---
-{{ range $.CRDs }}apiVersion: rbac.authorization.k8s.io/v1
+{{ if .ProxyClientCert.Enabled }}apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: grafana-local-dev-all-access
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: system:authenticated
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: system:unauthenticated
+---
+{{ end }}{{ range $.CRDs }}apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: grafana:{{.MachineName}}-user-rolebinding
@@ -18,8 +34,7 @@ subjects:
     name: grafana
     namespace: default
 ---
-{{end}}
-apiVersion: v1
+{{end}}{{ if not .DisableGrafanaPluginMount }}apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{.PluginIDKube}}-provisioning
@@ -38,7 +53,22 @@ data:
           {{ $key }}: {{ $value }}{{end}}
         secureJsonData:{{ range $key, $value := .SecureJSONData }}
           {{ $key }}: {{ $value }}{{end}}
-{{ if .GenerateGrafanaDeployment }}
+{{ end }}{{ if .GenerateGrafanaDeployment }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-apiserver-provisioning
+  namespace: default
+  labels:
+    name: grafana
+data:
+  apiservices.yaml: |
+    {{ range $group, $versions := $.APIGroups }}{{range $versions}}- group: {{$group}}
+      version: {{.}}
+      host: kubernetes.default.svc
+      port: 443
+    {{ end }}{{end}}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -48,28 +78,42 @@ metadata:
   labels:
     name: grafana
 data:
-  grafana.ini: | 
+  grafana.ini: |
+    app_mode = development
     [analytics]
     reporting_enabled = false
     [tracing.opentelemetry.otlp]
     address = tempo.default.svc:4317
-    [auth.anonymous]
+    [auth.anonymous]{{ if .GrafanaAnonymousAuth }}
     enabled = true
-    org_role = Admin
+    org_role = {{ .GrafanaAnonymousAuth }}{{ else }}
+    enabled = false{{ end }}
     [log.frontend]
-    enabled = true
+    enabled = true{{ if not .DisableGrafanaPluginMount }}
     [plugins]
     allow_loading_unsigned_plugins = {{.PluginID}}
     [plugin.{{.PluginID}}]
-    tracing = true
+    tracing = true{{ end }}
     [server]
     http_port = 3000
-    root_url = 
+    root_url =
     router_logging = true
     [unified_alerting]
     enabled = true
     [users]
     default_theme = dark
+    [feature_toggles]
+    grafanaAPIServerEnsureKubectlAccess = true
+    ; disable the experimental APIs flag to disable bundling of the example service locally
+    grafanaAPIServerWithExperimentalAPIs = true
+    {{ range $group, $versions := .APIGroups }}
+    aggregation.{{ replaceGroupName $group "-"}}.enabled=true
+    {{ end }}
+    kubernetesAggregator = true
+    [grafana-apiserver]
+    remote_services_file = /app-aggregator/apiservices.yaml{{ if .ProxyClientCert.Enabled }}
+    proxy_client_cert_file = /etc/proxy-client-certs/client-auth-proxy.crt
+    proxy_client_key_file = /etc/proxy-client-certs/client-auth-proxy.key{{ end }}
 ---
 apiVersion: v1
 kind: Service
@@ -105,12 +149,27 @@ spec:
     metadata:
       labels:
         name: grafana
-    spec:
+    spec:{{ if .ProxyClientCert.Enabled }}
+      initContainers:
+        - name: copy-proxy-certs
+          image: busybox:stable
+          command: ["sh", "-c", "cp /k3s-tls/client-auth-proxy.crt /k3s-tls/client-auth-proxy.key /proxy-certs/ && chmod 644 /proxy-certs/*"]
+          volumeMounts:
+            - mountPath: /k3s-tls
+              name: k3s-tls
+              readOnly: true
+            - mountPath: /proxy-certs
+              name: proxy-client-certs
+          securityContext:
+            runAsUser: 0{{ end }}
       containers:
         - env:
             - name: GF_INSTALL_PLUGINS
+              value: "{{.GrafanaInstallPlugins}}"
             - name: GF_PATHS_CONFIG
-              value: /etc/grafana-config/grafana.ini
+              value: /etc/grafana-config/grafana.ini{{ range .GrafanaEnvVars }}
+            - name: {{.Name}}
+              value: "{{.Value}}"{{ end }}
           image: {{.GrafanaImage}}
           imagePullPolicy: IfNotPresent
           name: grafana
@@ -123,28 +182,48 @@ spec:
               memory: 40Mi
           volumeMounts:
             - mountPath: /etc/grafana-config
-              name: grafana-config
+              name: grafana-config{{ if not .DisableGrafanaPluginMount }}
             - mountPath: /etc/grafana/provisioning/plugins
               name: {{.PluginIDKube}}-provisioning
             - mountPath: /var/lib/grafana/plugins/{{.PluginID}}
               name: {{.PluginIDKube}}
-              readOnly: true
+              readOnly: true{{ end }}
             - mountPath: /etc/grafana/provisioning/datasources
               name: grafana-datasources
+            - mountPath: /app-aggregator
+              name: grafana-apiserver-provisioning
+              readOnly: true{{ if .ProxyClientCert.Enabled }}
+            - mountPath: /etc/proxy-client-certs
+              name: proxy-client-certs
+              readOnly: true{{ end }}{{ range .GrafanaVolumeMounts }}
+            - mountPath: {{.MountPath}}
+              name: {{.Name}}
+              readOnly: true{{ end }}
       serviceAccount: grafana
       volumes:
         - configMap:
             name: grafana-config
-          name: grafana-config
+          name: grafana-config{{ if not .DisableGrafanaPluginMount }}
         - configMap:
             name: {{.PluginIDKube}}-provisioning
           name: {{.PluginIDKube}}-provisioning
         - hostPath:
             path: /tmp/k3d/mounted-files/plugin/dist
-          name: {{.PluginIDKube}}
+          name: {{.PluginIDKube}}{{ end }}
         - configMap:
             name: grafana-datasources
           name: grafana-datasources
+        - configMap:
+            name: grafana-apiserver-provisioning
+          name: grafana-apiserver-provisioning{{ if .ProxyClientCert.Enabled }}
+        - hostPath:
+            path: /var/lib/rancher/k3s/server/tls
+          name: k3s-tls
+        - emptyDir: {}
+          name: proxy-client-certs{{ end }}{{ range .GrafanaVolumeMounts }}
+        - hostPath:
+            path: {{.HostPath}}
+          name: {{.Name}}{{ end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -176,11 +255,13 @@ data:
     apiVersion: 1
     datasources:{{ range .Datasources }}
         - access: {{.Access}}
-          editable: false
+          editable: {{.Editable}}
           isDefault: {{.IsDefault}}
           name: {{.Name}}
           type: {{.Type}}
-          uid: {{.UID}}
-          url: {{.URL}}
-          version: 1{{end}}
+          uid: {{.UID}}{{ if .URL }}
+          url: {{.URL}}{{ end }}
+          version: 1{{ if .JSONData }}
+          jsonData:{{ range $key, $value := .JSONData }}
+            {{$key}}: {{$value}}{{ end }}{{ end }}{{ end }}
 {{end}}

@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -51,6 +52,7 @@ func WithResourceVersion(resourceVersion string) ObjectMetadataOption {
 // allowing the user to work with the actual type in the Schema Object's spec,
 // without casting in and out of the Object interface.
 // It should be instantiated with NewSimpleStore.
+//
 // Deprecated: prefer using TypedStore instead
 type SimpleStore[SpecType any] struct {
 	client Client
@@ -60,12 +62,13 @@ type SimpleStore[SpecType any] struct {
 // It will error if the type of the Schema.ZeroValue().SpecObject() does not match the provided SpecType.
 // It will also error if a client cannot be created from the generator, as unlike Store, the client is generated once
 // and reused for all subsequent calls.
+//
 // Deprecated: prefer using TypedStore instead
 func NewSimpleStore[SpecType any](kind Kind, generator ClientGenerator) (*SimpleStore[SpecType], error) {
-	if reflect.TypeOf(kind.Schema.ZeroValue().GetSpec()) != reflect.TypeOf(new(SpecType)).Elem() {
+	if reflect.TypeOf(kind.Schema.ZeroValue().GetSpec()) != reflect.TypeFor[SpecType]() {
 		return nil, fmt.Errorf(
 			"SpecType '%s' does not match underlying schema.ZeroValue().SpecObject() type '%s'",
-			reflect.TypeOf(new(SpecType)).Elem(),
+			reflect.TypeFor[SpecType](),
 			reflect.TypeOf(kind.ZeroValue().GetSpec()))
 	}
 
@@ -174,7 +177,7 @@ func (s *SimpleStore[T]) Update(ctx context.Context, identifier Identifier, obj 
 func (s *SimpleStore[T]) UpdateSubresource(ctx context.Context, identifier Identifier, subresource SubresourceName,
 	obj any) (*TypedObject[T, MapSubresourceCatalog], error) {
 	if subresource == "" {
-		return nil, fmt.Errorf("subresource may not be empty")
+		return nil, errors.New("subresource may not be empty")
 	}
 	object := TypedObject[T, MapSubresourceCatalog]{
 		Subresources: MapSubresourceCatalog{
@@ -192,7 +195,7 @@ func (s *SimpleStore[T]) UpdateSubresource(ctx context.Context, identifier Ident
 
 // Delete deletes a resource with the given identifier.
 func (s *SimpleStore[T]) Delete(ctx context.Context, identifier Identifier) error {
-	return s.client.Delete(ctx, identifier)
+	return s.client.Delete(ctx, identifier, DeleteOptions{})
 }
 
 type MapSubresourceCatalog map[string]any
@@ -204,7 +207,7 @@ func (s *SimpleStore[T]) cast(obj Object) (*TypedObject[T, MapSubresourceCatalog
 	}
 	spec, ok := obj.GetSpec().(T)
 	if !ok {
-		return nil, fmt.Errorf("returned object could not be cast to store's type")
+		return nil, errors.New("returned object could not be cast to store's type")
 	}
 	apiVersion, kind := obj.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()
 	return &TypedObject[T, MapSubresourceCatalog]{
@@ -216,7 +219,7 @@ func (s *SimpleStore[T]) cast(obj Object) (*TypedObject[T, MapSubresourceCatalog
 			Name:                       obj.GetName(),
 			GenerateName:               obj.GetGenerateName(),
 			Namespace:                  obj.GetNamespace(),
-			SelfLink:                   obj.GetSelfLink(),
+			SelfLink:                   obj.GetSelfLink(), // nolint: staticcheck
 			UID:                        obj.GetUID(),
 			ResourceVersion:            obj.GetResourceVersion(),
 			Generation:                 obj.GetGeneration(),

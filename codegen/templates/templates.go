@@ -5,32 +5,65 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
+	"path/filepath"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"text/template"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
 )
 
-//go:embed *.tmpl plugin/*.tmpl secure/*.tmpl operator/*.tmpl app/*.tmpl
+//go:embed *.tmpl operator/*.tmpl app/*.tmpl
 var templates embed.FS
 
-var (
-	templateResourceObject, _ = template.ParseFS(templates, "resourceobject.tmpl")
-	templateSchema, _         = template.ParseFS(templates, "schema.tmpl")
-	templateCodec, _          = template.ParseFS(templates, "codec.tmpl")
-	templateLineage, _        = template.ParseFS(templates, "lineage.tmpl")
-	templateThemaCodec, _     = template.ParseFS(templates, "themacodec.tmpl")
-	templateWrappedType, _    = template.ParseFS(templates, "wrappedtype.tmpl")
-	templateTSType, _         = template.ParseFS(templates, "tstype.tmpl")
+//go:embed custom/*.tmpl
+var cogTemplates embed.FS
 
-	templateBackendPluginRouter, _          = template.ParseFS(templates, "plugin/plugin.tmpl")
-	templateBackendPluginResourceHandler, _ = template.ParseFS(templates, "plugin/handler_resource.tmpl")
-	templateBackendPluginModelsHandler, _   = template.ParseFS(templates, "plugin/handler_models.tmpl")
-	templateBackendMain, _                  = template.ParseFS(templates, "plugin/main.tmpl")
+func GetCogTemplates() embed.FS {
+	return cogTemplates
+}
+
+var (
+	funcMap = template.FuncMap{
+		"list": func(items ...any) []any {
+			return items
+		},
+		"refString": func(ref spec.Ref) string {
+			return ref.String()
+		},
+		// goString renders s as a valid, fully-escaped Go double-quoted string
+		// literal (including the surrounding quotes). strconv.Quote escapes quotes,
+		// newlines, backslashes and control characters, so descriptions sourced
+		// from multi-line CUE doc comments produce parseable Go.
+		"goString": strconv.Quote,
+		// goBoolPtr renders a *bool as a Go expression that evaluates to a *bool.
+		// A nil pointer renders as "nil".
+		"goBoolPtr": func(b *bool) string {
+			if b == nil {
+				return "nil"
+			}
+			return "func(b bool) *bool { return &b }(" + strconv.FormatBool(*b) + ")"
+		},
+	}
+
+	templateResourceObject, _         = template.ParseFS(templates, "resourceobject.tmpl")
+	templateSchema, _                 = template.ParseFS(templates, "schema.tmpl")
+	templateCodec, _                  = template.ParseFS(templates, "codec.tmpl")
+	templateLineage, _                = template.ParseFS(templates, "lineage.tmpl")
+	templateThemaCodec, _             = template.ParseFS(templates, "themacodec.tmpl")
+	templateWrappedType, _            = template.ParseFS(templates, "wrappedtype.tmpl")
+	templateTSType, _                 = template.ParseFS(templates, "tstype.tmpl")
+	templateConstants, _              = template.ParseFS(templates, "constants.tmpl")
+	templateGoResourceClient, _       = template.ParseFS(templates, "resourceclient.tmpl")
+	templateGoVersionedRouteClient, _ = template.ParseFS(templates, "client.tmpl")
+	templateRuntimeObject, _          = template.ParseFS(templates, "runtimeobject.tmpl")
 
 	templateWatcher, _ = template.ParseFS(templates, "app/watcher.tmpl")
 	templateApp, _     = template.ParseFS(templates, "app/app.tmpl")
@@ -39,7 +72,7 @@ var (
 	templateOperatorMain, _       = template.ParseFS(templates, "operator/main.tmpl")
 	templateOperatorConfig, _     = template.ParseFS(templates, "operator/config.tmpl")
 
-	templateManifestGoFile, _ = template.ParseFS(templates, "manifest_go.tmpl")
+	templateManifestGoFile, _ = template.New("manifest_go.tmpl").Funcs(funcMap).ParseFS(templates, "manifest_go.tmpl")
 )
 
 var (
@@ -79,17 +112,20 @@ var (
 
 // ResourceObjectTemplateMetadata is the metadata required by the Resource Object template
 type ResourceObjectTemplateMetadata struct {
+	HasSecureValues      bool
 	Package              string
 	TypeName             string
 	SpecTypeName         string
 	ObjectTypeName       string
 	ObjectShortName      string
+	OpenAPIModelName     string
 	Subresources         []SubresourceMetadata
 	CustomMetadataFields []ObjectMetadataField
 }
 
 // SubresourceMetadata is subresource information used in templates
 type SubresourceMetadata struct {
+	Name     string
 	TypeName string
 	JSONName string
 	Comment  string
@@ -101,9 +137,10 @@ func WriteResourceObject(metadata ResourceObjectTemplateMetadata, out io.Writer)
 }
 
 type ResourceTSTemplateMetadata struct {
-	TypeName     string
-	FilePrefix   string
-	Subresources []SubresourceMetadata
+	HasSecureValues bool
+	TypeName        string
+	FilePrefix      string
+	Subresources    []SubresourceMetadata
 }
 
 func WriteResourceTSType(metadata ResourceTSTemplateMetadata, out io.Writer) error {
@@ -112,34 +149,69 @@ func WriteResourceTSType(metadata ResourceTSTemplateMetadata, out io.Writer) err
 
 // SchemaMetadata is the metadata required by the Resource Schema template
 type SchemaMetadata struct {
+	HasSecureValues  bool
 	Package          string
 	Group            string
 	Version          string
 	Kind             string
 	Plural           string
 	Scope            string
-	SelectableFields []SchemaMetadataSeletableField
+	SelectableFields []SchemaMetadataSelectableField
 	FuncPrefix       string
 }
 
-type SchemaMetadataSeletableField struct {
-	Field    string
-	Optional bool
+// UnionFieldAccess describes how to read a selectable field that lives inside a
+// CUE disjunction. cog generates each disjunction as a Go struct with one
+// optional pointer field per variant, so access is "check each variant pointer".
+// If a variant is the `null` literal, cog will not include the variant as a field;
+// When the disjunction is `<any> | null`, cog will collapse this into the `*<any>`
+// type, rather than a type with each disjunction as a field. When this is the case,
+// CollapsedNullToSingle should be set to `true`.
+type UnionFieldAccess struct {
+	UnionFieldPath string
+	UnionOptional  bool
+	Variants       []UnionVariantAccess
+	// CollapsedNullToSingle is true if the disjunction was a single variant + null,
+	// which is collapsed to a single returned variant as `null` is not a branch type
+	CollapsedNullToSingle bool
+}
+
+type UnionVariantAccess struct {
+	// VariantField is the Go field name on the union struct (e.g. "Foo" for
+	// named #Foo, or "TypeA" for an anonymous variant whose discriminator is
+	// type: "A" — matches cog's anonymous-variant naming).
+	VariantField string
+	// FieldInVariant is the Go field name within the variant struct, or empty
+	// when ConstantValue is set.
+	FieldInVariant         string
+	FieldInVariantOptional bool
+	// ConstantValue, when non-empty, is the literal string to return when this
+	// variant pointer is non-nil (used for selecting a discriminator field).
+	ConstantValue string
+}
+
+type SchemaMetadataSelectableField struct {
+	Field                string
+	Optional             bool
+	Type                 string
+	OptionalFieldsInPath []string
+	// Union, when set, replaces the flat path-based emission with per-variant
+	// pointer checks.
+	Union *UnionFieldAccess
 }
 
 func (SchemaMetadata) ToObjectPath(s string) string {
-	parts := make([]string, 0)
 	if len(s) > 0 && s[0] == '.' {
 		s = s[1:]
 	}
-	for i, part := range strings.Split(s, ".") {
+	split := strings.Split(s, ".")
+	parts := make([]string, 0, len(split))
+	for i, part := range split {
 		if i == 0 && part == "metadata" {
 			part = "ObjectMeta"
 		}
 		if len(part) > 0 {
 			part = strings.ToUpper(part[:1]) + part[1:]
-		} else {
-			part = strings.ToUpper(part)
 		}
 		parts = append(parts, part)
 	}
@@ -214,107 +286,15 @@ func WriteWrappedType(metadata WrappedTypeMetadata, out io.Writer) error {
 	return templateWrappedType.Execute(out, metadata)
 }
 
-// BackendPluginRouterTemplateMetadata is the metadata required by the Backend Plugin Router template
-type BackendPluginRouterTemplateMetadata struct {
-	Repo                  string
-	APICodegenPath        string
-	Resources             []codegen.KindProperties
-	PluginID              string
-	ResourcesAreVersioned bool
-	KindsAreGrouped       bool
-}
-
-type extendedBackendPluginRouterTemplateMetadata struct {
-	BackendPluginRouterTemplateMetadata
-	GVToKind map[schema.GroupVersion][]codegen.KindProperties
-}
-
-func (BackendPluginRouterTemplateMetadata) ToPackageName(input string) string {
-	return ToPackageName(input)
-}
-
-func (BackendPluginRouterTemplateMetadata) ToPackageNameVariable(input string) string {
-	return strings.ReplaceAll(ToPackageName(input), "_", "")
-}
-
-// WriteBackendPluginRouter executes the Backend Plugin Router template, and writes out the generated go code to out
-func WriteBackendPluginRouter(metadata BackendPluginRouterTemplateMetadata, out io.Writer) error {
-	return templateBackendPluginRouter.Execute(out, metadata)
-}
-
-// BackendPluginHandlerTemplateMetadata is the metadata required by the Backend Plugin Handler template
-type BackendPluginHandlerTemplateMetadata struct {
-	codegen.KindProperties
-	Repo            string
-	APICodegenPath  string
-	TypeName        string
-	IsResource      bool
-	Version         string
-	KindPackage     string
-	KindsAreGrouped bool
-}
-
-func (BackendPluginHandlerTemplateMetadata) ToPackageName(input string) string {
-	return ToPackageName(input)
-}
-
-// WriteBackendPluginHandler executes the Backend Plugin Handler template, and writes out the generated go code to out
-func WriteBackendPluginHandler(metadata BackendPluginHandlerTemplateMetadata, out io.Writer) error {
-	// Easier to have two templates than deal with all the if...else statements in the template
-	if !metadata.IsResource {
-		return templateBackendPluginModelsHandler.Execute(out, metadata)
-	}
-	return templateBackendPluginResourceHandler.Execute(out, metadata)
-}
-
-// WriteBackendPluginMain executes the Backend Plugin Main template, and writes out the generated go code to out
-func WriteBackendPluginMain(metadata BackendPluginRouterTemplateMetadata, out io.Writer) error {
-	md := extendedBackendPluginRouterTemplateMetadata{
-		BackendPluginRouterTemplateMetadata: metadata,
-		GVToKind:                            make(map[schema.GroupVersion][]codegen.KindProperties),
-	}
-	for _, k := range md.Resources {
-		gv := schema.GroupVersion{Group: k.Group, Version: k.Current}
-		l, ok := md.GVToKind[gv]
-		if !ok {
-			l = make([]codegen.KindProperties, 0)
-		}
-		l = append(l, k)
-		md.GVToKind[gv] = l
-	}
-	return templateBackendMain.Execute(out, md)
-}
-
-// GetBackendPluginSecurePackageFiles returns go files for the `secure` package in the backend plugin, as a map of
-// <filename> (without "secure" in path) => contents
-func GetBackendPluginSecurePackageFiles() (map[string][]byte, error) {
-	dataF, err := templates.ReadFile("secure/data.tmpl")
-	if err != nil {
-		return nil, err
-	}
-	middlewareF, err := templates.ReadFile("secure/middleware.tmpl")
-	if err != nil {
-		return nil, err
-	}
-	retrieverF, err := templates.ReadFile("secure/retriever.tmpl")
-	if err != nil {
-		return nil, err
-	}
-	return map[string][]byte{
-		"data.go":       dataF,
-		"middleware.go": middlewareF,
-		"retriever.go":  retrieverF,
-	}, nil
-}
-
 type WatcherMetadata struct {
 	codegen.KindProperties
-	PackageName     string
-	Repo            string
-	CodegenPath     string
-	Version         string
-	KindPackage     string
-	KindsAreGrouped bool
+	PackageName      string
+	Repo             string
+	CodegenPath      string
+	Version          string
+	KindPackage      string
+	KindsAreGrouped  bool
+	KindPackageAlias string
 }
 
 func (WatcherMetadata) ToPackageName(input string) string {
@@ -322,6 +302,10 @@ func (WatcherMetadata) ToPackageName(input string) string {
 }
 
 func WriteWatcher(metadata WatcherMetadata, out io.Writer) error {
+	if metadata.KindPackageAlias == "" {
+		metadata.KindPackageAlias = metadata.MachineName
+	}
+	metadata.KindPackageAlias = ToPackageName(metadata.KindPackageAlias)
 	return templateWatcher.Execute(out, metadata)
 }
 
@@ -330,19 +314,12 @@ func WriteOperatorKubeConfig(out io.Writer) error {
 }
 
 type OperatorMainMetadata struct {
-	PackageName           string
-	ProjectName           string
-	Repo                  string
-	CodegenPath           string
-	WatcherPackage        string
-	ResourcesAreVersioned bool
-	KindsAreGrouped       bool
-	Resources             []codegen.KindProperties
-}
-
-type extendedOperatorMainMetadata struct {
-	OperatorMainMetadata
-	GVToKind map[schema.GroupVersion][]codegen.KindProperties
+	PackageName     string
+	ProjectName     string
+	Repo            string
+	CodegenPath     string
+	WatcherPackage  string
+	KindsAreGrouped bool
 }
 
 func (OperatorMainMetadata) ToPackageName(input string) string {
@@ -353,21 +330,12 @@ func (OperatorMainMetadata) ToPackageNameVariable(input string) string {
 	return strings.ReplaceAll(ToPackageName(input), "_", "")
 }
 
+func (OperatorMainMetadata) GroupToPackageName(input string) string {
+	return ToPackageName(strings.Split(input, ".")[0])
+}
+
 func WriteOperatorMain(metadata OperatorMainMetadata, out io.Writer) error {
-	md := extendedOperatorMainMetadata{
-		OperatorMainMetadata: metadata,
-		GVToKind:             make(map[schema.GroupVersion][]codegen.KindProperties),
-	}
-	for _, k := range md.Resources {
-		gv := schema.GroupVersion{Group: k.Group, Version: k.Current}
-		l, ok := md.GVToKind[gv]
-		if !ok {
-			l = make([]codegen.KindProperties, 0)
-		}
-		l = append(l, k)
-		md.GVToKind[gv] = l
-	}
-	return templateOperatorMain.Execute(out, md)
+	return templateOperatorMain.Execute(out, metadata)
 }
 
 func WriteOperatorConfig(out io.Writer) error {
@@ -375,8 +343,21 @@ func WriteOperatorConfig(out io.Writer) error {
 }
 
 type ManifestGoFileMetadata struct {
-	Package      string
-	ManifestData app.ManifestData
+	Package              string
+	Repo                 string
+	CodegenPath          string
+	KindsAreGrouped      bool
+	ManifestData         app.ManifestData
+	TypeVersions         []app.ManifestVersion
+	OpenAPIVersions      map[string]bool
+	CodegenManifestGroup string
+}
+
+func (m ManifestGoFileMetadata) GeneratedTypeVersions() []app.ManifestVersion {
+	if m.TypeVersions != nil {
+		return m.TypeVersions
+	}
+	return m.ManifestData.Versions
 }
 
 func (ManifestGoFileMetadata) ToAdmissionOperationName(input app.AdmissionOperation) string {
@@ -410,18 +391,107 @@ func (ManifestGoFileMetadata) ToPackageName(input string) string {
 	return ToPackageName(input)
 }
 
+func (ManifestGoFileMetadata) KindToPackageName(input string) string {
+	return ToPackageName(strings.ToLower(input))
+}
+
+func (m ManifestGoFileMetadata) GetPackageName(kind, version string) string {
+	if m.KindsAreGrouped {
+		return ToPackageName(version)
+	}
+	return fmt.Sprintf("%s%s", m.KindToPackageName(kind), ToPackageName(version))
+}
+
+func (ManifestGoFileMetadata) GroupToPackageName(input string) string {
+	return ToPackageName(strings.Split(input, ".")[0])
+}
+
+func (ManifestGoFileMetadata) GoKindName(kind string) string {
+	if len(kind) > 0 {
+		return strings.ToUpper(kind[:1]) + kind[1:]
+	}
+	return strings.ToUpper(kind)
+}
+
+func (ManifestGoFileMetadata) ExportedFieldName(name string) string {
+	sanitized := regexp.MustCompile("[^A-Za-z0-9_]").ReplaceAllString(name, "")
+	if len(sanitized) > 1 {
+		return strings.ToUpper(sanitized[:1]) + sanitized[1:]
+	}
+	return strings.ToUpper(sanitized)
+}
+
+func (m ManifestGoFileMetadata) Packages() []string {
+	pkgs := make([]string, 0)
+	if m.KindsAreGrouped {
+		gvs := make(map[string]string)
+		for _, v := range m.GeneratedTypeVersions() {
+			routes := v.Routes //nolint:staticcheck // Routes is deprecated but still decides which version packages are imported
+			if m.OpenAPIVersions[v.Name] && len(v.Kinds)+len(routes.Cluster)+len(routes.Namespaced) == 0 {
+				continue
+			}
+			gvs[fmt.Sprintf("%s/%s", m.GroupToPackageName(m.CodegenManifestGroup), ToPackageName(v.Name))] = ToPackageName(v.Name)
+		}
+		for pkg, alias := range gvs {
+			pkgs = append(pkgs, fmt.Sprintf("%s \"%s\"", alias, filepath.Join(m.Repo, m.CodegenPath, pkg)))
+		}
+	} else {
+		for _, v := range m.GeneratedTypeVersions() {
+			for _, k := range v.Kinds {
+				pkgs = append(pkgs, fmt.Sprintf("%s%s \"%s\"", m.KindToPackageName(k.Kind), ToPackageName(v.Name), filepath.Join(m.Repo, m.CodegenPath, m.KindToPackageName(k.Kind), ToPackageName(v.Name))))
+			}
+			routes := v.Routes //nolint:staticcheck // Routes is deprecated but still decides which version packages are imported
+			if len(routes.Namespaced) > 0 || len(routes.Cluster) > 0 {
+				pkgs = append(pkgs, fmt.Sprintf("%s \"%s\"", ToPackageName(v.Name), filepath.Join(m.Repo, m.CodegenPath, m.GroupToPackageName(m.CodegenManifestGroup), ToPackageName(v.Name))))
+			}
+		}
+	}
+	// Sort for consistent output
+	slices.Sort(pkgs)
+	return pkgs
+}
+
+func (ManifestGoFileMetadata) StripLeadingSlash(path string) string {
+	for len(path) > 0 && path[0] == '/' {
+		path = path[1:]
+	}
+	return path
+}
+
+// HasVersionSchemas returns true if any kind in any version has a non-nil schema.
+// Used by the manifest Go template to avoid emitting an empty var () block.
+func (m ManifestGoFileMetadata) HasVersionSchemas() bool {
+	for _, v := range m.ManifestData.Versions {
+		for _, k := range v.Kinds {
+			if k.Schema != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// SortedRoleKeys returns the keys of ManifestData.Roles in sorted order
+// so the template produces deterministic output.
+func (m ManifestGoFileMetadata) SortedRoleKeys() []string {
+	keys := slices.Collect(maps.Keys(m.ManifestData.Roles))
+	slices.Sort(keys)
+	return keys
+}
+
 func WriteManifestGoFile(metadata ManifestGoFileMetadata, out io.Writer) error {
 	return templateManifestGoFile.Execute(out, metadata)
 }
 
 type AppMetadata struct {
-	PackageName     string
-	ProjectName     string
-	Repo            string
-	CodegenPath     string
-	WatcherPackage  string
-	KindsAreGrouped bool
-	Resources       []AppMetadataKind
+	PackageName         string
+	ProjectName         string
+	Repo                string
+	CodegenPath         string
+	WatcherPackage      string
+	ManifestPackagePath string
+	KindsAreGrouped     bool
+	Resources           []AppMetadataKind
 }
 
 type AppMetadataKind struct {
@@ -441,6 +511,10 @@ func (AppMetadata) ToPackageName(input string) string {
 
 func (AppMetadata) ToPackageNameVariable(input string) string {
 	return strings.ReplaceAll(ToPackageName(input), "_", "")
+}
+
+func (AppMetadata) GroupToPackageName(input string) string {
+	return ToPackageName(strings.Split(input, ".")[0])
 }
 
 func WriteAppGoFile(metadata AppMetadata, out io.Writer) error {
@@ -470,8 +544,137 @@ func WriteAppGoFile(metadata AppMetadata, out io.Writer) error {
 	return templateApp.Execute(out, md)
 }
 
+type ConstantsMetadata struct {
+	Package string
+	Group   string
+	Version string
+}
+
+func WriteConstantsFile(metadata ConstantsMetadata, out io.Writer) error {
+	return templateConstants.Execute(out, metadata)
+}
+
+type GoResourceClientMetadata struct {
+	PackageName  string
+	KindName     string
+	KindPrefix   string
+	Subresources []GoResourceClientSubresource
+	CustomRoutes []GoClientCustomRoute
+}
+
+type GoClientCustomRoute struct {
+	TypeName    string
+	Path        string
+	Method      string
+	HasParams   bool
+	HasBody     bool
+	ParamValues []GoCustomRouteParamValues
+}
+
+type GoCustomRouteParamValues struct {
+	Key       string
+	FieldName string
+}
+
+type GoResourceClientSubresource struct {
+	FieldName   string
+	Subresource string
+}
+
+func WriteGoResourceClient(metadata GoResourceClientMetadata, out io.Writer) error {
+	// sort custom route data for consistent output
+	slices.SortFunc(metadata.Subresources, func(a, b GoResourceClientSubresource) int {
+		return strings.Compare(a.Subresource, b.Subresource)
+	})
+	slices.SortFunc(metadata.CustomRoutes, func(a, b GoClientCustomRoute) int {
+		return strings.Compare(fmt.Sprintf("%s|%s", a.Path, a.Method), fmt.Sprintf("%s|%s", b.Path, b.Method))
+	})
+	for i := 0; i < len(metadata.CustomRoutes); i++ {
+		slices.SortFunc(metadata.CustomRoutes[i].ParamValues, func(a GoCustomRouteParamValues, b GoCustomRouteParamValues) int {
+			return strings.Compare(a.FieldName, b.FieldName)
+		})
+	}
+	return templateGoResourceClient.Execute(out, metadata)
+}
+
+type GoCustomRouteClientMetadata struct {
+	PackageName      string
+	NamespacedRoutes []GoClientCustomRoute
+	ClusterRoutes    []GoClientCustomRoute
+	Group            string
+	Version          string
+}
+
+func WriteGoCustomRouteClient(metadata GoCustomRouteClientMetadata, out io.Writer) error {
+	slices.SortFunc(metadata.NamespacedRoutes, func(a, b GoClientCustomRoute) int {
+		return strings.Compare(fmt.Sprintf("%s|%s", a.Path, a.Method), fmt.Sprintf("%s|%s", b.Path, b.Method))
+	})
+	slices.SortFunc(metadata.ClusterRoutes, func(a, b GoClientCustomRoute) int {
+		return strings.Compare(fmt.Sprintf("%s|%s", a.Path, a.Method), fmt.Sprintf("%s|%s", b.Path, b.Method))
+	})
+	for i := 0; i < len(metadata.NamespacedRoutes); i++ {
+		slices.SortFunc(metadata.NamespacedRoutes[i].ParamValues, func(a GoCustomRouteParamValues, b GoCustomRouteParamValues) int {
+			return strings.Compare(a.FieldName, b.FieldName)
+		})
+	}
+	for i := 0; i < len(metadata.ClusterRoutes); i++ {
+		slices.SortFunc(metadata.ClusterRoutes[i].ParamValues, func(a GoCustomRouteParamValues, b GoCustomRouteParamValues) int {
+			return strings.Compare(a.FieldName, b.FieldName)
+		})
+	}
+	return templateGoVersionedRouteClient.Execute(out, metadata)
+}
+
+type RuntimeObjectWrapperMetadata struct {
+	PackageName               string
+	WrapperTypeName           string
+	TypeName                  string
+	OpenAPIModelName          string
+	HasObjectMeta             bool
+	HasListMeta               bool
+	AddDeepCopyForTypeName    bool
+	KubernetesCodegenComments bool
+}
+
+func WriteRuntimeObjectWrapper(metadata RuntimeObjectWrapperMetadata, out io.Writer) error {
+	return templateRuntimeObject.Execute(out, metadata)
+}
+
+// goKeywords is the set of Go reserved keywords that cannot be used as package names
+var goKeywords = map[string]struct{}{
+	"break":       {},
+	"case":        {},
+	"chan":        {},
+	"const":       {},
+	"continue":    {},
+	"default":     {},
+	"defer":       {},
+	"else":        {},
+	"fallthrough": {},
+	"for":         {},
+	"func":        {},
+	"go":          {},
+	"goto":        {},
+	"if":          {},
+	"import":      {},
+	"interface":   {},
+	"map":         {},
+	"package":     {},
+	"range":       {},
+	"return":      {},
+	"select":      {},
+	"struct":      {},
+	"switch":      {},
+	"type":        {},
+	"var":         {},
+}
+
 // ToPackageName sanitizes an input into a deterministic allowed go package name.
 // It is used to turn kind names or versions into package names when performing go code generation.
 func ToPackageName(input string) string {
-	return regexp.MustCompile(`([^A-Za-z0-9_])`).ReplaceAllString(input, "_")
+	pkgName := regexp.MustCompile(`([^A-Za-z0-9_])`).ReplaceAllString(input, "_")
+	if _, ok := goKeywords[pkgName]; ok {
+		return pkgName + "_pkg"
+	}
+	return pkgName
 }

@@ -2,13 +2,19 @@
 package jennies
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"cuelang.org/go/cue"
-	"github.com/grafana/codejen"
-	goyaml "gopkg.in/yaml.v3"
+	"github.com/getkin/kin-openapi/openapi3"
 
+	"github.com/grafana/codejen"
+	"github.com/grafana/cog"
+
+	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/k8s"
 )
@@ -16,7 +22,7 @@ import (
 // CRDOutputEncoder is a function which marshals an object into a desired output format
 type CRDOutputEncoder func(any) ([]byte, error)
 
-func CRDGenerator(encoder CRDOutputEncoder, extension string) codejen.OneToOne[codegen.Kind] {
+func CRDGenerator(encoder CRDOutputEncoder, extension string) codejen.OneToMany[codegen.AppManifest] {
 	return &crdGenerator{
 		outputEncoder:   encoder,
 		outputExtension: extension,
@@ -32,50 +38,102 @@ func (*crdGenerator) JennyName() string {
 	return "CRD Generator"
 }
 
-func (c *crdGenerator) Generate(kind codegen.Kind) (*codejen.File, error) {
-	props := kind.Properties()
+type kindWithVersion struct {
+	version string
+	kind    codegen.VersionedKind
+}
 
-	resource := customResourceDefinition{
-		APIVersion: "apiextensions.k8s.io/v1",
-		Kind:       "CustomResourceDefinition",
-		Metadata: customResourceDefinitionMetadata{
-			Name: fmt.Sprintf("%s.%s", props.PluralMachineName, props.APIResource.Group),
-		},
-		Spec: k8s.CustomResourceDefinitionSpec{
-			Group: props.APIResource.Group,
-			Scope: props.APIResource.Scope,
-			Names: k8s.CustomResourceDefinitionSpecNames{
-				Kind:   props.Kind,
-				Plural: props.PluralMachineName,
-			},
-			Versions: make([]k8s.CustomResourceDefinitionSpecVersion, 0),
-		},
+func (c *crdGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
+	files := make(codejen.Files, 0, 1)
+
+	// Need to group all versions of a kind together to make a CRD (each CRD contains schemas for all versions)
+	kinds := make(map[string][]kindWithVersion)
+	for version, kind := range codegen.VersionedKinds(appManifest) {
+		kv, ok := kinds[kind.Kind]
+		if !ok {
+			kv = make([]kindWithVersion, 0)
+		}
+		kv = append(kv, kindWithVersion{
+			version: version.Name(),
+			kind:    kind,
+		})
+		kinds[kind.Kind] = kv
 	}
 
-	for _, ver := range kind.Versions() {
-		v, err := KindVersionToCRDSpecVersion(ver, kind.Properties().Kind, ver.Version == kind.Properties().Current)
+	for _, kv := range kinds {
+		// Edge case that should never happen, but just in case
+		if len(kv) == 0 {
+			continue
+		}
+		resource := customResourceDefinition{
+			APIVersion: "apiextensions.k8s.io/v1",
+			Kind:       "CustomResourceDefinition",
+			Metadata: customResourceDefinitionMetadata{
+				Name: fmt.Sprintf("%s.%s", kv[0].kind.PluralMachineName, appManifest.Properties().FullGroup),
+			},
+			Spec: k8s.CustomResourceDefinitionSpec{
+				Group: appManifest.Properties().FullGroup,
+				Scope: kv[0].kind.Scope,
+				Names: k8s.CustomResourceDefinitionSpecNames{
+					Kind:   kv[0].kind.Kind,
+					Plural: kv[0].kind.PluralMachineName,
+				},
+				Versions: make([]k8s.CustomResourceDefinitionSpecVersion, 0),
+			},
+		}
+
+		if kv[0].kind.Conversion && kv[0].kind.ConversionWebhookProps.URL != "" {
+			webhookURL, err := url.Parse(kv[0].kind.ConversionWebhookProps.URL)
+			if err != nil {
+				return nil, fmt.Errorf("invalid conversion webhook URL: %w", err)
+			}
+			resource.Spec.Conversion = &k8s.CustomResourceDefinitionSpecConversion{
+				Strategy: "webhook",
+				Webhook: &k8s.CustomResourceDefinitionSpecConversionWebhook{
+					ConversionReviewVersions: []string{"v1"},
+					ClientConfig: k8s.CustomResourceDefinitionClientConfig{
+						URL: webhookURL.String(),
+					},
+				},
+			}
+		}
+
+		for _, vs := range kv {
+			v, err := KindVersionToCRDSpecVersion(vs.kind.Schema, vs.kind, vs.version, vs.version == appManifest.Properties().PreferredVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			// Check for edge case that results in CRDs that may not work with discovery, but should still be allowed to work.
+			// If there is only one version, storage must always be true.
+			if len(kv) == 1 {
+				v.Storage = true
+			}
+			resource.Spec.Versions = append(resource.Spec.Versions, v)
+		}
+
+		contents, err := c.outputEncoder(resource)
 		if err != nil {
 			return nil, err
 		}
-		resource.Spec.Versions = append(resource.Spec.Versions, v)
+		files = append(files, codejen.File{
+			Data:         contents,
+			RelativePath: fmt.Sprintf("%s.%s.%s", kv[0].kind.MachineName, appManifest.Properties().FullGroup, c.outputExtension),
+			From:         []codejen.NamedJenny{c},
+		})
 	}
 
-	contents, err := c.outputEncoder(resource)
-	if err != nil {
-		return nil, err
-	}
-
-	return codejen.NewFile(fmt.Sprintf("%s.%s.%s", kind.Properties().MachineName, kind.Properties().APIResource.Group, c.outputExtension), contents, c), nil
+	return files, nil
 }
 
-func KindVersionToCRDSpecVersion(kv codegen.KindVersion, kindName string, stored bool) (k8s.CustomResourceDefinitionSpecVersion, error) {
-	props, err := CUEToCRDOpenAPI(kv.Schema, kindName, kv.Version)
+func KindVersionToCRDSpecVersion(schema cue.Value, kind codegen.VersionedKind, version string, stored bool) (k8s.CustomResourceDefinitionSpecVersion, error) {
+	props, err := cueToCRDOpenAPI(schema, kind.Kind)
 	if err != nil {
 		return k8s.CustomResourceDefinitionSpecVersion{}, err
 	}
 
 	def := k8s.CustomResourceDefinitionSpecVersion{
-		Name:    kv.Version,
+		Name:    version,
 		Served:  true,
 		Storage: stored,
 		Schema: map[string]any{
@@ -89,9 +147,9 @@ func KindVersionToCRDSpecVersion(kv codegen.KindVersion, kindName string, stored
 		},
 		Subresources: make(map[string]any),
 	}
-	if len(kv.SelectableFields) > 0 {
-		sf := make([]k8s.CustomResourceDefinitionSelectableField, len(kv.SelectableFields))
-		for i, field := range kv.SelectableFields {
+	if len(kind.SelectableFields) > 0 {
+		sf := make([]k8s.CustomResourceDefinitionSelectableField, len(kind.SelectableFields))
+		for i, field := range kind.SelectableFields {
 			field = strings.Trim(field, " ")
 			if field == "" {
 				continue
@@ -106,9 +164,9 @@ func KindVersionToCRDSpecVersion(kv codegen.KindVersion, kindName string, stored
 		def.SelectableFields = sf
 	}
 
-	if len(kv.AdditionalPrinterColumns) > 0 {
-		apc := make([]k8s.CustomResourceDefinitionAdditionalPrinterColumn, len(kv.AdditionalPrinterColumns))
-		for i, col := range kv.AdditionalPrinterColumns {
+	if len(kind.AdditionalPrinterColumns) > 0 {
+		apc := make([]k8s.CustomResourceDefinitionAdditionalPrinterColumn, len(kind.AdditionalPrinterColumns))
+		for i, col := range kind.AdditionalPrinterColumns {
 			apc[i] = k8s.CustomResourceDefinitionAdditionalPrinterColumn{
 				Name:        col.Name,
 				Type:        col.Type,
@@ -147,88 +205,60 @@ type customResourceDefinitionMetadata struct {
 	// TODO: other fields as necessary for codegen
 }
 
-type cueOpenAPIEncoded struct {
-	Components cueOpenAPIEncodedComponents `json:"components"`
-}
-
-type cueOpenAPIEncodedComponents struct {
-	Schemas map[string]any `json:"schemas"`
-}
-
-func CUEToCRDOpenAPI(v cue.Value, name, version string) (map[string]any, error) {
-	oyaml, err := CUEValueToOAPIYAML(v, CUEOpenAPIConfig{
-		Name:    name,
-		Version: version,
-		NameFunc: func(_ cue.Value, _ cue.Path) string {
-			return ""
-		},
-		ExpandReferences: true,
-	})
+func cueToOpenAPIBytes(v cue.Value, name string) ([]byte, error) {
+	defpath := cue.MakePath(cue.Def(name))
+	val := v.Context().CompileString(fmt.Sprintf("#%s: _", name))
+	defsch := val.FillPath(defpath, v)
+	codegenPipeline := cog.TypesFromSchema().
+		CUEValue(name, defsch, cog.ForceEnvelope(name)).
+		GenerateOpenAPI(cog.OpenAPIGenerationConfig{})
+	files, err := codegenPipeline.Run(context.Background())
 	if err != nil {
 		return nil, err
 	}
+	// should only be one file
+	if len(files) != 1 {
+		return nil, fmt.Errorf("expected one OpenAPI definition but got %d", len(files))
+	}
+	return files[0].Data, nil
+}
 
-	back := cueOpenAPIEncoded{}
-	err = goyaml.Unmarshal(oyaml, &back)
+// TODO: once the CRD jenny uses a manifest, we can use the same process as the manifest jenny
+func cueToCRDOpenAPI(v cue.Value, name string) (map[string]any, error) {
+	defpath := cue.MakePath(cue.Def(name))
+	val := v.Context().CompileString(fmt.Sprintf("#%s: _", name))
+	defsch := val.FillPath(defpath, v)
+	codegenPipeline := cog.TypesFromSchema().
+		CUEValue(name, defsch, cog.ForceEnvelope(name)).
+		GenerateOpenAPI(cog.OpenAPIGenerationConfig{})
+	files, err := codegenPipeline.Run(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	if len(back.Components.Schemas) != 1 {
-		// There should only be one schema here...
-		// TODO: this may change with subresources--but subresources should have defined names
-		return nil, fmt.Errorf("version %s has multiple schemas", version)
+	// should only be one file
+	if len(files) != 1 {
+		return nil, fmt.Errorf("expected one OpenAPI definition but got %d", len(files))
 	}
-	var schemaProps map[string]any
-	for k, v := range back.Components.Schemas {
-		d, ok := v.(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("error generating openapi schema - generated schema has invalid type")
-		}
-		schemaProps, ok = d["properties"].(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("error generating openapi schema - %s has no properties", k)
-		}
+	// Parse the JSON in the file into openAPI components
+	doc, err := openapi3.NewLoader().LoadFromData(files[0].Data)
+	if err != nil {
+		return nil, err
 	}
-	// Remove the "metadata" property, as metadata can't be extended in a CRD (the k8s.Client will handle how to encode/decode the metadata)
-	delete(schemaProps, "metadata")
-
-	// CRDs have a problem with openness and the "additionalProperties: {}", we need to _instead_ use "x-kubernetes-preserve-unknown-fields": true
-	replaceAdditionalProperties(schemaProps)
-
-	return schemaProps, nil
-}
-
-func replaceAdditionalProperties(props map[string]any) {
-	for _, v := range props {
-		cast, ok := v.(map[string]any)
-		if !ok {
-			return
-		}
-		if val, ok := cast["additionalProperties"]; ok {
-			castVal, ok := val.(map[string]any)
-			if !ok {
-				return
-			}
-			if len(castVal) == 0 {
-				delete(cast, "additionalProperties")
-				cast["x-kubernetes-preserve-unknown-fields"] = true
-			} else if innerProps, ok := castVal["properties"]; ok {
-				castInnerProps, ok := innerProps.(map[string]any)
-				if !ok {
-					return
-				}
-				replaceAdditionalProperties(castInnerProps)
-				castVal["properties"] = castInnerProps
-				cast["additionalProperties"] = castVal
-			}
-		}
-		if innerProps, ok := cast["properties"]; ok {
-			castInnerProps, ok := innerProps.(map[string]any)
-			if !ok {
-				return
-			}
-			replaceAdditionalProperties(castInnerProps)
-			cast["properties"] = castInnerProps
-		}
+	converted, err := app.GetCRDOpenAPISchema(doc.Components, name)
+	if err != nil {
+		return nil, err
 	}
+	// Delete the "metadata" property
+	delete(converted.Properties, "metadata")
+	// Convert to JSON and then into a map
+	j, err := json.Marshal(converted.Properties)
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[string]any)
+	err = json.Unmarshal(j, &m)
+	if err != nil {
+		return nil, err
+	}
+	return m, nil
 }

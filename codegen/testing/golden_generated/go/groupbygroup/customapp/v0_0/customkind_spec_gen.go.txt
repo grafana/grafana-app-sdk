@@ -1,0 +1,19 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package v0_0
+
+// +k8s:openapi-gen=true
+type CustomKindSpec struct {
+	Field1          string `json:"field1"`
+	DeprecatedField string `json:"deprecatedField"`
+}
+
+// NewCustomKindSpec creates a new CustomKindSpec object.
+func NewCustomKindSpec() *CustomKindSpec {
+	return &CustomKindSpec{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for CustomKindSpec.
+func (CustomKindSpec) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v0_0.CustomKindSpec"
+}

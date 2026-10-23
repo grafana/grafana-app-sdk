@@ -2,16 +2,34 @@ package testing
 
 import "time"
 
+customManifest: {
+	appName: "custom-app"
+	preferredVersion: "v1-0"
+	versions: {
+		"v0-0": custom_v0_0
+		"v1-0": custom_v1_0
+	}
+}
+
+custom_v0_0: {
+	kinds: [{
+			schema: customKind.versions["v0-0"].schema
+		} & customKind]
+}
+
+custom_v1_0: {
+	kinds: [{
+			schema: customKind.versions["v1-0"].schema
+		} & customKind]
+}
+
 customKind: {
-	group: "custom"
-	kind: "CustomKind"
-	current: "v1-0"
-	apiResource: {}
+	kind:    "CustomKind"
 	versions: {
 		"v0-0": {
 			schema: {
 				spec: {
-					field1: string
+					field1:          string
 					deprecatedField: string
 				}
 			}
@@ -19,48 +37,61 @@ customKind: {
 		"v1-0": {
 			schema: {
 				#InnerObject1: {
-                    innerField1: string
-                    innerField2: [...string]
-                    innerField3: [...#InnerObject2]
-                } @cuetsy(kind="interface")
-                #InnerObject2: {
-                    name: string
-                    details: {
-                        [string]: _
-                    }
-                } @cuetsy(kind="interface")
-                #Type1: {
-                    group: string
-                    options?: [...string]
-                } @cuetsy(kind="interface")
-                #Type2: {
-                    group: string
-                    details: {
-                        [string]: _
-                    }
-                } @cuetsy(kind="interface")
-                #UnionType: #Type1 | #Type2 @cuetsy(kind="type")
-                spec: {
-                    field1: string
-                    inner: #InnerObject1
-                    union: #UnionType
-                    map: {
-                        [string]: #Type2
-                    }
-                    timestamp: string & time.Time @cuetsy(kind="string")
-                    enum: "val1" | "val2" | "val3" | "val4" | *"default" @cuetsy(kind="enum")
-                    i32: int32 & <= 123456
-                    i64: int64 & >= 123456
-                    boolField: bool | *false
-                    floatField: float64
-                }
-                status: {
-                    statusField1: string
-                }
-                metadata: {
-                    customMetadataField: string
-                    otherMetadataField: string
-                }
+					innerField1: string
+					innerField2: [...string]
+					innerField3: [...#InnerObject2]
+					innerField4: [...{
+						[string]: _
+					}]
+				}
+				#InnerObject2: {
+					name: string
+					details: {
+						[string]: _
+					}
+				}
+				#UnionTypeDiscriminator: "Type1" | "Type2"
+				#Type1: {
+					type: #UnionTypeDiscriminator & "Type1"
+					group: string
+					options?: [...string]
+				}
+				#Type2: {
+					type: #UnionTypeDiscriminator & "Type2"
+					group: string
+					details: {
+						[string]: _
+					}
+				}
+				#RecursiveList: {
+					val: string
+					next?: #RecursiveList
+				}
+				#UnionType: #Type1 | #Type2
+				spec: {
+					field1: string
+					inner:  #InnerObject1
+					union:  #UnionType
+					map: {
+						[string]: #Type2
+					}
+					timestamp:  string & time.Time
+					enum:       "val1" | "val2" | "val3" | "val4" | *"default"
+					i32:        int32 & <=123456
+					i64:        int64 & >=123456
+					boolField:  bool | *false
+					floatField: float64
+					linkedList: #RecursiveList
+					exclusiveInt: int & < 100 & > 10
+				}
+				status: {
+					statusField1: string
+					[string]:     _
+				} @cog(open=true)
+				metadata: {
+					customMetadataField: string
+					otherMetadataField:  string
+				}
 			}
 		}
 	}

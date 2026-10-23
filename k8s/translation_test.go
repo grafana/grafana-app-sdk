@@ -464,7 +464,7 @@ func (o *TestResourceObjectList) GetItems() []resource.Object {
 
 func (o *TestResourceObjectList) SetItems(items []resource.Object) {
 	o.Items = make([]TestResourceObject, len(items))
-	for i := 0; i < len(items); i++ {
+	for i := range items {
 		o.Items[i] = *items[i].(*TestResourceObject)
 	}
 }

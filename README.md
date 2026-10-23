@@ -44,7 +44,7 @@ Which will print the version of the CLI which you have installed.
 
 ## App Design
 
-An agnotic view of an app using the SDK looks like:
+An agnostic view of an app using the SDK looks like:
 
 ![Application Using SDK Diagram](docs/diagrams/app_logic.png)
 
@@ -60,15 +60,15 @@ For more details on application design, see [application design documentation](d
 
 Full CLI usage is covered in [CLI docs page](docs/cli.md), but for a brief overview of the commands:
 
-| Command | Description |
-|---------|-------------|
-| `version` | Prints the version (use `-v` for a verbose print) |
-| `generate` | Generates code from your CUE kinds (defaults to CUE in `schemas`, use `-c`/`--cuepath` to speficy a different CUE path) |
-| `project init <module name>` | Creates a project template, including directory structure, go module, CUE module, and Makefile |
-| `project kind add <kind name>` | Add a boilerplate kind in CUE with descriptive comments for all fields |
-| `project component add <component>` | Add boilerplate code for a component to your project. `<component>` options are `frontend`, `backend`, and `operator` |
-| `project local init` | Initialize the `./local` directory for a local development environment (done automatically by `project init`) |
-| `project local generate` | Generate a YAML bundle for local deployment, based on your CUE kinds and `./local/config.yaml` |
+| Command | Description                                                                                                           |
+|---------|-----------------------------------------------------------------------------------------------------------------------|
+| `version` | Prints the version (use `-v` for a verbose print)                                                                     |
+| `generate` | Generates code from your CUE kinds (defaults to CUE in `kinds`, use `-s`/`--source` to speficy a different CUE path)  |
+| `project init <module name>` | Creates a project template, including directory structure, go module, CUE module, and Makefile                        |
+| `project kind add <kind name>` | Add a boilerplate kind in CUE with descriptive comments for all fields                                                |
+| `project component add <component>` | Add boilerplate code for a component to your project. `<component>` options are `frontend` and `operator`             |
+| `project local init` | Initialize the `./local` directory for a local development environment (done automatically by `project init`)         |
+| `project local generate` | Generate a YAML bundle for local deployment, based on your CUE kinds and `./local/config.yaml`                        |
 
 ## Examples
 
@@ -77,7 +77,7 @@ The [examples](./examples) directory contains small examples of different grafan
 ## Further Reading
 
 Please see the [/docs](docs/README.md) directory for full documentation,
-or take a look at the [Design Patterns](docs/design-patterns.md), [Kubernetes Concepts](docs/kubernetes.md), or the [tutorial](docs/tutorials/issue-tracker/README.md).
+or take a look at the [Design Patterns](docs/application-design/README.md), [App Platform Concepts](docs/application-design/platform-concepts.md), or the [tutorial](docs/tutorials/issue-tracker/README.md).
 
 The `examples` directory contains runnable example projects that use different SDK components.
 
@@ -85,4 +85,4 @@ Each package also contains a README.md detailing package usage and simple exampl
 
 ## Contributing
 
-See our [contributing guide](CONTRIBUTING) for instructions on how to contribute to the development of the SDK.
+See our [contributing guide](CONTRIBUTING.md) for instructions on how to contribute to the development of the SDK.

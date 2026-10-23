@@ -2,13 +2,18 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
-	"regexp"
+	"os/exec"
+	"path/filepath"
 	"strings"
+
+	"github.com/spf13/cobra"
 )
 
-const mkDirPerms = 0755
+const mkDirPerms = 0o755
 
 // checkAndMakePath makes a path if it doesn't already exist. If the path already exists but is not a directory,
 // it will error.
@@ -36,7 +41,7 @@ func writeFile(path string, contents []byte) error {
 		}
 	}
 	fmt.Printf(" * Writing file %s\n", path)
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
 	if err != nil {
 		return err
 	}
@@ -65,7 +70,7 @@ func writeExecutableFile(path string, contents []byte) error {
 		}
 	}
 	fmt.Printf(" * Writing file %s\n", path)
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0777)
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o777)
 	if err != nil {
 		return err
 	}
@@ -106,25 +111,72 @@ func promptYN(prompt string, defaultAnswer bool) bool {
 	}
 }
 
-// getGoModule returns the go module name by reading the go.mod file supplied
+type gomod struct {
+	Module struct {
+		Path string `json:"Path"`
+	} `json:"Module"`
+}
+
+// getGoModule returns the go module name by running `go mod edit --json` in the directory of the go.mod file
 // Linter doesn't like "Potential file inclusion via variable", which is actually desired here
 //
 //nolint:errcheck,gosec
 func getGoModule(goModPath string) (string, error) {
-	file, err := os.Open(goModPath)
+	dir := filepath.Dir(goModPath)
+
+	cmd := exec.Command("go", "mod", "edit", "-json")
+	cmd.Dir = dir
+	out, err := cmd.Output()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("unable to run go mod edit --json: %w", err)
 	}
-	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
-	r := regexp.MustCompile(`module (.+)`)
+	var mod gomod
+	if err := json.Unmarshal(out, &mod); err == nil {
+		return mod.Module.Path, nil
+	}
 
-	for scanner.Scan() {
-		if matches := r.FindStringSubmatch(scanner.Text()); len(matches) > 1 {
-			return matches[1], nil
+	return "", errors.New("unable to locate module in go.mod file")
+}
+
+const flagErrorMsgTemplate = "CLI flags have been replaced by CUE defined config values:\n%s\nFollow this migration guide https://github.com/grafana/grafana-app-sdk/blob/main/docs/migrations/v0.52.md to migrate your usage of CLI flags to the new CUE config values"
+
+func errorOnDeprecatedFlags(_ *cobra.Command, err error) error {
+	removedFlags := make([]string, 0)
+
+	removedFlagConfigCueKeyByName := map[string]string{
+		"--manifest":            "manifestSelectors",
+		"--genoperatorstate":    "codegen.enableOperatorStatusGeneration",
+		"--gogenpath":           "codegen.goGenPath",
+		"-g":                    "codegen.goGenPath",
+		"--tsgenpath":           "codegen.tsGenPath",
+		"-t":                    "codegen.tsGenPath",
+		"--defencoding":         "definitions.encoding (if set to 'none' -> definitions.genManifest=false, definitions.genCRDs=false)",
+		"--defpath":             "definitions.path",
+		"--grouping":            "kinds.grouping",
+		"--postprocess":         "codegen.enableK8sPostProcessing",
+		"--noschemasinmanifest": "definitions.manifestSchemas",
+		"--gomodule":            "codegen.goModule",
+		"--gomodgenpath":        "codegen.goModGenPath",
+		"--useoldmanifestkinds": "REMOVED",
+		"--crdmanifest":         "definitions.manifestVersion",
+	}
+
+	for _, arg := range os.Args[1:] {
+		if arg == "--" {
+			break
+		}
+		if idx := strings.Index(arg, "="); idx >= 0 {
+			arg = arg[:idx]
+		}
+		if configKey, ok := removedFlagConfigCueKeyByName[arg]; ok {
+			removedFlags = append(removedFlags, fmt.Sprintf(" %s -> %s", arg, configKey))
 		}
 	}
 
-	return "", fmt.Errorf("unable to locate module in go.mod file")
+	if len(removedFlags) == 0 {
+		return err
+	}
+
+	return fmt.Errorf(flagErrorMsgTemplate, strings.Join(removedFlags, "\n"))
 }

@@ -3,10 +3,12 @@ package k8s
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -59,7 +61,7 @@ func (m *ResourceManager) WaitForAvailability(ctx context.Context, schema resour
 			if err == nil {
 				return nil
 			}
-			if err != nil && sc != http.StatusNotFound {
+			if sc != http.StatusNotFound {
 				return err
 			}
 		case <-ctx.Done():
@@ -81,10 +83,7 @@ func (m *ResourceManager) RegisterSchema(ctx context.Context, schema resource.Sc
 	err := m.client.Get().Resource("customresourcedefinitions").Name(name).
 		Do(ctx).StatusCode(&sc).Into(&existing)
 	if err != nil && sc != http.StatusNotFound {
-		if sc >= 300 {
-			return NewServerResponseError(err, sc)
-		}
-		return err
+		return ParseKubernetesError(nil, sc, err)
 	}
 	if sc == http.StatusNotFound {
 		// Create new
@@ -98,7 +97,7 @@ func (m *ResourceManager) RegisterSchema(ctx context.Context, schema resource.Sc
 				if options.NoErrorOnConflict {
 					return nil // Quietly exit
 				}
-				return fmt.Errorf("schema with identical kind, group, and version already registered")
+				return errors.New("schema with identical kind, group, and version already registered")
 			}
 			// Replace with the new version
 			existing.Spec.Versions[idx] = toVersion(schema)
@@ -111,8 +110,8 @@ func (m *ResourceManager) RegisterSchema(ctx context.Context, schema resource.Sc
 		existing.Spec.Versions = append(existing.Spec.Versions, toVersion(schema))
 	}
 	// Make sure the latest is the one with storage = true
-	sort.Slice(existing.Spec.Versions, func(i, j int) bool {
-		return existing.Spec.Versions[i].Name > existing.Spec.Versions[j].Name
+	slices.SortFunc(existing.Spec.Versions, func(a, b CustomResourceDefinitionSpecVersion) int {
+		return strings.Compare(b.Name, a.Name)
 	})
 	for i := 0; i < len(existing.Spec.Versions); i++ {
 		existing.Spec.Versions[i].Storage = false
@@ -124,10 +123,7 @@ func (m *ResourceManager) RegisterSchema(ctx context.Context, schema resource.Sc
 	}
 	err = m.client.Put().Resource("customresourcedefinitions").Body(bytes).Do(ctx).StatusCode(&sc).Error()
 	if err != nil {
-		if sc >= 300 {
-			return NewServerResponseError(err, sc)
-		}
-		return err
+		return ParseKubernetesError(nil, sc, err)
 	}
 	if options.WaitForAvailability {
 		return m.WaitForAvailability(ctx, schema)
@@ -165,10 +161,7 @@ func (m *ResourceManager) create(ctx context.Context, schema resource.Schema, na
 	}
 	sc := 0
 	err = m.client.Post().Resource("customresourcedefinitions").Body(bytes).Do(ctx).StatusCode(&sc).Error()
-	if sc >= 300 {
-		return NewServerResponseError(err, sc)
-	}
-	return err
+	return ParseKubernetesError(nil, sc, err)
 }
 
 func toVersion(schema resource.Schema) CustomResourceDefinitionSpecVersion {
@@ -216,14 +209,12 @@ const (
 )
 
 // toOpenAPIV3 converts a struct into a map[string]any representation of an OpenAPIV3-compliant JSON spec
-func toOpenAPIV3(typ reflect.Type) map[string]any { // nolint: funlen
+func toOpenAPIV3(typ reflect.Type) map[string]any {
 	for typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
 	m := make(map[string]any)
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
-
+	for field := range typ.Fields() {
 		// Process type
 		fieldType := field.Type
 		for fieldType.Kind() == reflect.Pointer {
@@ -253,9 +244,7 @@ func toOpenAPIV3(typ reflect.Type) map[string]any { // nolint: funlen
 		case reflect.Struct:
 			props := toOpenAPIV3(fieldType)
 			if field.Anonymous { // Embed anonymous fields
-				for key, val := range props {
-					m[key] = val
-				}
+				maps.Copy(m, props)
 				continue
 			}
 			v["type"] = openAPITypeObject
@@ -324,10 +313,32 @@ func (crd *CustomResourceDefinition) DeepCopyObject() runtime.Object {
 
 // CustomResourceDefinitionSpec is the body or spec of a kubernetes Custom Resource Definition
 type CustomResourceDefinitionSpec struct {
-	Group    string                                `json:"group" yaml:"group"`
-	Versions []CustomResourceDefinitionSpecVersion `json:"versions" yaml:"versions"`
-	Names    CustomResourceDefinitionSpecNames     `json:"names" yaml:"names"`
-	Scope    string                                `json:"scope" yaml:"scope"`
+	Group      string                                  `json:"group" yaml:"group"`
+	Versions   []CustomResourceDefinitionSpecVersion   `json:"versions" yaml:"versions"`
+	Names      CustomResourceDefinitionSpecNames       `json:"names" yaml:"names"`
+	Conversion *CustomResourceDefinitionSpecConversion `json:"conversion,omitempty" yaml:"conversion,omitempty"`
+	Scope      string                                  `json:"scope" yaml:"scope"`
+}
+
+type CustomResourceDefinitionSpecConversion struct {
+	Strategy string                                         `json:"strategy" yaml:"strategy"`
+	Webhook  *CustomResourceDefinitionSpecConversionWebhook `json:"webhook,omitempty" yaml:"webhook,omitempty"`
+}
+
+type CustomResourceDefinitionSpecConversionWebhook struct {
+	ConversionReviewVersions []string                             `json:"conversionReviewVersions" yaml:"conversionReviewVersions"`
+	ClientConfig             CustomResourceDefinitionClientConfig `json:"clientConfig" yaml:"clientConfig"`
+}
+
+type CustomResourceDefinitionClientConfig struct {
+	Service *CustomResourceDefinitionClientConfigService `json:"service,omitempty" yaml:"service,omitempty"`
+	URL     string                                       `json:"url,omitempty" yaml:"url,omitempty"`
+}
+
+type CustomResourceDefinitionClientConfigService struct {
+	Name      string `json:"name,omitempty" yaml:"name,omitempty"`
+	Namespace string `json:"namespace,omitempty" yaml:"namespace,omitempty"`
+	Path      string `json:"path" yaml:"path"`
 }
 
 // CustomResourceDefinitionSpecVersion is the representation of a specific version of a CRD, as part of the overall spec
@@ -373,7 +384,7 @@ func DeepCopyObject(in any) runtime.Object {
 	cpy.Elem().Set(val)
 
 	// Using the <obj>, <ok> for the type conversion ensures that it doesn't panic if it can't be converted
-	if obj, ok := cpy.Interface().(runtime.Object); ok {
+	if obj, ok := reflect.TypeAssert[runtime.Object](cpy); ok {
 		return obj
 	}
 

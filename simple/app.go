@@ -2,16 +2,23 @@ package simple
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/k8s"
+	"github.com/grafana/grafana-app-sdk/logging"
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -51,9 +58,7 @@ func NewAppProvider(manifest app.Manifest, cfg app.SpecificConfig, newAppFunc fu
 	}
 }
 
-var (
-	_ app.App = &App{}
-)
+var _ app.App = &App{}
 
 // KindMutator is an interface which describes an object which can mutate a kind, used in AppManagedKind
 type KindMutator interface {
@@ -98,28 +103,147 @@ type App struct {
 	runner             *app.MultiRunner
 	clientGenerator    resource.ClientGenerator
 	kinds              map[string]AppManagedKind
+	gvrToGVK           map[string]string
 	internalKinds      map[string]resource.Kind
 	cfg                AppConfig
 	converters         map[string]Converter
 	customRoutes       map[string]AppCustomRouteHandler
+	patcher            *k8s.DynamicPatcher
+	collectors         []prometheus.Collector
+	handler            http.Handler
+
+	// Admission metrics (validate/mutate)
+	admissionLatency  *prometheus.HistogramVec
+	admissionTotal    *prometheus.CounterVec
+	admissionInflight *prometheus.GaugeVec
+
+	// Conversion metrics
+	conversionLatency  *prometheus.HistogramVec
+	conversionTotal    *prometheus.CounterVec
+	conversionInflight *prometheus.GaugeVec
+
+	// Custom route metrics
+	customRouteLatency  *prometheus.HistogramVec
+	customRouteTotal    *prometheus.CounterVec
+	customRouteInflight *prometheus.GaugeVec
 }
 
 // AppConfig is the configuration used by App
 type AppConfig struct {
-	Name           string
-	KubeConfig     rest.Config
-	InformerConfig AppInformerConfig
-	ManagedKinds   []AppManagedKind
-	UnmanagedKinds []AppUnmanagedKind
-	Converters     map[schema.GroupKind]Converter
+	Name       string
+	KubeConfig rest.Config
+	// ClientGenerator is the ClientGenerator to use when constructing informers.
+	// It is optional and will default to k8s.NewClientRegistry(KubeConfig, k8s.DefaultClientConfig()) if not present.
+	ClientGenerator resource.ClientGenerator
+	InformerConfig  AppInformerConfig
+	ManagedKinds    []AppManagedKind
+	UnmanagedKinds  []AppUnmanagedKind
+	Converters      map[schema.GroupKind]Converter
+	// Handler serves custom routes through the plugin adapter using full API paths.
+	// When nil, the adapter uses CallCustomRoute.
+	Handler http.Handler
+	// VersionedCustomRoutes is a map of version string => custom route handlers for
+	// custom routes attached at the version level rather than attached to a specific kind.
+	// Custom route paths for each version should not conflict with plural names of kinds for the version.
+	VersionedCustomRoutes map[string]AppVersionRouteHandlers
+	// DiscoveryRefreshInterval is the interval at which the API discovery cache should be refreshed.
+	// This is primarily used by the DynamicPatcher in the OpinionatedWatcher/OpinionatedReconciler
+	// for sending finalizer add/remove patches to the latest version of the kind.
+	// This defaults to 10 minutes.
+	DiscoveryRefreshInterval time.Duration
+	// MetricsConfig is the configuration for prometheus metrics emitted by the App's admission chain
+	// (validate, mutate, convert, custom route). If not provided, a default config with an empty namespace will be used.
+	MetricsConfig metrics.Config
+}
+
+// InformerSupplier is a function which creates an operator.Informer for a kind, given a ClientGenerator and ListWatchOptions
+type InformerSupplier func(
+	kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions,
+) (operator.Informer, error)
+
+// DefaultInformerSupplier is a default InformerSupplier function which creates a basic operator.KubernetesBasedInformer.
+// Note: This supplier does NOT respect WatchListPageSize or UseWatchList configuration.
+// For memory-optimized informers that support these options, use OptimizedInformerSupplier instead.
+var DefaultInformerSupplier = func(
+	kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions,
+) (operator.Informer, error) {
+	client, err := clients.ClientFor(kind)
+	if err != nil {
+		return nil, err
+	}
+
+	if options.ResourceKind == "" {
+		options.ResourceKind = kind.GroupVersionKind().String()
+	}
+
+	inf, err := operator.NewKubernetesBasedInformer(kind, client, options)
+	if err != nil {
+		return nil, err
+	}
+
+	return operator.NewConcurrentInformerFromOptions(inf, options)
+}
+
+// OptimizedInformerSupplier is an InformerSupplier that uses CustomCacheInformer and respects
+// all configuration in InformerOptions, including UseWatchList and WatchListPageSize.
+// This supplier provides better memory efficiency for large-scale watches (>10K objects).
+//
+// Experimental: This API is experimental and may change in future releases.
+//
+// Recommended for:
+//   - Watching cluster-scoped resources (e.g., namespaces, nodes)
+//   - Watching large numbers of objects (>10K)
+//   - Environments with memory constraints
+//
+// Configuration tips:
+//   - Set WatchListPageSize to 5000-10000 for optimal memory usage
+//   - Set UseWatchList to true on Kubernetes 1.27+ for streaming support
+//   - Both can be combined: WatchListPageSize provides fallback pagination if UseWatchList is not available
+var OptimizedInformerSupplier = func(
+	kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions,
+) (operator.Informer, error) {
+	client, err := clients.ClientFor(kind)
+	if err != nil {
+		return nil, err
+	}
+
+	if options.ResourceKind == "" {
+		options.ResourceKind = kind.GroupVersionKind().String()
+	}
+
+	store := cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc)
+	lw := operator.NewListerWatcher(client, kind, options.ListWatchOptions)
+
+	inf := operator.NewCustomCacheInformer(store, lw, kind, operator.CustomCacheInformerOptions{
+		InformerOptions: options,
+	})
+
+	return operator.NewConcurrentInformerFromOptions(inf, options)
 }
 
 // AppInformerConfig contains configuration for the App's internal operator.InformerController
 type AppInformerConfig struct {
-	ErrorHandler       func(context.Context, error)
-	RetryPolicy        operator.RetryPolicy
+	// InformerOptions are the options for the informer.
+	InformerOptions operator.InformerOptions
+	// RetryPolicy is the policy for retrying events.
+	RetryPolicy operator.RetryPolicy
+	// RetryDequeuePolicy is the policy for dequeuing events.
 	RetryDequeuePolicy operator.RetryDequeuePolicy
-	FinalizerSupplier  operator.FinalizerSupplier
+	// FinalizerSupplier is used to generate the finalizer for the kind.
+	FinalizerSupplier operator.FinalizerSupplier
+	// InProgressFinalizerSupplier is used to generate the "in-progress" finalizer used by opinionated adds,
+	// before the "normal" finalizer (provided by FinalizerSupplier) is applied when the add completes successfully.
+	// By default, this is "<app name>-wip"
+	InProgressFinalizerSupplier operator.FinalizerSupplier
+	// InformerSupplier can be set to specify a function for creating informers for kinds.
+	// If left unset, DefaultInformerSupplier will be used.
+	InformerSupplier InformerSupplier
+	// RetryProcessorConfig enables the concurrent retry processor when non-nil.
+	// When set, a RetryProcessor is created and its Prometheus metrics are included in PrometheusCollectors().
+	RetryProcessorConfig *operator.RetryProcessorConfig
+	// MetricsConfig controls the namespace and histogram settings for Prometheus metrics.
+	// Metrics are always created; an empty Namespace produces unprefixed metric names.
+	MetricsConfig metrics.Config
 }
 
 // AppManagedKind is a Kind and associated functionality used by an App.
@@ -154,7 +278,20 @@ type AppUnmanagedKind struct {
 	// Watcher is an optional Watcher to run for this Kind.
 	Watcher operator.ResourceWatcher
 	// ReconcileOptions are the options to use for running the Reconciler or Watcher for the Kind, if one exists.
-	ReconcileOptions BasicReconcileOptions
+	ReconcileOptions UnmanagedKindReconcileOptions
+}
+
+type UnmanagedKindReconcileOptions struct {
+	// Namespace is the namespace to use in the ListWatch request
+	Namespace string
+	// LabelFilters are any label filters to apply to the ListWatch request
+	LabelFilters []string
+	// FieldSelectors are any field selector filters to apply to the ListWatch request
+	FieldSelectors []string
+	// UseOpinionated should be set to true to wrap the Watcher or Reconciler in its opinionated variant.
+	// If true, the app must have permission to add finalizers to the unmanaged Kind, and if
+	// the AppUnmanagedKind is ever removed from the app, the finalizers added should be cleaned up.
+	UseOpinionated bool
 }
 
 // BasicReconcileOptions are settings for the ListWatch and informer setup for a reconciliation loop
@@ -188,24 +325,141 @@ type AppCustomRoute struct {
 	Path   string
 }
 
-type AppCustomRouteHandler func(context.Context, *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error)
+type AppVersionRoute struct {
+	Namespaced bool
+	Path       string
+	Method     AppCustomRouteMethod
+}
+
+type AppCustomRouteHandler func(context.Context, app.CustomRouteResponseWriter, *app.CustomRouteRequest) error
 
 type AppCustomRouteHandlers map[AppCustomRoute]AppCustomRouteHandler
+
+type AppVersionRouteHandlers map[AppVersionRoute]AppCustomRouteHandler
 
 // NewApp creates a new instance of App, managing the kinds provided in AppConfig.ManagedKinds.
 // AppConfig MUST contain a valid KubeConfig to be valid.
 // Watcher/Reconciler error handling, retry, and dequeue logic can be managed with AppConfig.InformerConfig.
+//
+//nolint:funlen
 func NewApp(config AppConfig) (*App, error) {
+	clients := config.ClientGenerator
+	if clients == nil {
+		clients = k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig())
+	}
+	controllerCfg := operator.DefaultInformerControllerConfig()
+	if config.InformerConfig.RetryProcessorConfig != nil {
+		controllerCfg.RetryProcessorConfig = config.InformerConfig.RetryProcessorConfig
+	}
+	controllerCfg.MetricsConfig = config.InformerConfig.MetricsConfig
 	a := &App{
-		informerController: operator.NewInformerController(operator.DefaultInformerControllerConfig()),
+		informerController: operator.NewInformerController(controllerCfg),
 		runner:             app.NewMultiRunner(),
-		clientGenerator:    k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig()),
+		clientGenerator:    clients,
 		kinds:              make(map[string]AppManagedKind),
+		gvrToGVK:           make(map[string]string),
 		internalKinds:      make(map[string]resource.Kind),
 		converters:         make(map[string]Converter),
 		customRoutes:       make(map[string]AppCustomRouteHandler),
 		cfg:                config,
+		collectors:         make([]prometheus.Collector, 0),
+		handler:            config.Handler,
 	}
+	if provider, ok := clients.(metrics.Provider); ok {
+		a.collectors = append(a.collectors, provider.PrometheusCollectors()...)
+	}
+	// Create admission chain metrics
+	mcfg := config.MetricsConfig
+	a.admissionLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace:                       mcfg.Namespace,
+		Subsystem:                       "admission",
+		Name:                            "request_duration_seconds",
+		Help:                            "Time (in seconds) spent processing admission requests.",
+		Buckets:                         metrics.LatencyBuckets,
+		NativeHistogramBucketFactor:     mcfg.NativeHistogramBucketFactor,
+		NativeHistogramMaxBucketNumber:  mcfg.NativeHistogramMaxBucketNumber,
+		NativeHistogramMinResetDuration: time.Hour,
+	}, []string{"operation", "group", "kind", "version", "action", "status"})
+	a.admissionTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: mcfg.Namespace,
+		Subsystem: "admission",
+		Name:      "requests_total",
+		Help:      "Total number of admission requests.",
+	}, []string{"operation", "group", "kind", "version", "action", "status"})
+	a.admissionInflight = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: mcfg.Namespace,
+		Subsystem: "admission",
+		Name:      "inflight_requests",
+		Help:      "Current number of in-flight admission requests.",
+	}, []string{"operation", "group", "kind", "version"})
+	a.conversionLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace:                       mcfg.Namespace,
+		Subsystem:                       "conversion",
+		Name:                            "request_duration_seconds",
+		Help:                            "Time (in seconds) spent processing conversion requests.",
+		Buckets:                         metrics.LatencyBuckets,
+		NativeHistogramBucketFactor:     mcfg.NativeHistogramBucketFactor,
+		NativeHistogramMaxBucketNumber:  mcfg.NativeHistogramMaxBucketNumber,
+		NativeHistogramMinResetDuration: time.Hour,
+	}, []string{"group", "kind", "source_version", "target_version", "status"})
+	a.conversionTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: mcfg.Namespace,
+		Subsystem: "conversion",
+		Name:      "requests_total",
+		Help:      "Total number of conversion requests.",
+	}, []string{"group", "kind", "source_version", "target_version", "status"})
+	a.conversionInflight = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: mcfg.Namespace,
+		Subsystem: "conversion",
+		Name:      "inflight_requests",
+		Help:      "Current number of in-flight conversion requests.",
+	}, []string{"group", "kind", "source_version", "target_version"})
+	a.customRouteLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace:                       mcfg.Namespace,
+		Subsystem:                       "custom_route",
+		Name:                            "request_duration_seconds",
+		Help:                            "Time (in seconds) spent processing custom route requests.",
+		Buckets:                         metrics.LatencyBuckets,
+		NativeHistogramBucketFactor:     mcfg.NativeHistogramBucketFactor,
+		NativeHistogramMaxBucketNumber:  mcfg.NativeHistogramMaxBucketNumber,
+		NativeHistogramMinResetDuration: time.Hour,
+	}, []string{"group", "method", "path", "kind", "status"})
+	a.customRouteTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: mcfg.Namespace,
+		Subsystem: "custom_route",
+		Name:      "requests_total",
+		Help:      "Total number of custom route requests.",
+	}, []string{"group", "method", "path", "kind", "status"})
+	a.customRouteInflight = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: mcfg.Namespace,
+		Subsystem: "custom_route",
+		Name:      "inflight_requests",
+		Help:      "Current number of in-flight custom route requests.",
+	}, []string{"group", "method", "path", "kind"})
+	a.collectors = append(a.collectors,
+		a.admissionLatency, a.admissionTotal, a.admissionInflight,
+		a.conversionLatency, a.conversionTotal, a.conversionInflight,
+		a.customRouteLatency, a.customRouteTotal, a.customRouteInflight,
+	)
+
+	if config.InformerConfig.InformerOptions.ErrorHandler != nil {
+		a.informerController.ErrorHandler = config.InformerConfig.InformerOptions.ErrorHandler
+	}
+	if config.InformerConfig.RetryPolicy != nil {
+		a.informerController.RetryPolicy = config.InformerConfig.RetryPolicy
+	}
+	if config.InformerConfig.RetryDequeuePolicy != nil {
+		a.informerController.RetryDequeuePolicy = config.InformerConfig.RetryDequeuePolicy
+	}
+	discoveryRefresh := config.DiscoveryRefreshInterval
+	if discoveryRefresh == 0 {
+		discoveryRefresh = time.Minute * 10
+	}
+	p, err := k8s.NewDynamicPatcher(clients, discoveryRefresh)
+	if err != nil {
+		return nil, err
+	}
+	a.patcher = p
 	for _, kind := range config.ManagedKinds {
 		err := a.manageKind(kind)
 		if err != nil {
@@ -218,12 +472,25 @@ func NewApp(config AppConfig) (*App, error) {
 			return nil, err
 		}
 	}
+	for version, routeHandlers := range config.VersionedCustomRoutes {
+		for info, handler := range routeHandlers {
+			scope := resource.NamespacedScope
+			if !info.Namespaced {
+				scope = resource.ClusterScope
+			}
+			key := a.customRouteHandlerKey(schema.GroupVersionKind{
+				Version: version,
+			}, string(info.Method), info.Path, scope)
+			if _, ok := a.customRoutes[key]; ok {
+				return nil, fmt.Errorf("custom route '%s %s' already exists for version %s", info.Method, info.Path, version)
+			}
+			a.customRoutes[key] = handler
+		}
+	}
 	for gk, converter := range config.Converters {
 		a.RegisterKindConverter(gk, converter)
 	}
-	a.runner.AddRunnable(&k8sRunnable{
-		runner: a.informerController,
-	})
+	a.runner.AddRunnable(a.informerController)
 	return a, nil
 }
 
@@ -234,26 +501,26 @@ func NewApp(config AppConfig) (*App, error) {
 // indicates, no error will be returned.
 // This method can be used after initializing an app to verify it matches the loaded app.ManifestData from the app runner.
 func (a *App) ValidateManifest(manifest app.ManifestData) error {
-	for _, k := range manifest.Kinds {
-		if _, ok := a.converters[schema.GroupKind{Group: manifest.Group, Kind: k.Kind}.String()]; !ok && k.Conversion {
-			return fmt.Errorf("kind %s has conversion enabled but no converter is registered", k.Kind)
-		}
-		for _, v := range k.Versions {
+	for _, v := range manifest.Versions {
+		for _, k := range v.Kinds {
+			if _, ok := a.converters[schema.GroupKind{Group: manifest.Group, Kind: k.Kind}.String()]; !ok && k.Conversion {
+				return fmt.Errorf("kind %s has conversion enabled but no converter is registered", k.Kind)
+			}
 			kind, ok := a.kinds[gvk(manifest.Group, v.Name, k.Kind)]
 			if !ok {
 				return fmt.Errorf("kind %s/%s exists in manifest but is not managed by the app", k.Kind, v.Name)
 			}
-			if v.Admission != nil && v.Admission.SupportsAnyValidation() && kind.Validator == nil {
+			if k.Admission != nil && k.Admission.SupportsAnyValidation() && kind.Validator == nil {
 				return fmt.Errorf("kind %s/%s supports validation but has no validator", k.Kind, v.Name)
 			}
-			if v.Admission != nil && v.Admission.SupportsAnyMutation() && kind.Mutator == nil {
+			if k.Admission != nil && k.Admission.SupportsAnyMutation() && kind.Mutator == nil {
 				return fmt.Errorf("kind %s/%s supports mutation but has no mutator", k.Kind, v.Name)
 			}
 			// Check for the inverse
-			if kind.Validator != nil && (v.Admission == nil || !v.Admission.SupportsAnyValidation()) {
+			if kind.Validator != nil && (k.Admission == nil || !k.Admission.SupportsAnyValidation()) {
 				return fmt.Errorf("kind %s/%s does not support validation, but has a validator", k.Kind, v.Name)
 			}
-			if kind.Mutator != nil && (v.Admission == nil || !v.Admission.SupportsAnyMutation()) {
+			if kind.Mutator != nil && (k.Admission == nil || !k.Admission.SupportsAnyMutation()) {
 				return fmt.Errorf("kind %s/%s does not support mutation, but has a mutator", k.Kind, v.Name)
 			}
 		}
@@ -263,16 +530,23 @@ func (a *App) ValidateManifest(manifest app.ManifestData) error {
 
 // ManagedKinds returns a slice of all Kinds managed by this App
 func (a *App) ManagedKinds() []resource.Kind {
-	kinds := make([]resource.Kind, 0)
+	kinds := make([]resource.Kind, 0, len(a.kinds))
 	for _, k := range a.kinds {
 		kinds = append(kinds, k.Kind)
 	}
 	return kinds
 }
 
+// ProvideRouteHandler returns the optional custom route handler from AppConfig.
+func (a *App) ProvideRouteHandler() (http.Handler, error) {
+	return a.handler, nil
+}
+
 // Runner returns a resource.Runnable() that runs the underlying operator.InformerController and all custom runners
 // added via AddRunnable. The returned resource.Runnable also implements metrics.Provider, allowing the caller
 // to gather prometheus.Collector objects used by all underlying runners.
+// PrometheusCollectors returns all Collectors from this Runner, and only one or the other should be used
+// to avoid duplicate metric registration.
 func (a *App) Runner() app.Runnable {
 	return a.runner
 }
@@ -285,19 +559,23 @@ func (a *App) AddRunnable(runner app.Runnable) {
 
 // manageKind introduces a new kind to manage.
 func (a *App) manageKind(kind AppManagedKind) error {
+	if kind.Kind.Schema == nil {
+		return errors.New("cannot manage an empty kind")
+	}
+	a.gvrToGVK[gvr(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Plural())] = gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())
 	a.kinds[gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())] = kind
 	// If there are custom routes, validate them
 	for route, handler := range kind.CustomRoutes {
 		if route.Method == "" {
-			return fmt.Errorf("custom route cannot have an empty method")
+			return errors.New("custom route cannot have an empty method")
 		}
 		if route.Path == "" {
-			return fmt.Errorf("custom route cannot have an empty path")
+			return errors.New("custom route cannot have an empty path")
 		}
 		if handler == nil {
-			return fmt.Errorf("custom route cannot have a nil handler")
+			return errors.New("custom route cannot have a nil handler")
 		}
-		key := a.customRouteHandlerKey(kind.Kind, string(route.Method), route.Path)
+		key := a.customRouteHandlerKey(kind.Kind.GroupVersionKind(), string(route.Method), route.Path, kind.Kind.Scope())
 		if _, ok := a.customRoutes[key]; ok {
 			return fmt.Errorf("custom route '%s %s' already exists", route.Method, route.Path)
 		}
@@ -305,31 +583,44 @@ func (a *App) manageKind(kind AppManagedKind) error {
 	}
 	if kind.Reconciler != nil || kind.Watcher != nil {
 		return a.watchKind(AppUnmanagedKind{
-			Kind:             kind.Kind,
-			Reconciler:       kind.Reconciler,
-			Watcher:          kind.Watcher,
-			ReconcileOptions: kind.ReconcileOptions,
+			Kind:       kind.Kind,
+			Reconciler: kind.Reconciler,
+			Watcher:    kind.Watcher,
+			ReconcileOptions: UnmanagedKindReconcileOptions{
+				Namespace:      kind.ReconcileOptions.Namespace,
+				LabelFilters:   kind.ReconcileOptions.LabelFilters,
+				FieldSelectors: kind.ReconcileOptions.FieldSelectors,
+				UseOpinionated: !kind.ReconcileOptions.UsePlain,
+			},
 		})
 	}
 	return nil
 }
 
 func (a *App) watchKind(kind AppUnmanagedKind) error {
+	if kind.Kind.Schema == nil {
+		return errors.New("cannot watch an empty kind")
+	}
 	if kind.Reconciler != nil && kind.Watcher != nil {
-		return fmt.Errorf("please provide either Watcher or Reconciler, not both")
+		return errors.New("please provide either Watcher or Reconciler, not both")
 	}
 	if kind.Reconciler != nil || kind.Watcher != nil {
-		client, err := a.clientGenerator.ClientFor(kind.Kind)
-		if err != nil {
-			return err
+		infSupplier := a.cfg.InformerConfig.InformerSupplier
+		if infSupplier == nil {
+			infSupplier = DefaultInformerSupplier
 		}
-		inf, err := operator.NewKubernetesBasedInformerWithFilters(kind.Kind, client, operator.KubernetesBasedIformerOptions{
-			ListWatchOptions: operator.ListWatchOptions{
-				Namespace:      kind.ReconcileOptions.Namespace,
-				LabelFilters:   kind.ReconcileOptions.LabelFilters,
-				FieldSelectors: kind.ReconcileOptions.FieldSelectors,
-			},
-		})
+
+		opts := a.cfg.InformerConfig.InformerOptions
+		opts.ListWatchOptions = operator.ListWatchOptions{
+			Namespace:      kind.ReconcileOptions.Namespace,
+			LabelFilters:   kind.ReconcileOptions.LabelFilters,
+			FieldSelectors: kind.ReconcileOptions.FieldSelectors,
+		}
+		if opts.MetricsConfig == (metrics.Config{}) {
+			opts.MetricsConfig = a.cfg.InformerConfig.MetricsConfig
+		}
+
+		inf, err := infSupplier(kind.Kind, a.clientGenerator, opts)
 		if err != nil {
 			return err
 		}
@@ -339,8 +630,8 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		}
 		if kind.Reconciler != nil {
 			reconciler := kind.Reconciler
-			if !kind.ReconcileOptions.UsePlain {
-				op, err := operator.NewOpinionatedReconciler(client, a.getFinalizer(kind.Kind))
+			if kind.ReconcileOptions.UseOpinionated {
+				op, err := operator.NewOpinionatedReconciler(&watchPatcher{a.patcher.ForKind(kind.Kind.GroupVersionKind().GroupKind())}, a.getFinalizer(kind.Kind))
 				if err != nil {
 					return err
 				}
@@ -354,8 +645,11 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		}
 		if kind.Watcher != nil {
 			watcher := kind.Watcher
-			if !kind.ReconcileOptions.UsePlain {
-				op, err := operator.NewOpinionatedWatcherWithFinalizer(kind.Kind, client, a.getFinalizer)
+			if kind.ReconcileOptions.UseOpinionated {
+				op, err := operator.NewOpinionatedWatcher(kind.Kind, &watchPatcher{a.patcher.ForKind(kind.Kind.GroupVersionKind().GroupKind())}, operator.OpinionatedWatcherConfig{
+					Finalizer:           a.getFinalizer,
+					InProgressFinalizer: a.getInProgressFinalizer,
+				})
 				if err != nil {
 					return err
 				}
@@ -382,9 +676,31 @@ func (a *App) RegisterKindConverter(groupKind schema.GroupKind, converter k8s.Co
 }
 
 // PrometheusCollectors implements metrics.Provider and returns prometheus collectors used by the app for exposing metrics
+// as well as all collectors that are part of all underlying runner logic, such as the runner returned by Runner().
+// Attempting to register the Collectors returned by Runner().PrometheusCollectors in addition to the Collectors
+// returned by this function will result in duplicate metrics.
 func (a *App) PrometheusCollectors() []prometheus.Collector {
-	// TODO: other collectors?
-	return a.runner.PrometheusCollectors()
+	return append(a.collectors, a.runner.PrometheusCollectors()...)
+}
+
+func (a *App) HealthChecks() []health.Check {
+	checks := make([]health.Check, 0) //nolint:prealloc
+
+	checks = append(checks, a.runner.HealthChecks()...)
+	checks = append(checks, a.informerController.HealthChecks()...)
+
+	return checks
+}
+
+// RegisterMetricsCollectors registers additional prometheus collectors for the app, in addition to those provided
+// by any Runnables the app will run as part of Runner(). These additional prometheus collectors are exposed
+// as a part of the list returned by PrometheusCollectors().
+func (a *App) RegisterMetricsCollectors(collectors ...prometheus.Collector) {
+	for _, c := range collectors {
+		if !slices.Contains(a.collectors, c) {
+			a.collectors = append(a.collectors, c)
+		}
+	}
 }
 
 // Validate implements app.App and handles Validating Admission Requests
@@ -397,7 +713,38 @@ func (a *App) Validate(ctx context.Context, req *app.AdmissionRequest) error {
 	if k.Validator == nil {
 		return app.ErrNotImplemented
 	}
-	return k.Validator.Validate(ctx, req)
+	logger := admissionLoggerFromContext(ctx, req).With("action", "validate")
+	ctx = logging.Context(ctx, logger)
+	inflightLabels := prometheus.Labels{
+		"operation": "validate",
+		"group":     req.Group,
+		"kind":      req.Kind,
+		"version":   req.Version,
+	}
+	a.admissionInflight.With(inflightLabels).Inc()
+	start := time.Now()
+	err := k.Validator.Validate(ctx, req)
+	a.admissionInflight.With(inflightLabels).Dec()
+	status := "success" //nolint:goconst
+	if err != nil {
+		status = "error" //nolint:goconst
+	}
+	labels := prometheus.Labels{
+		"operation": "validate",
+		"group":     req.Group,
+		"kind":      req.Kind,
+		"version":   req.Version,
+		"action":    string(req.Action),
+		"status":    status,
+	}
+	a.admissionLatency.With(labels).Observe(time.Since(start).Seconds())
+	a.admissionTotal.With(labels).Inc()
+	if err != nil {
+		logger.With("error", err).Error("validation failed")
+		return err
+	}
+	logger.Info("validation succeeded")
+	return nil
 }
 
 // Mutate implements app.App and handles Mutating Admission Requests
@@ -410,16 +757,56 @@ func (a *App) Mutate(ctx context.Context, req *app.AdmissionRequest) (*app.Mutat
 	if k.Mutator == nil {
 		return nil, app.ErrNotImplemented
 	}
-	return k.Mutator.Mutate(ctx, req)
+	logger := admissionLoggerFromContext(ctx, req).With("action", "mutate")
+	ctx = logging.Context(ctx, logger)
+	inflightLabels := prometheus.Labels{
+		"operation": "mutate",
+		"group":     req.Group,
+		"kind":      req.Kind,
+		"version":   req.Version,
+	}
+	a.admissionInflight.With(inflightLabels).Inc()
+	start := time.Now()
+	resp, err := k.Mutator.Mutate(ctx, req)
+	a.admissionInflight.With(inflightLabels).Dec()
+	status := "success" //nolint:goconst
+	if err != nil {
+		status = "error" //nolint:goconst
+	}
+	labels := prometheus.Labels{
+		"operation": "mutate",
+		"group":     req.Group,
+		"kind":      req.Kind,
+		"version":   req.Version,
+		"action":    string(req.Action),
+		"status":    status,
+	}
+	a.admissionLatency.With(labels).Observe(time.Since(start).Seconds())
+	a.admissionTotal.With(labels).Inc()
+	if err != nil {
+		logger.With("error", err).Error("mutation failed")
+		return nil, err
+	}
+	logger.Info("mutation succeeded")
+	return resp, nil
 }
 
 // Convert implements app.App and handles resource conversion requests
-func (a *App) Convert(_ context.Context, req app.ConversionRequest) (*app.RawObject, error) {
+func (a *App) Convert(ctx context.Context, req app.ConversionRequest) (*app.RawObject, error) {
 	converter, ok := a.converters[req.SourceGVK.GroupKind().String()]
 	if !ok {
 		// Default conversion?
 		return nil, app.ErrNotImplemented
 	}
+	logger := conversionLoggerFromContext(ctx, req)
+	inflightLabels := prometheus.Labels{
+		"group":          req.SourceGVK.Group,
+		"kind":           req.SourceGVK.Kind,
+		"source_version": req.SourceGVK.Version,
+		"target_version": req.TargetGVK.Version,
+	}
+	a.conversionInflight.With(inflightLabels).Inc()
+	start := time.Now()
 	srcAPIVersion, _ := req.SourceGVK.ToAPIVersionAndKind()
 	dstAPIVersion, _ := req.TargetGVK.ToAPIVersionAndKind()
 	converted, err := converter.Convert(k8s.RawKind{
@@ -429,22 +816,87 @@ func (a *App) Convert(_ context.Context, req app.ConversionRequest) (*app.RawObj
 		Version:    req.SourceGVK.Version,
 		Raw:        req.Raw.Raw,
 	}, dstAPIVersion)
+	a.conversionInflight.With(inflightLabels).Dec()
+	status := "success" //nolint:goconst
+	if err != nil {
+		status = "error" //nolint:goconst
+	}
+	labels := prometheus.Labels{
+		"group":          req.SourceGVK.Group,
+		"kind":           req.SourceGVK.Kind,
+		"source_version": req.SourceGVK.Version,
+		"target_version": req.TargetGVK.Version,
+		"status":         status,
+	}
+	a.conversionLatency.With(labels).Observe(time.Since(start).Seconds())
+	a.conversionTotal.With(labels).Inc()
+	if err != nil {
+		logger.With("error", err).Error("conversion failed")
+		return nil, err
+	}
+	logger.Info("conversion succeeded")
 	return &app.RawObject{
 		Raw: converted,
-	}, err
+	}, nil
 }
 
-// CallResourceCustomRoute implements app.App and handles custom resource route requests
-func (a *App) CallResourceCustomRoute(ctx context.Context, req *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
-	k, ok := a.kinds[gvk(req.ResourceIdentifier.Group, req.ResourceIdentifier.Version, req.ResourceIdentifier.Kind)]
+// CallCustomRoute implements app.App and handles custom resource route requests
+func (a *App) CallCustomRoute(ctx context.Context, writer app.CustomRouteResponseWriter, req *app.CustomRouteRequest) error {
+	if req.ResourceIdentifier.Kind == "" && req.ResourceIdentifier.Plural == "" {
+		scope := resource.NamespacedScope
+		if req.ResourceIdentifier.Namespace == "" {
+			scope = resource.ClusterScope
+		}
+		key := a.customRouteHandlerKey(schema.GroupVersionKind{Version: req.ResourceIdentifier.Version}, req.Method, req.Path, scope)
+		if handler, ok := a.customRoutes[key]; ok {
+			inflightLabels := a.customRouteInflightLabels(req)
+			a.customRouteInflight.With(inflightLabels).Inc()
+			start := time.Now()
+			err := handleCustomRouteWithLogging(ctx, handler, writer, req)
+			a.customRouteInflight.With(inflightLabels).Dec()
+			a.observeCustomRoute(start, req, err)
+			return err
+		}
+	}
+	key := gvk(req.ResourceIdentifier.Group, req.ResourceIdentifier.Version, req.ResourceIdentifier.Kind)
+	if req.ResourceIdentifier.Kind == "" {
+		key = a.gvrToGVK[gvr(req.ResourceIdentifier.Group, req.ResourceIdentifier.Version, req.ResourceIdentifier.Plural)]
+	}
+	k, ok := a.kinds[key]
 	if !ok {
 		// TODO: still return the not found, or just return NotImplemented?
-		return nil, app.ErrCustomRouteNotFound
+		return app.ErrCustomRouteNotFound
 	}
-	if handler, ok := a.customRoutes[a.customRouteHandlerKey(k.Kind, req.Method, req.SubresourcePath)]; ok {
-		return handler(ctx, req)
+	if handler, ok := a.customRoutes[a.customRouteHandlerKey(k.Kind.GroupVersionKind(), req.Method, req.Path, k.Kind.Scope())]; ok {
+		inflightLabels := a.customRouteInflightLabels(req)
+		a.customRouteInflight.With(inflightLabels).Inc()
+		start := time.Now()
+		err := handleCustomRouteWithLogging(ctx, handler, writer, req)
+		a.customRouteInflight.With(inflightLabels).Dec()
+		a.observeCustomRoute(start, req, err)
+		return err
 	}
-	return nil, app.ErrCustomRouteNotFound
+	return app.ErrCustomRouteNotFound
+}
+
+func (*App) customRouteInflightLabels(req *app.CustomRouteRequest) prometheus.Labels {
+	return prometheus.Labels{
+		"group":  req.ResourceIdentifier.Group,
+		"method": req.Method,
+		"path":   req.Path,
+		"kind":   req.ResourceIdentifier.Kind,
+	}
+}
+
+func (a *App) observeCustomRoute(start time.Time, req *app.CustomRouteRequest, err error) {
+	status := "success"
+	if err != nil {
+		status = "error"
+	}
+	labels := a.customRouteInflightLabels(req)
+	labels["status"] = status
+	a.customRouteLatency.With(labels).Observe(time.Since(start).Seconds())
+	a.customRouteTotal.With(labels).Inc()
 }
 
 func (a *App) getFinalizer(sch resource.Schema) string {
@@ -457,8 +909,21 @@ func (a *App) getFinalizer(sch resource.Schema) string {
 	return fmt.Sprintf("%s-finalizer", sch.Plural())
 }
 
-func (*App) customRouteHandlerKey(kind resource.Kind, method string, path string) string {
-	return fmt.Sprintf("%s/%s/%s/%s/%s", kind.Group(), kind.Version(), kind.Kind(), strings.ToUpper(method), path)
+func (a *App) getInProgressFinalizer(sch resource.Schema) string {
+	if a.cfg.InformerConfig.InProgressFinalizerSupplier != nil {
+		return a.cfg.InformerConfig.InProgressFinalizerSupplier(sch)
+	}
+	if a.cfg.Name != "" {
+		return fmt.Sprintf("%s-wip", a.cfg.Name)
+	}
+	return fmt.Sprintf("%s-wip", sch.Plural())
+}
+
+func (*App) customRouteHandlerKey(gvk schema.GroupVersionKind, method string, path string, scope resource.SchemaScope) string {
+	if len(path) > 0 && path[0] == '/' {
+		path = path[1:]
+	}
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%s", scope, gvk.Group, gvk.Version, gvk.Kind, strings.ToUpper(method), path)
 }
 
 type syncWatcher interface {
@@ -468,6 +933,10 @@ type syncWatcher interface {
 
 func gvk(group, version, kind string) string {
 	return fmt.Sprintf("%s/%s/%s", group, version, kind)
+}
+
+func gvr(group, version, plural string) string {
+	return fmt.Sprintf("%s/%s/%s", group, version, plural)
 }
 
 type k8sRunner interface {
@@ -480,4 +949,29 @@ type k8sRunnable struct {
 
 func (k *k8sRunnable) Run(ctx context.Context) error {
 	return k.runner.Run(ctx.Done())
+}
+
+var _ operator.PatchClient = &watchPatcher{}
+
+type watchPatcher struct {
+	patcher *k8s.DynamicKindPatcher
+}
+
+func (w *watchPatcher) PatchInto(ctx context.Context, identifier resource.Identifier, req resource.PatchRequest, options resource.PatchOptions, into resource.Object) error {
+	obj, err := w.patcher.Patch(ctx, identifier, req, options)
+	if err != nil {
+		return err
+	}
+	// This is only used to update the finalizers list, so we just need to update metadata
+	into.SetCommonMetadata(obj.GetCommonMetadata())
+	return nil
+}
+
+func (w *watchPatcher) GetInto(ctx context.Context, identifier resource.Identifier, into resource.Object) error {
+	obj, err := w.patcher.Get(ctx, identifier)
+	if err != nil {
+		return err
+	}
+	into.SetCommonMetadata(obj.GetCommonMetadata())
+	return nil
 }

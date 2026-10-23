@@ -1,4 +1,12 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
 export interface Spec {
-  deprecatedField: string;
-  field1: string;
+	field1: string;
+	deprecatedField: string;
 }
+
+export const defaultSpec = (): Spec => ({
+	field1: "",
+	deprecatedField: "",
+});
+

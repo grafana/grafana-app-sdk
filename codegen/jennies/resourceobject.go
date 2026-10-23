@@ -28,7 +28,6 @@ var (
 		Name:                       "foo",
 		GenerateName:               "bar",
 		Namespace:                  "foo",
-		SelfLink:                   "bar",
 		UID:                        types.UID("foo"),
 		ResourceVersion:            "bar",
 		Generation:                 i64,
@@ -48,9 +47,6 @@ var (
 )
 
 type ResourceObjectGenerator struct {
-	// This flag exists for compatibility with thema codegen, which only generates code for the current/latest version of the kind
-	OnlyUseCurrentVersion bool
-
 	// SubresourceTypesArePrefixed should be set to true if the subresource go types (such as spec or status)
 	// are prefixed with the exported Kind name. Generally, if you generated go types with Depth: 1 and PrefixWithKindName: true,
 	// then you should set this value to true as well.
@@ -61,49 +57,46 @@ type ResourceObjectGenerator struct {
 	// When GroupByKind is false, subresource types (such as spec and status) are assumed to be prefixed with the
 	// kind name, which can be accomplished by setting GroupByKind=false on the GoTypesGenerator.
 	GroupByKind bool
+
+	// OpenAPINamer will be called on each generated type's name to create an OpenAPIModelName() function
+	// for the type to implement k8s.io/kube-openapi/pkg/util/OpenAPIModelNamer.
+	// If nil, types will not implement OpenAPIModelNamer, which will cause problems with
+	// apiservers if using the default apiserver.AppInstaller.
+	OpenAPINamer func(OpenAPINamerInfo) string
 }
 
 func (*ResourceObjectGenerator) JennyName() string {
 	return "ResourceObjectGenerator"
 }
 
-func (r *ResourceObjectGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
-	if r.OnlyUseCurrentVersion {
-		ver := kind.Version(kind.Properties().Current)
-		if ver == nil {
-			return nil, fmt.Errorf("no version for %s", kind.Properties().Current)
+func (r *ResourceObjectGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
+	files := make(codejen.Files, 0, 1)
+	for version, kind := range codegen.VersionedKinds(appManifest) {
+		openAPIName := ""
+		if r.OpenAPINamer != nil {
+			openAPIName = r.OpenAPINamer(OpenAPINamerInfo{
+				TypeName:   kind.Kind,
+				ShortGroup: appManifest.Properties().Group,
+				Version:    version.Name(),
+				Kind:       kind.Kind,
+			})
 		}
-		b, err := r.generateObjectFile(kind, ver, strings.ToLower(kind.Properties().MachineName))
+		b, err := r.generateObjectFile(kind, ToPackageName(version.Name()), openAPIName)
 		if err != nil {
 			return nil, err
 		}
 		files = append(files, codejen.File{
-			RelativePath: fmt.Sprintf("%s/%s_object_gen.go", kind.Properties().MachineName, kind.Properties().MachineName),
+			RelativePath: filepath.Join(GetGeneratedGoTypePath(r.GroupByKind, appManifest.Properties().Group, version.Name(), kind.MachineName), fmt.Sprintf("%s_object_gen.go", strings.ToLower(kind.MachineName))),
 			Data:         b,
 			From:         []codejen.NamedJenny{r},
 		})
-	} else {
-		allVersions := kind.Versions()
-		for i := 0; i < len(allVersions); i++ {
-			ver := allVersions[i]
-			b, err := r.generateObjectFile(kind, &ver, ToPackageName(ver.Version))
-			if err != nil {
-				return nil, err
-			}
-			files = append(files, codejen.File{
-				RelativePath: filepath.Join(GetGeneratedPath(r.GroupByKind, kind, ver.Version), fmt.Sprintf("%s_object_gen.go", strings.ToLower(kind.Properties().MachineName))),
-				Data:         b,
-				From:         []codejen.NamedJenny{r},
-			})
-		}
 	}
 	return files, nil
 }
 
-func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version *codegen.KindVersion, pkg string) ([]byte, error) {
+func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.VersionedKind, pkg string, openAPIName string) ([]byte, error) {
 	customMetadataFields := make([]templates.ObjectMetadataField, 0)
-	mdv := version.Schema.LookupPath(cue.MakePath(cue.Str("metadata")))
+	mdv := kind.Schema.LookupPath(cue.MakePath(cue.Str("metadata")))
 	if mdv.Exists() {
 		mit, err := mdv.Fields()
 		if err != nil {
@@ -137,29 +130,32 @@ func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version 
 
 	typePrefix := ""
 	if r.SubresourceTypesArePrefixed {
-		typePrefix = exportField(kind.Name())
+		typePrefix = exportField(kind.Kind)
 	}
-	meta := kind.Properties()
 	md := templates.ResourceObjectTemplateMetadata{
 		Package:              pkg,
-		TypeName:             meta.Kind,
+		HasSecureValues:      len(kind.SecureValues) > 0,
+		TypeName:             kind.Kind,
 		SpecTypeName:         typePrefix + "Spec",
 		ObjectTypeName:       "Object", // Package is the machine name of the object, so this makes it machinename.Object
 		ObjectShortName:      "o",
 		Subresources:         make([]templates.SubresourceMetadata, 0),
 		CustomMetadataFields: customMetadataFields,
+		OpenAPIModelName:     openAPIName,
 	}
-	it, err := version.Schema.Fields()
+	it, err := kind.Schema.Fields()
 	if err != nil {
 		return nil, err
 	}
 	for it.Next() {
-		if it.Label() == "spec" || it.Label() == "metadata" {
+		if it.Selector().String() == "spec" || it.Selector().String() == "metadata" { //nolint:goconst
 			continue
 		}
+		fieldName := exportField(it.Selector().String())
 		md.Subresources = append(md.Subresources, templates.SubresourceMetadata{
-			TypeName: typePrefix + exportField(it.Label()),
-			JSONName: it.Label(),
+			Name:     fieldName,
+			TypeName: typePrefix + fieldName,
+			JSONName: it.Selector().String(),
 		})
 	}
 	b := bytes.Buffer{}
@@ -181,7 +177,7 @@ func goTypeFromCUEValue(value cue.Value) templates.CustomMetadataFieldGoType {
 	st := cueFmtState{}
 	value.Format(&st, 'v')
 	typeString := st.String()
-	if strings.Contains(typeString, "time.Time") {
+	if strings.Contains(typeString, "time.Time") { //nolint:revive
 		return templates.GoTypeTime
 	} else if strings.Contains(typeString, "int") {
 		return templates.GoTypeInt

@@ -11,6 +11,9 @@
     "kubeconfig": {
       "switchCurrentContext": true,
       "updateDefaultKubeconfig": true
+    },
+    "k3s": {
+      "extraArgs": [{"arg":"--kube-apiserver-arg=anonymous-auth=true","nodeFilters":["server:*"]}]
     }
   },
   "ports": [
@@ -27,6 +30,11 @@
         "server:*"
       ],
       "volume": "{{.ProjectRoot}}/local/mounted-files:/tmp/k3d/mounted-files"
-    }
+    }{{ range .AdditionalVolumes }},{
+      "nodeFilters": [
+        "server:*"
+      ],
+      "volume": "{{.SourcePath}}:{{.MountPath}}"
+    }{{ end }}
   ]
 }

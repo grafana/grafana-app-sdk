@@ -1,0 +1,1682 @@
+package app
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"slices"
+	"testing"
+
+	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/hashicorp/go-multierror"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/kube-openapi/pkg/common"
+	"k8s.io/kube-openapi/pkg/spec3"
+	"k8s.io/kube-openapi/pkg/validation/spec"
+)
+
+func TestManifestVersionOpenAPI_OmitZero(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		doc  ManifestVersionOpenAPI
+		want string
+	}{
+		{name: "zero", want: `{}`},
+		{
+			name: "empty maps",
+			doc: ManifestVersionOpenAPI{
+				Paths: map[string]spec3.PathProps{},
+				Components: ManifestVersionOpenAPIComponents{
+					Schemas: map[string]spec.Schema{}, Responses: map[string]*spec3.Response{},
+				},
+			},
+			want: `{}`,
+		},
+		{
+			name: "paths only",
+			doc:  ManifestVersionOpenAPI{Paths: map[string]spec3.PathProps{"/test": {}}},
+			want: `{"openapi":{"paths":{"/test":{}}}}`,
+		},
+		{
+			name: "schemas only",
+			doc: ManifestVersionOpenAPI{Components: ManifestVersionOpenAPIComponents{
+				Schemas: map[string]spec.Schema{"Test": {}},
+			}},
+			want: `{"openapi":{"components":{"schemas":{"Test":{}}}}}`,
+		},
+		{
+			name: "responses only",
+			doc: ManifestVersionOpenAPI{Components: ManifestVersionOpenAPIComponents{
+				Responses: map[string]*spec3.Response{"OK": {ResponseProps: spec3.ResponseProps{Description: "success"}}},
+			}},
+			want: `{"openapi":{"components":{"responses":{"OK":{"description":"success"}}}}}`,
+		},
+		{
+			name: "response reference",
+			doc: ManifestVersionOpenAPI{Components: ManifestVersionOpenAPIComponents{
+				Responses: map[string]*spec3.Response{"OK": {Refable: spec.Refable{Ref: spec.MustCreateRef("#/components/responses/Success")}}},
+			}},
+			want: `{"openapi":{"components":{"responses":{"OK":{"$ref":"#/components/responses/Success"}}}}}`,
+		},
+		{
+			name: "examples only",
+			doc: ManifestVersionOpenAPI{Components: ManifestVersionOpenAPIComponents{
+				Examples: map[string]*spec3.Example{"Example": {ExampleProps: spec3.ExampleProps{Value: "sample"}}},
+			}},
+			want: `{"openapi":{"components":{"examples":{"Example":{"value":"sample"}}}}}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			value := struct {
+				OpenAPI ManifestVersionOpenAPI `json:"openapi,omitzero"`
+			}{OpenAPI: tc.doc}
+			data, err := json.Marshal(value)
+			require.NoError(t, err)
+			assert.JSONEq(t, tc.want, string(data))
+		})
+	}
+}
+
+func TestManifestData_Validate(t *testing.T) {
+	tests := []struct {
+		name        string
+		data        ManifestData
+		expectedErr error
+	}{{
+		name: "valid (empty manifest)",
+		data: ManifestData{},
+	}, {
+		name: "plural mismatch",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "foos",
+				}},
+			}, {
+				Name: "v2",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "bars",
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil, errors.New("kind 'Foo' has a different plural in versions 'v1' and 'v2'")),
+	}, {
+		name: "scope mismatch",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:  "Foo",
+					Scope: "Namespaced",
+				}},
+			}, {
+				Name: "v2",
+				Kinds: []ManifestVersionKind{{
+					Kind:  "Foo",
+					Scope: "Cluster",
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil, errors.New("kind 'Foo' has a different scope in versions 'v1' and 'v2'")),
+	}, {
+		name: "conversion mismatch",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:       "Foo",
+					Conversion: true,
+				}},
+			}, {
+				Name: "v2",
+				Kinds: []ManifestVersionKind{{
+					Kind:       "Foo",
+					Conversion: false,
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil, errors.New("kind 'Foo' conversion does not match in versions 'v1' and 'v2'")),
+	}, {
+		name: "folderScoped mismatch (unset vs explicit false)",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind: "Foo",
+				}},
+			}, {
+				Name: "v2",
+				Kinds: []ManifestVersionKind{{
+					Kind:         "Foo",
+					FolderScoped: new(false),
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil, errors.New("kind 'Foo' has a different folderScoped in versions 'v1' and 'v2'")),
+	}, {
+		name: "folderScoped consistent (unset vs explicit true)",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind: "Foo",
+				}},
+			}, {
+				Name: "v2",
+				Kinds: []ManifestVersionKind{{
+					Kind:         "Foo",
+					FolderScoped: new(true),
+				}},
+			}},
+		},
+	}, {
+		name: "plural, scope, and conversion mismatch",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:       "Foo",
+					Plural:     "foos",
+					Scope:      "Namespaced",
+					Conversion: true,
+				}},
+			}, {
+				Name: "v2",
+				Kinds: []ManifestVersionKind{{
+					Kind:       "Foo",
+					Plural:     "bars",
+					Scope:      "Cluster",
+					Conversion: false,
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("kind 'Foo' has a different plural in versions 'v1' and 'v2'"),
+			errors.New("kind 'Foo' has a different scope in versions 'v1' and 'v2'"),
+			errors.New("kind 'Foo' conversion does not match in versions 'v1' and 'v2'")),
+	}, {
+		name: "conflicting routes and kinds",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "foos",
+					Scope:  "Namespaced",
+				}, {
+					Kind:   "Bar",
+					Plural: "bars",
+					Scope:  "Cluster",
+				}, {
+					Kind:   "Foobar",
+					Plural: "foobars",
+					Scope:  "Cluster",
+				}},
+				Routes: ManifestVersionRoutes{
+					Namespaced: map[string]spec3.PathProps{
+						"/foos": spec3.PathProps{},
+						"/bars": spec3.PathProps{},
+					},
+					Cluster: map[string]spec3.PathProps{
+						"/foobars": spec3.PathProps{},
+					},
+				},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("namespaced custom route '/foos' conflicts with already-registered kind 'foos'"),
+			errors.New("cluster-scoped custom route '/foobars' conflicts with already-registered kind 'foobars'")),
+	}, {
+		name: "search and trash routes remain reserved after opt-out",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "foos",
+					Scope:  "Namespaced",
+					Search: &ManifestVersionKindSearch{
+						Endpoint: new(false),
+					},
+				}, {
+					Kind:   "Bar",
+					Plural: "bars",
+					Scope:  "Cluster",
+					Search: &ManifestVersionKindSearch{
+						Trash: new(false),
+					},
+				}},
+				Routes: ManifestVersionRoutes{
+					Namespaced: map[string]spec3.PathProps{
+						"/foos/search": {},
+						"/bars/search": {},
+					},
+					Cluster: map[string]spec3.PathProps{
+						"/BARS/TRASH/": {},
+						"/foos/trash":  {},
+					},
+				},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("namespaced custom route '/foos/search' conflicts with reserved 'search' route for kind 'foos'"),
+			errors.New("cluster-scoped custom route '/BARS/TRASH/' conflicts with reserved 'trash' route for kind 'bars'")),
+	}, {
+		name: "rolebindings for missing roles (no roles in manifest)",
+		data: ManifestData{
+			AppName: "myapp",
+			RoleBindings: &ManifestRoleBindings{
+				Viewer: []string{"viewer-role"},
+				Editor: []string{"editor-role"},
+				Admin:  []string{"admin-role"},
+				Additional: map[string][]string{
+					"extra": []string{"extra-role"},
+				},
+			},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("viewer: cannot bind role 'viewer-role' as no roles are present in the manifest"),
+			errors.New("editor: cannot bind role 'editor-role' as no roles are present in the manifest"),
+			errors.New("admin: cannot bind role 'admin-role' as no roles are present in the manifest"),
+			errors.New("extra: cannot bind role 'extra-role' as no roles are present in the manifest")),
+	}, {
+		name: "rolebindings for missing roles (no matching role)",
+		data: ManifestData{
+			AppName: "myapp",
+			Versions: []ManifestVersion{{
+				Name:  "v1",
+				Kinds: []ManifestVersionKind{{Kind: "Foo"}},
+			}},
+			Roles: map[string]ManifestRole{
+				"viewer-role": {
+					Title: "Viewer Role",
+					Kinds: []ManifestRoleKind{{
+						Kind:  "Foo",
+						Verbs: []string{"get"},
+					}},
+				},
+				"editor-role": {
+					Title: "Editor Role",
+					Kinds: []ManifestRoleKind{{
+						Kind:  "Foo",
+						Verbs: []string{"get", "create"},
+					}},
+				},
+				"admin-role": {
+					Title: "Admin Role",
+					Kinds: []ManifestRoleKind{{
+						Kind:  "Foo",
+						Verbs: []string{"get", "create", "delete"},
+					}},
+				},
+				"extra-role": {
+					Title: "Viewer Role",
+					Kinds: []ManifestRoleKind{{
+						Kind:  "Foo",
+						Verbs: []string{"list"},
+					}},
+				},
+			},
+			RoleBindings: &ManifestRoleBindings{
+				Viewer: []string{"viewer-role", "other-viewer-role"},
+				Editor: []string{"editor-role", "other-editor-role"},
+				Admin:  []string{"admin-role", "other-admin-role"},
+				Additional: map[string][]string{
+					"extra": []string{"extra-role", "other-extra-role"},
+				},
+			},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("viewer: cannot bind role 'other-viewer-role' as it is not present in manifest roles"),
+			errors.New("editor: cannot bind role 'other-editor-role' as it is not present in manifest roles"),
+			errors.New("admin: cannot bind role 'other-admin-role' as it is not present in manifest roles"),
+			errors.New("extra: cannot bind role 'other-extra-role' as it is not present in manifest roles")),
+	}, {
+		name: "role kinds must be kinds or their custom routes",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind: "Foo",
+					Routes: map[string]spec3.PathProps{
+						"/render": {Get: &spec3.Operation{}},
+						"/approve-request": {Post: &spec3.Operation{VendorExtensible: spec.VendorExtensible{Extensions: spec.Extensions{
+							OpenAPIExtensionAuthzResource:    "foos",
+							OpenAPIExtensionAuthzSubresource: "approve",
+						}}}},
+					},
+				}, {
+					Kind:  "Bar",
+					Scope: "Cluster",
+				}},
+				Routes: ManifestVersionRoutes{
+					Namespaced: map[string]spec3.PathProps{
+						"/foos/bulk": {Post: &spec3.Operation{VendorExtensible: spec.VendorExtensible{Extensions: spec.Extensions{
+							OpenAPIExtensionAuthzResource:    "foos",
+							OpenAPIExtensionAuthzSubresource: "bulk",
+						}}}},
+					},
+				},
+				OpenAPI: ManifestVersionOpenAPI{Paths: map[string]spec3.PathProps{
+					"/namespaces/{namespace}/foos/{name}/preview/{id}": {Get: &spec3.Operation{}},
+					"bars/{name}/count": {Get: &spec3.Operation{}},
+				}},
+			}},
+			Roles: map[string]ManifestRole{
+				"a-role": {
+					Kinds: []ManifestRoleKind{{Kind: "Foo"}, {Kind: "foo"}, {Kind: "Foo/render"}, {Kind: "Foo/preview"}, {Kind: "Foo/approve"}, {Kind: "Foo/bulk"}, {Kind: "Bar/count"}},
+				},
+				"b-role": {
+					Kinds: []ManifestRoleKind{{Kind: "Foo/status"}, {Kind: "Foo/Scale"}, {Kind: "Foo/missing"}, {Kind: "Foo/render/x"}, {Kind: "Foo/Render"}, {Kind: "Baz"}},
+				},
+			},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New(`invalid role b-role: kind "Foo/status" names the built-in "status" subresource, which is not grantable`),
+			errors.New(`invalid role b-role: kind "Foo/Scale" names the built-in "scale" subresource, which is not grantable`),
+			errors.New(`invalid role b-role: kind "Foo/missing" names "missing", which is not a custom route of Foo`),
+			errors.New(`invalid role b-role: kind "Foo/render/x" names "render/x", which is not a custom route of Foo`),
+			errors.New(`invalid role b-role: kind "Foo/Render" names "Render", which is not a custom route of Foo`),
+			errors.New(`invalid role b-role: kind "Baz" does not exist in manifest`)),
+	}, {
+		name: "declared authz resource and subresource cannot contain a slash",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind: "Foo",
+					Routes: map[string]spec3.PathProps{
+						"/render": {Get: &spec3.Operation{VendorExtensible: spec.VendorExtensible{Extensions: spec.Extensions{
+							OpenAPIExtensionAuthzResource: "foos/render",
+						}}}},
+					},
+				}},
+				OpenAPI: ManifestVersionOpenAPI{Paths: map[string]spec3.PathProps{
+					"/namespaces/{namespace}/foos/{name}/preview": {Get: &spec3.Operation{VendorExtensible: spec.VendorExtensible{Extensions: spec.Extensions{
+						OpenAPIExtensionAuthzResource:    "foos",
+						OpenAPIExtensionAuthzSubresource: "preview/large",
+					}}}},
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New(`kind "Foo" version "v1" route "/render": x-grafana-declared-authz-resource must be a resource name, not "foos/render"; declare the subresource in x-grafana-declared-authz-subresource`),
+			errors.New(`version "v1" route "/namespaces/{namespace}/foos/{name}/preview": x-grafana-declared-authz-subresource must be a single path segment, not "preview/large"`)),
+	}, {
+		name: "kind routes conflicting with built-in subresources",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind: "Foo",
+					Routes: map[string]spec3.PathProps{
+						"/status":       {},
+						"status":        {},
+						"/status/foo":   {},
+						"/SCALE":        {},
+						"/statusreport": {},
+					},
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New(`kind "Foo" version "v1": custom route "/SCALE" conflicts with the built-in "scale" subresource`),
+			errors.New(`kind "Foo" version "v1": custom route "/status" conflicts with the built-in "status" subresource`),
+			errors.New(`kind "Foo" version "v1": custom route "/status/foo" conflicts with the built-in "status" subresource`),
+			errors.New(`kind "Foo" version "v1": custom route "status" conflicts with the built-in "status" subresource`)),
+	}, {
+		name: "status and scale version routes are reserved",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "foos",
+					Scope:  "Namespaced",
+				}, {
+					Kind:   "Bar",
+					Plural: "bars",
+					Scope:  "Cluster",
+				}},
+				Routes: ManifestVersionRoutes{
+					Namespaced: map[string]spec3.PathProps{
+						"/foos/status": {},
+					},
+					Cluster: map[string]spec3.PathProps{
+						"bars/scale": {},
+					},
+				},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("namespaced custom route '/foos/status' conflicts with reserved 'status' route for kind 'foos'"),
+			errors.New("cluster-scoped custom route 'bars/scale' conflicts with reserved 'scale' route for kind 'bars'")),
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expectedErr, test.data.Validate())
+		})
+	}
+}
+
+func TestManifestData_ValidateHybridRoutes(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		search *ManifestVersionKindSearch
+	}{
+		{name: "unset"},
+		{name: "disabled", search: &ManifestVersionKindSearch{Hybrid: new(false)}},
+		{name: "enabled", search: &ManifestVersionKindSearch{Hybrid: new(true)}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := ManifestData{
+				Versions: []ManifestVersion{{
+					Name: "v1",
+					Kinds: []ManifestVersionKind{{
+						Kind:   "Foo",
+						Scope:  "Namespaced",
+						Search: tt.search,
+					}, {
+						Kind:   "Bar",
+						Scope:  "Cluster",
+						Search: tt.search,
+					}},
+					Routes: ManifestVersionRoutes{
+						Namespaced: map[string]spec3.PathProps{
+							"/foos/search/hybrid":       {},
+							"/bars/search/hybrid":       {},
+							"/foos/search/hybrid/stats": {},
+						},
+						Cluster: map[string]spec3.PathProps{
+							"/BARS/SEARCH/HYBRID/":      {},
+							"/foos/search/hybrid":       {},
+							"/other/search/hybrid":      {},
+							"/bars/search/hybrid/stats": {},
+						},
+					},
+				}},
+			}
+			expectedErr := multierror.Append(nil,
+				errors.New("namespaced custom route '/foos/search/hybrid' conflicts with reserved 'search/hybrid' route for kind 'foos'"),
+				errors.New("cluster-scoped custom route '/BARS/SEARCH/HYBRID/' conflicts with reserved 'search/hybrid' route for kind 'bars'"))
+			assert.Equal(t, expectedErr, manifest.Validate())
+		})
+	}
+}
+
+func TestManifestData_ValidateEmbed(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		embed        map[string]ManifestResourceEmbed
+		kindVersions []ManifestVersionKind
+		wantErr      string
+	}{
+		{
+			name:         "custom builder omits embedding declarations",
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+		},
+		{
+			name:         "empty configuration remains optional",
+			embed:        map[string]ManifestResourceEmbed{},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+		},
+		{
+			name:  "positive revision with versioned fields",
+			embed: map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{
+				Kind:   "Foo",
+				Plural: "foos",
+				Embed: &ManifestVersionKindEmbed{
+					Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
+				},
+			}},
+		},
+		{
+			name:  "declared field requires a path",
+			embed: map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{
+				Kind: "Foo",
+				Embed: &ManifestVersionKindEmbed{
+					Fields: []ManifestVersionKindEmbedField{{Name: "title"}},
+				},
+			}},
+			wantErr: "embed field \"title\" requires a path",
+		},
+		{
+			name:         "resource revision without versioned fields",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 2}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+		},
+		{
+			name:         "zero revision",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 0}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+			wantErr:      "reembedVersion",
+		},
+		{
+			name:         "negative revision",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: -1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+			wantErr:      "reembedVersion",
+		},
+		{
+			name:         "unknown resource",
+			embed:        map[string]ManifestResourceEmbed{"missing": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+			wantErr:      "missing",
+		},
+		{
+			name: "versioned fields require a resource revision",
+			kindVersions: []ManifestVersionKind{{
+				Kind:   "Foo",
+				Plural: "foos",
+				Embed: &ManifestVersionKindEmbed{
+					Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
+				},
+			}},
+			wantErr: "foos",
+		},
+		{
+			name:         "empty versioned embed still requires a resource revision",
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Embed: &ManifestVersionKindEmbed{}}},
+			wantErr:      "foos",
+		},
+		{
+			name:         "resource key uses lowercase plural",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "Foos"}},
+		},
+		{
+			name:         "resource key cannot use kind name",
+			embed:        map[string]ManifestResourceEmbed{"Foo": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+			wantErr:      "Foo",
+		},
+		{
+			name:         "resource key uses inferred plural",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo"}},
+		},
+		{
+			name:         "resource key supports explicit irregular plural",
+			embed:        map[string]ManifestResourceEmbed{"people": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Person", Plural: "people"}},
+		},
+		{
+			name:  "only some API versions declare fields",
+			embed: map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{
+				{Kind: "Foo", Plural: "foos"},
+				{
+					Kind:   "Foo",
+					Plural: "foos",
+					Embed: &ManifestVersionKindEmbed{
+						Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
+					},
+				},
+			},
+		},
+		{
+			name:  "versioned fields can differ with one resource revision",
+			embed: map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 3}},
+			kindVersions: []ManifestVersionKind{
+				{
+					Kind:   "Foo",
+					Plural: "foos",
+					Embed: &ManifestVersionKindEmbed{
+						Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
+					},
+				},
+				{
+					Kind:   "Foo",
+					Plural: "foos",
+					Embed: &ManifestVersionKindEmbed{
+						Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.displayName"}},
+					},
+				},
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := ManifestData{Embed: tt.embed}
+			for i, kind := range tt.kindVersions {
+				manifest.Versions = append(manifest.Versions, ManifestVersion{
+					Name:  fmt.Sprintf("v%d", i+1),
+					Kinds: []ManifestVersionKind{kind},
+				})
+			}
+			err := manifest.Validate()
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestManifestVersionKind_Resource(t *testing.T) {
+	tests := []struct {
+		name     string
+		kind     ManifestVersionKind
+		expected string
+	}{
+		{
+			name: "explicit plural",
+			kind: ManifestVersionKind{
+				Kind:   "Person",
+				Plural: "People",
+			},
+			expected: "people",
+		},
+		{
+			name: "plural derived from kind",
+			kind: ManifestVersionKind{
+				Kind: "Widget",
+			},
+			expected: "widgets",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, test.kind.Resource())
+		})
+	}
+}
+
+func TestManifestVersionKind_Subresources(t *testing.T) {
+	sch1, _ := VersionSchemaFromMap(jsonToMap([]byte(`{"spec":{"properties":{"foo":{"type":"string"}}},"metadata":{}}`)), "Foo")
+	sch2, _ := VersionSchemaFromMap(jsonToMap([]byte(`{"spec":{"properties":{"foo":{"type":"string"}}},"metadata":{},"status":{}}`)), "Foo")
+
+	tests := []struct {
+		name     string
+		kind     ManifestVersionKind
+		expected []string
+	}{{
+		name:     "empty kind",
+		expected: []string{},
+	}, {
+		name: "empty schema",
+		kind: ManifestVersionKind{
+			Kind: "Foo",
+			Schema: &VersionSchema{
+				raw: map[string]any{},
+			},
+		},
+		expected: []string{},
+	}, {
+		name: "invalid schema",
+		kind: ManifestVersionKind{
+			Kind: "Foo",
+			Schema: &VersionSchema{
+				raw: jsonToMap([]byte(`{"spec":{"properties":{"foo":{"type":"string"}}}}`)),
+			},
+		},
+		expected: []string{},
+	}, {
+		name: "no subresources",
+		kind: ManifestVersionKind{
+			Kind:   "Foo",
+			Schema: sch1,
+		},
+		expected: []string{},
+	}, {
+		name: "status subresource",
+		kind: ManifestVersionKind{
+			Kind:   "Foo",
+			Schema: sch2,
+		},
+		expected: []string{"status"},
+	}}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, test.kind.Subresources())
+		})
+	}
+}
+
+func TestVersionSchemaFromMap(t *testing.T) {
+	tests := []struct {
+		name        string
+		schema      map[string]any
+		kind        string
+		expectedMap map[string]any
+		expectedErr error
+	}{{
+		name:        "valid (empty map)",
+		schema:      map[string]any{},
+		kind:        "Foo",
+		expectedMap: map[string]any{},
+		expectedErr: nil,
+	}, {
+		name:        "CRD shape",
+		schema:      jsonToMap([]byte(`{"spec":{"properties":{"foo":"string"},"type":"object"}}`)),
+		kind:        "Bar",
+		expectedMap: jsonToMap([]byte(`{"Bar":{"type":"object","properties":{"spec":{"properties":{"foo":"string"},"type":"object"}}}}`)),
+	}, {
+		name:        "Full CRD",
+		schema:      jsonToMap([]byte(`{"openAPIV3Schema":{"properties":{"spec":{"properties":{"foo":"string"},"type":"object"}}}}`)),
+		kind:        "Foo",
+		expectedMap: jsonToMap([]byte(`{"Foo":{"type":"object","properties":{"spec":{"properties":{"foo":"string"},"type":"object"}}}}`)),
+	}, {
+		name:        "OpenAPI without kind",
+		schema:      jsonToMap([]byte(`{"components":{"schemas":{"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"bar":{"type":"string"}}}}}}}}`)),
+		kind:        "Bar",
+		expectedErr: errors.New("kind \"Bar\" not found in map openAPI components"),
+	}, {
+		name:        "OpenAPI without references",
+		schema:      jsonToMap([]byte(`{"components":{"schemas":{"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"bar":{"type":"string"}}}}}}}}`)),
+		kind:        "Foo",
+		expectedMap: jsonToMap([]byte(`{"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"bar":{"type":"string"}}}}}}`)),
+	}, {
+		name:        "OpenAPI with references",
+		schema:      jsonToMap([]byte(`{"components":{"schemas":{"Bar":{"type":"object","properties":{"foo":{"type":"string"}}},"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"bar":{"type":"string"},"ref":{"$ref":"#/components/schemas/Bar"}}}}}}}}`)),
+		kind:        "Foo",
+		expectedMap: jsonToMap([]byte(`{"Bar":{"type":"object","properties":{"foo":{"type":"string"}}},"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"bar":{"type":"string"},"ref":{"$ref":"#/components/schemas/Bar"}}}}}}`)),
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sch, err := VersionSchemaFromMap(test.schema, test.kind)
+			if test.expectedErr == nil {
+				require.NoError(t, err)
+				assert.Equal(t, test.expectedMap, sch.AsOpenAPI3SchemasMap())
+			} else {
+				assert.Equal(t, test.expectedErr, err)
+			}
+		})
+	}
+}
+
+func jsonToMap(data []byte) map[string]any {
+	m := make(map[string]any)
+	_ = json.Unmarshal(data, &m)
+	return m
+}
+
+func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
+	gvk := schema.GroupVersionKind{
+		Group:   "test.grafana.app",
+		Version: "v1",
+		Kind:    "Foo",
+	}
+	ref := func(path string) spec.Ref {
+		r, e := spec.NewRef(path)
+		if e != nil {
+			panic(e)
+		}
+		return r
+	}
+	tests := []struct {
+		name   string
+		schema []byte
+		gvk    schema.GroupVersionKind
+		ref    common.ReferenceCallback
+		want   map[string]common.OpenAPIDefinition
+		err    error
+	}{{
+		name:   "empty",
+		schema: []byte(`{}`),
+		gvk:    gvk,
+		ref:    ref,
+		err:    errors.New("unable to locate openAPI definition for kind Foo"),
+	}, {
+		name:   "spec (CRD-shape)",
+		schema: []byte(`{"spec":{"type":"object","properties":{"foo":{"type":"string"}}}}`),
+		gvk:    gvk,
+		ref:    ref,
+		want: map[string]common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"foo": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+							},
+						},
+					},
+				},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+		},
+		err: nil,
+	}, {
+		name:   "spec (OpenAPI-shape)",
+		schema: []byte(`{"components":{"schemas":{"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"foo":{"type":"string"}}}}}}}}`),
+		gvk:    gvk,
+		ref:    ref,
+		want: map[string]common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"foo": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+							},
+						},
+					},
+				},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+		},
+		err: nil,
+	}, {
+		name:   "dependencies (CRD-shape)",
+		schema: []byte(`{"#foo":{"type":"object","properties":{"foobar":{"type":"string"}}},"spec":{"type":"object","properties":{"foo":{"type":"string"},"bar":{"$ref":"#/components/schemas/#foo"}}}}`),
+		gvk:    gvk,
+		ref:    ref,
+		want: map[string]common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"foo": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+							},
+						},
+						"bar": {
+							SchemaProps: spec.SchemaProps{
+								Ref: ref("test.grafana.app/v1.Foo#foo"),
+							},
+						},
+					},
+				},
+			}, "test.grafana.app/v1.Foo#foo"),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+			"test.grafana.app/v1.Foo#foo": common.OpenAPIDefinition{
+				Schema: spec.Schema{
+					SchemaProps: spec.SchemaProps{
+						Type: spec.StringOrArray{"object"},
+						Properties: map[string]spec.Schema{
+							"foobar": {
+								SchemaProps: spec.SchemaProps{
+									Type: []string{"string"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}, {
+		name:   "dependencies (OpenAPI-shape)",
+		schema: []byte(`{"components":{"schemas":{"#foo":{"type":"object","properties":{"foobar":{"type":"string"}}},"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"foo":{"type":"string"},"bar":{"$ref":"#/components/schemas/#foo"}}}}}}}}`),
+		gvk:    gvk,
+		ref:    ref,
+		want: map[string]common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"foo": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+							},
+						},
+						"bar": {
+							SchemaProps: spec.SchemaProps{
+								Ref: ref("test.grafana.app/v1.Foo#foo"),
+							},
+						},
+					},
+				},
+			}, "test.grafana.app/v1.Foo#foo"),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+			"test.grafana.app/v1.Foo#foo": common.OpenAPIDefinition{
+				Schema: spec.Schema{
+					SchemaProps: spec.SchemaProps{
+						Type: spec.StringOrArray{"object"},
+						Properties: map[string]spec.Schema{
+							"foobar": {
+								SchemaProps: spec.SchemaProps{
+									Type: []string{"string"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}, {
+		name:   "additional subresources (CRD-shape)",
+		schema: []byte(`{"status":{"type":"object","properties":{"foobar":{"type":"string"}}},"spec":{"type":"object","properties":{"foo":{"type":"string"}}}}`),
+		gvk:    gvk,
+		ref:    ref,
+		want: map[string]common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"foo": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+							},
+						},
+					},
+				},
+				"status": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"foobar": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+							},
+						},
+					},
+				},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+		},
+	}, {
+		name:   "additional subresources (OpenAPI-shape)",
+		schema: []byte(`{"components":{"schemas":{"Foo":{"type":"object","properties":{"status":{"type":"object","properties":{"foobar":{"type":"string"}}},"spec":{"type":"object","properties":{"foo":{"type":"string"}}}}}}}}`),
+		gvk:    gvk,
+		ref:    ref,
+		want: map[string]common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"foo": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+							},
+						},
+					},
+				},
+				"status": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"foobar": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+							},
+						},
+					},
+				},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+		},
+	}, {
+		name:   "freeform additionalProperties (CRD-shape)",
+		schema: []byte(`{"spec":{"type":"object","additionalProperties":true}}`),
+		gvk:    gvk,
+		ref:    ref,
+		want: map[string]common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					AdditionalProperties: &spec.SchemaOrBool{
+						Allows: true,
+					},
+				},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+		},
+	}, {
+		name:   "freeform additionalProperties (OpenAPI-shape)",
+		schema: []byte(`{"components":{"schemas":{"Foo":{"type":"object","properties":{"spec":{"type":"object","additionalProperties":true}}}}}}`),
+		gvk:    gvk,
+		ref:    ref,
+		want: map[string]common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					AdditionalProperties: &spec.SchemaOrBool{
+						Allows: true,
+					},
+				},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+		},
+	}, {
+		name:   "defined additionalProperties (CRD-shape)",
+		schema: []byte(`{"spec":{"type":"object","additionalProperties":{"type":"object","properties":{"foo":{"type":"string"}}}}}`),
+		gvk:    gvk,
+		ref:    ref,
+		want: map[string]common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					AdditionalProperties: &spec.SchemaOrBool{
+						Allows: true,
+						Schema: &spec.Schema{
+							SchemaProps: spec.SchemaProps{
+								Type: spec.StringOrArray{"object"},
+								Properties: map[string]spec.Schema{
+									"foo": {
+										SchemaProps: spec.SchemaProps{
+											Type: []string{"string"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+		},
+	}, {
+		name:   "defined additionalProperties (OpenAPI-shape)",
+		schema: []byte(`{"spec":{"type":"object","additionalProperties":{"type":"object","properties":{"foo":{"type":"string"}}}}}`),
+		gvk:    gvk,
+		ref:    ref,
+		want: map[string]common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					AdditionalProperties: &spec.SchemaOrBool{
+						Allows: true,
+						Schema: &spec.Schema{
+							SchemaProps: spec.SchemaProps{
+								Type: spec.StringOrArray{"object"},
+								Properties: map[string]spec.Schema{
+									"foo": {
+										SchemaProps: spec.SchemaProps{
+											Type: []string{"string"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+		},
+	}, {
+		name:   "defined additionalProperties",
+		schema: []byte(`{"components":{"schemas":{"Foo":{"properties":{"spec":{"type":"object","x-kubernetes-preserve-unknown-fields":true}}}}}}`),
+		gvk:    gvk,
+		ref:    ref,
+		want: map[string]common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					AdditionalProperties: &spec.SchemaOrBool{
+						Allows: true,
+					},
+				},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+		},
+	}, {
+		name: "full complex schema",
+		schema: []byte(`{
+	"components":{
+		"schemas":{
+			"#foo":{
+				"type":"object",
+				"x-kubernetes-preserve-unknown-fields":true
+			},
+			"#bar":{
+				"type":"object",
+				"properties": {
+					"int": {
+						"type":"number",
+						"minimum": 5,
+						"maximum": 10,
+						"format": "integer"
+					},
+					"string": { "type":"string" },
+					"bool": { "type":"boolean", "default": true },
+					"float": { 
+						"type":"number",
+						"minimum": -0.5,
+						"maximum": 0.5,
+						"format": "decimal"
+					}
+				}
+			},
+			"#foobar":{
+				"type":"string"
+			},
+			"Foo": {
+				"type": "object",
+				"properties": {
+					"spec":{
+						"type":"object",
+						"properties":{
+							"all": {
+								"allOf": [{"$ref":"#/components/schemas/#foo"},{"$ref":"#/components/schemas/#bar"}]
+							},
+							"any": {
+								"anyOf": [{"$ref":"#/components/schemas/#foo"},{"$ref":"#/components/schemas/#bar"},{"$ref":"#/components/schemas/#foobar"}]
+							},
+							"one": {
+								"oneOf": [{"$ref":"#/components/schemas/#foo"},{"$ref":"#/components/schemas/#foobar"}]
+							},
+							"no": {
+								"not": {
+									"$ref": "#/components/schemas/#foo"
+								}
+							},
+							"array": {
+								"type":  "array",
+								"items": {
+									"type": "string"
+								}
+							},
+							"refarray": {
+								"type": "array",
+								"items": {
+									"$ref": "#/components/schemas/#foo"
+								}
+							}
+						}
+					},
+					"status":{"type":"object","x-kubernetes-preserve-unknown-fields":true}
+				}
+			}
+		}
+	}
+}`),
+		gvk: gvk,
+		ref: ref,
+		want: map[string]common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"all": {
+							SchemaProps: spec.SchemaProps{
+								AllOf: []spec.Schema{{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("test.grafana.app/v1.Foo#foo"),
+									},
+								}, {
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("test.grafana.app/v1.Foo#bar"),
+									},
+								}},
+							},
+						},
+						"any": {
+							SchemaProps: spec.SchemaProps{
+								AnyOf: []spec.Schema{{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("test.grafana.app/v1.Foo#foo"),
+									},
+								}, {
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("test.grafana.app/v1.Foo#bar"),
+									},
+								}, {
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("test.grafana.app/v1.Foo#foobar"),
+									},
+								}},
+							},
+						},
+						"one": {
+							SchemaProps: spec.SchemaProps{
+								OneOf: []spec.Schema{{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("test.grafana.app/v1.Foo#foo"),
+									},
+								}, {
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("test.grafana.app/v1.Foo#foobar"),
+									},
+								}},
+							},
+						},
+						"no": {
+							SchemaProps: spec.SchemaProps{
+								Not: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("test.grafana.app/v1.Foo#foo"),
+									},
+								},
+							},
+						},
+						"array": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"array"},
+								Items: &spec.SchemaOrArray{
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Type: spec.StringOrArray{"string"},
+										},
+									},
+								},
+							},
+						},
+						"refarray": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"array"},
+								Items: &spec.SchemaOrArray{
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Ref: ref("test.grafana.app/v1.Foo#foo"),
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"status": {
+					Type: spec.StringOrArray{"object"},
+					AdditionalProperties: &spec.SchemaOrBool{
+						Allows: true,
+					},
+				},
+			}, "test.grafana.app/v1.Foo#bar", "test.grafana.app/v1.Foo#foo", "test.grafana.app/v1.Foo#foobar"),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+			"test.grafana.app/v1.Foo#foo": common.OpenAPIDefinition{
+				Schema: spec.Schema{
+					SchemaProps: spec.SchemaProps{
+						Type: spec.StringOrArray{"object"},
+						AdditionalProperties: &spec.SchemaOrBool{
+							Allows: true,
+						},
+					},
+				},
+			},
+			"test.grafana.app/v1.Foo#bar": common.OpenAPIDefinition{
+				Schema: spec.Schema{
+					SchemaProps: spec.SchemaProps{
+						Type: spec.StringOrArray{"object"},
+						Properties: map[string]spec.Schema{
+							"int": {
+								SchemaProps: spec.SchemaProps{
+									Type:    []string{"number"},
+									Minimum: new(float64(5)),
+									Maximum: new(float64(10)),
+									Format:  "integer",
+								},
+							},
+							"string": {
+								SchemaProps: spec.SchemaProps{
+									Type: []string{"string"},
+								},
+							},
+							"bool": {
+								SchemaProps: spec.SchemaProps{
+									Type:    []string{"boolean"},
+									Default: true,
+								},
+							},
+							"float": {
+								SchemaProps: spec.SchemaProps{
+									Type:    []string{"number"},
+									Minimum: new(float64(-0.5)),
+									Maximum: new(float64(0.5)),
+									Format:  "decimal",
+								},
+							},
+						},
+					},
+				},
+			},
+			"test.grafana.app/v1.Foo#foobar": common.OpenAPIDefinition{
+				Schema: spec.Schema{
+					SchemaProps: spec.SchemaProps{
+						Type: spec.StringOrArray{"string"},
+					},
+				},
+			},
+		},
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			m := make(map[string]any)
+			require.Nil(t, json.Unmarshal(test.schema, &m))
+			vs, err := VersionSchemaFromMap(m, test.gvk.Kind)
+			require.Nil(t, err)
+			res, err := vs.AsKubeOpenAPI(test.gvk, test.ref, "test.grafana.app/v1")
+			if test.err != nil {
+				assert.Equal(t, test.err, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, test.want, res)
+			}
+		})
+	}
+}
+
+func TestVersionSchema_AsKubeOpenAPI_SecureValues(t *testing.T) {
+	gvk := schema.GroupVersionKind{Group: "test.grafana.app", Version: "v1", Kind: "Foo"}
+	ref := func(path string) spec.Ref { return spec.MustCreateRef(path) }
+	vs, err := VersionSchemaFromMap(map[string]any{
+		"spec": map[string]any{"type": "object"},
+	}, gvk.Kind)
+	require.NoError(t, err)
+	for _, test := range []struct {
+		name   string
+		values []ManifestVersionKindSecureValue
+	}{
+		{name: "multiple keys", values: []ManifestVersionKindSecureValue{
+			{Key: "apiKey", Description: "API key supplied by the service."},
+			{Key: "token"},
+		}},
+		{name: "nil"},
+		{name: "empty", values: []ManifestVersionKindSecureValue{}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			definitions, err := vs.AsKubeOpenAPI(gvk, ref, "test.grafana.app/v1", test.values...)
+			require.NoError(t, err)
+			kind := definitions["test.grafana.app/v1.Foo"].Schema
+			secure, exists := kind.Properties["secure"]
+			if len(test.values) == 0 {
+				assert.False(t, exists)
+				return
+			}
+			require.True(t, exists)
+			assert.Equal(t, spec.StringOrArray{"object"}, secure.Type)
+			require.Len(t, secure.Properties, 2)
+			assert.Equal(t, spec.StringOrArray{"object"}, secure.Properties["apiKey"].Type)
+			assert.Equal(t, "API key supplied by the service.", secure.Properties["apiKey"].Description)
+			assert.Equal(t, spec.StringOrArray{"object"}, secure.Properties["token"].Type)
+			assert.Empty(t, secure.Properties["token"].Description)
+			assert.Empty(t, secure.Required)
+			assert.NotContains(t, kind.Required, "secure")
+		})
+	}
+}
+
+func TestVersionSchema_AsKubeOpenAPI_ExactKindBeforeQualifiedDefinition(t *testing.T) {
+	gvk := schema.GroupVersionKind{Group: "test.grafana.app", Version: "v1", Kind: "InlineSecureValue"}
+	vs, err := VersionSchemaFromMap(map[string]any{
+		"components": map[string]any{"schemas": map[string]any{
+			"InlineSecureValue": map[string]any{
+				"type":       "object",
+				"properties": map[string]any{"spec": map[string]any{"type": "object"}},
+			},
+			"com.github.grafana.grafana-app-sdk.resource.InlineSecureValue": map[string]any{
+				"type": "object",
+				"oneOf": []any{
+					map[string]any{"required": []string{"create"}},
+					map[string]any{"required": []string{"name"}},
+				},
+			},
+		}},
+	}, gvk.Kind)
+	require.NoError(t, err)
+	// Map iteration must never select a qualified definition before the exact kind.
+	for range 100 {
+		definitions, err := vs.AsKubeOpenAPI(gvk, spec.MustCreateRef, "example")
+		require.NoError(t, err)
+		require.Contains(t, definitions["example.InlineSecureValue"].Schema.Properties, "spec")
+	}
+}
+
+func TestSecureValuesOpenAPISchema_IndependentValues(t *testing.T) {
+	schema := SecureValuesOpenAPISchema([]ManifestVersionKindSecureValue{
+		{Key: "apiKey"}, {Key: "token"}, {Key: "*"},
+	})
+	apiKey := schema.Properties["apiKey"]
+	delete(apiKey.Properties, "create")
+	apiKey.OneOf[0].Required[0] = "changed"
+	for _, other := range []spec.Schema{schema.Properties["token"], *schema.AdditionalProperties.Schema} {
+		assert.Contains(t, other.Properties, "create")
+		assert.Equal(t, []string{"create"}, other.OneOf[0].Required)
+	}
+}
+
+func TestGetCRDOpenAPISchema(t *testing.T) {
+	tests := []struct {
+		name          string
+		schemaName    string
+		jsonData      []byte
+		outputJSON    []byte
+		expectedError error
+	}{{
+		name:          "empty document",
+		schemaName:    "foo",
+		jsonData:      []byte(`{}`),
+		expectedError: fmt.Errorf("invalid components or schemas"),
+	}, {
+		name:          "missing schema",
+		schemaName:    "foo",
+		jsonData:      []byte(`{"components":{"schemas":{}}}`),
+		expectedError: fmt.Errorf("schema foo not found"),
+	}, {
+		name:       "recursive schema",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"item":{"type":"object","properties":{"val":{"type":"string"},"next":{"type":"object","$ref":"#/components/schemas/item"}}},"foo":{"type":"object","properties":{"linked":{"type":"object","$ref":"#/components/schemas/item"}}}}}}`),
+		outputJSON: []byte(`{"type":"object","properties":{"linked":{"type":"object","properties":{"val":{"type":"string"},"next":{"type":"object","x-kubernetes-preserve-unknown-fields":true}}}}}`),
+	}, {
+		name:       "additionalProperties replaced",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"foo":{"type":"object","additionalProperties":{"type":"object"}}}}}`),
+		outputJSON: []byte(`{"type":"object","x-kubernetes-preserve-unknown-fields":true}`),
+	}, {
+		name:       "additionalProperties resolved",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"bar":{"type":"object","properties":{"baz":{"type":"string"}}},"foo":{"type":"object","additionalProperties":{"type":"object","$ref":"#/components/schemas/bar"}}}}}`),
+		outputJSON: []byte(`{"type":"object","additionalProperties":{"type":"object","properties":{"baz":{"type":"string"}}}}`),
+	}, {
+		name:       "simple additionalProperties",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"foo":{"type":"object","properties":{"bar":{"type":"string"}},"additionalProperties":{}}}}}`),
+		outputJSON: []byte(`{"type":"object","properties":{"bar":{"type":"string"}},"x-kubernetes-preserve-unknown-fields":true}`),
+	}, {
+		name:       "convert to structural schema: oneOf",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"foo":{"oneOf":[{"type":"object","properties":{"foo":{"type":"string"}},"required":["foo"]},{}]}}}}`),
+		outputJSON: []byte(`{"type":"object","properties":{"foo":{"type":"string"}},"oneOf":[{"required":["foo"]},{"not":{"anyOf":[{"required":["foo"]}]}}]}`),
+	}, {
+		name:       "preserve oneOf primitive union",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"foo":{"oneOf":[{"type":"integer"},{"type":"number"},{"type":"string"},{"type":"boolean"}]}}}}`),
+		outputJSON: []byte(`{"x-kubernetes-preserve-unknown-fields":true}`),
+	}, {
+		name:       "convert to structural schema: anyOf",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"foo":{"anyOf":[{"type":"object","properties":{"foo":{"type":"string"}},"required":["foo"]},{"properties":{"bar":{"type":"string"}},"required":["bar"]}]}}}}`),
+		outputJSON: []byte(`{"type":"object","properties":{"foo":{"type":"string"},"bar":{"type":"string"}},"anyOf":[{"required":["foo"]},{"required":["bar"]}]}`),
+	}, {
+		name:       "convert to structural schema: allOf",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"foo":{"allOf":[{"type":"object","properties":{"foo":{"type":"string"}},"required":["foo"]},{"properties":{"bar":{"type":"string"}},"required":["bar"]}]}}}}`),
+		outputJSON: []byte(`{"type":"object","properties":{"foo":{"type":"string"},"bar":{"type":"string"}},"allOf":[{"required":["foo"]},{"required":["bar"]}]}`),
+	}, {
+		// A field which references another type and also has a default is expressed as an allOf with a
+		// single $ref, because in OpenAPI 3.0 a $ref cannot have any siblings.
+		name:       "allOf with single ref keeps enum",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"routingType":{"type":"string","enum":["a","b"]},"foo":{"type":"object","properties":{"routing":{"allOf":[{"$ref":"#/components/schemas/routingType"}],"default":"a"}}}}}}`),
+		outputJSON: []byte(`{"type":"object","properties":{"routing":{"type":"string","enum":["a","b"],"default":"a"}}}`),
+	}, {
+		name:       "allOf with single ref keeps other constraints",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"duration":{"type":"string","pattern":"^[0-9]+s$","minLength":2,"description":"a duration"},"foo":{"type":"object","properties":{"interval":{"allOf":[{"$ref":"#/components/schemas/duration"}],"default":"30s"}}}}}}`),
+		outputJSON: []byte(`{"type":"object","properties":{"interval":{"type":"string","pattern":"^[0-9]+s$","minLength":2,"description":"a duration","default":"30s"}}}`),
+	}, {
+		name:       "allOf with shared ref keeps nested validation",
+		schemaName: "foo",
+		jsonData: []byte(`{"components":{"schemas":{
+			"choice":{"type":"object","properties":{"a":{"type":"string"},"b":{"type":"string"}},"anyOf":[{"required":["a"]},{"required":["b"]}],"not":{"required":["a","b"]}},
+			"foo":{"allOf":[{"$ref":"#/components/schemas/choice"}],"description":"Choose one"}
+		}}}`),
+		outputJSON: []byte(`{"type":"object","description":"Choose one","properties":{"a":{"type":"string"},"b":{"type":"string"}},"allOf":[{"anyOf":[{"required":["a"]},{"required":["b"]}],"not":{"required":["a","b"]}}]}`),
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			doc, err := openapi3.NewLoader().LoadFromData(test.jsonData)
+			assert.NoError(t, err)
+			output, err := GetCRDOpenAPISchema(doc.Components, test.schemaName)
+			if test.expectedError != nil {
+				assert.Equal(t, test.expectedError, err)
+			} else {
+				require.NoError(t, err)
+				m, err := json.MarshalIndent(output, "", "  ")
+				require.NoError(t, err)
+				assert.JSONEq(t, string(test.outputJSON), string(m))
+			}
+		})
+	}
+}
+
+func kubeOpenAPIKindWithProps(gvk schema.GroupVersionKind, ref common.ReferenceCallback, props map[string]spec.SchemaProps, deps ...string) common.OpenAPIDefinition {
+	required := []string{"kind", "apiVersion", "metadata"}
+	if _, ok := props["spec"]; ok {
+		required = append(required, "spec")
+	}
+	kind := common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]any{},
+							Ref:     ref("io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"),
+						},
+					},
+				},
+				Required: required,
+			},
+		},
+		Dependencies: make([]string, 0),
+	}
+	kind.Dependencies = append(kind.Dependencies, "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta")
+	for k, prop := range props {
+		kind.Schema.Properties[k] = spec.Schema{
+			SchemaProps: prop,
+		}
+		if prop.Ref.String() != "" {
+			kind.Dependencies = append(kind.Dependencies, prop.Ref.String())
+		}
+	}
+	for _, dep := range deps {
+		if slices.Contains(kind.Dependencies, dep) {
+			continue
+		}
+		kind.Dependencies = append(kind.Dependencies, dep)
+	}
+	return kind
+}
+
+func kubeOpenAPIList(gvk schema.GroupVersionKind, ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]any{},
+							Ref:     ref("io.k8s.apimachinery.pkg.apis.meta.v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]any{},
+										Ref:     ref(fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, gvk.Kind)),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"metadata", "items"},
+			},
+		},
+		Dependencies: []string{
+			"io.k8s.apimachinery.pkg.apis.meta.v1.ListMeta", fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, gvk.Kind)},
+	}
+}
+
+func TestManifestVersionKind_SearchEndpoints(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		search         *ManifestVersionKindSearch
+		expectedSearch bool
+		expectedTrash  bool
+		expectedHybrid bool
+		expectedGlobal bool
+	}{
+		// search and trash are served unless the kind opts out. hybrid and global
+		// are the reverse: off unless the kind opts in.
+		{name: "unset", search: nil, expectedSearch: true, expectedTrash: true, expectedHybrid: false},
+		{name: "empty block", search: &ManifestVersionKindSearch{}, expectedSearch: true, expectedTrash: true, expectedHybrid: false},
+		{name: "search opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false)}, expectedSearch: false, expectedTrash: true, expectedHybrid: false},
+		{name: "trash opt-out", search: &ManifestVersionKindSearch{Trash: new(false)}, expectedSearch: true, expectedTrash: false, expectedHybrid: false},
+		{name: "both opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false), Trash: new(false)}, expectedSearch: false, expectedTrash: false, expectedHybrid: false},
+		{name: "hybrid opt-in", search: &ManifestVersionKindSearch{Hybrid: new(true)}, expectedSearch: true, expectedTrash: true, expectedHybrid: true},
+		{name: "hybrid explicit false", search: &ManifestVersionKindSearch{Hybrid: new(false)}, expectedSearch: true, expectedTrash: true, expectedHybrid: false},
+		{name: "hybrid opt-in with search opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false), Hybrid: new(true)}, expectedSearch: false, expectedTrash: true, expectedHybrid: true},
+		{name: "global opt-in", search: &ManifestVersionKindSearch{Global: new(true)}, expectedSearch: true, expectedTrash: true, expectedGlobal: true},
+		{name: "global explicit false", search: &ManifestVersionKindSearch{Global: new(false)}, expectedSearch: true, expectedTrash: true, expectedGlobal: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			kind := ManifestVersionKind{Kind: "Foo", Search: tc.search}
+			assert.Equal(t, tc.expectedSearch, kind.HasSearchEndpoint())
+			assert.Equal(t, tc.expectedTrash, kind.HasTrashEndpoint())
+			assert.Equal(t, tc.expectedHybrid, kind.HasHybridEndpoint())
+			assert.Equal(t, tc.expectedGlobal, kind.InGlobalSearchIndex())
+		})
+	}
+}
+
+func TestManifestVersionKind_ListKeysEndpoint(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		storage *ManifestVersionKindStorage
+		want    bool
+	}{
+		{name: "omitted", want: true},
+		{name: "empty storage", storage: &ManifestVersionKindStorage{}, want: true},
+		{name: "enabled", storage: &ManifestVersionKindStorage{ListKeys: new(true)}, want: true},
+		{name: "disabled", storage: &ManifestVersionKindStorage{ListKeys: new(false)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			kind := ManifestVersionKind{Storage: tc.storage}
+			assert.Equal(t, tc.want, kind.HasListKeysEndpoint())
+			data, err := json.Marshal(kind)
+			require.NoError(t, err)
+			var decoded ManifestVersionKind
+			require.NoError(t, json.Unmarshal(data, &decoded))
+			assert.Equal(t, kind.Storage, decoded.Storage)
+			assert.Equal(t, tc.want, decoded.HasListKeysEndpoint())
+		})
+	}
+}

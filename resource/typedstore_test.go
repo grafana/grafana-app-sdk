@@ -3,11 +3,12 @@ package resource
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 func TestNewTypedStore(t *testing.T) {
@@ -161,13 +162,25 @@ func TestTypedStore_Update(t *testing.T) {
 		assert.Equal(t, cerr, err)
 	})
 
+	t.Run("no ResourceVersion", func(t *testing.T) {
+		client.UpdateFunc = func(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
+			assert.Fail(t, "client update should not be called")
+			return nil, nil
+		}
+		obj := updateObj.Copy().(*TypedSpecStatusObject[string, string])
+		obj.SetResourceVersion("")
+		ret, err := store.Update(ctx, id, obj)
+		assert.Nil(t, ret)
+		assert.Equal(t, ErrMissingResourceVersion, err)
+	})
+
 	t.Run("success, no metadata options", func(t *testing.T) {
 		client.UpdateFunc = func(c context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, updateObj.Name, identifier.Name)
 			assert.Equal(t, updateObj.Namespace, identifier.Namespace)
 			assert.Equal(t, updateObj, obj)
-			assert.Equal(t, "", options.ResourceVersion)
+			assert.Equal(t, updateObj.ResourceVersion, options.ResourceVersion)
 			assert.Equal(t, "", options.Subresource)
 			return retObj, nil
 		}
@@ -212,7 +225,7 @@ func TestTypedStore_Upsert(t *testing.T) {
 	})
 
 	t.Run("error get 503", func(t *testing.T) {
-		cerr := &testAPIError{fmt.Errorf("Internal Server Error"), http.StatusInternalServerError}
+		cerr := apierrors.NewInternalError(fmt.Errorf("Internal Server Error"))
 		client.GetFunc = func(ctx context.Context, identifier Identifier) (Object, error) {
 			return nil, cerr
 		}
@@ -238,7 +251,7 @@ func TestTypedStore_Upsert(t *testing.T) {
 
 	t.Run("success, get 404", func(t *testing.T) {
 		client.GetFunc = func(c context.Context, identifier Identifier) (Object, error) {
-			return nil, &testAPIError{fmt.Errorf("Not Found"), http.StatusNotFound}
+			return nil, apierrors.NewNotFound(schema.GroupResource{Group: "test", Resource: "test"}, identifier.Name)
 		}
 		client.CreateFunc = func(c context.Context, identifier Identifier, obj Object, options CreateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
@@ -309,7 +322,7 @@ func TestTypedStore_UpdateSubresource(t *testing.T) {
 		client.UpdateFunc = func(c context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, updateObj, obj)
-			assert.Equal(t, "", options.ResourceVersion)
+			assert.Equal(t, updateObj.ResourceVersion, options.ResourceVersion)
 			assert.Equal(t, string(SubresourceStatus), options.Subresource)
 			return retObj, nil
 		}
@@ -329,7 +342,7 @@ func TestTypedStore_Delete(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		cerr := fmt.Errorf("I AM ERROR")
-		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+		client.DeleteFunc = func(c context.Context, identifier Identifier, _ DeleteOptions) error {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
 			return cerr
@@ -339,7 +352,7 @@ func TestTypedStore_Delete(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+		client.DeleteFunc = func(c context.Context, identifier Identifier, _ DeleteOptions) error {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
 			return nil
@@ -359,7 +372,7 @@ func TestTypedStore_ForceDelete(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		cerr := fmt.Errorf("I AM ERROR")
-		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+		client.DeleteFunc = func(c context.Context, identifier Identifier, _ DeleteOptions) error {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
 			return cerr
@@ -369,7 +382,7 @@ func TestTypedStore_ForceDelete(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+		client.DeleteFunc = func(c context.Context, identifier Identifier, _ DeleteOptions) error {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
 			return nil
@@ -379,10 +392,10 @@ func TestTypedStore_ForceDelete(t *testing.T) {
 	})
 
 	t.Run("success with 404", func(t *testing.T) {
-		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+		client.DeleteFunc = func(c context.Context, identifier Identifier, _ DeleteOptions) error {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
-			return &testAPIError{fmt.Errorf("Not Found"), http.StatusNotFound}
+			return apierrors.NewNotFound(schema.GroupResource{Group: "test", Resource: "test"}, identifier.Name)
 		}
 		err := store.ForceDelete(ctx, id)
 		assert.Nil(t, err)

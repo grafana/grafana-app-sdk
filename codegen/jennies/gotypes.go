@@ -1,29 +1,24 @@
 package jennies
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"go/format"
-	"go/parser"
-	"go/token"
 	"path"
-	"path/filepath"
 	"strings"
 
 	"cuelang.org/go/cue"
-	"github.com/dave/dst/decorator"
-	"github.com/dave/dst/dstutil"
-	"github.com/getkin/kin-openapi/openapi3"
+
 	"github.com/grafana/codejen"
-	"golang.org/x/tools/imports"
+	"github.com/grafana/cog"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
-	deepmapcodegen "github.com/grafana/grafana-app-sdk/internal/deepmap/oapi-codegen/pkg/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
 
 const GoTypesMaxDepth = 5
 
-// GoTypes is a Jenny for turning a codegen.Kind into go types according to its codegen settings.
+// GoTypes is a Jenny for turning a codegen.AppManifest into go types according to its codegen settings.
 type GoTypes struct {
 	// GenerateOnlyCurrent should be set to true if you only want to generate code for the kind.Properties().Current version.
 	// This will affect the package and path(s) of the generated file(s).
@@ -51,92 +46,174 @@ type GoTypes struct {
 	// When GroupByKind is false, subresource types (such as spec and status) are prefixed with the kind name,
 	// i.e. generating FooSpec instead of Spec for kind.Name() = "Foo" and Depth=1
 	GroupByKind bool
+
+	// AnyAsInterface determines whether to use `interface{}` instead of `any` in generated go code.
+	// If true, `interface{}` will be used instead of `any`.
+	AnyAsInterface bool
+
+	// ExcludeFields will exclude fields with the provided name at the provided Depth value from having types generated for them.
+	// This only applies to fields at the Depth where types will be generated, and will not be applied to field names
+	// within a type already having a go type generated for it. This only applies at Depth > 0, as at Depth = 0,
+	// only one type is generated for the entire CUE object.
+	// Practically, since current implementation is to generate one go file per field at Depth, this excludes
+	// a go file for the type from being generated.
+	// ex:
+	//
+	//  {
+	//     Foo: string
+	//     Bar: string
+	//  }
+	// With an ExcludeFields of `Bar` will only generate a file and go type for `Foo`.
+	ExcludeFields []string
+
+	// OpenAPINamer will be called on each generated type's name to create an OpenAPIModelName() function
+	// for the type to implement k8s.io/kube-openapi/pkg/util/OpenAPIModelNamer.
+	// If nil, types will not implement OpenAPIModelNamer, which will cause problems with
+	// apiservers if using the default apiserver.AppInstaller.
+	OpenAPINamer func(OpenAPINamerInfo) string
+}
+
+type OpenAPINamerInfo struct {
+	TypeName   string
+	FullGroup  string
+	ShortGroup string
+	Version    string
+	Kind       string
 }
 
 func (*GoTypes) JennyName() string {
 	return "GoTypes"
 }
 
-func (g *GoTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
-	if g.GenerateOnlyCurrent {
-		ver := kind.Version(kind.Properties().Current)
-		if ver == nil {
-			return nil, fmt.Errorf("version '%s' of kind '%s' does not exist", kind.Properties().Current, kind.Name())
-		}
-		return g.generateFiles(ver, kind.Name(), kind.Properties().MachineName, kind.Properties().MachineName, kind.Properties().MachineName)
-	}
-
-	files := make(codejen.Files, 0)
-	versions := kind.Versions()
-	for i := 0; i < len(versions); i++ {
-		ver := versions[i]
-		if !ver.Codegen.Backend {
+func (g *GoTypes) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
+	files := make(codejen.Files, 0, 1)
+	for version, kind := range codegen.VersionedKinds(appManifest) {
+		if g.GenerateOnlyCurrent && appManifest.Properties().PreferredVersion != version.Name() {
 			continue
 		}
 
-		generated, err := g.generateFiles(&ver, kind.Name(), kind.Properties().MachineName, ToPackageName(ver.Version), GetGeneratedPath(g.GroupByKind, kind, ver.Version))
+		genCfg := goTypesGenerateFilesConfig{
+			VersionName:   version.Name(),
+			KindName:      kind.Kind,
+			MachineName:   kind.MachineName,
+			Group:         appManifest.Properties().Group,
+			PackageName:   ToPackageName(version.Name()),
+			PathPrefix:    GetGeneratedGoTypePath(g.GroupByKind, appManifest.Properties().Group, version.Name(), kind.MachineName),
+			ExcludeFields: g.ExcludeFields,
+		}
+		if g.Depth > 0 {
+			if !g.GroupByKind {
+				genCfg.NamePrefix = exportField(kind.Kind)
+			}
+			generated, err := g.generateFilesAtDepth(kind.Schema, kind.Schema.Path(), 0, genCfg)
+			if err != nil {
+				return nil, err
+			}
+			files = append(files, generated...)
+			continue
+		}
+
+		codegenPipeline := cog.TypesFromSchema().
+			CUEValue(genCfg.PackageName, kind.Schema, cog.ForceEnvelope(kind.Kind)).
+			Golang(cog.GoConfig{
+				AnyAsInterface: g.AnyAsInterface,
+			})
+
+		if g.AddKubernetesCodegen {
+			codegenPipeline = codegenPipeline.SchemaTransformations(cog.AppendCommentToObjects("+k8s:openapi-gen=true"))
+		}
+
+		generated, err := codegenPipeline.Run(context.Background())
 		if err != nil {
 			return nil, err
 		}
-		files = append(files, generated...)
-	}
 
+		if len(generated) != 1 {
+			return nil, fmt.Errorf("expected one file to be generated, got %d", len(generated))
+		}
+
+		data := generated[0].Data
+		if g.AddKubernetesCodegen {
+			data, err = alignAliasComments(data)
+			if err != nil {
+				return nil, err
+			}
+		}
+		formatted, err := format.Source(data)
+		if err != nil {
+			return nil, err
+		}
+
+		files = append(files, codejen.File{
+			Data:         formatted,
+			RelativePath: fmt.Sprintf(path.Join(genCfg.PathPrefix, "%s_gen.go"), strings.ToLower(genCfg.MachineName)),
+			From:         []codejen.NamedJenny{g},
+		})
+	}
 	return files, nil
 }
 
-func (g *GoTypes) generateFiles(version *codegen.KindVersion, name string, machineName string, packageName string, pathPrefix string) (codejen.Files, error) {
-	if g.Depth > 0 {
-		namePrefix := ""
-		if !g.GroupByKind {
-			namePrefix = exportField(name)
-		}
-		return g.generateFilesAtDepth(version.Schema, version, 0, machineName, packageName, pathPrefix, namePrefix)
-	}
-
-	applyFuncs := make([]dstutil.ApplyFunc, 0)
-	if g.AddKubernetesCodegen {
-		applyFuncs = append(applyFuncs, addGenComments())
-	}
-	goBytes, err := GoTypesFromCUE(version.Schema, CUEGoConfig{
-		PackageName: packageName,
-		Name:        exportField(sanitizeLabelString(name)),
-		Version:     version.Version,
-		ApplyFuncs:  applyFuncs,
-	}, 0)
-	if err != nil {
-		return nil, err
-	}
-	return codejen.Files{codejen.File{
-		Data:         goBytes,
-		RelativePath: fmt.Sprintf(path.Join(pathPrefix, "%s_gen.go"), strings.ToLower(machineName)),
-		From:         []codejen.NamedJenny{g},
-	}}, nil
+type goTypesGenerateFilesConfig struct {
+	VersionName   string
+	KindName      string
+	MachineName   string
+	PackageName   string
+	PathPrefix    string
+	NamePrefix    string
+	Group         string
+	ExcludeFields []string
 }
 
 //nolint:goconst
-func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, currDepth int, machineName string, packageName string, pathPrefix string, namePrefix string) (codejen.Files, error) {
+func (g *GoTypes) generateFilesAtDepth(v cue.Value, schemaPath cue.Path, currDepth int, cfg goTypesGenerateFilesConfig) (codejen.Files, error) {
 	if currDepth == g.Depth {
-		fieldName := make([]string, 0)
-		for _, s := range TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors() {
+		selectors := TrimPathPrefix(v.Path(), schemaPath).Selectors()
+		fieldName := make([]string, 0, len(selectors))
+		for _, s := range selectors {
 			fieldName = append(fieldName, s.String())
 		}
-		applyFuncs := make([]dstutil.ApplyFunc, 0)
-		if g.AddKubernetesCodegen && fieldName[len(fieldName)-1] != "metadata" { // metadata hack because of thema
-			applyFuncs = append(applyFuncs, addGenComments())
+		exclude := false
+		for _, s := range cfg.ExcludeFields {
+			// Check if the exclude name matches either the final element of the path, or the joined path
+			if len(fieldName) > 0 && strings.EqualFold(fieldName[len(fieldName)-1], s) {
+				exclude = true
+				break
+			}
+			if strings.EqualFold(strings.Join(fieldName, ""), s) {
+				exclude = true
+				break
+			}
 		}
+		if exclude {
+			return codejen.Files{}, nil
+		}
+
+		var namerFunc func(string) string
+		if g.OpenAPINamer != nil {
+			namerFunc = func(name string) string {
+				return g.OpenAPINamer(OpenAPINamerInfo{
+					TypeName:   name,
+					ShortGroup: cfg.Group,
+					Version:    cfg.VersionName,
+					Kind:       cfg.KindName,
+				})
+			}
+		}
+
 		goBytes, err := GoTypesFromCUE(v, CUEGoConfig{
-			PackageName: packageName,
-			Name:        exportField(strings.Join(fieldName, "")),
-			NamePrefix:  namePrefix,
-			Version:     kv.Version,
-			ApplyFuncs:  applyFuncs,
-		}, len(v.Path().Selectors())-(g.Depth-g.NamingDepth))
+			PackageName:                    cfg.PackageName,
+			Name:                           exportField(strings.Join(fieldName, "")),
+			NamePrefix:                     cfg.NamePrefix,
+			AddKubernetesOpenAPIGenComment: g.AddKubernetesCodegen && (len(fieldName) != 1 || fieldName[0] != "metadata"),
+			AnyAsInterface:                 g.AnyAsInterface,
+		}, len(v.Path().Selectors())-(g.Depth-g.NamingDepth), namerFunc)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error converting schema path %s.%s to go type: %w", schemaPath.String(), fieldName, err)
 		}
+
 		return codejen.Files{codejen.File{
 			Data:         goBytes,
-			RelativePath: fmt.Sprintf(path.Join(pathPrefix, "%s_%s_gen.go"), strings.ToLower(machineName), strings.Join(fieldName, "_")),
+			RelativePath: fmt.Sprintf(path.Join(cfg.PathPrefix, "%s_%s_gen.go"), strings.ToLower(cfg.MachineName), strings.Join(fieldName, "_")),
 			From:         []codejen.NamedJenny{g},
 		}}, nil
 	}
@@ -146,9 +223,9 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, cur
 		return nil, err
 	}
 
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	for it.Next() {
-		f, err := g.generateFilesAtDepth(it.Value(), kv, currDepth+1, machineName, packageName, pathPrefix, namePrefix)
+		f, err := g.generateFilesAtDepth(it.Value(), schemaPath, currDepth+1, cfg)
 		if err != nil {
 			return nil, err
 		}
@@ -158,144 +235,130 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, cur
 }
 
 type CUEGoConfig struct {
-	PackageName             string
-	Name                    string
-	Version                 string
-	IgnoreDiscoveredImports bool
+	PackageName string
+	Name        string
 
-	// ApplyFuncs is a slice of AST manipulation funcs that will be executed against
-	// the generated Go file prior to running it through goimports. For each slice
-	// element, [dstutil.Apply] is called with the element as the "pre" parameter.
-	ApplyFuncs []dstutil.ApplyFunc
-
-	// UseGoDeclInComments sets the name of the fields and structs at the beginning of each comment.
-	UseGoDeclInComments bool
+	AddKubernetesOpenAPIGenComment bool
+	AnyAsInterface                 bool
 
 	// NamePrefix prefixes all generated types with the provided NamePrefix
 	NamePrefix string
 }
 
-func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int) ([]byte, error) {
-	openAPIConfig := CUEOpenAPIConfig{
-		Name:    cfg.NamePrefix + cfg.Name,
-		Version: cfg.Version,
-		NameFunc: func(_ cue.Value, path cue.Path) string {
-			i := 0
-			for ; i < len(path.Selectors()) && i < len(v.Path().Selectors()); i++ {
-				if maxNamingDepth > 0 && i >= maxNamingDepth {
-					break
-				}
-				if !SelEq(path.Selectors()[i], v.Path().Selectors()[i]) {
-					break
-				}
+func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc func(string) string) ([]byte, error) {
+	nameFunc := func(_ cue.Value, definitionPath cue.Path) string {
+		prefix := ""
+		if typePrefix := getTypePrefix(v); typePrefix != "" {
+			prefix = typePrefix
+		}
+		i := 0
+		for ; i < len(definitionPath.Selectors()) && i < len(v.Path().Selectors()); i++ {
+			if maxNamingDepth > 0 && i >= maxNamingDepth {
+				break
 			}
-			if i > 0 {
-				path = cue.MakePath(path.Selectors()[i:]...)
+			if !SelEq(definitionPath.Selectors()[i], v.Path().Selectors()[i]) {
+				break
 			}
-			return cfg.NamePrefix + strings.Trim(path.String(), "?#")
-		},
+		}
+		if i > 0 {
+			definitionPath = cue.MakePath(definitionPath.Selectors()[i:]...)
+		}
+		name := strings.Trim(definitionPath.String(), "?#")
+		if prefix != "" {
+			return fmt.Sprintf("%s.%s", prefix, name)
+		}
+		return name
+	}
+	// Force CUE to evaluate the value tree without setting isData
+	// This speeds up subsequent Subsume() and Equals() calls being done by cog, as otherwise this jenny's cost can become prohibitive.
+	// TODO: this should probably be a fix in cog rather than here
+	err := v.Validate(cue.All())
+	if err != nil {
+		return nil, fmt.Errorf("invalid CUE value at %s: %w", v.Path(), err)
+	}
+	codegenPipeline := cog.TypesFromSchema().
+		CUEValue(cfg.PackageName, v, cog.ForceEnvelope(cfg.Name), cog.NameFunc(nameFunc)).
+		SchemaTransformations(cog.PrefixObjectsNames(cfg.NamePrefix)).
+		Golang(cog.GoConfig{
+			AnyAsInterface:    cfg.AnyAsInterface,
+			CustomTemplatesFS: templates.GetCogTemplates(),
+			CustomTemplatesFuncs: map[string]any{
+				"namerFunc": namerFunc,
+			},
+		})
+
+	if cfg.AddKubernetesOpenAPIGenComment {
+		codegenPipeline = codegenPipeline.SchemaTransformations(cog.AppendCommentToObjects("+k8s:openapi-gen=true"))
 	}
 
-	yml, err := CUEValueToOAPIYAML(v, openAPIConfig)
+	files, err := codegenPipeline.Run(context.Background())
 	if err != nil {
 		return nil, err
 	}
 
-	loader := openapi3.NewLoader()
-	oT, err := loader.LoadFromData(yml)
+	if len(files) != 1 {
+		return nil, fmt.Errorf("expected one file to be generated, got %d", len(files))
+	}
+
+	data := files[0].Data
+	empty, err := isEmptyStruct(v)
 	if err != nil {
-		return nil, fmt.Errorf("loading generated openapi failed: %w", err)
+		return nil, err
+	}
+	if empty {
+		// cog doesn't generate an envelope type for a struct with no fields (e.g. `response: {}`),
+		// but callers expect the named type to exist, so we append an empty struct type ourselves.
+		data = append(data, emptyStructGoType(cfg, namerFunc)...)
 	}
 
-	ccfg := deepmapcodegen.Configuration{
-		PackageName: cfg.PackageName,
-		Compatibility: deepmapcodegen.CompatibilityOptions{
-			AlwaysPrefixEnumValues: true,
-		},
-		Generate: deepmapcodegen.GenerateOptions{
-			Models: true,
-		},
-		OutputOptions: deepmapcodegen.OutputOptions{
-			SkipPrune: true,
-			// SkipFmt:   true, // we should be able to skip fmt, but dst's parser panics on nested structs when we don't
-			UserTemplates: map[string]string{
-				"imports.tmpl": importstmpl,
-			},
-		},
-		ImportMapping:     nil,
-		AdditionalImports: nil,
+	if cfg.AddKubernetesOpenAPIGenComment {
+		data, err = alignAliasComments(data)
+		if err != nil {
+			return nil, err
+		}
 	}
-
-	gostr, err := deepmapcodegen.Generate(oT, ccfg)
+	formatted, err := format.Source(data)
 	if err != nil {
-		return nil, fmt.Errorf("openapi generation failed: %w", err)
+		return nil, err
 	}
 
-	applyFuncs := []dstutil.ApplyFunc{depointerizer(), fixRawData(), fixUnderscoreInTypeName()}
-	if !cfg.UseGoDeclInComments {
-		applyFuncs = append(applyFuncs, fixTODOComments())
-	}
-	applyFuncs = append(applyFuncs, cfg.ApplyFuncs...)
-
-	return postprocessGoFile(genGoFile{
-		path:     fmt.Sprintf("%s_type_gen.go", cfg.Name),
-		appliers: applyFuncs,
-		in:       []byte(gostr),
-		errifadd: !cfg.IgnoreDiscoveredImports,
-	})
+	return formatted, nil
 }
 
-type genGoFile struct {
-	errifadd bool
-	path     string
-	appliers []dstutil.ApplyFunc
-	in       []byte
+// isEmptyStruct returns true if v is a struct with no regular (non-definition) fields.
+func isEmptyStruct(v cue.Value) (bool, error) {
+	if v.IncompleteKind() != cue.StructKind {
+		return false, nil
+	}
+	i, err := v.Fields(cue.Definitions(true), cue.Optional(true))
+	if err != nil {
+		return false, err
+	}
+	for i.Next() {
+		if !i.Selector().IsDefinition() {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
-func postprocessGoFile(cfg genGoFile) ([]byte, error) {
-	fname := sanitizeLabelString(filepath.Base(cfg.path))
-	buf := new(bytes.Buffer)
-	fset := token.NewFileSet()
-	gf, err := decorator.ParseFile(fset, fname, string(cfg.in), parser.ParseComments)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing generated file: %w", err)
+// emptyStructGoType returns the go code for an empty struct type named according to cfg,
+// matching what cog would generate for a struct type with fields.
+func emptyStructGoType(cfg CUEGoConfig, namerFunc func(string) string) []byte {
+	name := cfg.NamePrefix + cfg.Name
+	sb := strings.Builder{}
+	sb.WriteString("\n")
+	if cfg.AddKubernetesOpenAPIGenComment {
+		sb.WriteString("// +k8s:openapi-gen=true\n")
 	}
-
-	for _, af := range cfg.appliers {
-		dstutil.Apply(gf, af, nil)
+	fmt.Fprintf(&sb, "type %s struct{}\n\n", name)
+	fmt.Fprintf(&sb, "// New%s creates a new %s object.\n", name, name)
+	fmt.Fprintf(&sb, "func New%s() *%s {\n\treturn &%s{}\n}\n", name, name, name)
+	if namerFunc != nil {
+		fmt.Fprintf(&sb, "\n// OpenAPIModelName returns the OpenAPI model name for %s.\n", name)
+		fmt.Fprintf(&sb, "func (%s) OpenAPIModelName() string {\n\treturn %q\n}\n", name, namerFunc(name))
 	}
-
-	err = decorator.Fprint(buf, gf)
-	if err != nil {
-		return nil, fmt.Errorf("error formatting generated file: %w", err)
-	}
-
-	byt, err := imports.Process(fname, buf.Bytes(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("goimports processing of generated file failed: %w", err)
-	}
-
-	if cfg.errifadd {
-		// Compare imports before and after; warn about performance if some were added
-		gfa, _ := parser.ParseFile(fset, fname, string(byt), parser.ParseComments)
-		imap := make(map[string]bool)
-		for _, im := range gf.Imports {
-			imap[im.Path.Value] = true
-		}
-		var added []string
-		for _, im := range gfa.Imports {
-			if !imap[im.Path.Value] {
-				added = append(added, im.Path.Value)
-			}
-		}
-
-		if len(added) != 0 {
-			// TODO improve the guidance in this error if/when we better abstract over imports to generate
-			return nil, fmt.Errorf("goimports added the following import statements to %s: \n\t%s\nRelying on goimports to find imports significantly slows down code generation. Either add these imports with an AST manipulation in cfg.ApplyFuncs, or set cfg.IgnoreDiscoveredImports to true", cfg.path, strings.Join(added, "\n\t"))
-		}
-	}
-
-	return format.Source(byt)
+	return []byte(sb.String())
 }
 
 // SanitizeLabelString strips characters from a string that are not allowed for
@@ -324,38 +387,3 @@ func exportField(field string) string {
 	}
 	return strings.ToUpper(field)
 }
-
-// Almost all of the below imports are eliminated by dst transformers and calls
-// to goimports - but if they're not present in the template, then the internal
-// call to goimports that oapi-codegen makes will trigger a search for them,
-// which can slow down codegen by orders of magnitude.
-var importstmpl = `package {{ .PackageName }}
-
-import (
-	"bytes"
-	"compress/gzip"
-	"context"
-	"encoding/base64"
-	"encoding/json"
-	"encoding/xml"
-	"errors"
-	"fmt"
-	"gopkg.in/yaml.v2"
-	"io"
-	"io/ioutil"
-	"os"
-	"net/http"
-	"net/url"
-	"path"
-	"strings"
-	"time"
-
-	"github.com/deepmap/oapi-codegen/pkg/runtime"
-	openapi_types "github.com/deepmap/oapi-codegen/pkg/types"
-	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/go-chi/chi/v5"
-	"github.com/labstack/echo/v4"
-	"github.com/gin-gonic/gin"
-	"github.com/gorilla/mux"
-)
-`

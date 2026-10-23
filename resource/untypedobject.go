@@ -2,6 +2,7 @@ package resource
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -33,6 +34,8 @@ type UntypedObject struct {
 	Spec map[string]any `json:"spec"`
 	// Subresources contains all subresources in raw JSON bytes
 	Subresources map[string]json.RawMessage
+	// Optional secure values
+	Secure InlineSecureValues `json:"secure,omitempty" yaml:"secure,omitempty"`
 }
 
 func (u *UntypedObject) GetSpec() any {
@@ -42,7 +45,7 @@ func (u *UntypedObject) GetSpec() any {
 func (u *UntypedObject) SetSpec(spec any) error {
 	cast, ok := spec.(map[string]any)
 	if !ok {
-		return fmt.Errorf("spec must be of type map[string]any")
+		return errors.New("spec must be of type map[string]any")
 	}
 	u.Spec = cast
 	return nil
@@ -93,16 +96,23 @@ func (u *UntypedObject) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if err = json.Unmarshal(m["apiVersion"], &u.TypeMeta.APIVersion); err != nil {
+	if err = json.Unmarshal(m["apiVersion"], &u.APIVersion); err != nil {
 		return fmt.Errorf("error reading apiVersion: %w", err)
 	}
-	if err = json.Unmarshal(m["kind"], &u.TypeMeta.Kind); err != nil {
+	if err = json.Unmarshal(m["kind"], &u.Kind); err != nil {
 		return fmt.Errorf("error reading kind: %w", err)
 	}
 	if err = json.Unmarshal(m["metadata"], &u.ObjectMeta); err != nil {
 		return fmt.Errorf("error reading metadata: %w", err)
 	}
+	u.Secure = nil
 	for k, v := range m {
+		if k == "secure" {
+			if err := json.Unmarshal(v, &u.Secure); err != nil {
+				return err
+			}
+			continue
+		}
 		if k == "apiVersion" || k == "kind" || k == "metadata" {
 			continue
 		}
@@ -130,13 +140,16 @@ func (u *UntypedObject) MarshalJSON() ([]byte, error) {
 	for k, v := range u.Subresources {
 		m[k] = v
 	}
+	if len(u.Secure) > 0 {
+		m["secure"] = u.Secure
+	}
 	return json.Marshal(m)
 }
 
 func (u *UntypedObject) GetStaticMetadata() StaticMetadata {
 	return StaticMetadata{
-		Name:      u.ObjectMeta.Name,
-		Namespace: u.ObjectMeta.Namespace,
+		Name:      u.Name,
+		Namespace: u.Namespace,
 		Group:     u.GroupVersionKind().Group,
 		Version:   u.GroupVersionKind().Version,
 		Kind:      u.GroupVersionKind().Kind,
@@ -228,6 +241,7 @@ func (u *UntypedObject) Copy() Object {
 	cpy.APIVersion = u.APIVersion
 	cpy.Kind = u.Kind
 	cpy.ObjectMeta = *u.ObjectMeta.DeepCopy()
+	cpy.Secure = CopySecureValues(u.Secure)
 	cpy.Spec = make(map[string]any)
 	// Copying spec is just json marshal/unmarshal--it's a bit slower, but less complicated for now
 	// Efficient implementations of Copy()/DeepCopyObject() should be bespoke in implementations of Object2
@@ -263,7 +277,7 @@ func (u *UntypedList) Copy() ListObject {
 		TypeMeta: u.TypeMeta,
 		Items:    make([]Object, len(u.Items)),
 	}
-	u.ListMeta.DeepCopyInto(&cpy.ListMeta)
+	u.DeepCopyInto(&cpy.ListMeta)
 	for i := 0; i < len(u.Items); i++ {
 		cpy.Items[i] = u.Items[i].Copy()
 	}
@@ -276,4 +290,10 @@ func (u *UntypedList) GetItems() []Object {
 
 func (u *UntypedList) SetItems(items []Object) {
 	u.Items = items
+}
+
+func (u *UntypedObject) GetSecureValues() InlineSecureValues { return u.Secure }
+func (u *UntypedObject) SetSecureValues(values InlineSecureValues) error {
+	u.Secure = values
+	return nil
 }

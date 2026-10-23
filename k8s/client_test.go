@@ -8,14 +8,20 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/flowcontrol"
 
@@ -52,6 +58,189 @@ var (
 	responseBytes, _ = json.Marshal(k8sResponseObject)
 )
 
+func TestDefaultClientConfig(t *testing.T) {
+	config := DefaultClientConfig()
+	// Check the KubeConfigProvider's logic
+	t.Run("KubeConfigProvider doesn't modify APIPath when already set", func(t *testing.T) {
+		existingPath := "/a/path"
+		rcfg := rest.Config{
+			APIPath: existingPath,
+		}
+		provided := config.KubeConfigProvider(testKind, rcfg)
+		assert.Equal(t, rcfg, provided)
+	})
+	t.Run("KubeConfigProvider sets APIPath to /apis for custom kinds", func(t *testing.T) {
+		rcfg := rest.Config{}
+		provided := config.KubeConfigProvider(testKind, rcfg)
+		assert.NotEqual(t, rcfg, provided)
+		assert.Equal(t, "/apis", provided.APIPath)
+	})
+	t.Run("KubeConfigProvider sets APIPath to /apis for kinds with an empty group (legacy k8s kinds)", func(t *testing.T) {
+		rcfg := rest.Config{}
+		provided := config.KubeConfigProvider(resource.Kind{
+			Schema: resource.NewSimpleSchema("", "v1", &resource.UntypedObject{}, &resource.UntypedList{}),
+		}, rcfg)
+		assert.NotEqual(t, rcfg, provided)
+		assert.Equal(t, "/api", provided.APIPath)
+	})
+}
+
+func TestNewClientConfigWithExternalClients(t *testing.T) {
+	remoteWrapTransportInvoked := false
+	remoteWrapTransport := func(rt http.RoundTripper) http.RoundTripper {
+		remoteWrapTransportInvoked = true
+		return rt
+	}
+	remoteByGroup := map[string]*RemoteRestConfig{
+		testKind.Group(): {
+			Host: "https://remote.example.com",
+			TLSClientConfig: rest.TLSClientConfig{
+				Insecure: true,
+			},
+			WrapTransport: remoteWrapTransport,
+			OverrideAuth:  true,
+		},
+	}
+	config := NewClientConfigWithExternalClients(remoteByGroup)
+
+	t.Run("sets APIPath to /apis for custom kinds without remote entry", func(t *testing.T) {
+		otherKind := resource.Kind{
+			Schema: resource.NewSimpleSchema(
+				"other.group",
+				"v1",
+				&resource.UntypedObject{},
+				&resource.UntypedList{},
+				resource.WithKind("Other"),
+			),
+		}
+
+		provided := config.KubeConfigProvider(otherKind, rest.Config{})
+		assert.Equal(t, "/apis", provided.APIPath)
+		assert.Empty(t, provided.Host)
+	})
+
+	t.Run("sets APIPath to /api for empty-group kinds", func(t *testing.T) {
+		legacyKind := resource.Kind{
+			Schema: resource.NewSimpleSchema("", "v1", &resource.UntypedObject{}, &resource.UntypedList{}),
+		}
+
+		provided := config.KubeConfigProvider(legacyKind, rest.Config{})
+		assert.Equal(t, "/api", provided.APIPath)
+		assert.Empty(t, provided.Host)
+	})
+
+	t.Run("overlays remote config for mapped group and clears inherited auth", func(t *testing.T) {
+		base := rest.Config{
+			Host:            "https://local.example.com",
+			BearerToken:     "token",
+			BearerTokenFile: "/tmp/token",
+			TLSClientConfig: rest.TLSClientConfig{
+				CertData: []byte("cert"),
+				CertFile: "/tmp/cert",
+				KeyData:  []byte("key"),
+				KeyFile:  "/tmp/key",
+			},
+		}
+
+		provided := config.KubeConfigProvider(testKind, base)
+		assert.Equal(t, "/apis", provided.APIPath)
+		assert.Equal(t, "https://remote.example.com", provided.Host)
+		assert.True(t, provided.TLSClientConfig.Insecure)
+		require.NotNil(t, provided.WrapTransport)
+		assert.Empty(t, provided.BearerToken)
+		assert.Empty(t, provided.BearerTokenFile)
+		assert.Nil(t, provided.CertData)
+		assert.Empty(t, provided.CertFile)
+		assert.Nil(t, provided.KeyData)
+		assert.Empty(t, provided.KeyFile)
+
+		_ = provided.WrapTransport(http.DefaultTransport)
+		assert.True(t, remoteWrapTransportInvoked)
+	})
+
+	t.Run("preserves APIPath but still applies remote overlay when APIPath already set", func(t *testing.T) {
+		existing := rest.Config{
+			APIPath:         "/already-configured",
+			Host:            "https://local.example.com",
+			BearerToken:     "keep-me",
+			BearerTokenFile: "/tmp/token",
+			TLSClientConfig: rest.TLSClientConfig{
+				CertData: []byte("cert"),
+				CertFile: "/tmp/cert",
+				KeyData:  []byte("key"),
+				KeyFile:  "/tmp/key",
+			},
+		}
+
+		provided := config.KubeConfigProvider(testKind, existing)
+		// APIPath is preserved
+		assert.Equal(t, "/already-configured", provided.APIPath)
+		// Remote overlay is applied (host, TLS, auth cleared via OverrideAuth)
+		assert.Equal(t, "https://remote.example.com", provided.Host)
+		assert.True(t, provided.TLSClientConfig.Insecure)
+		assert.Empty(t, provided.BearerToken)
+		assert.Empty(t, provided.BearerTokenFile)
+		assert.Nil(t, provided.CertData)
+		assert.Empty(t, provided.CertFile)
+		assert.Nil(t, provided.KeyData)
+		assert.Empty(t, provided.KeyFile)
+	})
+
+	t.Run("preserves APIPath without overlay for unmapped group", func(t *testing.T) {
+		otherKind := resource.Kind{
+			Schema: resource.NewSimpleSchema(
+				"other.group",
+				"v1",
+				&resource.UntypedObject{},
+				&resource.UntypedList{},
+				resource.WithKind("Other"),
+			),
+		}
+
+		existing := rest.Config{
+			APIPath: "/already-configured",
+			Host:    "https://local.example.com",
+		}
+
+		provided := config.KubeConfigProvider(otherKind, existing)
+		assert.Equal(t, existing, provided)
+	})
+
+	t.Run("keeps inherited auth when OverrideAuth is false", func(t *testing.T) {
+		configNoAuthOverride := NewClientConfigWithExternalClients(map[string]*RemoteRestConfig{
+			testKind.Group(): {
+				Host: "https://remote.example.com",
+				TLSClientConfig: rest.TLSClientConfig{
+					Insecure: true,
+				},
+			},
+		})
+
+		base := rest.Config{
+			Host:            "https://local.example.com",
+			BearerToken:     "token",
+			BearerTokenFile: "/tmp/token",
+			TLSClientConfig: rest.TLSClientConfig{
+				CertData: []byte("cert"),
+				CertFile: "/tmp/cert",
+				KeyData:  []byte("key"),
+				KeyFile:  "/tmp/key",
+			},
+		}
+
+		provided := configNoAuthOverride.KubeConfigProvider(testKind, base)
+		assert.Equal(t, "/apis", provided.APIPath)
+		assert.Equal(t, "https://remote.example.com", provided.Host)
+		assert.Equal(t, "token", provided.BearerToken)
+		assert.Equal(t, "/tmp/token", provided.BearerTokenFile)
+		assert.True(t, provided.TLSClientConfig.Insecure)
+		assert.Nil(t, provided.CertData)
+		assert.Empty(t, provided.CertFile)
+		assert.Nil(t, provided.KeyData)
+		assert.Empty(t, provided.KeyFile)
+	})
+}
+
 func TestClient_Get(t *testing.T) {
 	client, server := getClientTestSetup(testKind)
 	defer server.Close()
@@ -69,9 +258,9 @@ func TestClient_Get(t *testing.T) {
 		resp, err := client.Get(ctx, id)
 		assert.Nil(t, resp)
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -117,9 +306,9 @@ func TestClient_GetInto(t *testing.T) {
 		err := client.GetInto(ctx, id, &into)
 		assert.Equal(t, resource.TypedSpecObject[any]{}, into)
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -166,9 +355,9 @@ func TestClient_Create(t *testing.T) {
 		resp, err := client.Create(ctx, id, getTestObject(), resource.CreateOptions{})
 		assert.Nil(t, resp)
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -229,9 +418,9 @@ func TestClient_CreateInto(t *testing.T) {
 
 		err := client.CreateInto(ctx, id, getTestObject(), resource.CreateOptions{}, &resource.TypedSpecObject[any]{})
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -286,9 +475,9 @@ func TestClient_Update(t *testing.T) {
 		resp, err := client.Update(ctx, id, getTestObject(), resource.UpdateOptions{})
 		assert.Nil(t, resp)
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success, explicit RV", func(t *testing.T) {
@@ -407,9 +596,9 @@ func TestClient_UpdateInto(t *testing.T) {
 
 		err := client.UpdateInto(ctx, id, getTestObject(), resource.UpdateOptions{}, getTestObject())
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success, explicit RV", func(t *testing.T) {
@@ -511,11 +700,11 @@ func TestClient_Delete(t *testing.T) {
 			writer.WriteHeader(http.StatusBadRequest)
 		}
 
-		err := client.Delete(ctx, id)
+		err := client.Delete(ctx, id, resource.DeleteOptions{})
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -526,7 +715,54 @@ func TestClient_Delete(t *testing.T) {
 			assert.Equal(t, fmt.Sprintf("/namespaces/%s/%s/%s", id.Namespace, testSchema.Plural(), id.Name), r.URL.Path)
 		}
 
-		err := client.Delete(ctx, id)
+		err := client.Delete(ctx, id, resource.DeleteOptions{})
+		assert.Nil(t, err)
+	})
+
+	t.Run("propagationPolicy", func(t *testing.T) {
+		server.responseFunc = func(writer http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method)
+			writer.Write(responseBytes)
+			writer.WriteHeader(http.StatusOK)
+			assert.Equal(t, fmt.Sprintf("/namespaces/%s/%s/%s", id.Namespace, testSchema.Plural(), id.Name), r.URL.Path)
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			opts := metav1.DeleteOptions{}
+			require.NoError(t, json.Unmarshal(body, &opts))
+			assert.Equal(t, "DeleteOptions", opts.Kind)
+			assert.Equal(t, "meta.k8s.io/v1", opts.APIVersion)
+			assert.Equal(t, metav1.DeletePropagationForeground, *opts.PropagationPolicy)
+		}
+
+		err := client.Delete(ctx, id, resource.DeleteOptions{
+			PropagationPolicy: resource.DeleteOptionsPropagationPolicyForeground,
+		})
+		assert.Nil(t, err)
+	})
+
+	t.Run("preconditions", func(t *testing.T) {
+		server.responseFunc = func(writer http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method)
+			writer.Write(responseBytes)
+			writer.WriteHeader(http.StatusOK)
+			assert.Equal(t, fmt.Sprintf("/namespaces/%s/%s/%s", id.Namespace, testSchema.Plural(), id.Name), r.URL.Path)
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			opts := metav1.DeleteOptions{}
+			require.NoError(t, json.Unmarshal(body, &opts))
+			assert.Equal(t, "DeleteOptions", opts.Kind)
+			assert.Equal(t, "meta.k8s.io/v1", opts.APIVersion)
+			assert.NotNil(t, opts.Preconditions)
+			assert.Equal(t, "123", *opts.Preconditions.ResourceVersion)
+			assert.Equal(t, types.UID("abc"), *opts.Preconditions.UID)
+		}
+
+		err := client.Delete(ctx, id, resource.DeleteOptions{
+			Preconditions: resource.DeleteOptionsPreconditions{
+				ResourceVersion: "123",
+				UID:             "abc",
+			},
+		})
 		assert.Nil(t, err)
 	})
 }
@@ -556,9 +792,9 @@ func TestClient_List(t *testing.T) {
 		list, err := client.List(ctx, ns, resource.ListOptions{})
 		assert.Nil(t, list)
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success, no options", func(t *testing.T) {
@@ -778,8 +1014,8 @@ type decoder struct {
 
 func (d *decoder) Decode(data []byte, defaults *schema.GroupVersionKind, into runtime.Object) (runtime.Object, *schema.GroupVersionKind, error) {
 	type check struct {
-		Kind  string        `json:"kind"`
-		Items []interface{} `json:"items,omitempty"`
+		Kind  string `json:"kind"`
+		Items []any  `json:"items,omitempty"`
 	}
 	if into == nil {
 		fmt.Println("OH NO")
@@ -889,4 +1125,469 @@ func (r *mockRESTClient) APIVersion() schema.GroupVersion {
 		return r.APIVersionFunc()
 	}
 	return schema.GroupVersion{}
+}
+
+// mockWatch implements watch.Interface for testing
+type mockWatch struct {
+	ch      chan watch.Event
+	stopCh  chan struct{}
+	stopped bool
+	stopMux sync.Mutex
+}
+
+func newMockWatch() *mockWatch {
+	return &mockWatch{
+		ch:     make(chan watch.Event, 10),
+		stopCh: make(chan struct{}),
+	}
+}
+
+func (m *mockWatch) Stop() {
+	m.stopMux.Lock()
+	defer m.stopMux.Unlock()
+	if !m.stopped {
+		m.stopped = true
+		close(m.stopCh)
+		close(m.ch)
+	}
+}
+
+func (m *mockWatch) ResultChan() <-chan watch.Event {
+	return m.ch
+}
+
+func (m *mockWatch) sendEvent(evt watch.Event) {
+	m.stopMux.Lock()
+	defer m.stopMux.Unlock()
+	if !m.stopped {
+		m.ch <- evt
+	}
+}
+
+func TestMetricsWatchWrapper(t *testing.T) {
+	tests := []struct {
+		name              string
+		events            []watch.Event
+		expectEventCounts map[string]int
+		expectErrorCounts map[string]int
+	}{
+		{
+			name: "records ADDED event",
+			events: []watch.Event{
+				{Type: watch.Added, Object: getTestObject()},
+			},
+			expectEventCounts: map[string]int{
+				"ADDED": 1,
+			},
+			expectErrorCounts: map[string]int{},
+		},
+		{
+			name: "records MODIFIED event",
+			events: []watch.Event{
+				{Type: watch.Modified, Object: getTestObject()},
+			},
+			expectEventCounts: map[string]int{
+				"MODIFIED": 1,
+			},
+			expectErrorCounts: map[string]int{},
+		},
+		{
+			name: "records DELETED event",
+			events: []watch.Event{
+				{Type: watch.Deleted, Object: getTestObject()},
+			},
+			expectEventCounts: map[string]int{
+				"DELETED": 1,
+			},
+			expectErrorCounts: map[string]int{},
+		},
+		{
+			name: "records BOOKMARK event",
+			events: []watch.Event{
+				{Type: watch.Bookmark, Object: getTestObject()},
+			},
+			expectEventCounts: map[string]int{
+				"BOOKMARK": 1,
+			},
+			expectErrorCounts: map[string]int{},
+		},
+		{
+			name: "records ERROR event",
+			events: []watch.Event{
+				{Type: watch.Error, Object: getTestObject()},
+			},
+			expectEventCounts: map[string]int{
+				"ERROR": 1,
+			},
+			expectErrorCounts: map[string]int{},
+		},
+		{
+			name: "records nil object error",
+			events: []watch.Event{
+				{Type: watch.Added, Object: nil},
+			},
+			expectEventCounts: map[string]int{
+				"ADDED": 1,
+			},
+			expectErrorCounts: map[string]int{
+				"nil_object": 1,
+			},
+		},
+		{
+			name: "records multiple events",
+			events: []watch.Event{
+				{Type: watch.Added, Object: getTestObject()},
+				{Type: watch.Modified, Object: getTestObject()},
+				{Type: watch.Deleted, Object: getTestObject()},
+			},
+			expectEventCounts: map[string]int{
+				"ADDED":    1,
+				"MODIFIED": 1,
+				"DELETED":  1,
+			},
+			expectErrorCounts: map[string]int{},
+		},
+		{
+			name: "records mixed events and errors",
+			events: []watch.Event{
+				{Type: watch.Added, Object: getTestObject()},
+				{Type: watch.Modified, Object: nil},
+				{Type: watch.Deleted, Object: getTestObject()},
+			},
+			expectEventCounts: map[string]int{
+				"ADDED":    1,
+				"MODIFIED": 1,
+				"DELETED":  1,
+			},
+			expectErrorCounts: map[string]int{
+				"nil_object": 1,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock metrics
+			watchEventsTotal := prometheus.NewCounterVec(
+				prometheus.CounterOpts{Name: "test_watch_events_total"},
+				[]string{"event_type", "kind"},
+			)
+			watchErrorsTotal := prometheus.NewCounterVec(
+				prometheus.CounterOpts{Name: "test_watch_errors_total"},
+				[]string{"error_type", "kind"},
+			)
+
+			// Create mock watch
+			mockW := newMockWatch()
+
+			// Create wrapper
+			ctx := context.Background()
+			wrapper := &metricsWatchWrapper{
+				underlying:       mockW,
+				plural:           "tests",
+				watchEventsTotal: watchEventsTotal,
+				watchErrorsTotal: watchErrorsTotal,
+				ctx:              ctx,
+				ch:               make(chan watch.Event, 10),
+				stopCh:           make(chan struct{}, 1),
+			}
+
+			// Start reading from ResultChan
+			resultCh := wrapper.ResultChan()
+
+			// Send events
+			go func() {
+				for _, evt := range tt.events {
+					mockW.sendEvent(evt)
+				}
+			}()
+
+			// Collect events
+			var receivedEvents []watch.Event
+			done := make(chan struct{})
+			go func() {
+				for i := 0; i < len(tt.events); i++ {
+					evt := <-resultCh
+					receivedEvents = append(receivedEvents, evt)
+				}
+				close(done)
+			}()
+
+			// Wait for events with timeout
+			select {
+			case <-done:
+			case <-time.After(1 * time.Second):
+				t.Fatal("timeout waiting for events")
+			}
+
+			// Stop the wrapper
+			wrapper.Stop()
+
+			// Verify event counts
+			assert.Equal(t, len(tt.events), len(receivedEvents), "should receive all events")
+
+			// Check metrics
+			for eventType, expectedCount := range tt.expectEventCounts {
+				metric, err := watchEventsTotal.GetMetricWithLabelValues(eventType, "tests")
+				require.NoError(t, err)
+				var m prometheus.Metric = metric
+				var pb dto.Metric
+				err = m.Write(&pb)
+				require.NoError(t, err)
+				actualCount := int(pb.GetCounter().GetValue())
+				assert.Equal(t, expectedCount, actualCount, "event count mismatch for type %s", eventType)
+			}
+
+			for errorType, expectedCount := range tt.expectErrorCounts {
+				metric, err := watchErrorsTotal.GetMetricWithLabelValues(errorType, "tests")
+				require.NoError(t, err)
+				var m prometheus.Metric = metric
+				var pb dto.Metric
+				err = m.Write(&pb)
+				require.NoError(t, err)
+				actualCount := int(pb.GetCounter().GetValue())
+				assert.Equal(t, expectedCount, actualCount, "error count mismatch for type %s", errorType)
+			}
+		})
+	}
+}
+
+func TestMetricsWatchWrapper_StopPropagation(t *testing.T) {
+	// Create mock watch
+	mockW := newMockWatch()
+
+	// Create wrapper
+	ctx := context.Background()
+	watchEventsTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{Name: "test_watch_events_total"},
+		[]string{"event_type", "kind"},
+	)
+
+	wrapper := &metricsWatchWrapper{
+		underlying:       mockW,
+		plural:           "tests",
+		watchEventsTotal: watchEventsTotal,
+		ctx:              ctx,
+		ch:               make(chan watch.Event, 10),
+		stopCh:           make(chan struct{}, 1),
+	}
+
+	// Call Stop on wrapper
+	wrapper.Stop()
+
+	// Verify underlying watch was stopped
+	assert.True(t, mockW.stopped, "underlying watch should be stopped")
+}
+
+func TestMetricsWatchWrapper_NoMetrics(t *testing.T) {
+	// Create mock watch
+	mockW := newMockWatch()
+
+	// Create wrapper without metrics
+	ctx := context.Background()
+	wrapper := &metricsWatchWrapper{
+		underlying:       mockW,
+		plural:           "tests",
+		watchEventsTotal: nil,
+		watchErrorsTotal: nil,
+		ctx:              ctx,
+		ch:               make(chan watch.Event, 10),
+		stopCh:           make(chan struct{}, 1),
+	}
+
+	// Start reading from ResultChan
+	resultCh := wrapper.ResultChan()
+
+	// Send an event
+	go func() {
+		mockW.sendEvent(watch.Event{Type: watch.Added, Object: getTestObject()})
+	}()
+
+	// Should still receive event
+	select {
+	case evt := <-resultCh:
+		assert.Equal(t, watch.Added, evt.Type)
+	case <-time.After(1 * time.Second):
+		t.Fatal("timeout waiting for event")
+	}
+
+	wrapper.Stop()
+}
+
+func TestWatchResponse_KubernetesWatch_WithMetrics(t *testing.T) {
+	// Create mock watch
+	mockW := newMockWatch()
+
+	// Create mock metrics
+	watchEventsTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{Name: "test_watch_events_total"},
+		[]string{"event_type", "kind"},
+	)
+	watchErrorsTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{Name: "test_watch_errors_total"},
+		[]string{"error_type", "kind"},
+	)
+
+	// Create WatchResponse with metrics
+	ctx := context.Background()
+	wr := &WatchResponse{
+		watch:            mockW,
+		ch:               make(chan resource.WatchEvent, 1),
+		stopCh:           make(chan struct{}, 1),
+		ctx:              ctx,
+		plural:           "tests",
+		watchEventsTotal: watchEventsTotal,
+		watchErrorsTotal: watchErrorsTotal,
+	}
+
+	// Call KubernetesWatch()
+	k8sWatch := wr.KubernetesWatch()
+
+	// Should return a metricsWatchWrapper
+	wrapper, ok := k8sWatch.(*metricsWatchWrapper)
+	require.True(t, ok, "KubernetesWatch() should return metricsWatchWrapper when metrics configured")
+	assert.NotNil(t, wrapper.watchEventsTotal)
+	assert.NotNil(t, wrapper.watchErrorsTotal)
+	assert.Equal(t, "tests", wrapper.plural)
+
+	// Test that metrics are recorded
+	resultCh := k8sWatch.ResultChan()
+
+	// Send an event
+	go func() {
+		mockW.sendEvent(watch.Event{Type: watch.Added, Object: getTestObject()})
+	}()
+
+	// Receive event
+	select {
+	case evt := <-resultCh:
+		assert.Equal(t, watch.Added, evt.Type)
+	case <-time.After(1 * time.Second):
+		t.Fatal("timeout waiting for event")
+	}
+
+	// Stop the watch
+	k8sWatch.Stop()
+
+	// Verify metrics were recorded
+	metric, err := watchEventsTotal.GetMetricWithLabelValues("ADDED", "tests")
+	require.NoError(t, err)
+	var m prometheus.Metric = metric
+	var pb dto.Metric
+	err = m.Write(&pb)
+	require.NoError(t, err)
+	actualCount := int(pb.GetCounter().GetValue())
+	assert.Equal(t, 1, actualCount, "should record ADDED event metric")
+}
+
+func TestWatchResponse_KubernetesWatch_WithoutMetrics(t *testing.T) {
+	// Create mock watch
+	mockW := newMockWatch()
+
+	// Create WatchResponse without metrics
+	ctx := context.Background()
+	wr := &WatchResponse{
+		watch:            mockW,
+		ch:               make(chan resource.WatchEvent, 1),
+		stopCh:           make(chan struct{}, 1),
+		ctx:              ctx,
+		plural:           "tests",
+		watchEventsTotal: nil,
+		watchErrorsTotal: nil,
+	}
+
+	// Call KubernetesWatch()
+	k8sWatch := wr.KubernetesWatch()
+
+	// Should return the raw underlying watch (not wrapped)
+	assert.Equal(t, mockW, k8sWatch, "KubernetesWatch() should return raw watch when metrics not configured")
+}
+
+func TestMetricsWatchWrapper_StopWhileBlocked(t *testing.T) {
+	mockW := newMockWatch()
+	ctx := context.Background()
+
+	wrapper := &metricsWatchWrapper{
+		underlying: mockW,
+		plural:     "tests",
+		ctx:        ctx,
+		ch:         make(chan watch.Event), // unbuffered — send will block
+		stopCh:     make(chan struct{}, 1),
+	}
+
+	resultCh := wrapper.ResultChan()
+
+	// Fill the underlying channel so interceptEvents has an event to forward
+	mockW.sendEvent(watch.Event{Type: watch.Added, Object: getTestObject()})
+
+	// Give interceptEvents time to pick up the event and block on w.ch send
+	time.Sleep(50 * time.Millisecond)
+
+	// Stop must not deadlock even though interceptEvents is blocked sending
+	done := make(chan struct{})
+	go func() {
+		wrapper.Stop()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Stop() deadlocked — goroutine leak not fixed")
+	}
+
+	// Channel should be closed after interceptEvents exits
+	select {
+	case _, ok := <-resultCh:
+		if ok {
+			t.Fatal("expected channel to be closed")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("result channel was never closed — goroutine leaked")
+	}
+}
+
+func TestWatchResponse_StopWhileBlocked(t *testing.T) {
+	mockW := newMockWatch()
+	ctx := context.Background()
+
+	wr := &WatchResponse{
+		watch:  mockW,
+		ch:     make(chan resource.WatchEvent), // unbuffered — send will block
+		stopCh: make(chan struct{}, 1),
+		ctx:    ctx,
+		plural: "tests",
+	}
+
+	// Start the translation goroutine
+	watchCh := wr.WatchEvents()
+
+	// Send an event so start() has something to forward and blocks on w.ch
+	mockW.sendEvent(watch.Event{Type: watch.Added, Object: getTestObject()})
+
+	// Give start() time to pick up the event and block on w.ch send
+	time.Sleep(50 * time.Millisecond)
+
+	// Stop must not deadlock even though start() is blocked sending
+	done := make(chan struct{})
+	go func() {
+		wr.Stop()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Stop() deadlocked — goroutine leak not fixed")
+	}
+
+	// Channel should be closed after start() exits
+	select {
+	case _, ok := <-watchCh:
+		if ok {
+			t.Fatal("expected channel to be closed")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("watch channel was never closed — goroutine leaked")
+	}
 }

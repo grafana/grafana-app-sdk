@@ -2,6 +2,7 @@ package jennies
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -98,7 +99,7 @@ func getASTFieldByLabel(n ast.Node, label string) (*ast.Field, error) {
 	case *ast.StructLit:
 		d = x.Elts
 	default:
-		return nil, fmt.Errorf("not an *ast.File or *ast.StructLit")
+		return nil, errors.New("not an *ast.File or *ast.StructLit")
 	}
 
 	for _, el := range d {
@@ -185,4 +186,14 @@ func (*cueFmtState) Precision() (prec int, ok bool) {
 // Flag returns whether the specified flag has been set. It will always return false.
 func (*cueFmtState) Flag(flag int) bool {
 	return flag == '#' || flag == '+'
+}
+
+func getTypePrefix(val cue.Value) string {
+	if attr := val.Attribute("grafana_app_sdk"); attr.Err() == nil {
+		prefix, ok, err := attr.Lookup(0, "prefix")
+		if ok && err == nil {
+			return exportField(prefix)
+		}
+	}
+	return ""
 }

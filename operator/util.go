@@ -1,25 +1,26 @@
 package operator
 
 import (
+	"slices"
 	"sync"
 
-	"github.com/puzpuzpuz/xsync/v2"
+	"github.com/puzpuzpuz/xsync/v4"
 )
 
 // NewListMap returns a pointer to a new properly-initialized ListMap.
 // The type parameter is the type of elements in the lists
 func NewListMap[T any]() *ListMap[string, T] {
 	return &ListMap[string, T]{
-		internal: xsync.NewMapOf[[]T](),
-		muxes:    xsync.NewMapOf[*sync.RWMutex](),
+		internal: xsync.NewMap[string, []T](),
+		muxes:    xsync.NewMap[string, *sync.RWMutex](),
 	}
 }
 
 // ListMap is a map of lists which is thread-safe, with read and write distinction.
 // The underlying map and slice(s) are not directly accessible, as it would prevent the read/write safety.
 type ListMap[K comparable, V any] struct {
-	internal *xsync.MapOf[K, []V]
-	muxes    *xsync.MapOf[K, *sync.RWMutex]
+	internal *xsync.Map[K, []V]
+	muxes    *xsync.Map[K, *sync.RWMutex]
 }
 
 // ItemAt returns the item at index `index` in the list for the map key `key`.
@@ -82,7 +83,7 @@ func (l *ListMap[K, V]) Range(key K, rangeFunc func(index int, value V)) {
 	if !ok {
 		return
 	}
-	for i := 0; i < len(list); i++ {
+	for i := range list {
 		rangeFunc(i, list[i])
 	}
 }
@@ -131,7 +132,7 @@ func (l *ListMap[K, V]) RemoveItem(key K, match func(V) bool) bool {
 	if !ok {
 		return false
 	}
-	for i := 0; i < len(list); i++ {
+	for i := range list {
 		if match(list[i]) {
 			l.internal.Store(key, l.remove(list, i))
 			return true
@@ -163,8 +164,8 @@ func (l *ListMap[K, V]) RemoveItems(key K, match func(V) bool, limit int) int {
 		}
 	}
 	// Traverse the toRemove list backwards, so we preserve indices as we delete from the list
-	for i := len(toRemove) - 1; i >= 0; i-- {
-		list = l.remove(list, toRemove[i])
+	for _, t := range slices.Backward(toRemove) {
+		list = l.remove(list, t)
 	}
 	l.internal.Store(key, list)
 	return len(toRemove)

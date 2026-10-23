@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
+	customcache "github.com/grafana/grafana-app-sdk/k8s/cache"
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -24,47 +25,100 @@ import (
 
 var _ Informer = &CustomCacheInformer{}
 
-const processorBufferSize = 1024
-
-type CustomCacheInformer struct {
-	// CacheResyncInterval is the interval at which the informer will emit CacheResync events for all resources in the cache.
-	// This is distinct from a full resync, as no information is fetched from the API server.
-	// Changes to this value after run() is called will not take effect.
-	CacheResyncInterval time.Duration
-	// ErrorHandler is called if the informer encounters an error which does not stop the informer from running,
-	// but may stop it from processing a given event.
-	ErrorHandler func(context.Context, error)
-
-	started           bool
-	startedLock       sync.Mutex
-	store             cache.Store
-	controller        cache.Controller
-	listerWatcher     cache.ListerWatcher
-	objectType        resource.Object
-	processor         *informerProcessor
-	objectTransformer func(any) (resource.Object, error)
+// MemcachedInformerOptions are the options for the MemcachedInformer.
+type MemcachedInformerOptions struct {
+	CustomCacheInformerOptions
+	// ServerAddrs is a list of addresses for the memcached servers.
+	ServerAddrs []string
+	// ServerSelector is a server selector for the memcached client.
+	// If present, it overrides Addrs and is used to determine the memcached servers to connect to.
+	ServerSelector MemcachedServerSelector
 }
 
 // NewMemcachedInformer creates a new CustomCacheInformer which uses memcached as its custom cache.
-// This is analogous to calling NewCustomCacheInformer with a MemcachedStore as the store.
-func NewMemcachedInformer(kind resource.Kind, client ListWatchClient, namespace string, addrs ...string) (*CustomCacheInformer, error) {
-	return NewMemcachedInformerWithFilters(kind, client, ListWatchOptions{Namespace: namespace}, addrs...)
-}
-
-// NewMemcachedInformerWithFilters creates a new CustomCacheInformer which uses memcached as its custom cache.
-// This is analogous to calling NewCustomCacheInformer with a MemcachedStore as the store.
-func NewMemcachedInformerWithFilters(kind resource.Kind, client ListWatchClient, filterOptions ListWatchOptions, addrs ...string) (*CustomCacheInformer, error) {
+// This is analogous to calling NewCustomCacheInformer with a MemcachedStore as the store, using the default memcached options.
+// To set additional memcached options, use NewCustomCacheInformer and NewMemcachedStore.
+func NewMemcachedInformer(
+	kind resource.Kind, client ListWatchClient, opts MemcachedInformerOptions,
+) (*CustomCacheInformer, error) {
 	c, err := NewMemcachedStore(kind, MemcachedStoreConfig{
-		Addrs: addrs,
+		Addrs:          opts.ServerAddrs,
+		ServerSelector: opts.ServerSelector,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return NewCustomCacheInformer(c, NewListerWatcher(client, kind, filterOptions), kind), nil
+
+	return NewCustomCacheInformer(
+		c, NewListerWatcher(client, kind, opts.ListWatchOptions), kind, opts.CustomCacheInformerOptions,
+	), nil
+}
+
+const (
+	processorBufferSize        = 1024
+	waitForSyncInitialInterval = time.Millisecond
+	waitForSyncMaxInterval     = 100 * time.Millisecond
+)
+
+// CustomCacheInformerOptions are the options for the CustomCacheInformer.
+type CustomCacheInformerOptions struct {
+	InformerOptions
+	// ProcessorBufferSize is the size of the buffer for the informer processor.
+	// This is the number of events that can be buffered before the processor is blocked.
+	// An empty value will use the default of 1024.
+	ProcessorBufferSize int
+	// WaitForSyncInitialInterval is the initial interval for the wait for sync.
+	// This is the interval at which the wait for sync will check if the informer has synced.
+	// An empty value will use the default of 1 millisecond.
+	WaitForSyncInitialInterval time.Duration
+	// WaitForSyncMaxInterval is the max interval for the wait for sync.
+	// This is the max interval at which the wait for sync will check if the informer has synced.
+	// An empty value will use the default of 100 milliseconds.
+	WaitForSyncMaxInterval time.Duration
+}
+
+// CustomCacheInformer is an informer that uses a custom cache.Store to store the state of the resources.
+type CustomCacheInformer struct {
+	started        bool
+	startedLock    sync.RWMutex
+	controller     cache.Controller
+	controllerLock sync.RWMutex
+	store          cache.Store
+	listerWatcher  cache.ListerWatcher
+	opts           CustomCacheInformerOptions
+	objectType     resource.Object
+	processor      *informerProcessor
+	schema         resource.Kind
+	runContext     context.Context
 }
 
 // NewCustomCacheInformer returns a new CustomCacheInformer using the provided cache.Store and cache.ListerWatcher.
-func NewCustomCacheInformer(store cache.Store, lw cache.ListerWatcher, kind resource.Kind) *CustomCacheInformer {
+// To use ListWatchOptions, use NewListerWatcher to get a cache.ListerWatcher.
+func NewCustomCacheInformer(
+	store cache.Store, lw cache.ListerWatcher, kind resource.Kind, opts CustomCacheInformerOptions,
+) *CustomCacheInformer {
+	if opts.ProcessorBufferSize <= 0 {
+		opts.ProcessorBufferSize = processorBufferSize
+	}
+
+	if opts.CacheResyncInterval < 0 {
+		opts.CacheResyncInterval = 0
+	}
+
+	if opts.EventTimeout < 0 {
+		opts.EventTimeout = 0
+	}
+
+	if opts.CacheResyncInterval > 0 && opts.EventTimeout > opts.CacheResyncInterval {
+		opts.EventTimeout = opts.CacheResyncInterval
+	}
+
+	if opts.ErrorHandler == nil {
+		opts.ErrorHandler = func(ctx context.Context, err error) {
+			logging.FromContext(ctx).Error("error processing informer event", "component", "CustomCacheInformer", "error", err)
+		}
+	}
+
 	return &CustomCacheInformer{
 		store:         store,
 		listerWatcher: lw,
@@ -72,12 +126,8 @@ func NewCustomCacheInformer(store cache.Store, lw cache.ListerWatcher, kind reso
 		// We can enable the k8s.KindNegotiatedSerializer for this, but it would be used by all clients then
 		// objectType:    kind.ZeroValue(),
 		processor: newInformerProcessor(),
-		objectTransformer: func(a any) (resource.Object, error) {
-			return toResourceObject(a, kind)
-		},
-		ErrorHandler: func(ctx context.Context, err error) {
-			logging.FromContext(ctx).Error("error processing informer event", "component", "CustomCacheInformer", "error", err)
-		},
+		schema:    kind,
+		opts:      opts,
 	}
 }
 
@@ -91,27 +141,59 @@ func (c *CustomCacheInformer) PrometheusCollectors() []prometheus.Collector {
 
 // AddEventHandler adds the provided ResourceWatcher to the list of handlers to have events reported to.
 func (c *CustomCacheInformer) AddEventHandler(handler ResourceWatcher) error {
-	c.processor.addListener(newInformerProcessorListener(toResourceEventHandlerFuncs(handler, c.objectTransformer, c.errorHandler), processorBufferSize))
-	return nil
+	return c.processor.addListener(
+		newInformerProcessorListener(
+			toResourceEventHandlerFuncs(
+				handler, c.toResourceObject, c.errorHandler, func() (context.Context, context.CancelFunc) {
+					if c.runContext != nil {
+						return c.runContext, func() {}
+					}
+
+					if c.opts.EventTimeout > 0 {
+						return context.WithTimeout(context.Background(), c.opts.EventTimeout)
+					}
+
+					return context.WithCancel(context.Background())
+				},
+			),
+			processorBufferSize,
+		),
+	)
 }
 
 // Run runs the informer until stopCh is closed or receives a message.
 // While running, events from the ListerWatcher will be propagated to all registered ResourceWatcher handlers,
 // and current state of all resources will be stored in the custom cache.Store.
-func (c *CustomCacheInformer) Run(stopCh <-chan struct{}) error {
+func (c *CustomCacheInformer) Run(ctx context.Context) error {
 	defer utilruntime.HandleCrash()
 
 	if c.HasStarted() {
-		return fmt.Errorf("informer is already started")
+		return errors.New("informer is already started")
 	}
 
-	func() {
-		c.startedLock.Lock()
-		defer c.startedLock.Unlock()
-
-		c.controller = newInformer(c.listerWatcher, c.objectType, c.CacheResyncInterval, c, c.store, nil)
-		c.started = true
+	c.runContext = ctx
+	defer func() {
+		c.runContext = nil
 	}()
+
+	// Initialize the controller
+	c.controllerLock.Lock()
+	c.controller = newInformer(
+		c.listerWatcher,
+		c.objectType,
+		c.schema.GroupVersionKind().String(),
+		c.opts.CacheResyncInterval,
+		c,
+		c.store,
+		nil,
+		c.opts.UseWatchList,
+		c.opts.WatchListPageSize)
+	c.controllerLock.Unlock()
+
+	// Mark the informer as started
+	c.startedLock.Lock()
+	c.started = true
+	c.startedLock.Unlock()
 
 	// Separate stop channel because Processor should be stopped strictly after controller
 	processorStopCh := make(chan struct{})
@@ -126,39 +208,42 @@ func (c *CustomCacheInformer) Run(stopCh <-chan struct{}) error {
 		defer c.startedLock.Unlock()
 		c.started = false
 	}()
+
 	// Wait for the processor to complete startup before running the controller (otherwise events may be dropped by distribution)
 	<-c.processor.startedCh
-	c.controller.Run(stopCh)
+	c.controller.Run(ctx.Done())
 	return nil
 }
 
 // HasStarted returns true if the informer is already running
 func (c *CustomCacheInformer) HasStarted() bool {
-	c.startedLock.Lock()
-	defer c.startedLock.Unlock()
+	c.startedLock.RLock()
+	defer c.startedLock.RUnlock()
+
 	return c.started
 }
 
 // HasSynced returns true if the informer has synced all events from the initial list request.
 func (c *CustomCacheInformer) HasSynced() bool {
-	c.startedLock.Lock()
-	defer c.startedLock.Unlock()
+	c.controllerLock.RLock()
+	defer c.controllerLock.RUnlock()
 
-	if c.controller == nil {
-		return false
+	if c.controller != nil {
+		return c.controller.HasSynced()
 	}
-	return c.controller.HasSynced()
+	return false
 }
 
 // LastSyncResourceVersion delegates to the underlying cache.Reflector's method,
 // if the informer has started. Otherwise, it returns an empty string.
 func (c *CustomCacheInformer) LastSyncResourceVersion() string {
-	c.startedLock.Lock()
-	defer c.startedLock.Unlock()
+	c.controllerLock.RLock()
+	defer c.controllerLock.RUnlock()
 
 	if c.controller == nil {
 		return ""
 	}
+
 	return c.controller.LastSyncResourceVersion()
 }
 
@@ -185,18 +270,43 @@ func (c *CustomCacheInformer) OnDelete(obj any) {
 	})
 }
 
-func (c *CustomCacheInformer) errorHandler(ctx context.Context, err error) {
-	if c.ErrorHandler != nil {
-		c.ErrorHandler(ctx, err)
+// WaitForSync waits for the informer to sync all events from the initial list request.
+func (c *CustomCacheInformer) WaitForSync(ctx context.Context) error {
+	interval := waitForSyncInitialInterval
+
+	for {
+		if c.HasSynced() {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(interval):
+			// Exponential backoff up to max interval
+			interval = min(interval*2, waitForSyncMaxInterval)
+		}
 	}
+}
+
+func (c *CustomCacheInformer) toResourceObject(obj any) (resource.Object, error) {
+	return toResourceObject(obj, c.schema)
+}
+
+func (c *CustomCacheInformer) errorHandler(ctx context.Context, err error) {
+	if c.opts.ErrorHandler == nil {
+		return
+	}
+
+	c.opts.ErrorHandler(ctx, err)
 }
 
 // NewListerWatcher returns a cache.ListerWatcher for the provided resource.Schema that uses the given ListWatchClient.
 // The List and Watch requests will always use the provided namespace and labelFilters.
 func NewListerWatcher(client ListWatchClient, sch resource.Schema, filterOptions ListWatchOptions) cache.ListerWatcher {
 	return &cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-			ctx, span := GetTracer().Start(context.Background(), "informer-list")
+		ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
+			ctx, span := GetTracer().Start(ctx, "informer-list")
 			defer span.End()
 			span.SetAttributes(
 				attribute.String("kind.name", sch.Kind()),
@@ -217,8 +327,8 @@ func NewListerWatcher(client ListWatchClient, sch resource.Schema, filterOptions
 			}
 			return &resp, nil
 		},
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-			ctx, span := GetTracer().Start(context.Background(), "informer-watch")
+		WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
+			ctx, span := GetTracer().Start(ctx, "informer-watch")
 			defer span.End()
 			span.SetAttributes(
 				attribute.String("kind.name", sch.Kind()),
@@ -231,14 +341,10 @@ func NewListerWatcher(client ListWatchClient, sch resource.Schema, filterOptions
 				ResourceVersionMatch: string(options.ResourceVersionMatch),
 				LabelFilters:         filterOptions.LabelFilters,
 				FieldSelectors:       filterOptions.FieldSelectors,
+				AllowWatchBookmarks:  options.AllowWatchBookmarks,
+				TimeoutSeconds:       options.TimeoutSeconds,
+				SendInitialEvents:    options.SendInitialEvents,
 			}
-			// TODO: can't defer the cancel call for the context, because it should only be canceled if the
-			// _caller_ of WatchFunc finishes with the WatchResponse before the timeout elapses...
-			// Seems to be a limitation of the kubernetes implementation here
-			/* if options.TimeoutSeconds != nil {
-				timeout := time.Duration(*options.TimeoutSeconds) * time.Second
-				ctx, cancel = context.WithTimeout(ctx, timeout)
-			}*/
 			watchResp, err := client.Watch(ctx, filterOptions.Namespace, opts)
 			if err != nil {
 				return nil, err
@@ -251,16 +357,24 @@ func NewListerWatcher(client ListWatchClient, sch resource.Schema, filterOptions
 				watch: watchResp,
 				ch:    make(chan watch.Event),
 			}
-			go w.start()
+			go w.run(ctx)
 			return w, nil
 		},
 	}
 }
 
-func toResourceEventHandlerFuncs(handler ResourceWatcher, transformer func(any) (resource.Object, error), errorHandler func(context.Context, error)) *cache.ResourceEventHandlerFuncs {
+func toResourceEventHandlerFuncs(
+	handler ResourceWatcher,
+	transformer func(any) (resource.Object, error),
+	errorHandler func(context.Context, error),
+	ctxProvider func() (context.Context, context.CancelFunc),
+) *cache.ResourceEventHandlerFuncs {
 	return &cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj any) {
-			ctx, span := GetTracer().Start(context.Background(), "informer-event-add")
+			ctx, cancel := ctxProvider()
+			defer cancel()
+
+			ctx, span := GetTracer().Start(ctx, "informer-event-add")
 			defer span.End()
 			cast, err := transformer(obj)
 			if err != nil {
@@ -283,7 +397,10 @@ func toResourceEventHandlerFuncs(handler ResourceWatcher, transformer func(any) 
 			}
 		},
 		UpdateFunc: func(oldObj, newObj any) {
-			ctx, span := GetTracer().Start(context.Background(), "informer-event-update")
+			ctx, cancel := ctxProvider()
+			defer cancel()
+
+			ctx, span := GetTracer().Start(ctx, "informer-event-update")
 			defer span.End()
 			cOld, err := transformer(oldObj)
 			if err != nil {
@@ -313,7 +430,10 @@ func toResourceEventHandlerFuncs(handler ResourceWatcher, transformer func(any) 
 			}
 		},
 		DeleteFunc: func(obj any) {
-			ctx, span := GetTracer().Start(context.Background(), "informer-event-delete")
+			ctx, cancel := ctxProvider()
+			defer cancel()
+
+			ctx, span := GetTracer().Start(ctx, "informer-event-delete")
 			defer span.End()
 			cast, err := transformer(obj)
 			if err != nil {
@@ -344,10 +464,13 @@ func toResourceEventHandlerFuncs(handler ResourceWatcher, transformer func(any) 
 func newInformer(
 	lw cache.ListerWatcher,
 	objType runtime.Object,
+	objDesc string,
 	resyncPeriod time.Duration,
 	h cache.ResourceEventHandler,
 	clientState cache.Store,
 	transformer cache.TransformFunc,
+	useWatchList bool,
+	watchListPageSize int64,
 ) cache.Controller {
 	// This will hold incoming changes. Note how we pass clientState in as a
 	// KeyLister, that way resync operations will result in the correct set
@@ -359,11 +482,11 @@ func newInformer(
 	})
 
 	cfg := &cache.Config{
-		Queue:            fifo,
-		ListerWatcher:    lw,
-		ObjectType:       objType,
-		FullResyncPeriod: resyncPeriod,
-		RetryOnError:     false,
+		Queue:             fifo,
+		ListerWatcher:     lw,
+		ObjectType:        objType,
+		ObjectDescription: objDesc,
+		FullResyncPeriod:  resyncPeriod,
 
 		Process: func(obj any, isInInitialList bool) error {
 			if deltas, ok := obj.(cache.Deltas); ok {
@@ -372,7 +495,11 @@ func newInformer(
 			return errors.New("object given as Process argument is not Deltas")
 		},
 	}
-	return cache.New(cfg)
+
+	controller := customcache.NewController(cfg)
+	controller.UseWatchList = useWatchList
+	controller.WatchListPageSize = watchListPageSize
+	return controller
 }
 
 // processDeltas is mostly copied from the kubernetes method of the same name in client-go/tools/cache/controller.go,
@@ -410,6 +537,13 @@ func processDeltas(
 				return err
 			}
 			handler.OnDelete(obj)
+		case cache.Bookmark:
+			info, ok := obj.(cache.BookmarkInfo)
+			if !ok {
+				return fmt.Errorf("bookmark delta did not contain BookmarkInfo: %T", obj)
+			}
+			clientState.Bookmark(info.ResourceVersion)
+		default:
 		}
 	}
 	return nil

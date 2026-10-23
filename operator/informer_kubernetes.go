@@ -2,52 +2,134 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/grafana/grafana-app-sdk/health"
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
+)
+
+var (
+	_ Informer     = &KubernetesBasedInformer{}
+	_ health.Check = &KubernetesBasedInformer{}
 )
 
 // KubernetesBasedInformer is a k8s apimachinery-based informer. It wraps a k8s cache.SharedIndexInformer,
 // and works most optimally with a client that has a Watch response that implements KubernetesCompatibleWatch.
 type KubernetesBasedInformer struct {
-	ErrorHandler        func(context.Context, error)
 	SharedIndexInformer cache.SharedIndexInformer
-	schema              resource.Kind
+	// HealthCheckIgnoreSync will set the KubernetesBasedInformer HealthCheck to return ok once the informer is started,
+	// rather than waiting for the informer to finish with its initial list sync.
+	// You may want to set this to `true` if you have a particularly long initial sync period and don't want readiness checks failing.
+	HealthCheckIgnoreSync bool
+	schema                resource.Kind
+	runContext            context.Context
+	eventTimeout          time.Duration
+	errorHandlerFn        func(context.Context, error)
+	healthCheckName       string
 }
 
-type KubernetesBasedIformerOptions struct {
+// InformerOptions are generic options for all Informer implementations.
+type InformerOptions struct {
+	// ListWatchOptions are the options for filtering the watch based on namespace and other compatible filters.
 	ListWatchOptions ListWatchOptions
 	// CacheResyncInterval is the interval at which the informer will emit CacheResync events for all resources in the cache.
 	// This is distinct from a full resync, as no information is fetched from the API server.
+	// Changes to this value after run() is called will not take effect.
 	// An empty value will disable cache resyncs.
 	CacheResyncInterval time.Duration
+	// EventTimeout is the timeout for an event to be processed.
+	// If an event is not processed within this timeout, it will be dropped.
+	// The timeout cannot be larger than the cache resync interval, if it is,
+	// the cache resync interval will be used instead.
+	// An empty value will disable event timeouts.
+	EventTimeout time.Duration
+	// ErrorHandler is called if the informer encounters an error which does not stop the informer from running,
+	// but may stop it from processing a given event.
+	ErrorHandler func(context.Context, error)
+	// HealthCheckIgnoreSync will set the KubernetesBasedInformer HealthCheck to return ok once the informer is started,
+	// rather than waiting for the informer to finish with its initial list sync.
+	// You may want to set this to `true` if you have a particularly long initial sync period and don't want readiness checks failing.
+	HealthCheckIgnoreSync bool
+	// UseWatchList if turned on instructs the reflector to open a stream to bring data from the API server.
+	// Streaming has the primary advantage of using fewer server's resources to fetch data.
+	//
+	// The old behavior establishes a LIST request which gets data in chunks.
+	// Paginated list is less efficient and depending on the actual size of objects
+	// might result in an increased memory consumption of the APIServer.
+	//
+	// Defaults to false. Requires Kubernetes 1.27+ when enabled.
+	// See https://github.com/kubernetes/enhancements/tree/master/keps/sig-api-machinery/3157-watch-list#design-details
+	UseWatchList bool
+	// WatchListPageSize is the requested chunk size for paginated LIST operations.
+	// This significantly reduces memory usage when watching large numbers of objects (>10K).
+	// Recommended values: 5000-10000 for most use cases.
+	// Note: This only affects traditional LIST operations. It does NOT apply to watch-list streaming (UseWatchList).
+	// An empty value (0) will use client-go's default pagination behavior based on resource version.
+	WatchListPageSize int64
+	// MaxConcurrentWorkers is the maximum number of concurrent workers for event processing in ConcurrentInformer.
+	// Each worker maintains a queue of events which are processed sequentially.
+	// Events for a particular object are assigned to the same worker to maintain in-order delivery per object.
+	// An empty value (0) will use the default of 10 workers.
+	MaxConcurrentWorkers uint64
+	// MetricsConfig controls the namespace and histogram settings for Prometheus metrics
+	// exposed by components that use these options (e.g., ConcurrentInformer queue depth).
+	MetricsConfig metrics.Config
+	// ResourceKind is used as the "kind" label on queue depth metrics.
+	// When empty, the label value defaults to an empty string.
+	ResourceKind string
 }
 
-// NewKubernetesBasedInformer creates a new KubernetesBasedInformer for the provided schema and namespace,
-// using the ListWatchClient provided to do its List and Watch requests.
-func NewKubernetesBasedInformer(sch resource.Kind, client ListWatchClient, namespace string) (
-	*KubernetesBasedInformer, error) {
-	return NewKubernetesBasedInformerWithFilters(sch, client, KubernetesBasedIformerOptions{
-		ListWatchOptions: ListWatchOptions{Namespace: namespace},
-	})
-}
-
-// NewKubernetesBasedInformerWithFilters creates a new KubernetesBasedInformer for the provided schema and namespace,
+// NewKubernetesBasedInformer creates a new KubernetesBasedInformer for the provided kind and options,
 // using the ListWatchClient provided to do its List and Watch requests applying provided labelFilters if it is not empty.
-func NewKubernetesBasedInformerWithFilters(sch resource.Kind, client ListWatchClient, options KubernetesBasedIformerOptions) (
-	*KubernetesBasedInformer, error) {
+func NewKubernetesBasedInformer(
+	sch resource.Kind, client ListWatchClient, options InformerOptions,
+) (*KubernetesBasedInformer, error) {
 	if client == nil {
-		return nil, fmt.Errorf("client cannot be nil")
+		return nil, errors.New("client cannot be nil")
+	}
+
+	var timeout time.Duration
+	if options.EventTimeout > 0 {
+		timeout = options.EventTimeout
+	}
+	if options.CacheResyncInterval > 0 && options.CacheResyncInterval < timeout {
+		timeout = options.CacheResyncInterval
+	}
+
+	var errorHandler func(context.Context, error)
+	if options.ErrorHandler != nil {
+		errorHandler = options.ErrorHandler
+	} else {
+		errorHandler = DefaultErrorHandler
+	}
+	// Compute a unique name for the health check based on what the informer is watching
+	healthCheckName := fmt.Sprintf("informer-%s.%s/%s", sch.Plural(), sch.Group(), sch.Version())
+	if options.ListWatchOptions.Namespace != "" {
+		healthCheckName = fmt.Sprintf("%s/namespaces/%s", healthCheckName, options.ListWatchOptions.Namespace)
+	}
+	if len(options.ListWatchOptions.LabelFilters) > 0 || len(options.ListWatchOptions.FieldSelectors) > 0 {
+		params := make([]string, 0)
+		if len(options.ListWatchOptions.LabelFilters) > 0 {
+			params = append(params, fmt.Sprintf("labelSelector=%s", strings.Join(options.ListWatchOptions.LabelFilters, ",")))
+		}
+		if len(options.ListWatchOptions.FieldSelectors) > 0 {
+			params = append(params, fmt.Sprintf("fieldSelector=%s", strings.Join(options.ListWatchOptions.FieldSelectors, ",")))
+		}
+		healthCheckName = fmt.Sprintf("%s?%s", healthCheckName, strings.Join(params, "&"))
 	}
 
 	return &KubernetesBasedInformer{
-		schema:       sch,
-		ErrorHandler: DefaultErrorHandler,
+		schema:         sch,
+		eventTimeout:   timeout,
+		errorHandlerFn: errorHandler,
 		SharedIndexInformer: cache.NewSharedIndexInformer(
 			NewListerWatcher(client, sch, options.ListWatchOptions),
 			nil,
@@ -55,6 +137,8 @@ func NewKubernetesBasedInformerWithFilters(sch resource.Kind, client ListWatchCl
 			cache.Indexers{
 				cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
 			}),
+		HealthCheckIgnoreSync: options.HealthCheckIgnoreSync,
+		healthCheckName:       healthCheckName,
 	}, nil
 }
 
@@ -66,14 +150,33 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 	// TODO: AddEventHandler returns the registration handle which should be supplied to RemoveEventHandler
 	// but we don't currently call the latter. We should add RemoveEventHandler to the informer API
 	// and let controller call it when appropriate.
-	_, err := k.SharedIndexInformer.AddEventHandler(toResourceEventHandlerFuncs(handler, k.toResourceObject, k.errorHandler))
+	_, err := k.SharedIndexInformer.AddEventHandler(
+		toResourceEventHandlerFuncs(
+			handler, k.toResourceObject, k.errorHandler,
+			func() (context.Context, context.CancelFunc) {
+				if k.runContext != nil {
+					return k.runContext, func() {}
+				}
+
+				if k.eventTimeout > 0 {
+					return context.WithTimeout(context.Background(), k.eventTimeout)
+				}
+
+				return context.WithCancel(context.Background())
+			},
+		),
+	)
 
 	return err
 }
 
 // Run starts the informer and blocks until stopCh receives a message
-func (k *KubernetesBasedInformer) Run(stopCh <-chan struct{}) error {
-	k.SharedIndexInformer.Run(stopCh)
+func (k *KubernetesBasedInformer) Run(ctx context.Context) error {
+	k.runContext = ctx
+	defer func() {
+		k.runContext = nil
+	}()
+	k.SharedIndexInformer.Run(ctx.Done())
 	return nil
 }
 
@@ -82,20 +185,51 @@ func (k *KubernetesBasedInformer) Schema() resource.Schema {
 	return k.schema
 }
 
+func (k *KubernetesBasedInformer) HealthCheck(context.Context) error {
+	if !k.SharedIndexInformer.HasSynced() && !k.HealthCheckIgnoreSync {
+		return errors.New("informer has not synced")
+	}
+
+	if k.SharedIndexInformer.IsStopped() {
+		return errors.New("informer is stopped")
+	}
+
+	return nil
+}
+
+func (k *KubernetesBasedInformer) HealthCheckName() string {
+	return k.healthCheckName
+}
+
+// WaitForSync waits for the informer to sync.
+// If the sync is not complete within the context deadline, it will return a timeout error.
+func (k *KubernetesBasedInformer) WaitForSync(ctx context.Context) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			if k.SharedIndexInformer.HasSynced() {
+				return nil
+			}
+		}
+	}
+}
+
 func (k *KubernetesBasedInformer) toResourceObject(obj any) (resource.Object, error) {
 	return toResourceObject(obj, k.schema)
 }
 
 func (k *KubernetesBasedInformer) errorHandler(ctx context.Context, err error) {
-	if k.ErrorHandler != nil {
-		k.ErrorHandler(ctx, err)
+	if k.errorHandlerFn != nil {
+		k.errorHandlerFn(ctx, err)
 	}
 }
 
 func toResourceObject(obj any, kind resource.Kind) (resource.Object, error) {
 	// Nil check
 	if obj == nil {
-		return nil, fmt.Errorf("object cannot be nil")
+		return nil, errors.New("object cannot be nil")
 	}
 
 	// First, check if it's already a resource.Object
@@ -114,6 +248,15 @@ func toResourceObject(obj any, kind resource.Kind) (resource.Object, error) {
 		// TODO: better
 		err := cast.Into(newObj, kind.Codec(resource.KindEncodingJSON))
 		return newObj, err
+	}
+
+	// Deletes which are missed while the watch is disconnected are delivered on relist
+	// as cache.DeletedFinalStateUnknown tombstones wrapping the last known state of the object
+	if tombstone, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+		if tombstone.Obj == nil {
+			return nil, fmt.Errorf("cannot convert DeletedFinalStateUnknown tombstone for %q: it contains no object", tombstone.Key)
+		}
+		return toResourceObject(tombstone.Obj, kind)
 	}
 	// TODO: other methods...?
 
@@ -149,18 +292,24 @@ type watchWrapper struct {
 	ch    chan watch.Event
 }
 
-func (w *watchWrapper) start() {
-	for e := range w.watch.WatchEvents() {
-		w.ch <- watch.Event{
-			Type:   watch.EventType(e.EventType),
-			Object: e.Object,
+func (w *watchWrapper) run(ctx context.Context) {
+	defer close(w.ch)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case e := <-w.watch.WatchEvents():
+			w.ch <- watch.Event{
+				Type:   watch.EventType(e.EventType),
+				Object: e.Object,
+			}
 		}
 	}
 }
 
 func (w *watchWrapper) Stop() {
 	w.watch.Stop()
-	close(w.ch)
 }
 
 func (w *watchWrapper) ResultChan() <-chan watch.Event {

@@ -1,0 +1,322 @@
+package app
+
+import "strings"
+
+appManifestv1alpha2: appManifestKind & {
+	schema: {
+		#AdditionalPrinterColumns: {
+			// name is a human readable name for the column.
+			name: string
+			// type is an OpenAPI type definition for this column.
+			// See https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md#data-types for details.
+			type: string
+			// format is an optional OpenAPI type definition for this column. The 'name' format is applied
+			// to the primary identifier column to assist in clients identifying column is the resource name.
+			// See https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md#data-types for details.
+			format?: string
+			// description is a human readable description of this column.
+			description?: string
+			// priority is an integer defining the relative importance of this column compared to others. Lower
+			// numbers are considered higher priority. Columns that may be omitted in limited space scenarios
+			// should be given a priority greater than 0.
+			priority?: int32
+			// jsonPath is a simple JSON path (i.e. with array notation) which is evaluated against
+			// each custom resource to produce the value for this column.
+			jsonPath: string
+		}
+		// #SearchField describes a field exposed for search indexing and querying.
+		// The type and capabilities values, and which capabilities are valid on which
+		// type, are defined by the searchfields package
+		// (github.com/grafana/grafana-app-sdk/searchfields), the shared source of
+		// truth for both the SDK codegen validator and the runtime search backend.
+		#SearchField: {
+			// name is the field name as it appears in search documents and queries.
+			name: string
+			// path is the JSON path within the resource that supplies this field's value
+			// (for example "spec.email"). When omitted, the field is populated by a custom
+			// document builder rather than read directly from the resource.
+			path?: string
+			// type is the value type of the field.
+			type: "string" | "int64" | "double" | "boolean" | "date"
+			// array indicates that the field holds a list of values of the given type.
+			array?: bool | *false
+			// capabilities lists what the field can be used for at query time, such as
+			// filtering, full-text search, sorting, or faceting.
+			capabilities: [...("filter" | "text" | "partial" | "sort" | "facet" | "retrieve" | "unranked")]
+			// emitZeroIfAbsent indexes the type's zero value when path resolves to nothing,
+			// so sort and range queries see every document. Without it, a document missing
+			// the path omits the field entirely.
+			emitZeroIfAbsent?: bool | *false
+			// description is a human readable description of the field.
+			description?: string
+		}
+		#SecureValue: {
+			// Key used in the secure value map
+			// "*" indicates that any key will be accepted
+			key: string
+			// Description explains how the secure value is used and where it should come from.
+			// this text will be exposed in the openapi schema
+			description?: string
+		}
+		#AdmissionOperation: "CREATE" | "UPDATE" | "DELETE" | "CONNECT" | "*" @cog(kind="enum",memberNames="create|update|delete|connect|all")
+		#ValidationCapability: {
+			operations: [...#AdmissionOperation]
+		}
+		#MutationCapability: {
+			operations: [...#AdmissionOperation]
+		}
+		#AdmissionCapabilities: {
+			validation?: #ValidationCapability
+			mutation?: #MutationCapability
+		}
+		#ManifestVersionKindSchema: {
+			[string]: _
+		}
+		#ManifestVersionKind: S={
+			// Kind is the name of the kind. This should begin with a capital letter and be CamelCased
+			kind: string
+			// Plural is the plural version of `kind`. This is optional and defaults to the kind + "s" if not present.
+			plural?: string
+			// Scope dictates the scope of the kind. This field must be the same for all versions of the kind.
+			// Different values will result in an error or undefined behavior.
+			scope: *"Namespaced" | "Cluster"
+			// userReadable controls whether end users may get/list cluster-scoped resources of this kind.
+			// Only meaningful when scope is "Cluster"; for namespaced kinds the field is ignored.
+			userReadable?: bool | *false
+			// folderScoped controls whether resources of this kind are scoped to folders.
+			// Only meaningful when scope is "Namespaced"; for cluster-scoped kinds the field is ignored.
+			// Defaults to true (folder-scoped).
+			folderScoped?: bool | *true
+			admission?: #AdmissionCapabilities
+			// Schemas is the components.schemas section of an OpenAPI document describing this Kind.
+			// It must contain a key named the same as the `kind` field of the Kind.
+			// Other fields may be present to be referenced by $ref tags in a schema,
+			// and references should lead with '#/components/schemas/' just as they would in a standard OpenAPI document.
+			// If route responses in the `routes` section reference a definition in '#/components/schemas',
+			// that schema definition must exist in this section.
+			schemas: #ManifestVersionKindSchema & {
+				// The schema must contain an object for the kind. All other top-level fields can be referenced by the kind schema
+				[S.kind]: _
+			}
+			secure?: [...#SecureValue]
+			selectableFields?: [...string]
+			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
+			searchFields?: [...#SearchField]
+			// storage declares storage-related behavior for this kind.
+			storage?: #ManifestVersionKindStorage
+			// search declares which search endpoints are served for this kind.
+			// /search and /trash default to enabled; /search/hybrid and global index inclusion default to disabled.
+			search?: #ManifestVersionKindSearch
+			// embed defines the embedding document independently of search fields.
+			embed?: #ManifestVersionKindEmbed
+			// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
+			// It may not prevent automatic conversion behavior between versions of the kind when set to false
+			// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
+			// This field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.
+			conversion?: bool | *false
+			// Routes is a map of subresource route path to spec3.PathProps description of the route.
+			// Currently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.
+			// Invalid payloads will not be parsed correctly and may cause undefined behavior.
+			// Deprecated: routes now live in ManifestVersion#openapi
+			routes?: {
+				[string]: _
+			}
+		}
+		#ManifestVersionKindStorage: {
+			// listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.
+			listKeys?: bool
+		}
+		// #ManifestVersionKindSearch declares which search endpoints are served for a kind.
+		#ManifestVersionKindSearch: {
+			// endpoint declares whether the kind serves the /search endpoint.
+			endpoint?: bool | *true
+			// trash declares whether the kind serves the /trash endpoint,
+			// which lists deleted resources of the kind.
+			trash?: bool | *true
+			// hybrid declares whether the kind serves the /search/hybrid endpoint.
+			hybrid?: bool | *false
+			// global declares whether the kind is included in the namespace-wide search index.
+			global?: bool | *false
+		}
+		// Kinds with a custom embedding builder omit this section.
+		#ManifestVersionKindEmbed: {
+			// fields supplies inputs, in declaration order, used only to generate the text to be embedded.
+			// Declaring an embedding field does not enable filtering embeddings by that field.
+			fields: [...#ManifestVersionKindEmbedField]
+		}
+		#ResourceEmbed: {
+			// reembedVersion is a manual revision for requesting re-embedding of existing resources, shared by all API versions.
+			// Increase it when a backfill is needed; changing the declared inputs does not require a bump by itself.
+			reembedVersion: int & >0
+		}
+		#ManifestVersionKindEmbedField: {
+			// name labels this input in the embedding document.
+			name: string
+			// path supplies a string or string array from the resource, using the same
+			// dot-separated paths and [*] projections as searchFields.
+			path: string & strings.MinRunes(1)
+		}
+		// Deprecated: custom routes are moved to the openapi section
+		#ManifestVersionRoutes: {
+			// Namespaced is a map of namespace-scoped route paths to spec3.PathProps description of the route.
+			// Currently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.
+			// Invalid payloads will not be parsed correctly and may cause undefined behavior.
+			namespaced?: {
+				[string]: _
+			}
+			// Cluster is a map of cluster-scoped route paths to spec3.PathProps description of the route.
+			// Currently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.
+			// Invalid payloads will not be parsed correctly and may cause undefined behavior.
+			cluster?: {
+				[string]: _
+			}
+			// Schemas contains additional schemas referenced by requests/responses for namespaced and cluster routes.
+			// If route responses in the `namespaced` or `cluster` section reference a definition in '#/components/schemas',
+			// that schema definition must exist in this section.
+			schemas?: {
+				[string]: _
+			}
+		}
+		#ManifestVersionOpenAPI: {
+			// The path values are relative to the version root (eg, they do NOT include /apis/{group}/{version})
+			paths: {
+				[string]: _ // follows the openapi 3.0 spec implemented by k8s
+			}
+			components?: {
+				schemas?: {
+					[string]: _ // follows the openapi 3.0 spec implemented by k8s
+				}
+				responses?: {
+					[string]: _
+				}
+				examples?: {
+					[string]: _
+				}
+			}
+		}
+		#ManifestVersion: {
+			// Name is the version name string, such as "v1" or "v1alpha1"
+			name: string
+			// Served dictates whether this version is served by the API server.
+			// A version cannot be removed from a manifest until it is no longer served.
+			served?: bool | *true
+			// Kinds is a list of all the kinds served in this version.
+			// Generally, kinds should exist in each version unless they have been deprecated (and no longer exist in a newer version)
+			// or newly added (and didn't exist for older versions).
+			kinds: [...#ManifestVersionKind]
+			// Routes is a section defining version-level custom resource routes.
+			// These routes are registered at the same level as kinds, and thus should not conflict with existing kinds.
+			// Deprecated: routes are now exposed under the openapi property
+			routes?: #ManifestVersionRoutes
+			// Define custom routes (cluster, namespaced, and sub-resources) and additional schemas
+			openapi?: #ManifestVersionOpenAPI
+		}
+		#KindPermission: {
+			group: string
+			resource: string
+			actions: [...string]
+		}
+		#OperatorWebhookProperties: {
+			conversionPath?: string | *"/convert"
+			validationPath?: string | *"/validate"
+			mutationPath?: string | *"/mutate"
+		}
+		#OperatorInfo: {
+			// URL is the URL of the operator's HTTPS endpoint, including port if non-standard (443).
+			// It should be a URL which the API server can access.
+			url?: string
+			// Webhooks contains information about the various webhook paths.
+			webhooks?: #OperatorWebhookProperties
+		}
+		#RoleKindWithPermissionSet: {
+			kind: string
+			permissionSet: *"viewer" | "editor" | "admin"
+		}
+		#RoleKindWithVerbs: {
+			kind: string
+			verbs: [...string]
+		}
+		#RoleKind: #RoleKindWithPermissionSet | #RoleKindWithVerbs
+		#Role: {
+			// Title will be used as the role title in grafana
+			title: string
+			// Description is used as the role description in grafana, displayed in the UI and API responses
+			description: string
+			kinds?: [...#RoleKind]
+			// Routes is a list of route names to match. 
+			// To match the same route in multiple versions, it should share the same name.
+			routes?: [...string]
+		}
+		spec: {
+			// AppName is the unique ID of the app
+			appName: string & =~"^([a-z][a-z0-9-]*[a-z0-9])$"
+			// AppDisplayName is the display name of the app, which can contain any printable characters
+			appDisplayName: string
+			group: string
+			// Embed configures declarative embeddings by resource name (the lowercase plural) within this app's group.
+			// Custom embedding builders omit their entry and define their content version in Go.
+			embed?: {
+				[string]: #ResourceEmbed
+			}
+			// Versions is the list of versions for this manifest, in order.
+			versions: [...#ManifestVersion]
+			// PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.
+			// For CRDs, this also dictates which version is used for storage.
+			preferredVersion?: string
+			// ExtraPermissions contains additional permissions needed for an app's backend component to operate.
+			// Apps implicitly have all permissions for kinds they managed (defined in `kinds`).
+			extraPermissions?: {
+				// accessKinds is a list of KindPermission objects for accessing additional kinds provided by other apps
+				accessKinds: [...#KindPermission]
+			}
+			// DryRunKinds dictates whether this revision should create/update CRD's from the provided kinds,
+			// Or simply validate and report errors in status.resources.crds.
+			// If dryRunKinds is true, CRD change validation will be skipped on ingress and reported in status instead.
+			// Even if no validation errors exist, CRDs will not be created or updated for a revision with dryRunKinds=true.
+			dryRunKinds?: bool | *false
+			// Operator has information about the operator being run for the app, if there is one.
+			// When present, it can indicate to the API server the URL and paths for webhooks, if applicable.
+			// This is only required if you run your app as an operator and any of your kinds support webhooks for validation,
+			// mutation, or conversion.
+			operator?: #OperatorInfo
+			// Roles contains information for new user roles associated with this app.
+			// It is a map of the role name (e.g. "dashboard:reader") to the set of permissions on resources managed by this app.
+			roles?: {
+				[string]: #Role
+			}
+			// RoleBindings binds the roles specified in Roles to groups.
+			// Basic groups are "anonymous", "viewer", "editor", and "admin".
+			// Additional groups are specified under "additional"
+			roleBindings?: {
+				viewer?: [...string]
+				editor?: [...string]
+				admin?: [...string]
+				additional?: {
+					[string]: [...string]
+				}
+			}
+		}
+		status: {
+			#ApplyStatusManagedResource: {
+				kind: string
+				apiVersion: string
+				namespace: string
+				name: string
+			}
+			#ApplyStatus: {
+				status: "success" | "failure"
+				// details may contain specific information (such as error message(s)) on the reason for the status
+				details?: string
+				// objects contains a list of managed resources (such as roles, CRDs, webhooks, etc.)
+				managedResources?: [...#ApplyStatusManagedResource]
+			}
+			// ObservedGeneration is the last generation which has been applied by the controller.
+			observedGeneration?: int
+			// Resources contains the status of each resource type created or updated in the API server
+			// as a result of the AppManifest.
+			resources: {
+				[string]: #ApplyStatus
+			}
+		}
+	}
+}

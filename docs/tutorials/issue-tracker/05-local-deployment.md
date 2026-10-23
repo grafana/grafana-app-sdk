@@ -6,41 +6,21 @@ and our APIs function, so let's do that.
 
 ## Building Everything
 
-First of all, we need to build our project. Luckily, the Makefile created by our `grafana-app-sdk project init` has us covered. All we need to do is run a `make build`.
-```shell
-$ make build
-Error parsing magefiles: error running "go list -f {{.Dir}}||{{.Name}} github.com/grafana/grafana-plugin-sdk-go/build": exit status 1
-no required module provides package github.com/grafana/grafana-plugin-sdk-go/build; to add it:
-	go get github.com/grafana/grafana-plugin-sdk-go/build
-make: *** [build/plugin-backend] Error 1
-```
+First of all, we need to build our project. Luckily, the Makefile created by our `grafana-app-sdk project init` has us covered.
 
-Hang on, something isn't right. Well, we generated code, and build out boilerplate, but go doesn't know about any of the libraries our boilerplate and generated code need to import. You could run `go get` for all the go files, but our Makefile, again, has us covered:
+Go doesn't yet know about the libraries that our boilerplate and generated code import. You could run `go get` for them manually, but our Makefile, once again, has us covered:
 ```shell
 make deps
 ```
 This will `go get` all the go modules we use, and then vendor them in the `vendor` directory.
 
-Now we can run our biuld successfully:
+Now we can run our build:
 ```shell
 make build
 ```
 We get _a lot_ of output for this command:
 ```shell
 $ make build
-Running dependency: github.com/grafana/grafana-plugin-sdk-go/build.Build.GenerateManifestFile-fm
-Running dependency: github.com/grafana/grafana-plugin-sdk-go/build.Build.Windows-fm
-Running dependency: github.com/grafana/grafana-plugin-sdk-go/build.Build.Darwin-fm
-Running dependency: github.com/grafana/grafana-plugin-sdk-go/build.Build.LinuxARM-fm
-Running dependency: github.com/grafana/grafana-plugin-sdk-go/build.Build.LinuxARM64-fm
-Running dependency: github.com/grafana/grafana-plugin-sdk-go/build.Build.Linux-fm
-Running dependency: github.com/grafana/grafana-plugin-sdk-go/build.Build.DarwinARM64-fm
-exec: go "build" "-o" "dist/gpx_issue-tracker-project-app_darwin_amd64" "-ldflags" "-w -s -extldflags \"-static\" -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1680111821582,\"version\":\"1.0.0\"}' -X 'main.version=1.0.0'" "./pkg"
-exec: go "build" "-o" "dist/gpx_issue-tracker-project-app_linux_arm" "-ldflags" "-w -s -extldflags \"-static\" -X 'main.version=1.0.0' -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1680111821582,\"version\":\"1.0.0\"}'" "./pkg"
-exec: go "build" "-o" "dist/gpx_issue-tracker-project-app_windows_amd64.exe" "-ldflags" "-w -s -extldflags \"-static\" -X 'main.version=1.0.0' -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1680111821581,\"version\":\"1.0.0\"}'" "./pkg"
-exec: go "build" "-o" "dist/gpx_issue-tracker-project-app_linux_arm64" "-ldflags" "-w -s -extldflags \"-static\" -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1680111821581,\"version\":\"1.0.0\"}' -X 'main.version=1.0.0'" "./pkg"
-exec: go "build" "-o" "dist/gpx_issue-tracker-project-app_darwin_arm64" "-ldflags" "-w -s -extldflags \"-static\" -X 'main.version=1.0.0' -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1680111821582,\"version\":\"1.0.0\"}'" "./pkg"
-exec: go "build" "-o" "dist/gpx_issue-tracker-project-app_linux_amd64" "-ldflags" "-w -s -extldflags \"-static\" -X 'main.version=1.0.0' -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1680111821581,\"version\":\"1.0.0\"}'" "./pkg"
 yarn install v1.22.19
 info No lockfile found.
 [1/5] 🔍  Validating package.json...
@@ -112,15 +92,13 @@ Successfully tagged localhost/issue-tracker-project:latest
 ```
 (some parts of this trimmed for readability)
 
-So what's with all the output? Well, `make build` is doing three separate things, just chained together.
-1. Build the backend plugin binary (using `Magefile`)
-2. Build the frontend plugin (using `yarn`)
-3. Build the operator docker image (using `docker`)
+So what's with all the output? Well, `make build` is doing two separate things, just chained together.
+1. Build the frontend plugin (using `yarn`)
+2. Build the operator docker image (using `docker`)
 
 If you only want to build one of those pieces at a time, there are default make targets for each:
-1. `make build/plugin-backend`
-2. `make build/plugin-frontend`
-3. `make build/operator`
+1. `make build/plugin-frontend`
+2. `make build/operator`
 
 ## Local Deployment
 
@@ -169,31 +147,34 @@ Now, if I hit `space` and launch the tilt console, I can see the status of my lo
 
 If we click on the `grafana` tile to see what the error is, it shows us the logs from the container, which end with:
 ```
-logger=provisioning t=2023-03-29T18:16:41.17+0000 lvl=eror msg="Failed to provision plugins" error="app provisioning error: plugin not installed: \"issue-tracker-project-app\""
-Failed to start grafana. error: app provisioning error: plugin not installed: "issue-tracker-project-app"
-app provisioning error: plugin not installed: "issue-tracker-project-app"
+logger=provisioning t=2025-01-30T16:53:00.36954668Z level=error msg="Failed to provision plugins" error="app provisioning error: plugin not installed: \"issuetrackerproject-app\""
 ```
 
-So this is just something we didn't do before we started our environment. While we built the plugin, we want to also deploy it to our local cluster. The local cluster can only read from `local/mounted-files`, so we need it there. Simple enough fix: in another terminal session, we run
+So this is just something we didn't do before starting our environment. When we build the plugin, we also need to deploy it to the local cluster. Because the cluster can only read from `local/mounted-files`, the plugin must be copied there. In another terminal window, run:
 ```shell
 $ make local/deploy_plugin 
 tilt disable grafana
 cp -R plugin/dist local/mounted-files/plugin/dist
 tilt enable grafana
 ```
-We can see that this stops the grafana deployment, copies our built plugin over into `local/mounted-files`, and then restarts the grafana deployment. 
-We have to stop and restart, because if a plugin is already deployed and running, we can't overwrite the binary, as it's in-use by grafana. 
-You can leave your local deployment running and make changes to your plugin this way, but just re-running a build and `make local/deploy_plugin`.
+The script stops the Grafana deployment, copies the built plugin into `local/mounted-files`, and then restarts the deployment. We have to stop and restart because, if a plugin is already deployed and running, we can’t overwrite the binary while Grafana is using it. You can keep your local deployment running and iterate on your plugin by simply rebuilding and running `make local/deploy_plugin` again.
 
-TODO: should this be part of the `make local/up` command?
+<!-- TODO: should this be part of the `make local/up` command? -->
+
+> [!NOTE]
+> If you still see a warning icon next to your grafana deployment and it restarts with the error `failed to create aggregator server: missing filename for serving cert`, 
+> you will want to follow the steps in [this issue](https://github.com/grafana/grafana-app-sdk/issues/826#issuecomment-2956357790) to update your `local/config.yaml`.
 
 OK, now grafana is all green on the dashboard, so let's take a look at the operator. 
 If we click on the `issue-tracker-project` tile to learn more about the error, it shows us the event:
 ```
-[event: pod issue-tracker-project-app-operator-c66c79cdc-65vvc] Failed to pull image "localhost/issue-tracker-project:latest": rpc error: code = NotFound desc = failed to pull and unpack image "localhost/issue-tracker-project:latest": failed to resolve reference "localhost/issue-tracker-project:latest": localhost/issue-tracker-project:latest: not found
+[event: pod issuetrackerproject-app-operator-c66c79cdc-65vvc] Failed to pull image "localhost/issue-tracker-project:latest": rpc error: code = NotFound desc = failed to pull and unpack image "localhost/issue-tracker-project:latest": failed to resolve reference "localhost/issue-tracker-project:latest": localhost/issue-tracker-project:latest: not found
 ```
 
 k3d doesn't use the docker registry on your localhost, so we have to deploy it to the cluster. Luckily, that's very simple:
+```shell
+make local/push_operator
+```
 ```shell
 $ make local/push_operator 
 # Tag the docker image as part of localhost, which is what the generated k8s uses to avoid confusion with the real operator image
@@ -219,141 +200,119 @@ Though not recommended, you can deploy without using tilt, if you desire. Not us
 ### Interacting With Our Local Deployment
 
 Our grafana is now available at [grafana.k3d.localhost:9999](http://grafana.k3d.localhost:9999). 
-Since our plugin is automatically installed, we can go to [grafana.k3d.localhost:9999/a/issue-tracker-project-app](http://grafana.k3d.localhost:9999/a/issue-tracker-project-app) and see the simple landing page that got generated for us, and we can interact with our backend APIs at [grafana.k3d.localhost:9999/api/plugins/issue-tracker-project-app/resources/v1/issues](http://grafana.k3d.localhost:9999/api/plugins/issue-tracker-project-app/resources/v1/issues).
+By default, the credentials to log in are `admin`/`admin`. You'll be prompted to change the password upon logging in (though you can skip this). 
+Note that if you do, you'll need to modify the cURL commands used later in this tutorial. You can also click `Skip` to avoid updating the password. 
+Since our plugin is automatically installed, we can go to [grafana.k3d.localhost:9999/a/issuetrackerproject-app/](http://grafana.k3d.localhost:9999/a/issuetrackerproject-app/) and see the simple landing page that got generated for us, 
+and we can now interact with our exposed API at [grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.app/v1alpha1/namespaces/default/issues](http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.app/v1alpha1/namespaces/default/issues).
 
-Right now, if I do a curl to our list endpoint, we'll get back a response with an empty list:
+Our kinds are available via the grafana API server, located at [http://grafana.k3d.localhost:9999/apis]. This is a kubernetes-compatible API server, and we can interact with it via cURL, or kubectl. 
+Right now, if we list our issues, we'll get back a response with an empty list:
 ```shell
-$ curl http://grafana.k3d.localhost:9999/api/plugins/issue-tracker-project-app/resources/v1/issues | jq .
-{
-    "kind": "IssueList",
-    "apiVersion": "issue-tracker-project.ext.grafana.com/v1",
-    "metadata": {
-        "resourceVersion": "1079"
-    },
-    "items": []
-}
+curl -u admin:admin http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.app/v1alpha1/namespaces/default/issues
 ```
+> [!NOTE]
+> If you updated the password for your grafana instance, you'll need to change `-u admin:admin` to `-u admin:<your_new_password>`
 
-Just to demonstrate our API surface, we can try creating a new issue from the API:
 ```shell
-$ curl -X POST -H "contant-type:application/json" -d '{"metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Test","description":"A test issue","status":"open"}}' http://grafana.k3d.localhost:9999/api/plugins/issue-tracker-project-app/resources/v1/issues
-{"kind":"Issue","apiVersion":"issue-tracker-project.ext.grafana.com/v1","metadata":{"name":"test-issue","namespace":"default","uid":"027d84d6-4b0d-4154-8343-83a9280089d1","resourceVersion":"1104","generation":1,"creationTimestamp":"2024-02-21T17:05:32Z","labels":{"grafana-app-sdk-resource-version":"v1"},"managedFields":[{"manager":"gpx_issue-tracker-project-app_linux_arm64","operation":"Update","apiVersion":"issue-tracker-project.ext.grafana.com/v1","time":"2024-02-21T17:05:32Z","fieldsType":"FieldsV1","fieldsV1":{"f:metadata":{"f:labels":{".":{},"f:grafana-app-sdk-resource-version":{}}},"f:spec":{".":{},"f:description":{},"f:status":{},"f:title":{}}}}]},"spec":{"description":"A test issue","status":"open","title":"Test"},"status":{}}
-$ curl http://grafana.k3d.localhost:9999/api/plugins/issue-tracker-project-app/resources/v1/issues | jq .
+$ curl -u admin:admin http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.app/v1alpha1/namespaces/default/issues
 {
+  "apiVersion": "issuetrackerproject.ext.grafana.app/v1alpha1",
+  "items": [],
   "kind": "IssueList",
-  "apiVersion": "issue-tracker-project.ext.grafana.com/v1",
   "metadata": {
-    "resourceVersion": "1109"
-  },
-  "items": [
-    {
-      "kind": "Issue",
-      "apiVersion": "issue-tracker-project.ext.grafana.com/v1",
-      "metadata": {
-        "name": "test-issue",
-        "namespace": "default",
-        "uid": "027d84d6-4b0d-4154-8343-83a9280089d1",
-        "resourceVersion": "1105",
-        "generation": 1,
-        "creationTimestamp": "2024-02-21T17:05:32Z",
-        "labels": {
-          "grafana-app-sdk-resource-version": "v1"
-        },
-        "finalizers": [
-          "issue-tracker-project-operator-issues-finalizer"
-        ],
-        "managedFields": [
-          {
-            "manager": "gpx_issue-tracker-project-app_linux_arm64",
-            "operation": "Update",
-            "apiVersion": "issue-tracker-project.ext.grafana.com/v1",
-            "time": "2024-02-21T17:05:32Z",
-            "fieldsType": "FieldsV1",
-            "fieldsV1": {
-              "f:metadata": {
-                "f:labels": {
-                  ".": {},
-                  "f:grafana-app-sdk-resource-version": {}
-                }
-              },
-              "f:spec": {
-                ".": {},
-                "f:description": {},
-                "f:status": {},
-                "f:title": {}
-              }
-            }
-          },
-          {
-            "manager": "operator",
-            "operation": "Update",
-            "apiVersion": "issue-tracker-project.ext.grafana.com/v1",
-            "time": "2024-02-21T17:05:32Z",
-            "fieldsType": "FieldsV1",
-            "fieldsV1": {
-              "f:metadata": {
-                "f:finalizers": {
-                  ".": {},
-                  "v:\"issue-tracker-project-operator-issues-finalizer\"": {}
-                }
-              }
-            }
-          }
-        ]
-      },
-      "spec": {
-        "description": "A test issue",
-        "status": "open",
-        "title": "Test"
-      },
-      "status": {}
-    }
-  ]
+    "continue": "",
+    "resourceVersion": "1586"
+  }
 }
 ```
+Now let's create an Issue:
+```shell
+curl -u admin:admin -X POST -H "content-type:application/json" -d '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.app/v1alpha1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Test","description":"A test issue","status":"open"}}' http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.app/v1alpha1/namespaces/default/issues
+```
+```shell
+$ curl -u admin:admin -X POST -H "content-type:application/json" -d '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.app/v1alpha1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Test","description":"A test issue","status":"open"}}' http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.app/v1alpha1/namespaces/default/issues
+{
+  "apiVersion": "issuetrackerproject.ext.grafana.app/v1alpha1",
+  "kind": "Issue",
+  "metadata": {
+    "creationTimestamp": "2025-07-10T15:58:33Z",
+    "generation": 1,
+    "managedFields": [
+      {
+        "apiVersion": "issuetrackerproject.ext.grafana.app/v1alpha1",
+        "fieldsType": "FieldsV1",
+        "fieldsV1": {
+          "f:spec": {
+            ".": {},
+            "f:description": {},
+            "f:status": {},
+            "f:title": {}
+          }
+        },
+        "manager": "curl",
+        "operation": "Update",
+        "time": "2025-07-10T15:58:33Z"
+      }
+    ],
+    "name": "test-issue",
+    "namespace": "default",
+    "resourceVersion": "1620",
+    "uid": "adde103a-8413-4d9e-b749-91e9dc3fcfff"
+  },
+  "spec": {
+    "description": "A test issue",
+    "status": "open",
+    "title": "Test"
+  }
+}
+```
+Now if we list issues again, we'll see the issue we just made in the output.
 
 You can see that this includes metadata which we didn't define in our CUE, but was implicitly added (kubernetes metadata). 
 
 For fun, we can also interact with our resources through kubectl:
 ```shell
+kubectl get issue test-issue -o yaml
+```
+```shell
 $ kubectl get issue test-issue -o yaml
+apiVersion: issuetrackerproject.ext.grafana.app/v1alpha1
 kind: Issue
 metadata:
-  creationTimestamp: "2024-02-21T17:05:32Z"
+  creationTimestamp: "2025-07-10T15:58:33Z"
   finalizers:
-  - issue-tracker-project-operator-issues-finalizer
+  - issue-tracker-project-issues-finalizer
   generation: 1
-  labels:
-    grafana-app-sdk-resource-version: v1
   name: test-issue
   namespace: default
-  resourceVersion: "1105"
-  uid: 027d84d6-4b0d-4154-8343-83a9280089d1
+  resourceVersion: "1622"
+  uid: adde103a-8413-4d9e-b749-91e9dc3fcfff
 spec:
   description: A test issue
   status: open
   title: Test
 ```
-Here we can note that the non-kubernetes metadata which is part of common metadata is encapsulated in `metadata.annotations` when stored in kubernetes. 
-The SDK does a transform between our go/CUE representation of the object and the implementation-specific storage representation of the object.
-
-In future versions of the SDK, pre-built mutating webhooks for kubernetes will be available to automatically deal with the common metadata on admission, 
-with the option to extend them for custom metadata.
+Here we can note that the grafana-specific metadata which is part of common metadata is encapsulated in `metadata.annotations`. 
+The SDK does a transform between our go/CUE representation of the object and how it is represented in the API.
 
 We can also see that the operator is monitoring adds/updates/deletes to our issues if we take a look at its logs, either through the Tilt console, or via kubectl:
 ```
-Added  {default test-issue}
+$ kubectl logs -l name=issuetrackerproject-app-operator
+...
+{"time":"2024-12-04T23:44:22.388481222Z","level":"DEBUG","msg":"Added resource","name":"test-issue","traceID":"cfffb1cf88e0370ad48a185b3a321881"}
+...
 ```
 
 If we delete the issue, we'll also see that delete show up in our operator:
 ```shell
-$ curl -X DELETE http://grafana.k3d.localhost:9999/api/plugins/issue-tracker-project-app/resources/v1/issues/test-issue
+kubectl delete issue test-issue
 ```
 Now the operator logs show:
 ```
-Added  {default test-issue}
-Deleted  {default test-issue}
+{"time":"2024-12-04T23:44:22.388481222Z","level":"DEBUG","msg":"Added resource","name":"test-issue","traceID":"cfffb1cf88e0370ad48a185b3a321881"}
+{"time":"2024-12-04T23:46:47.696342678Z","level":"DEBUG","msg":"Deleted resource","name":"test-issue","traceID":"cf4bfc9b933da55ef6cea6187689f814"}
 ```
+(plus some other logging)
 
 Alright! We have a local test environment that we can keep up and running if we like for the rest of the tutorial, or we can stop it. To take down the deployed resources from the cluster, you can use `make local/down`. To delete the cluster entirely, you can use `make local/clean`. For the rest of this tutorial, we're going to assume the local environment is still up and running. Now, it's time to actually write some code, [starting with fleshing out our plugin's front-end](06-frontend.md).
 

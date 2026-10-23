@@ -3,6 +3,8 @@ package jennies
 import (
 	"bytes"
 	"go/format"
+	"slices"
+	"strings"
 
 	"github.com/grafana/codejen"
 
@@ -11,40 +13,53 @@ import (
 )
 
 type AppGenerator struct {
-	GroupByKind bool
-	ProjectRepo string
-	ProjectName string
-	CodegenPath string
+	GroupByKind         bool
+	ProjectRepo         string
+	ProjectName         string
+	CodegenPath         string
+	ManifestPackagePath string
 }
 
 func (*AppGenerator) JennyName() string {
 	return "App"
 }
 
-func (a *AppGenerator) Generate(kinds ...codegen.Kind) (*codejen.File, error) {
+func (a *AppGenerator) Generate(appManifest codegen.AppManifest) (*codejen.File, error) {
 	tmd := templates.AppMetadata{
-		Repo:            a.ProjectRepo,
-		ProjectName:     a.ProjectName,
-		CodegenPath:     a.CodegenPath,
-		PackageName:     "app",
-		WatcherPackage:  "watchers",
-		Resources:       make([]templates.AppMetadataKind, 0),
-		KindsAreGrouped: !a.GroupByKind,
+		Repo:                a.ProjectRepo,
+		ProjectName:         a.ProjectName,
+		CodegenPath:         a.CodegenPath,
+		PackageName:         "app",
+		WatcherPackage:      "watchers",
+		Resources:           make([]templates.AppMetadataKind, 0),
+		KindsAreGrouped:     !a.GroupByKind,
+		ManifestPackagePath: a.ManifestPackagePath,
 	}
 
-	for _, kind := range kinds {
-		if kind.Properties().APIResource == nil {
-			continue
+	appMetadataByKind := make(map[string]templates.AppMetadataKind)
+
+	for version, kind := range codegen.VersionedKinds(appManifest) {
+		meta, ok := appMetadataByKind[kind.Kind]
+		if !ok {
+			meta = templates.AppMetadataKind{
+				KindProperties: versionedKindToKindProperties(kind, appManifest),
+				Versions:       make([]string, 0),
+			}
 		}
-		vers := make([]string, len(kind.Versions()))
-		for i, ver := range kind.Versions() {
-			vers[i] = ver.Version
+		meta.Versions = append(meta.Versions, version.Name())
+		if version.Name() == appManifest.Properties().PreferredVersion {
+			meta.KindProperties = versionedKindToKindProperties(kind, appManifest)
 		}
-		tmd.Resources = append(tmd.Resources, templates.AppMetadataKind{
-			KindProperties: kind.Properties(),
-			Versions:       vers,
-		})
+		appMetadataByKind[kind.Kind] = meta
 	}
+
+	for _, meta := range appMetadataByKind {
+		tmd.Resources = append(tmd.Resources, meta)
+	}
+	// Sort for deterministic output
+	slices.SortFunc(tmd.Resources, func(a, b templates.AppMetadataKind) int {
+		return strings.Compare(a.Kind, b.Kind)
+	})
 
 	b := bytes.Buffer{}
 	err := templates.WriteAppGoFile(tmd, &b)

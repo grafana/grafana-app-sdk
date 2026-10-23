@@ -3,13 +3,21 @@ package operator
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/grafana/grafana-app-sdk/resource"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/grafana/grafana-app-sdk/metrics"
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 func TestInformerController_AddWatcher(t *testing.T) {
@@ -342,19 +350,20 @@ func TestInformerController_AddInformer(t *testing.T) {
 
 func TestInformerController_Run(t *testing.T) {
 	t.Run("normal operation", func(t *testing.T) {
+		// Ensure that informer's Run() functions are called as part of the controller's Run()
 		wg := sync.WaitGroup{}
 		c := NewInformerController(InformerControllerConfig{})
 		inf1 := &mockInformer{
-			RunFunc: func(stopCh <-chan struct{}) error {
-				<-stopCh
+			RunFunc: func(ctx context.Context) error {
+				<-ctx.Done()
 				wg.Done()
 				return nil
 			},
 		}
 		c.AddInformer(inf1, "foo")
 		inf2 := &mockInformer{
-			RunFunc: func(stopCh <-chan struct{}) error {
-				<-stopCh
+			RunFunc: func(ctx context.Context) error {
+				<-ctx.Done()
 				wg.Done()
 				return nil
 			},
@@ -362,49 +371,12 @@ func TestInformerController_Run(t *testing.T) {
 		c.AddInformer(inf2, "bar")
 		wg.Add(3)
 
-		stopCh := make(chan struct{})
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+		defer cancel()
 		go func() {
-			err := c.Run(stopCh)
+			err := c.Run(ctx)
 			assert.Nil(t, err)
 			wg.Done()
-		}()
-		go func() {
-			time.Sleep(time.Second * 3)
-			close(stopCh)
-		}()
-		wg.Wait()
-	})
-
-	t.Run("normal operation", func(t *testing.T) {
-		wg := sync.WaitGroup{}
-		c := NewInformerController(InformerControllerConfig{})
-		inf1 := &mockInformer{
-			RunFunc: func(stopCh <-chan struct{}) error {
-				<-stopCh
-				wg.Done()
-				return nil
-			},
-		}
-		c.AddInformer(inf1, "foo")
-		inf2 := &mockInformer{
-			RunFunc: func(stopCh <-chan struct{}) error {
-				<-stopCh
-				wg.Done()
-				return nil
-			},
-		}
-		c.AddInformer(inf2, "bar")
-		wg.Add(3)
-
-		stopCh := make(chan struct{})
-		go func() {
-			err := c.Run(stopCh)
-			assert.Nil(t, err)
-			wg.Done()
-		}()
-		go func() {
-			time.Sleep(time.Second * 3)
-			close(stopCh)
 		}()
 		wg.Wait()
 	})
@@ -412,6 +384,7 @@ func TestInformerController_Run(t *testing.T) {
 
 func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 	t.Run("no errors", func(t *testing.T) {
+		// Ensure that events emitted from informers are propagated to watchers and reconcilers
 		kind := "foo"
 		addCalls := 0
 		reconcileCalls := 0
@@ -432,15 +405,15 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddInformer(inf, kind)
 
 		// Run
-		stopCh := make(chan struct{})
-		go c.Run(stopCh)
+		ctx := t.Context()
+		go c.Run(ctx)
 		inf.FireAdd(context.Background(), emptyObject)
-		close(stopCh)
 		assert.Equal(t, 1, addCalls)
 		assert.Equal(t, 1, reconcileCalls)
 	})
 
 	t.Run("watcher error, one retry", func(t *testing.T) {
+		// Ensure that errors processing events in the watcher are retried per the RetryPolicy
 		kind := "foo"
 		addCalls := 0
 		reconcileCalls := 0
@@ -458,6 +431,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddWatcher(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
 				addCalls++
+				require.Less(t, addCalls, 3, "Add should only be retried once based on the RetryPolicy")
 				wg.Done()
 				return errors.New("I AM ERROR")
 			},
@@ -471,11 +445,11 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddInformer(inf, kind)
 
 		// Run
-		stopCh := make(chan struct{})
-		go c.Run(stopCh)
+		ctx, cancel := context.WithCancel(context.Background())
+		go c.Run(ctx)
 		inf.FireAdd(context.Background(), emptyObject)
 		wg.Wait()
-		close(stopCh)
+		cancel()
 		assert.Equal(t, 2, addCalls)
 		assert.Equal(t, 1, reconcileCalls)
 	})
@@ -504,6 +478,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddReconciler(&SimpleReconciler{
 			ReconcileFunc: func(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
 				reconcileCalls++
+				require.Less(t, reconcileCalls, 3, "Add should only be retried once based on the state check (improper state passed to Reconcile retry)")
 				wg.Done()
 				if len(request.State) > 0 {
 					return ReconcileResult{}, nil
@@ -520,11 +495,11 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddInformer(inf, kind)
 
 		// Run
-		stopCh := make(chan struct{})
-		go c.Run(stopCh)
+		ctx, cancel := context.WithCancel(context.Background())
+		go c.Run(ctx)
 		inf.FireAdd(context.Background(), emptyObject)
 		wg.Wait()
-		close(stopCh)
+		cancel()
 		assert.Equal(t, 1, addCalls)
 		assert.Equal(t, 2, reconcileCalls)
 	})
@@ -547,6 +522,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddWatcher(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
 				addCalls++
+				require.Less(t, addCalls, 3, "Add should only be retried once based on the RetryPolicy")
 				wg.Done()
 				return errors.New("I AM ERROR")
 			},
@@ -554,6 +530,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddReconciler(&SimpleReconciler{
 			ReconcileFunc: func(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
 				reconcileCalls++
+				require.Less(t, reconcileCalls, 3, "Add should only be retried once based on the state check (improper state passed to Reconcile retry)")
 				wg.Done()
 				if len(request.State) > 0 {
 					return ReconcileResult{}, nil
@@ -570,11 +547,11 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddInformer(inf, kind)
 
 		// Run
-		stopCh := make(chan struct{})
-		go c.Run(stopCh)
+		ctx, cancel := context.WithCancel(context.Background())
+		go c.Run(ctx)
 		inf.FireAdd(context.Background(), emptyObject)
 		wg.Wait()
-		close(stopCh)
+		cancel()
 		assert.Equal(t, 2, addCalls)
 		assert.Equal(t, 2, reconcileCalls)
 	})
@@ -610,11 +587,11 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddInformer(inf, kind)
 
 		// Run
-		stopCh := make(chan struct{})
-		go c.Run(stopCh)
+		ctx, cancel := context.WithCancel(context.Background())
+		go c.Run(ctx)
 		inf.FireAdd(context.Background(), emptyObject)
 		wg.Wait()
-		close(stopCh)
+		cancel()
 		assert.Equal(t, 1, addCalls)
 		assert.Equal(t, 2, reconcileCalls)
 	})
@@ -637,6 +614,9 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddWatcher(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
 				addCalls++
+				if addCalls >= 3 {
+					t.Fatal("Add should only be retried once based on the RetryPolicy")
+				}
 				wg.Done()
 				return errors.New("I AM ERROR")
 			},
@@ -644,6 +624,9 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddReconciler(&SimpleReconciler{
 			ReconcileFunc: func(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
 				reconcileCalls++
+				if reconcileCalls >= 3 {
+					t.Fatal("Reconcile should only be retried once based on the RetryPolicy")
+				}
 				wg.Done()
 				return ReconcileResult{}, errors.New("ICH BIN ERROR")
 			},
@@ -651,23 +634,95 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddInformer(inf, kind)
 
 		// Run
-		stopCh := make(chan struct{})
-		go c.Run(stopCh)
+		ctx, cancel := context.WithCancel(context.Background())
+		go c.Run(ctx)
 		inf.FireAdd(context.Background(), emptyObject)
 		wg.Wait()
-		close(stopCh)
+		cancel()
 		assert.Equal(t, 2, addCalls)
 		assert.Equal(t, 2, reconcileCalls)
 	})
 }
 
+func TestInformerController_Run_HandleEvents(t *testing.T) {
+	t.Run("reconciler update", func(t *testing.T) {
+		kind := "foo"
+		inf := &testInformer{}
+		c := NewInformerController(InformerControllerConfig{})
+		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
+			if attempt > 1 {
+				return false, 0
+			}
+			return true, time.Millisecond * 50
+		}
+		c.retryTickerInterval = time.Millisecond * 50
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		reconcileAction := ReconcileActionUnknown
+		c.AddReconciler(&SimpleReconciler{
+			ReconcileFunc: func(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				reconcileAction = request.Action
+				wg.Done()
+				return ReconcileResult{}, nil
+			},
+		}, kind)
+		c.AddInformer(inf, kind)
+
+		// Run
+		ctx, cancel := context.WithCancel(context.Background())
+		go c.Run(ctx)
+		oldObj := emptyObject.Copy()
+		newObj := emptyObject.Copy()
+		newObj.SetResourceVersion("321") // Different RV
+		inf.FireUpdate(context.Background(), oldObj, newObj)
+		wg.Wait()
+		cancel()
+		assert.Equal(t, ReconcileActionUpdated, reconcileAction)
+	})
+	t.Run("reconciler cache resync", func(t *testing.T) {
+		kind := "foo"
+		inf := &testInformer{}
+		c := NewInformerController(InformerControllerConfig{})
+		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
+			if attempt > 1 {
+				return false, 0
+			}
+			return true, time.Millisecond * 50
+		}
+		c.retryTickerInterval = time.Millisecond * 50
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		reconcileAction := ReconcileActionUnknown
+		c.AddReconciler(&SimpleReconciler{
+			ReconcileFunc: func(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				reconcileAction = request.Action
+				wg.Done()
+				return ReconcileResult{}, nil
+			},
+		}, kind)
+		c.AddInformer(inf, kind)
+
+		// Run
+		ctx, cancel := context.WithCancel(context.Background())
+		go c.Run(ctx)
+		oldObj := emptyObject.Copy()
+		newObj := emptyObject.Copy()
+		inf.FireUpdate(context.Background(), oldObj, newObj)
+		wg.Wait()
+		cancel()
+		assert.Equal(t, ReconcileActionResynced, reconcileAction)
+	})
+}
+
 func TestInformerController_Run_BackoffRetry(t *testing.T) {
-	// The backoff retry test needs to take twenty seconds to run properly, so it's isolated to its own function
+	// The backoff retry test needs to take at least 16 seconds to run properly, so it's isolated to its own function
 	// to avoid the often-used default of a 30-second-timeout on tests affecting other retry tests which take a few seconds each to run
 	addError := errors.New("I AM ERROR")
 	addAttempt := 0
 	updateError := errors.New("JE SUIS ERROR")
 	updateAttempt := 0
+	baseInterval := time.Second
+	jitter := time.Millisecond * 50
 	wg := sync.WaitGroup{}
 	inf := &testInformer{
 		handlers: make([]ResourceWatcher, 0),
@@ -678,40 +733,87 @@ func TestInformerController_Run_BackoffRetry(t *testing.T) {
 	c := NewInformerController(InformerControllerConfig{})
 	// One-second multiplier on exponential backoff.
 	// Backoff will be 1s, 2s, 4s, 8s, 16s
-	c.RetryPolicy = ExponentialBackoffRetryPolicy(time.Second, 5)
+	c.RetryPolicy = ExponentialBackoffRetryPolicy(baseInterval, 5)
+	// Ensure the default dequeue policy doesn't interfere with our retries
+	c.RetryDequeuePolicy = func(_ ResourceAction, _ resource.Object, _ ResourceAction, _ resource.Object, _ error) bool {
+		return false
+	}
 	c.AddInformer(inf, "foo")
+	type chanTuple struct {
+		attempt     int
+		lastAttempt time.Time
+	}
+	addChan := make(chan chanTuple, 6)
+	defer close(addChan)
+	updateChan := make(chan chanTuple, 6)
+	defer close(updateChan)
+	lastAdd := time.Now()
+	lastUpdate := time.Now()
 	c.AddWatcher(&SimpleWatcher{
 		AddFunc: func(ctx context.Context, object resource.Object) error {
+			addChan <- chanTuple{
+				attempt:     addAttempt,
+				lastAttempt: lastAdd,
+			}
+			lastAdd = time.Now()
 			addAttempt++
 			return addError
 		},
 		UpdateFunc: func(ctx context.Context, object resource.Object, object2 resource.Object) error {
+			updateChan <- chanTuple{
+				attempt:     updateAttempt,
+				lastAttempt: lastUpdate,
+			}
+			lastUpdate = time.Now()
 			updateAttempt++
 			return updateError
 		},
 	}, "foo")
 	wg.Add(2)
 
-	stopCh := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		err := c.Run(stopCh)
+		err := c.Run(ctx)
 		assert.Nil(t, err)
 		wg.Done()
 	}()
-	inf.FireAdd(context.Background(), emptyObject)
-	// 3 retries takes 7 seconds, 4 takes 15. Use 10 for some leeway
-	time.Sleep(time.Second * 10)
-	// Fire an update, which should halt the add retries
-	inf.FireUpdate(context.Background(), nil, emptyObject)
+
+	addWG := sync.WaitGroup{}
+	addWG.Add(5)
 	go func() {
-		// 3 retries takes 7 seconds, 4 takes 15. Use 10 for some leeway
-		time.Sleep(time.Second * 10)
-		close(stopCh)
+		for tpl := range addChan {
+			if tpl.attempt < 5 {
+				addWG.Done()
+			}
+			if tpl.attempt == 0 {
+				continue
+			}
+			// Check that the time since the last call is not less than (retry attempt)^2 seconds. Retry attempt is attempt-1 (as we're tracking attempts including the first one in this test)
+			assert.GreaterOrEqual(t, time.Since(tpl.lastAttempt), time.Duration(math.Pow(2, float64(tpl.attempt-1)))*baseInterval-jitter)
+		}
 	}()
+	updateWG := sync.WaitGroup{}
+	updateWG.Add(5)
+	go func() {
+		for tpl := range updateChan {
+			if tpl.attempt < 5 {
+				updateWG.Done()
+			}
+			if tpl.attempt == 0 {
+				continue
+			}
+			// Check that the time since the last call is not less than (retry attempt)^2 seconds. Retry attempt is attempt-1 (as we're tracking attempts including the first one in this test)
+			assert.GreaterOrEqual(t, time.Since(tpl.lastAttempt), time.Duration(math.Pow(2, float64(tpl.attempt-1)))*baseInterval-jitter)
+		}
+	}()
+
+	inf.FireAdd(context.Background(), emptyObject)
+	inf.FireUpdate(context.Background(), nil, emptyObject)
+
+	assert.True(t, waitOrTimeout(&addWG, time.Second*30), fmt.Sprintf("timed out waiting for adds to finish (saw %d adds)", addAttempt))
+	assert.True(t, waitOrTimeout(&updateWG, time.Second*30), fmt.Sprintf("timed out waiting for updates to finish (saw %d updates)", updateAttempt))
+	cancel()
 	wg.Wait()
-	// We should have four total attempts for each call, initial + three retries
-	assert.Equal(t, 4, addAttempt)
-	assert.Equal(t, 4, updateAttempt)
 }
 
 func TestInformerController_Run_WithRetries(t *testing.T) {
@@ -735,8 +837,11 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 			return true, time.Millisecond * 500
 		}
 		c.AddInformer(inf, "foo")
+		addCh := make(chan int, 5)
+		defer close(addCh)
 		c.AddWatcher(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addCh <- addAttempt
 				addAttempt++
 				return addError
 			},
@@ -747,27 +852,29 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 		}, "foo")
 		wg.Add(2)
 
-		stopCh := make(chan struct{})
+		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
-			err := c.Run(stopCh)
+			err := c.Run(ctx)
 			assert.Nil(t, err)
 			wg.Done()
 		}()
 		inf.FireAdd(context.Background(), emptyObject)
-		// Wait for what should be four retries
-		time.Sleep(time.Millisecond * 2300)
+		// Wait for three add attempts (initial and two retries), then fire an update
+		for i := range 3 {
+			t.Log("waiting for add ", i)
+			<-addCh
+		}
 		// Fire an update, which should halt the add retries
 		inf.FireUpdate(context.Background(), nil, emptyObject)
-		go func() {
-			// 3 retries takes 7 seconds, 4 takes 15. Use 10 for some leeway
-			time.Sleep(time.Second)
-			close(stopCh)
-		}()
+		// We _may_ get one more add retry, if it was already happening when the update was processed. But we shouldn't get any more than that
+		// Wait a second before stopping in case another retry _does_ come through
+		time.Sleep(time.Second * 1)
+		cancel()
 		wg.Wait()
 		// We should have four total attempts, though we may be off-by-one because timing is hard,
 		// so we actually check that 3 <= attempts <= 5
 		assert.LessOrEqual(t, 3, addAttempt)
-		assert.GreaterOrEqual(t, 5, addAttempt)
+		assert.GreaterOrEqual(t, 4, addAttempt)
 		assert.Equal(t, 1, updateAttempt)
 	})
 
@@ -791,8 +898,13 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 			return true, time.Millisecond * 50
 		}
 		c.AddInformer(inf, "foo")
+		addCh := make(chan int, 3)
+		defer close(addCh)
+		updateCh := make(chan int, 3)
+		defer close(updateCh)
 		c.AddWatcher(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addCh <- addAttempt
 				addAttempt++
 				if addAttempt >= 2 {
 					return nil
@@ -800,6 +912,7 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 				return addError
 			},
 			UpdateFunc: func(ctx context.Context, object resource.Object, object2 resource.Object) error {
+				updateCh <- updateAttempt
 				updateAttempt++
 				if updateAttempt >= 2 {
 					return nil
@@ -809,21 +922,24 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 		}, "foo")
 		wg.Add(2)
 
-		stopCh := make(chan struct{})
+		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
-			err := c.Run(stopCh)
+			err := c.Run(ctx)
 			assert.Nil(t, err)
 			wg.Done()
 		}()
 		inf.FireAdd(context.Background(), emptyObject)
+		// Wait for two adds
+		<-addCh
+		<-addCh
 		// Wait for half a second, this should be enough time for many retries if the halt doesn't work
 		time.Sleep(time.Millisecond * 500)
 		inf.FireUpdate(context.Background(), nil, emptyObject)
-		go func() {
-			// Wait for half a second, this should be enough time for many retries if the halt doesn't work
-			time.Sleep(time.Millisecond * 500)
-			close(stopCh)
-		}()
+		// Wait for two updates
+		<-updateCh
+		<-updateCh
+		// Wait for half a second, this should be enough time for many retries if the halt doesn't work
+		cancel()
 		wg.Wait()
 		// We should have only two attempts for each
 		assert.Equal(t, 2, addAttempt)
@@ -848,32 +964,34 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 			return attempt < 3, time.Millisecond * 50
 		}
 		c.AddInformer(inf, "foo")
+		addCh := make(chan int, 3)
+		defer close(addCh)
 		c.AddWatcher(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addCh <- addAttempt
 				addAttempt++
-				if addAttempt >= 2 {
-					return nil
-				}
 				return addError
 			},
 		}, "foo")
 		wg.Add(2)
 
-		stopCh := make(chan struct{})
+		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
-			err := c.Run(stopCh)
+			err := c.Run(ctx)
 			assert.Nil(t, err)
 			wg.Done()
 		}()
 		inf.FireAdd(context.Background(), emptyObject)
-		go func() {
-			// Wait for half a second, this should be enough time for many retries if the halt doesn't work
-			time.Sleep(time.Millisecond * 500)
-			close(stopCh)
-		}()
+		// We should see three attempts, then be done
+		for range 3 {
+			<-addCh
+		}
+		// Wait for half a second, this should be enough time for many retries if the halt doesn't work
+		time.Sleep(time.Millisecond * 500)
+		cancel()
 		wg.Wait()
-		// We should have only two attempts for each
-		assert.Equal(t, 2, addAttempt)
+		// We should have four total attempts, 1 initial and 3 retries
+		assert.Equal(t, 4, addAttempt)
 	})
 }
 
@@ -906,9 +1024,9 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 				return nil
 			},
 		}, "foo")
-		stopCh := make(chan struct{})
+		ctx := t.Context()
 		go func() {
-			err := c.Run(stopCh)
+			err := c.Run(ctx)
 			assert.Nil(t, err)
 		}()
 
@@ -923,16 +1041,13 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 		inf.FireUpdate(context.Background(), nil, emptyObject)
 
 		// Now we wait for the RetryPolicy to be queried again, OR for a timeout, which indicates a failure
-		timeout := make(chan struct{})
-		go func() {
-			time.Sleep(time.Second * 2)
-			timeout <- struct{}{}
-		}()
+		timeout := time.NewTimer(2 * time.Second)
+		t.Cleanup(func() { timeout.Stop() })
 		select {
 		case <-retryQuery:
 			// The retry wasn't dequeued, we can tell it to stop retrying now and finish the test
 			retryResponse <- true
-		case <-timeout:
+		case <-timeout.C:
 			assert.Fail(t, "Add Event retry appears to have been dequeued")
 		}
 	})
@@ -966,9 +1081,9 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 				return updateError
 			},
 		}, "foo")
-		stopCh := make(chan struct{})
+		ctx := t.Context()
 		go func() {
-			err := c.Run(stopCh)
+			err := c.Run(ctx)
 			assert.Nil(t, err)
 		}()
 
@@ -985,14 +1100,11 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 		inf.FireUpdate(context.Background(), nil, emptyObject)
 
 		// Now we wait for the RetryPolicy to be queried again, OR for a timeout, which indicates a failure
-		timeout := make(chan struct{})
-		go func() {
-			time.Sleep(time.Second * 5)
-			timeout <- struct{}{}
-		}()
+		timeout := time.NewTimer(2 * time.Second)
+		t.Cleanup(func() { timeout.Stop() })
 		addRetries := 0
 		updateRetries := 0
-		for i := 0; i < 2; i++ {
+		for range 2 {
 			select {
 			case err := <-retryQuery:
 				// Check what request this is a retry for by examining the error
@@ -1004,7 +1116,7 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 				// The retry wasn't dequeued, we can tell it to stop retrying now and either wait for the other
 				// request's retry, or finish the test
 				retryResponse <- true
-			case <-timeout:
+			case <-timeout.C:
 				assert.Fail(t, "Add Event retry appears to have been dequeued")
 			}
 		}
@@ -1087,7 +1199,7 @@ func TestOpinionatedRetryDequeuePolicy(t *testing.T) {
 
 type mockInformer struct {
 	AddEventHandlerFunc func(handler ResourceWatcher)
-	RunFunc             func(stopCh <-chan struct{}) error
+	RunFunc             func(ctx context.Context) error
 }
 
 func (i *mockInformer) AddEventHandler(handler ResourceWatcher) error {
@@ -1096,10 +1208,14 @@ func (i *mockInformer) AddEventHandler(handler ResourceWatcher) error {
 	}
 	return nil
 }
-func (i *mockInformer) Run(stopCh <-chan struct{}) error {
+func (i *mockInformer) Run(ctx context.Context) error {
 	if i.RunFunc != nil {
-		return i.RunFunc(stopCh)
+		return i.RunFunc(ctx)
 	}
+	return nil
+}
+
+func (i *mockInformer) WaitForSync(ctx context.Context) error {
 	return nil
 }
 
@@ -1113,8 +1229,8 @@ func (ti *testInformer) AddEventHandler(handler ResourceWatcher) error {
 	return nil
 }
 
-func (ti *testInformer) Run(stopCh <-chan struct{}) error {
-	<-stopCh
+func (ti *testInformer) Run(ctx context.Context) error {
+	<-ctx.Done()
 	if ti.onStop != nil {
 		ti.onStop()
 	}
@@ -1139,4 +1255,222 @@ func (ti *testInformer) FireDelete(ctx context.Context, object resource.Object) 
 	}
 }
 
+func (ti *testInformer) WaitForSync(ctx context.Context) error {
+	return nil
+}
+
 var emptyObject = &resource.TypedSpecObject[string]{}
+
+// newTestControllerWithProcessor creates an InformerController using the new RetryProcessor path.
+// WorkerPoolSize is set to 1 for deterministic ordering in tests.
+func newTestControllerWithProcessor(retryPolicy RetryPolicy, checkInterval time.Duration) *InformerController {
+	cfg := InformerControllerConfig{
+		RetryPolicy: retryPolicy,
+		RetryProcessorConfig: &RetryProcessorConfig{
+			WorkerPoolSize: 1, // deterministic ordering for tests
+			CheckInterval:  checkInterval,
+		},
+	}
+	return NewInformerController(cfg)
+}
+
+func TestInformerController_Run_WithRetryProcessor(t *testing.T) {
+	t.Run("watcher error, one retry via processor", func(t *testing.T) {
+		kind := "foo"
+		var addCalls atomic.Int64
+		reconcileCalls := 0
+		inf := &testInformer{}
+		c := newTestControllerWithProcessor(func(err error, attempt int) (bool, time.Duration) {
+			if attempt >= 1 {
+				return false, 0
+			}
+			return true, time.Millisecond * 10
+		}, time.Millisecond*50)
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+		c.AddWatcher(&SimpleWatcher{
+			AddFunc: func(ctx context.Context, object resource.Object) error {
+				n := addCalls.Add(1)
+				require.LessOrEqual(t, n, int64(2), "Add should only be retried once based on the RetryPolicy")
+				wg.Done()
+				return errors.New("I AM ERROR")
+			},
+		}, kind)
+		c.AddReconciler(&SimpleReconciler{
+			ReconcileFunc: func(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				reconcileCalls++
+				return ReconcileResult{}, nil
+			},
+		}, kind)
+		c.AddInformer(inf, kind)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		go c.Run(ctx)
+		inf.FireAdd(context.Background(), emptyObject)
+		assert.True(t, waitOrTimeout(&wg, 5*time.Second), "timed out waiting for watcher retries via processor")
+		cancel()
+		assert.Equal(t, int64(2), addCalls.Load())
+		assert.Equal(t, 1, reconcileCalls)
+	})
+
+	t.Run("reconciler error, one retry via processor", func(t *testing.T) {
+		kind := "foo"
+		addCalls := 0
+		var reconcileCalls atomic.Int64
+		inf := &testInformer{}
+		c := newTestControllerWithProcessor(func(err error, attempt int) (bool, time.Duration) {
+			if attempt > 1 {
+				return false, 0
+			}
+			return true, time.Millisecond * 10
+		}, time.Millisecond*50)
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+		c.AddWatcher(&SimpleWatcher{
+			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addCalls++
+				return nil
+			},
+		}, kind)
+		c.AddReconciler(&SimpleReconciler{
+			ReconcileFunc: func(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				n := reconcileCalls.Add(1)
+				_ = n
+				wg.Done()
+				return ReconcileResult{}, errors.New("I AM ERROR")
+			},
+		}, kind)
+		c.AddInformer(inf, kind)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		go c.Run(ctx)
+		inf.FireAdd(context.Background(), emptyObject)
+		assert.True(t, waitOrTimeout(&wg, 5*time.Second), "timed out waiting for reconciler retries via processor")
+		cancel()
+		assert.Equal(t, 1, addCalls)
+		assert.Equal(t, int64(2), reconcileCalls.Load())
+	})
+}
+
+func TestInformerController_Run_WithRetryProcessorDequeue(t *testing.T) {
+	t.Run("update dequeues stale add retry", func(t *testing.T) {
+		kind := "foo"
+		addError := errors.New("I AM ERROR")
+		var addCalls atomic.Int64
+		var updateCalls atomic.Int64
+		inf := &testInformer{}
+		// Use a long retry delay so the retry is sitting in the queue when we fire update
+		c := newTestControllerWithProcessor(func(err error, attempt int) (bool, time.Duration) {
+			return true, time.Second * 10
+		}, time.Millisecond*50)
+		// No RetryDequeuePolicy means all retries are dequeued on new events
+		c.RetryDequeuePolicy = nil
+		c.AddWatcher(&SimpleWatcher{
+			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addCalls.Add(1)
+				return addError
+			},
+			UpdateFunc: func(ctx context.Context, object resource.Object, object2 resource.Object) error {
+				updateCalls.Add(1)
+				return nil
+			},
+		}, kind)
+		c.AddInformer(inf, kind)
+
+		ctx := t.Context()
+		go c.Run(ctx)
+
+		// Fire an add that fails - this queues a retry
+		inf.FireAdd(context.Background(), emptyObject)
+		assert.Equal(t, int64(1), addCalls.Load())
+
+		// Fire an update - this should dequeue the pending add retry
+		inf.FireUpdate(context.Background(), nil, emptyObject)
+		assert.Equal(t, int64(1), updateCalls.Load())
+
+		// Wait a bit and verify no additional add retries fire
+		time.Sleep(200 * time.Millisecond)
+		assert.Equal(t, int64(1), addCalls.Load(), "add retry should have been dequeued by update")
+	})
+}
+
+func TestInformerController_PrometheusCollectors(t *testing.T) {
+	c := NewInformerController(InformerControllerConfig{
+		MetricsConfig: metrics.DefaultConfig("test"),
+	})
+	collectors := c.PrometheusCollectors()
+	assert.ElementsMatch(t, []prometheus.Collector{
+		c.totalEvents,
+		c.reconcileLatency,
+		c.inflightEvents,
+		c.inflightActions,
+		c.reconcilerLatency,
+		c.watcherLatency,
+		c.reconcilerErrors,
+		c.watcherErrors,
+	}, collectors)
+}
+
+func TestInformerController_Metrics_ReconcilerErrors(t *testing.T) {
+	kind := "foo"
+	inf := &testInformer{}
+	c := NewInformerController(InformerControllerConfig{
+		MetricsConfig: metrics.DefaultConfig("test"),
+		// No RetryPolicy so errors are dropped after first attempt — keeps the test simple.
+		RetryPolicy: func(_ error, _ int) (bool, time.Duration) { return false, 0 },
+	})
+	c.AddReconciler(&SimpleReconciler{
+		ReconcileFunc: func(_ context.Context, _ ReconcileRequest) (ReconcileResult, error) {
+			return ReconcileResult{}, errors.New("reconcile error")
+		},
+	}, kind)
+	c.AddInformer(inf, kind)
+
+	ctx := t.Context()
+	go c.Run(ctx)
+
+	inf.FireAdd(context.Background(), emptyObject)
+
+	assert.Equal(t, float64(1), counterValueFromVec(t, c.reconcilerErrors, string(ResourceActionCreate), ""))
+}
+
+func TestInformerController_Metrics_WatcherErrors(t *testing.T) {
+	kind := "foo"
+	inf := &testInformer{}
+	c := NewInformerController(InformerControllerConfig{
+		MetricsConfig: metrics.DefaultConfig("test"),
+		RetryPolicy:   func(_ error, _ int) (bool, time.Duration) { return false, 0 },
+	})
+	c.AddWatcher(&SimpleWatcher{
+		AddFunc: func(_ context.Context, _ resource.Object) error {
+			return errors.New("watcher add error")
+		},
+		UpdateFunc: func(_ context.Context, _, _ resource.Object) error {
+			return errors.New("watcher update error")
+		},
+		DeleteFunc: func(_ context.Context, _ resource.Object) error {
+			return errors.New("watcher delete error")
+		},
+	}, kind)
+	c.AddInformer(inf, kind)
+
+	ctx := t.Context()
+	go c.Run(ctx)
+
+	inf.FireAdd(context.Background(), emptyObject)
+	inf.FireUpdate(context.Background(), emptyObject, emptyObject)
+	inf.FireDelete(context.Background(), emptyObject)
+
+	assert.Equal(t, float64(1), counterValueFromVec(t, c.watcherErrors, string(ResourceActionCreate), ""))
+	assert.Equal(t, float64(1), counterValueFromVec(t, c.watcherErrors, string(ResourceActionUpdate), ""))
+	assert.Equal(t, float64(1), counterValueFromVec(t, c.watcherErrors, string(ResourceActionDelete), ""))
+}
+
+func counterValueFromVec(t *testing.T, cv *prometheus.CounterVec, labelValues ...string) float64 {
+	t.Helper()
+	m, err := cv.GetMetricWithLabelValues(labelValues...)
+	require.NoError(t, err)
+	var pb dto.Metric
+	require.NoError(t, m.Write(&pb))
+	return pb.GetCounter().GetValue()
+}

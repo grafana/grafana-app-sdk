@@ -1,0 +1,689 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package v1alpha2
+
+// +k8s:openapi-gen=true
+type AppManifestResourceEmbed struct {
+	// reembedVersion is a manual revision for requesting re-embedding of existing resources, shared by all API versions.
+	// Increase it when a backfill is needed; changing the declared inputs does not require a bump by itself.
+	ReembedVersion int64 `json:"reembedVersion"`
+}
+
+// NewAppManifestResourceEmbed creates a new AppManifestResourceEmbed object.
+func NewAppManifestResourceEmbed() *AppManifestResourceEmbed {
+	return &AppManifestResourceEmbed{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestResourceEmbed.
+func (AppManifestResourceEmbed) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestResourceEmbed"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersion struct {
+	// Name is the version name string, such as "v1" or "v1alpha1"
+	Name string `json:"name"`
+	// Served dictates whether this version is served by the API server.
+	// A version cannot be removed from a manifest until it is no longer served.
+	Served *bool `json:"served,omitempty"`
+	// Kinds is a list of all the kinds served in this version.
+	// Generally, kinds should exist in each version unless they have been deprecated (and no longer exist in a newer version)
+	// or newly added (and didn't exist for older versions).
+	Kinds []AppManifestManifestVersionKind `json:"kinds"`
+	// Routes is a section defining version-level custom resource routes.
+	// These routes are registered at the same level as kinds, and thus should not conflict with existing kinds.
+	// Deprecated: routes are now exposed under the openapi property
+	Routes *AppManifestManifestVersionRoutes `json:"routes,omitempty"`
+	// Define custom routes (cluster, namespaced, and sub-resources) and additional schemas
+	Openapi *AppManifestManifestVersionOpenAPI `json:"openapi,omitempty"`
+}
+
+// NewAppManifestManifestVersion creates a new AppManifestManifestVersion object.
+func NewAppManifestManifestVersion() *AppManifestManifestVersion {
+	return &AppManifestManifestVersion{
+		Served: (func(input bool) *bool { return &input })(true),
+		Kinds:  []AppManifestManifestVersionKind{},
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersion.
+func (AppManifestManifestVersion) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersion"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKind struct {
+	// Kind is the name of the kind. This should begin with a capital letter and be CamelCased
+	Kind string `json:"kind"`
+	// Plural is the plural version of `kind`. This is optional and defaults to the kind + "s" if not present.
+	Plural *string `json:"plural,omitempty"`
+	// Scope dictates the scope of the kind. This field must be the same for all versions of the kind.
+	// Different values will result in an error or undefined behavior.
+	Scope AppManifestManifestVersionKindScope `json:"scope"`
+	// userReadable controls whether end users may get/list cluster-scoped resources of this kind.
+	// Only meaningful when scope is "Cluster"; for namespaced kinds the field is ignored.
+	UserReadable *bool `json:"userReadable,omitempty"`
+	// folderScoped controls whether resources of this kind are scoped to folders.
+	// Only meaningful when scope is "Namespaced"; for cluster-scoped kinds the field is ignored.
+	// Defaults to true (folder-scoped).
+	FolderScoped *bool                             `json:"folderScoped,omitempty"`
+	Admission    *AppManifestAdmissionCapabilities `json:"admission,omitempty"`
+	// Schemas is the components.schemas section of an OpenAPI document describing this Kind.
+	// It must contain a key named the same as the `kind` field of the Kind.
+	// Other fields may be present to be referenced by $ref tags in a schema,
+	// and references should lead with '#/components/schemas/' just as they would in a standard OpenAPI document.
+	// If route responses in the `routes` section reference a definition in '#/components/schemas',
+	// that schema definition must exist in this section.
+	Schemas                  map[string]interface{}                `json:"schemas"`
+	Secure                   []AppManifestSecureValue              `json:"secure,omitempty"`
+	SelectableFields         []string                              `json:"selectableFields,omitempty"`
+	AdditionalPrinterColumns []AppManifestAdditionalPrinterColumns `json:"additionalPrinterColumns,omitempty"`
+	SearchFields             []AppManifestSearchField              `json:"searchFields,omitempty"`
+	// storage declares storage-related behavior for this kind.
+	Storage *AppManifestManifestVersionKindStorage `json:"storage,omitempty"`
+	// search declares which search endpoints are served for this kind.
+	// /search and /trash default to enabled; /search/hybrid and global index inclusion default to disabled.
+	Search *AppManifestManifestVersionKindSearch `json:"search,omitempty"`
+	// embed defines the embedding document independently of search fields.
+	Embed *AppManifestManifestVersionKindEmbed `json:"embed,omitempty"`
+	// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
+	// It may not prevent automatic conversion behavior between versions of the kind when set to false
+	// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
+	// This field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.
+	Conversion *bool `json:"conversion,omitempty"`
+	// Routes is a map of subresource route path to spec3.PathProps description of the route.
+	// Currently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.
+	// Invalid payloads will not be parsed correctly and may cause undefined behavior.
+	// Deprecated: routes now live in ManifestVersion#openapi
+	Routes map[string]interface{} `json:"routes,omitempty"`
+}
+
+// NewAppManifestManifestVersionKind creates a new AppManifestManifestVersionKind object.
+func NewAppManifestManifestVersionKind() *AppManifestManifestVersionKind {
+	return &AppManifestManifestVersionKind{
+		Scope:        AppManifestManifestVersionKindScopeNamespaced,
+		UserReadable: (func(input bool) *bool { return &input })(false),
+		FolderScoped: (func(input bool) *bool { return &input })(true),
+		Schemas:      map[string]interface{}{},
+		Conversion:   (func(input bool) *bool { return &input })(false),
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKind.
+func (AppManifestManifestVersionKind) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKind"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestAdmissionCapabilities struct {
+	Validation *AppManifestValidationCapability `json:"validation,omitempty"`
+	Mutation   *AppManifestMutationCapability   `json:"mutation,omitempty"`
+}
+
+// NewAppManifestAdmissionCapabilities creates a new AppManifestAdmissionCapabilities object.
+func NewAppManifestAdmissionCapabilities() *AppManifestAdmissionCapabilities {
+	return &AppManifestAdmissionCapabilities{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestAdmissionCapabilities.
+func (AppManifestAdmissionCapabilities) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestAdmissionCapabilities"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestValidationCapability struct {
+	Operations []AppManifestAdmissionOperation `json:"operations"`
+}
+
+// NewAppManifestValidationCapability creates a new AppManifestValidationCapability object.
+func NewAppManifestValidationCapability() *AppManifestValidationCapability {
+	return &AppManifestValidationCapability{
+		Operations: []AppManifestAdmissionOperation{},
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestValidationCapability.
+func (AppManifestValidationCapability) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestValidationCapability"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestAdmissionOperation string
+
+const (
+	AppManifestAdmissionOperationCreate  AppManifestAdmissionOperation = "CREATE"
+	AppManifestAdmissionOperationUpdate  AppManifestAdmissionOperation = "UPDATE"
+	AppManifestAdmissionOperationDelete  AppManifestAdmissionOperation = "DELETE"
+	AppManifestAdmissionOperationConnect AppManifestAdmissionOperation = "CONNECT"
+	AppManifestAdmissionOperationAll     AppManifestAdmissionOperation = "*"
+)
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestAdmissionOperation.
+func (AppManifestAdmissionOperation) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestAdmissionOperation"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestMutationCapability struct {
+	Operations []AppManifestAdmissionOperation `json:"operations"`
+}
+
+// NewAppManifestMutationCapability creates a new AppManifestMutationCapability object.
+func NewAppManifestMutationCapability() *AppManifestMutationCapability {
+	return &AppManifestMutationCapability{
+		Operations: []AppManifestAdmissionOperation{},
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestMutationCapability.
+func (AppManifestMutationCapability) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestMutationCapability"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestSecureValue struct {
+	// Key used in the secure value map
+	// "*" indicates that any key will be accepted
+	Key string `json:"key"`
+	// Description explains how the secure value is used and where it should come from.
+	// this text will be exposed in the openapi schema
+	Description *string `json:"description,omitempty"`
+}
+
+// NewAppManifestSecureValue creates a new AppManifestSecureValue object.
+func NewAppManifestSecureValue() *AppManifestSecureValue {
+	return &AppManifestSecureValue{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestSecureValue.
+func (AppManifestSecureValue) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestSecureValue"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestAdditionalPrinterColumns struct {
+	// name is a human readable name for the column.
+	Name string `json:"name"`
+	// type is an OpenAPI type definition for this column.
+	// See https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md#data-types for details.
+	Type string `json:"type"`
+	// format is an optional OpenAPI type definition for this column. The 'name' format is applied
+	// to the primary identifier column to assist in clients identifying column is the resource name.
+	// See https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md#data-types for details.
+	Format *string `json:"format,omitempty"`
+	// description is a human readable description of this column.
+	Description *string `json:"description,omitempty"`
+	// priority is an integer defining the relative importance of this column compared to others. Lower
+	// numbers are considered higher priority. Columns that may be omitted in limited space scenarios
+	// should be given a priority greater than 0.
+	Priority *int32 `json:"priority,omitempty"`
+	// jsonPath is a simple JSON path (i.e. with array notation) which is evaluated against
+	// each custom resource to produce the value for this column.
+	JsonPath string `json:"jsonPath"`
+}
+
+// NewAppManifestAdditionalPrinterColumns creates a new AppManifestAdditionalPrinterColumns object.
+func NewAppManifestAdditionalPrinterColumns() *AppManifestAdditionalPrinterColumns {
+	return &AppManifestAdditionalPrinterColumns{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestAdditionalPrinterColumns.
+func (AppManifestAdditionalPrinterColumns) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestAdditionalPrinterColumns"
+}
+
+// #SearchField describes a field exposed for search indexing and querying.
+// The type and capabilities values, and which capabilities are valid on which
+// type, are defined by the searchfields package
+// (github.com/grafana/grafana-app-sdk/searchfields), the shared source of
+// truth for both the SDK codegen validator and the runtime search backend.
+// +k8s:openapi-gen=true
+type AppManifestSearchField struct {
+	// name is the field name as it appears in search documents and queries.
+	Name string `json:"name"`
+	// path is the JSON path within the resource that supplies this field's value
+	// (for example "spec.email"). When omitted, the field is populated by a custom
+	// document builder rather than read directly from the resource.
+	Path *string `json:"path,omitempty"`
+	// type is the value type of the field.
+	Type AppManifestSearchFieldType `json:"type"`
+	// array indicates that the field holds a list of values of the given type.
+	Array *bool `json:"array,omitempty"`
+	// capabilities lists what the field can be used for at query time, such as
+	// filtering, full-text search, sorting, or faceting.
+	Capabilities []AppManifestSearchFieldCapabilities `json:"capabilities"`
+	// emitZeroIfAbsent indexes the type's zero value when path resolves to nothing,
+	// so sort and range queries see every document. Without it, a document missing
+	// the path omits the field entirely.
+	EmitZeroIfAbsent *bool `json:"emitZeroIfAbsent,omitempty"`
+	// description is a human readable description of the field.
+	Description *string `json:"description,omitempty"`
+}
+
+// NewAppManifestSearchField creates a new AppManifestSearchField object.
+func NewAppManifestSearchField() *AppManifestSearchField {
+	return &AppManifestSearchField{
+		Array:            (func(input bool) *bool { return &input })(false),
+		Capabilities:     []AppManifestSearchFieldCapabilities{},
+		EmitZeroIfAbsent: (func(input bool) *bool { return &input })(false),
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestSearchField.
+func (AppManifestSearchField) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestSearchField"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindStorage struct {
+	// listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.
+	ListKeys *bool `json:"listKeys,omitempty"`
+}
+
+// NewAppManifestManifestVersionKindStorage creates a new AppManifestManifestVersionKindStorage object.
+func NewAppManifestManifestVersionKindStorage() *AppManifestManifestVersionKindStorage {
+	return &AppManifestManifestVersionKindStorage{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindStorage.
+func (AppManifestManifestVersionKindStorage) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindStorage"
+}
+
+// #ManifestVersionKindSearch declares which search endpoints are served for a kind.
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindSearch struct {
+	// endpoint declares whether the kind serves the /search endpoint.
+	Endpoint *bool `json:"endpoint,omitempty"`
+	// trash declares whether the kind serves the /trash endpoint,
+	// which lists deleted resources of the kind.
+	Trash *bool `json:"trash,omitempty"`
+	// hybrid declares whether the kind serves the /search/hybrid endpoint.
+	Hybrid *bool `json:"hybrid,omitempty"`
+	// global declares whether the kind is included in the namespace-wide search index.
+	Global *bool `json:"global,omitempty"`
+}
+
+// NewAppManifestManifestVersionKindSearch creates a new AppManifestManifestVersionKindSearch object.
+func NewAppManifestManifestVersionKindSearch() *AppManifestManifestVersionKindSearch {
+	return &AppManifestManifestVersionKindSearch{
+		Endpoint: (func(input bool) *bool { return &input })(true),
+		Trash:    (func(input bool) *bool { return &input })(true),
+		Hybrid:   (func(input bool) *bool { return &input })(false),
+		Global:   (func(input bool) *bool { return &input })(false),
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindSearch.
+func (AppManifestManifestVersionKindSearch) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindSearch"
+}
+
+// Kinds with a custom embedding builder omit this section.
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindEmbed struct {
+	// fields supplies inputs, in declaration order, used only to generate the text to be embedded.
+	// Declaring an embedding field does not enable filtering embeddings by that field.
+	Fields []AppManifestManifestVersionKindEmbedField `json:"fields"`
+}
+
+// NewAppManifestManifestVersionKindEmbed creates a new AppManifestManifestVersionKindEmbed object.
+func NewAppManifestManifestVersionKindEmbed() *AppManifestManifestVersionKindEmbed {
+	return &AppManifestManifestVersionKindEmbed{
+		Fields: []AppManifestManifestVersionKindEmbedField{},
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindEmbed.
+func (AppManifestManifestVersionKindEmbed) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindEmbed"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindEmbedField struct {
+	// name labels this input in the embedding document.
+	Name string `json:"name"`
+	// path supplies a string or string array from the resource, using the same
+	// dot-separated paths and [*] projections as searchFields.
+	Path string `json:"path"`
+}
+
+// NewAppManifestManifestVersionKindEmbedField creates a new AppManifestManifestVersionKindEmbedField object.
+func NewAppManifestManifestVersionKindEmbedField() *AppManifestManifestVersionKindEmbedField {
+	return &AppManifestManifestVersionKindEmbedField{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindEmbedField.
+func (AppManifestManifestVersionKindEmbedField) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindEmbedField"
+}
+
+// Deprecated: custom routes are moved to the openapi section
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionRoutes struct {
+	// Namespaced is a map of namespace-scoped route paths to spec3.PathProps description of the route.
+	// Currently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.
+	// Invalid payloads will not be parsed correctly and may cause undefined behavior.
+	Namespaced map[string]interface{} `json:"namespaced,omitempty"`
+	// Cluster is a map of cluster-scoped route paths to spec3.PathProps description of the route.
+	// Currently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.
+	// Invalid payloads will not be parsed correctly and may cause undefined behavior.
+	Cluster map[string]interface{} `json:"cluster,omitempty"`
+	// Schemas contains additional schemas referenced by requests/responses for namespaced and cluster routes.
+	// If route responses in the `namespaced` or `cluster` section reference a definition in '#/components/schemas',
+	// that schema definition must exist in this section.
+	Schemas map[string]interface{} `json:"schemas,omitempty"`
+}
+
+// NewAppManifestManifestVersionRoutes creates a new AppManifestManifestVersionRoutes object.
+func NewAppManifestManifestVersionRoutes() *AppManifestManifestVersionRoutes {
+	return &AppManifestManifestVersionRoutes{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionRoutes.
+func (AppManifestManifestVersionRoutes) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionRoutes"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionOpenAPI struct {
+	// The path values are relative to the version root (eg, they do NOT include /apis/{group}/{version})
+	Paths      map[string]interface{}                               `json:"paths"`
+	Components *AppManifestV1alpha2ManifestVersionOpenAPIComponents `json:"components,omitempty"`
+}
+
+// NewAppManifestManifestVersionOpenAPI creates a new AppManifestManifestVersionOpenAPI object.
+func NewAppManifestManifestVersionOpenAPI() *AppManifestManifestVersionOpenAPI {
+	return &AppManifestManifestVersionOpenAPI{
+		Paths: map[string]interface{}{},
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionOpenAPI.
+func (AppManifestManifestVersionOpenAPI) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionOpenAPI"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestKindPermission struct {
+	Group    string   `json:"group"`
+	Resource string   `json:"resource"`
+	Actions  []string `json:"actions"`
+}
+
+// NewAppManifestKindPermission creates a new AppManifestKindPermission object.
+func NewAppManifestKindPermission() *AppManifestKindPermission {
+	return &AppManifestKindPermission{
+		Actions: []string{},
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestKindPermission.
+func (AppManifestKindPermission) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestKindPermission"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestOperatorInfo struct {
+	// URL is the URL of the operator's HTTPS endpoint, including port if non-standard (443).
+	// It should be a URL which the API server can access.
+	Url *string `json:"url,omitempty"`
+	// Webhooks contains information about the various webhook paths.
+	Webhooks *AppManifestOperatorWebhookProperties `json:"webhooks,omitempty"`
+}
+
+// NewAppManifestOperatorInfo creates a new AppManifestOperatorInfo object.
+func NewAppManifestOperatorInfo() *AppManifestOperatorInfo {
+	return &AppManifestOperatorInfo{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestOperatorInfo.
+func (AppManifestOperatorInfo) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestOperatorInfo"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestOperatorWebhookProperties struct {
+	ConversionPath *string `json:"conversionPath,omitempty"`
+	ValidationPath *string `json:"validationPath,omitempty"`
+	MutationPath   *string `json:"mutationPath,omitempty"`
+}
+
+// NewAppManifestOperatorWebhookProperties creates a new AppManifestOperatorWebhookProperties object.
+func NewAppManifestOperatorWebhookProperties() *AppManifestOperatorWebhookProperties {
+	return &AppManifestOperatorWebhookProperties{
+		ConversionPath: (func(input string) *string { return &input })("/convert"),
+		ValidationPath: (func(input string) *string { return &input })("/validate"),
+		MutationPath:   (func(input string) *string { return &input })("/mutate"),
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestOperatorWebhookProperties.
+func (AppManifestOperatorWebhookProperties) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestOperatorWebhookProperties"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestRole struct {
+	// Title will be used as the role title in grafana
+	Title string `json:"title"`
+	// Description is used as the role description in grafana, displayed in the UI and API responses
+	Description string                `json:"description"`
+	Kinds       []AppManifestRoleKind `json:"kinds,omitempty"`
+	// Routes is a list of route names to match.
+	// To match the same route in multiple versions, it should share the same name.
+	Routes []string `json:"routes,omitempty"`
+}
+
+// NewAppManifestRole creates a new AppManifestRole object.
+func NewAppManifestRole() *AppManifestRole {
+	return &AppManifestRole{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestRole.
+func (AppManifestRole) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestRole"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestRoleKind interface{}
+
+// +k8s:openapi-gen=true
+type AppManifestRoleKindWithPermissionSet struct {
+	Kind          string                                            `json:"kind"`
+	PermissionSet AppManifestRoleKindWithPermissionSetPermissionSet `json:"permissionSet"`
+}
+
+// NewAppManifestRoleKindWithPermissionSet creates a new AppManifestRoleKindWithPermissionSet object.
+func NewAppManifestRoleKindWithPermissionSet() *AppManifestRoleKindWithPermissionSet {
+	return &AppManifestRoleKindWithPermissionSet{
+		PermissionSet: AppManifestRoleKindWithPermissionSetPermissionSetViewer,
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestRoleKindWithPermissionSet.
+func (AppManifestRoleKindWithPermissionSet) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestRoleKindWithPermissionSet"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestRoleKindWithVerbs struct {
+	Kind  string   `json:"kind"`
+	Verbs []string `json:"verbs"`
+}
+
+// NewAppManifestRoleKindWithVerbs creates a new AppManifestRoleKindWithVerbs object.
+func NewAppManifestRoleKindWithVerbs() *AppManifestRoleKindWithVerbs {
+	return &AppManifestRoleKindWithVerbs{
+		Verbs: []string{},
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestRoleKindWithVerbs.
+func (AppManifestRoleKindWithVerbs) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestRoleKindWithVerbs"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestSpec struct {
+	// AppName is the unique ID of the app
+	AppName string `json:"appName"`
+	// AppDisplayName is the display name of the app, which can contain any printable characters
+	AppDisplayName string `json:"appDisplayName"`
+	Group          string `json:"group"`
+	// Embed configures declarative embeddings by resource name (the lowercase plural) within this app's group.
+	// Custom embedding builders omit their entry and define their content version in Go.
+	Embed map[string]AppManifestResourceEmbed `json:"embed,omitempty"`
+	// Versions is the list of versions for this manifest, in order.
+	Versions []AppManifestManifestVersion `json:"versions"`
+	// PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.
+	// For CRDs, this also dictates which version is used for storage.
+	PreferredVersion *string `json:"preferredVersion,omitempty"`
+	// ExtraPermissions contains additional permissions needed for an app's backend component to operate.
+	// Apps implicitly have all permissions for kinds they managed (defined in `kinds`).
+	ExtraPermissions *AppManifestV1alpha2SpecExtraPermissions `json:"extraPermissions,omitempty"`
+	// DryRunKinds dictates whether this revision should create/update CRD's from the provided kinds,
+	// Or simply validate and report errors in status.resources.crds.
+	// If dryRunKinds is true, CRD change validation will be skipped on ingress and reported in status instead.
+	// Even if no validation errors exist, CRDs will not be created or updated for a revision with dryRunKinds=true.
+	DryRunKinds *bool `json:"dryRunKinds,omitempty"`
+	// Operator has information about the operator being run for the app, if there is one.
+	// When present, it can indicate to the API server the URL and paths for webhooks, if applicable.
+	// This is only required if you run your app as an operator and any of your kinds support webhooks for validation,
+	// mutation, or conversion.
+	Operator *AppManifestOperatorInfo `json:"operator,omitempty"`
+	// Roles contains information for new user roles associated with this app.
+	// It is a map of the role name (e.g. "dashboard:reader") to the set of permissions on resources managed by this app.
+	Roles map[string]AppManifestRole `json:"roles,omitempty"`
+	// RoleBindings binds the roles specified in Roles to groups.
+	// Basic groups are "anonymous", "viewer", "editor", and "admin".
+	// Additional groups are specified under "additional"
+	RoleBindings *AppManifestV1alpha2SpecRoleBindings `json:"roleBindings,omitempty"`
+}
+
+// NewAppManifestSpec creates a new AppManifestSpec object.
+func NewAppManifestSpec() *AppManifestSpec {
+	return &AppManifestSpec{
+		Versions:    []AppManifestManifestVersion{},
+		DryRunKinds: (func(input bool) *bool { return &input })(false),
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestSpec.
+func (AppManifestSpec) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestSpec"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestV1alpha2ManifestVersionOpenAPIComponents struct {
+	Schemas   map[string]interface{} `json:"schemas,omitempty"`
+	Responses map[string]interface{} `json:"responses,omitempty"`
+	Examples  map[string]interface{} `json:"examples,omitempty"`
+}
+
+// NewAppManifestV1alpha2ManifestVersionOpenAPIComponents creates a new AppManifestV1alpha2ManifestVersionOpenAPIComponents object.
+func NewAppManifestV1alpha2ManifestVersionOpenAPIComponents() *AppManifestV1alpha2ManifestVersionOpenAPIComponents {
+	return &AppManifestV1alpha2ManifestVersionOpenAPIComponents{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestV1alpha2ManifestVersionOpenAPIComponents.
+func (AppManifestV1alpha2ManifestVersionOpenAPIComponents) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestV1alpha2ManifestVersionOpenAPIComponents"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestV1alpha2SpecExtraPermissions struct {
+	// accessKinds is a list of KindPermission objects for accessing additional kinds provided by other apps
+	AccessKinds []AppManifestKindPermission `json:"accessKinds"`
+}
+
+// NewAppManifestV1alpha2SpecExtraPermissions creates a new AppManifestV1alpha2SpecExtraPermissions object.
+func NewAppManifestV1alpha2SpecExtraPermissions() *AppManifestV1alpha2SpecExtraPermissions {
+	return &AppManifestV1alpha2SpecExtraPermissions{
+		AccessKinds: []AppManifestKindPermission{},
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestV1alpha2SpecExtraPermissions.
+func (AppManifestV1alpha2SpecExtraPermissions) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestV1alpha2SpecExtraPermissions"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestV1alpha2SpecRoleBindings struct {
+	Viewer     []string            `json:"viewer,omitempty"`
+	Editor     []string            `json:"editor,omitempty"`
+	Admin      []string            `json:"admin,omitempty"`
+	Additional map[string][]string `json:"additional,omitempty"`
+}
+
+// NewAppManifestV1alpha2SpecRoleBindings creates a new AppManifestV1alpha2SpecRoleBindings object.
+func NewAppManifestV1alpha2SpecRoleBindings() *AppManifestV1alpha2SpecRoleBindings {
+	return &AppManifestV1alpha2SpecRoleBindings{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestV1alpha2SpecRoleBindings.
+func (AppManifestV1alpha2SpecRoleBindings) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestV1alpha2SpecRoleBindings"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindScope string
+
+const (
+	AppManifestManifestVersionKindScopeNamespaced AppManifestManifestVersionKindScope = "Namespaced"
+	AppManifestManifestVersionKindScopeCluster    AppManifestManifestVersionKindScope = "Cluster"
+)
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindScope.
+func (AppManifestManifestVersionKindScope) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindScope"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestSearchFieldType string
+
+const (
+	AppManifestSearchFieldTypeString  AppManifestSearchFieldType = "string"
+	AppManifestSearchFieldTypeInt64   AppManifestSearchFieldType = "int64"
+	AppManifestSearchFieldTypeDouble  AppManifestSearchFieldType = "double"
+	AppManifestSearchFieldTypeBoolean AppManifestSearchFieldType = "boolean"
+	AppManifestSearchFieldTypeDate    AppManifestSearchFieldType = "date"
+)
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestSearchFieldType.
+func (AppManifestSearchFieldType) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestSearchFieldType"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestSearchFieldCapabilities string
+
+const (
+	AppManifestSearchFieldCapabilitiesFilter   AppManifestSearchFieldCapabilities = "filter"
+	AppManifestSearchFieldCapabilitiesText     AppManifestSearchFieldCapabilities = "text"
+	AppManifestSearchFieldCapabilitiesPartial  AppManifestSearchFieldCapabilities = "partial"
+	AppManifestSearchFieldCapabilitiesSort     AppManifestSearchFieldCapabilities = "sort"
+	AppManifestSearchFieldCapabilitiesFacet    AppManifestSearchFieldCapabilities = "facet"
+	AppManifestSearchFieldCapabilitiesRetrieve AppManifestSearchFieldCapabilities = "retrieve"
+	AppManifestSearchFieldCapabilitiesUnranked AppManifestSearchFieldCapabilities = "unranked"
+)
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestSearchFieldCapabilities.
+func (AppManifestSearchFieldCapabilities) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestSearchFieldCapabilities"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestRoleKindWithPermissionSetPermissionSet string
+
+const (
+	AppManifestRoleKindWithPermissionSetPermissionSetViewer AppManifestRoleKindWithPermissionSetPermissionSet = "viewer"
+	AppManifestRoleKindWithPermissionSetPermissionSetEditor AppManifestRoleKindWithPermissionSetPermissionSet = "editor"
+	AppManifestRoleKindWithPermissionSetPermissionSetAdmin  AppManifestRoleKindWithPermissionSetPermissionSet = "admin"
+)
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestRoleKindWithPermissionSetPermissionSet.
+func (AppManifestRoleKindWithPermissionSetPermissionSet) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestRoleKindWithPermissionSetPermissionSet"
+}

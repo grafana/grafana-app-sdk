@@ -2,6 +2,7 @@ package simple
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -22,12 +23,18 @@ type OperatorConfig struct {
 	KubeConfig   rest.Config
 	Webhooks     WebhookConfig
 	Metrics      MetricsConfig
+	Port         int
 	Tracing      TracingConfig
 	ErrorHandler func(ctx context.Context, err error)
 	// FinalizerGenerator consumes a schema and returns a finalizer name to use for opinionated logic.
 	// the finalizer name MUST be 63 chars or fewer, and should be unique to the operator
 	FinalizerGenerator          func(kind resource.Schema) string
 	InformerCacheResyncInterval time.Duration
+	// DiscoveryRefreshInterval is the interval at which the API discovery cache should be refreshed.
+	// This is primarily used by the DynamicPatcher in the OpinionatedWatcher/OpinionatedReconciler
+	// for sending finalizer add/remove patches to the latest version of the kind.
+	// This defaults to 10 minutes.
+	DiscoveryRefreshInterval time.Duration
 }
 
 // WebhookConfig is a configuration for exposed kubernetes webhooks for an Operator
@@ -57,6 +64,7 @@ type WebhookConfig struct {
 // MetricsConfig contains configuration information for exposing prometheus metrics
 type MetricsConfig struct {
 	metrics.ExporterConfig
+	operator.MetricsServerConfig
 	Enabled   bool
 	Namespace string
 }
@@ -68,9 +76,17 @@ type TracingConfig struct {
 }
 
 // NewOperator creates a new Operator
+//
+// Deprecated: please use simple.NewApp and operator.NewRunner to create a simple operator app.
 func NewOperator(cfg OperatorConfig) (*Operator, error) {
 	cg := k8s.NewClientRegistry(cfg.KubeConfig, k8s.ClientConfig{})
 	var ws *k8s.WebhookServer
+
+	if cfg.Port <= 0 {
+		cfg.Port = 9090
+		cfg.Metrics.Port = 9090
+	}
+
 	if cfg.Webhooks.Enabled {
 		var err error
 		ws, err = k8s.NewWebhookServer(k8s.WebhookServerConfig{
@@ -86,11 +102,24 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 			return nil, err
 		}
 	}
+	discoveryRefresh := cfg.DiscoveryRefreshInterval
+	if discoveryRefresh == 0 {
+		discoveryRefresh = time.Minute * 10
+	}
+
+	patcher, err := k8s.NewDynamicPatcher(cg, discoveryRefresh)
+	if err != nil {
+		return nil, err
+	}
 
 	informerControllerConfig := operator.DefaultInformerControllerConfig()
 	informerControllerConfig.MetricsConfig.Namespace = cfg.Metrics.Namespace
 	// TODO: other factors?
 	controller := operator.NewInformerController(informerControllerConfig)
+
+	// this deprecated operator doesn't have any actual health checks, use the new operator runner
+	// in order to get a true read on the readiness of the operator
+	metricsServer := operator.NewMetricsServer(cfg.Metrics.MetricsServerConfig)
 
 	// Telemetry (metrics, traces)
 	var me *metrics.Exporter
@@ -104,6 +133,10 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		metricsServer.RegisterHealthChecks(controller.HealthChecks()...)
+
+		metricsServer.RegisterMetricsHandler(me.HTTPHandler())
 	}
 	if cfg.Tracing.Enabled {
 		err := SetTraceProvider(cfg.Tracing.OpenTelemetryConfig)
@@ -121,7 +154,10 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 		admission:           ws,
 		metricsExporter:     me,
 		cacheResyncInterval: cfg.InformerCacheResyncInterval,
+		patcher:             patcher,
+		metricsServer:       metricsServer,
 	}
+
 	op.controller.ErrorHandler = op.ErrorHandler
 	return op, nil
 }
@@ -130,6 +166,8 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 // use WatchKind to add a watcher for a specific kind (schema) and configuration (such as namespace, label filters),
 // ReconcileKind to add a reconciler for a specific kind (schema) and configuration (such as namespace, label filers),
 // and ValidateKind or MutateKind to add admission control for a kind (schema).
+//
+// Deprecated: use simple.App in conjunction with operator.Runner instead.
 type Operator struct {
 	Name string
 	// ErrorHandler, if non-nil, is called when a recoverable error is encountered in underlying components.
@@ -141,8 +179,10 @@ type Operator struct {
 	clientGen           resource.ClientGenerator
 	controller          *operator.InformerController
 	admission           *k8s.WebhookServer
+	metricsServer       *operator.MetricsServer
 	metricsExporter     *metrics.Exporter
 	cacheResyncInterval time.Duration
+	patcher             *k8s.DynamicPatcher
 }
 
 // SyncWatcher extends operator.ResourceWatcher with a Sync method which can be called by the operator.OpinionatedWatcher
@@ -165,16 +205,18 @@ func (o *Operator) ClientGenerator() resource.ClientGenerator {
 // * Expose all configured webhooks as an HTTPS server
 //
 // * Expose a prometheus metrics endpoint if configured
-func (o *Operator) Run(stopCh <-chan struct{}) error {
+func (o *Operator) Run(ctx context.Context) error {
 	op := operator.New()
 	op.AddController(o.controller)
 	if o.admission != nil {
-		op.AddController(o.admission)
+		op.AddController(&k8sRunnable{runner: o.admission})
 	}
-	if o.metricsExporter != nil {
-		op.AddController(o.metricsExporter)
-	}
-	return op.Run(stopCh)
+
+	// todo: is this the correct place to add these? op is only a local variable?
+	// in the Run method
+	o.metricsServer.RegisterHealthChecks(op.HealthChecks()...)
+	op.AddController(o.metricsServer)
+	return op.Run(ctx)
 }
 
 // RegisterMetricsCollectors registers Prometheus collectors with the exporter used by the operator,
@@ -190,27 +232,39 @@ func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options op
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, operator.KubernetesBasedIformerOptions{
-		ListWatchOptions:    operator.ListWatchOptions{Namespace: options.Namespace, LabelFilters: options.LabelFilters, FieldSelectors: options.FieldSelectors},
+	inf, err := operator.NewKubernetesBasedInformer(kind, client, operator.InformerOptions{
+		ListWatchOptions: operator.ListWatchOptions{
+			Namespace:      options.Namespace,
+			LabelFilters:   options.LabelFilters,
+			FieldSelectors: options.FieldSelectors,
+		},
 		CacheResyncInterval: o.cacheResyncInterval,
+		ErrorHandler:        o.ErrorHandler,
 	})
 	if err != nil {
 		return err
 	}
-	inf.ErrorHandler = o.ErrorHandler
 	kindStr := o.label(kind, options)
 	err = o.controller.AddInformer(inf, kindStr)
 	if err != nil {
 		return err
 	}
-	ow, err := operator.NewOpinionatedWatcherWithFinalizer(kind, client, func(sch resource.Schema) string {
-		if o.FinalizerGenerator != nil {
-			return o.FinalizerGenerator(sch)
-		}
-		if o.Name != "" {
-			return fmt.Sprintf("%s-%s-finalizer", o.Name, kind.Plural())
-		}
-		return fmt.Sprintf("%s-finalizer", kind.Plural())
+	ow, err := operator.NewOpinionatedWatcher(kind, &watchPatcher{o.patcher.ForKind(kind.GroupVersionKind().GroupKind())}, operator.OpinionatedWatcherConfig{
+		Finalizer: func(sch resource.Schema) string {
+			if o.FinalizerGenerator != nil {
+				return o.FinalizerGenerator(sch)
+			}
+			if o.Name != "" {
+				return fmt.Sprintf("%s-%s-finalizer", o.Name, kind.Plural())
+			}
+			return fmt.Sprintf("%s-finalizer", kind.Plural())
+		},
+		InProgressFinalizer: func(_ resource.Schema) string {
+			if o.Name != "" {
+				return fmt.Sprintf("%s-%s-wip", o.Name, kind.Plural())
+			}
+			return fmt.Sprintf("%s-wip", kind.Plural())
+		},
 	})
 	if err != nil {
 		return err
@@ -227,14 +281,18 @@ func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconci
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, operator.KubernetesBasedIformerOptions{
-		ListWatchOptions:    operator.ListWatchOptions{Namespace: options.Namespace, LabelFilters: options.LabelFilters, FieldSelectors: options.FieldSelectors},
+	inf, err := operator.NewKubernetesBasedInformer(kind, client, operator.InformerOptions{
+		ListWatchOptions: operator.ListWatchOptions{
+			Namespace:      options.Namespace,
+			LabelFilters:   options.LabelFilters,
+			FieldSelectors: options.FieldSelectors,
+		},
+		ErrorHandler:        o.ErrorHandler,
 		CacheResyncInterval: o.cacheResyncInterval,
 	})
 	if err != nil {
 		return err
 	}
-	inf.ErrorHandler = o.ErrorHandler
 	kindStr := o.label(kind, options)
 	err = o.controller.AddInformer(inf, kindStr)
 	if err != nil {
@@ -246,7 +304,7 @@ func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconci
 	} else if o.Name != "" {
 		finalizer = fmt.Sprintf("%s-%s-finalizer", o.Name, kind.Plural())
 	}
-	or, err := operator.NewOpinionatedReconciler(client, finalizer)
+	or, err := operator.NewOpinionatedReconciler(&watchPatcher{o.patcher.ForKind(kind.GroupVersionKind().GroupKind())}, finalizer)
 	if err != nil {
 		return err
 	}
@@ -258,7 +316,7 @@ func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconci
 // using the provided ValidatingAdmissionController for the validation logic.
 func (o *Operator) ValidateKind(kind resource.Kind, controller resource.ValidatingAdmissionController) error {
 	if o.admission == nil {
-		return fmt.Errorf("webhooks are not enabled")
+		return errors.New("webhooks are not enabled")
 	}
 	o.admission.AddValidatingAdmissionController(controller, kind)
 	return nil
@@ -268,7 +326,7 @@ func (o *Operator) ValidateKind(kind resource.Kind, controller resource.Validati
 // using the provided MutatingAdmissionController for the mutation logic.
 func (o *Operator) MutateKind(kind resource.Kind, controller resource.MutatingAdmissionController) error {
 	if o.admission == nil {
-		return fmt.Errorf("webhooks are not enabled")
+		return errors.New("webhooks are not enabled")
 	}
 	o.admission.AddMutatingAdmissionController(controller, kind)
 	return nil
@@ -278,7 +336,7 @@ func (o *Operator) MutateKind(kind resource.Kind, controller resource.MutatingAd
 // using the provided k8s.Converter for the conversion logic.
 func (o *Operator) ConvertKind(gk metav1.GroupKind, converter k8s.Converter) error {
 	if o.admission == nil {
-		return fmt.Errorf("webhooks are not enabled")
+		return errors.New("webhooks are not enabled")
 	}
 	o.admission.AddConverter(converter, gk)
 	return nil

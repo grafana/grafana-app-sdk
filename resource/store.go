@@ -3,9 +3,11 @@ package resource
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"net/http"
 	"time"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 // TODO: rewrite the godocs, this is all copied from crd/store.go
@@ -22,11 +24,6 @@ const (
 	SubresourceStatus = SubresourceName("status")
 	SubresourceScale  = SubresourceName("scale")
 )
-
-type APIServerResponseError interface {
-	error
-	StatusCode() int
-}
 
 type KindCollection interface {
 	Kinds() []Kind
@@ -87,13 +84,13 @@ func (s *Store) Get(ctx context.Context, kind string, identifier Identifier) (Ob
 // If they are not, no request will be issued to the underlying client, and an error will be returned.
 func (s *Store) Add(ctx context.Context, obj Object) (Object, error) {
 	if obj.GetStaticMetadata().Kind == "" {
-		return nil, fmt.Errorf("obj.GetStaticMetadata().Kind must not be empty")
+		return nil, errors.New("obj.GetStaticMetadata().Kind must not be empty")
 	}
 	if obj.GetNamespace() == "" {
-		return nil, fmt.Errorf("obj.GetNamespace() must not be empty")
+		return nil, errors.New("obj.GetNamespace() must not be empty")
 	}
 	if obj.GetName() == "" {
-		return nil, fmt.Errorf("obj.GetName() must not be empty")
+		return nil, errors.New("obj.GetName() must not be empty")
 	}
 
 	client, err := s.getClient(obj.GetStaticMetadata().Kind)
@@ -123,13 +120,13 @@ func (s *Store) SimpleAdd(ctx context.Context, kind string, identifier Identifie
 // It returns the updated Object from the storage system.
 func (s *Store) Update(ctx context.Context, obj Object) (Object, error) {
 	if obj.GetStaticMetadata().Kind == "" {
-		return nil, fmt.Errorf("obj.GetStaticMetadata().Kind must not be empty")
+		return nil, errors.New("obj.GetStaticMetadata().Kind must not be empty")
 	}
 	if obj.GetNamespace() == "" {
-		return nil, fmt.Errorf("obj.GetNamespace() must not be empty")
+		return nil, errors.New("obj.GetNamespace() must not be empty")
 	}
 	if obj.GetName() == "" {
-		return nil, fmt.Errorf("obj.GetName() must not be empty")
+		return nil, errors.New("obj.GetName() must not be empty")
 	}
 
 	md := obj.GetCommonMetadata()
@@ -157,7 +154,7 @@ func (s *Store) UpdateSubresource(
 		return nil, err
 	}
 	if subresourceName == "" {
-		return nil, fmt.Errorf("subresourceName cannot be empty")
+		return nil, errors.New("subresourceName cannot be empty")
 	}
 
 	srBytes, err := json.Marshal(obj)
@@ -184,13 +181,13 @@ func (s *Store) UpdateSubresource(
 // It returns the updated/created Object from the storage system.
 func (s *Store) Upsert(ctx context.Context, obj Object) (Object, error) {
 	if obj.GetStaticMetadata().Kind == "" {
-		return nil, fmt.Errorf("obj.GetStaticMetadata().Kind must not be empty")
+		return nil, errors.New("obj.GetStaticMetadata().Kind must not be empty")
 	}
 	if obj.GetNamespace() == "" {
-		return nil, fmt.Errorf("obj.GetNamespace() must not be empty")
+		return nil, errors.New("obj.GetNamespace() must not be empty")
 	}
 	if obj.GetName() == "" {
-		return nil, fmt.Errorf("obj.GetName() must not be empty")
+		return nil, errors.New("obj.GetName() must not be empty")
 	}
 
 	client, err := s.getClient(obj.GetStaticMetadata().Kind)
@@ -199,14 +196,8 @@ func (s *Store) Upsert(ctx context.Context, obj Object) (Object, error) {
 	}
 
 	resp, err := client.Get(ctx, obj.GetStaticMetadata().Identifier())
-
-	if err != nil {
-		cast, ok := err.(APIServerResponseError)
-		if !ok {
-			return nil, err
-		} else if cast.StatusCode() != http.StatusNotFound {
-			return nil, err
-		}
+	if err != nil && !apierrors.IsNotFound(err) {
+		return nil, err
 	}
 
 	if resp != nil {
@@ -233,7 +224,7 @@ func (s *Store) Delete(ctx context.Context, kind string, identifier Identifier) 
 		return err
 	}
 
-	return client.Delete(ctx, identifier)
+	return client.Delete(ctx, identifier, DeleteOptions{})
 }
 
 // ForceDelete deletes a resource with the given Identifier and kind, ignores client 404 errors.
@@ -243,9 +234,9 @@ func (s *Store) ForceDelete(ctx context.Context, kind string, identifier Identif
 		return err
 	}
 
-	err = client.Delete(ctx, identifier)
+	err = client.Delete(ctx, identifier, DeleteOptions{})
 
-	if cast, ok := err.(APIServerResponseError); ok && cast.StatusCode() == http.StatusNotFound {
+	if apierrors.IsNotFound(err) {
 		return nil
 	}
 	return err

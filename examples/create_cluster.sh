@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Creates a k3d cluster with all volume mounts required for testing the apps.
+# Creates a local k3d cluster for running the examples.
 
 set -eufo pipefail
 
@@ -22,9 +22,7 @@ if ! k3d cluster list "${CLUSTER_NAME}" >/dev/null 2>&1; then
 
   k3d cluster create "${CLUSTER_NAME}" ${EXTRA_K3D_OPTS[@]+"${EXTRA_K3D_OPTS[@]}"} \
     --api-port "0.0.0.0:6443" \
-    -p "8080:80@loadbalancer" \
-    --volume "${ROOT_DIR}"/examples/plugin/testdata/grafana/plugins/operator-app-sdk-plugin-example:/tmp/k3d/operator-app-sdk-plugin-example@server:* \
-    --volume "${ROOT_DIR}"/examples/plugin/testdata/grafana/kubeconfig:/tmp/k3d/kubeconfig@server:*
+    -p "8080:80@loadbalancer"
 else
   echo "Cluster already exists"
 fi

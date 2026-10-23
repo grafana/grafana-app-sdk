@@ -5,48 +5,40 @@ The preferred way of writing kinds for use with codegen provided by the `grafana
 > [!TIP]
 > You can generate a kind with descriptive comments of all fields with `grafana-app-sdk project kind add <KindName>`
 
-Defining a kind can be thought of as being split into two parts: the kind metadata, and the schemas for each version. A simple kind, without any versions (which makes it invalid, but it's a place to start) would look like this:
+Defining a kind can be thought of as being split into two parts: the kind metadata, and the schemas and other version-specific information for each version. 
+When writing a kind in CUE, it's good practice to split out the kind metadata, which is common across all versions, 
+and the version-specific information, so that the metadata can be re-used for each version of the kind.
+
+A simple kind, with a single version and without any schema information would look like:
 ```cue
-foo: {
+// fooKind is the kind metadata for Foo
+fooKind: {
     // kind is the kind name. It must be capitalized by convention
     kind: "Foo"
-    // group is the group the kind belongs to, typically the name of the app. 
-    // When generating the CRD and resource.Kind, the group will be appended with '.ext.grafana.com'
-    group: "myapp"
-    // apiResource tells the codegen that this is an API resource. 
-    // Optionally, one can specify additional options in this object.
-    // For non-API resource kinds, see later section.
-    apiResource: {}
 }
+
+// foov1 is the v1 version of the Foo kind.
+// It combines the kind metadata for Foo with version-specific information
+foov1: fooKind & {}
 ```
 
 > [!NOTE]  
-> When using `grafana-app-sdk project kind add`, `group` is automatically set to the plugin ID.
+> For a kind to be expressed by your app and work with the codegen, it must be a part of your app's [**Manifest**](../app-manifest.md).
+> When using `grafana-app-sdk project kind add`, the newly-created kind version is automatically added to your manifest 
+> (though additional versions for the kind will need to be added manually).
 
 ## Schemas
 
-To complete the kind, it needs a version and a schema for that version. These slot into the kind like so:
+To complete the kind, it needs a schema for its `v1` version:
 ```cue
-foo: {
-    // ... existing fields ...
-
-    // We have to specify the currentVersion, even if there's only one version
-    currentVersion: "v1"
-
-    // Collection of all versions for the kind, as a map of version string => version details
-    versions: {
-        // This is our "v1" version
-        "v1": {
-            // schema is the only required field for a version, and contains the schema for this version of the kind
-            schema: {
-                // ... schema goes here ...
-            }
-        }
-    }
+foov1: fooKind & {
+	schema: {
+		// TODO
+	}
 }
 ```
 
-What is the `schema`? It's the template for the data. If you're familiar with OpenAPI, the schema is rendered into a subset of OpenAPI when converted into a Custom Resource Definition for the kubernetes API server. In CUE, a schema follows the pattern of [a definition](https://cuelang.org/docs/tour/types/defs/), which declares field names and types. Something like:
+What is the `schema`? It's the template for the data. If you're familiar with OpenAPI, the schema is rendered into a subset of OpenAPI in your app manifest. In CUE, a schema follows the pattern of [a definition](https://cuelang.org/docs/tour/types/defs/), which declares field names and types. Something like:
 ```cue
 {
     field1: string
@@ -62,23 +54,15 @@ Is the format of a definition. The declarative style is similar to TypeScript, a
 }
 ```
 
-The `schema` of an API resource also has a few restrictions on it: there _MUST_ be a `spec` field (and this field _SHOULD_ be a struct type), and any other top-level field in the `schema` will be considered to be a subresource within the kubernetes API. At present, only `status` and `scale` are supported for Custom Resource Definitions (CRDs), so other subresource fields will not be supported in your CRD.
+The `schema` of an API resource also has a few restrictions on it: there _MUST_ be a `spec` field (and this field _SHOULD_ be a struct type), and any other top-level field in the `schema` will be considered to be a subresource. At present, only `status` and `scale` subresources are supported.
 
 With all that, let's complete our simple kind:
 ```cue
-foo: {
-    kind: "Foo"
-    group: "myapp"
-    apiResource: {}
-    currentVersion: "v1"
-    versions: {
-        "v1": {
-            schema: {
-                spec: {
-                    stringField: string
-                    intField: int64
-                }
-            }
+foov1: fooKind & {
+    schema: {
+        spec: {
+            stringField: string
+            intField: int64
         }
     }
 }
@@ -90,40 +74,63 @@ Our final CUE file looks like:
 ```cue
 package kinds
 
-foo: {
+fooKind: {
     kind: "Foo"
-    group: "myapp"
-    apiResource: {}
-    currentVersion: "v1"
-    versions: {
-        "v1": {
-            schema: {
-                spec: {
-                    stringField: string
-                    intField: int64
-                }
-            }
+}
+
+foov1: fooKind & {
+    schema: {
+        spec: {
+            stringField: string
+            intField: int64
         }
-    }
+	}
 }
 ```
 
+## Cluster scope and user-readable kinds
+
+Kinds are **namespaced** by default. Set `scope: "Cluster"` on the kind metadata when the resource should exist once per cluster (no namespace in the API path).
+
+Cluster-scoped kinds are normally not intended for users to access, so users are denied access to them unless you explicitly opt in.
+
+To allow users to **get** and **list** instances of a cluster-scoped kind (but not watch, mutate, or access subresources such as `/status` through this fast path), set **`userReadable: true`** alongside `scope: "Cluster"` in your CUE kind and in **App Manifest v1alpha2** (`userReadable` on the kind entry).
+
+Service identities are not limited by this gate; they continue through the normal resource authorizer (RBAC / access checks).
+
 ## Generating Code
 
-We now have a valid kind! If you save this as a CUE file (`.cue`) in your project (the default directory for parsing kinds is `./kinds`), you can now generate code and a CRD file for your kind. To do so, make sure you have the `grafana-app-sdk` CLI installed (you can download a binary for your distribution on the [releases](https://github.com/grafana/grafana-app-sdk/releases) page, build the binary from the repo with `make build`, or use `go install` with the cloned repo (there is a known issue with `replace` in the `go.mod` that prevents `go install` working from a remote source)). Now you can run
+We now have a valid kind! If you save this as a CUE file (`.cue`) in your project (the default directory for parsing kinds is `./kinds`), you can now generate code and a manifest for your kind.
+To do so, make sure you have the `grafana-app-sdk` CLI installed (you can download a binary for your distribution on the [releases](https://github.com/grafana/grafana-app-sdk/releases) page, build the binary from the repo with `make build`, or use `go install` with the cloned repo (there is a known issue with `replace` in the `go.mod` that prevents `go install` working from a remote source)). 
+Make sure your kind is added to your [**manifest**](../app-manifest.md). If you set up your project with `grafana-app-sdk project init`, you'll already have a `kind/manifest.cue` file, but if you don't, a simple manifest looks like this:
+```cue
+package kinds // Or the package you're using for your CUE
+
+manifest: {
+	appName: "my-app"
+	versions: {
+		"v1": {
+			kinds: [foov1] // This points to the kind `foov1` we defined in our file
+		}
+	}
+}
+```
+Now you can run
 ```shell
 grafana-app-sdk generate
 ```
 (if you saved your CUE file to a directory different than `./kinds`, add `-c <CUE directory>`)
 
-Generated code by default ends up in three different places (these directories can be customized with CLI flags, use `grafana-app-sdk generate --help` to display them):
-* `pkg/generated/resource/foo/v1`
-* `plugin/src/generated/foo/v1`
-* `definitions/`
+Generated code by default ends up in three different places (these paths can be customized via the manifest's `config` block):
+* `config.codegen.goGenPath` (for example `pkg/generated/foo/v1`)
+* `config.codegen.tsGenPath` (for example `plugin/src/generated/foo/v1`)
+* `config.definitions.path` (for example `definitions/`)
 
-### `pkg/generated/resource`
+Within `config.definitions.path`, the app manifest is named `<appName>-manifest.<encoding>` unless `config.definitions.manifestFileName` overrides it. That override is only valid when a single manifest is generated (see `config.manifestSelectors`).
 
-All generated go code ends up in `pkg/generated/resource/<kind name>/<kind version>`. For each kind, there are at least six files that are generated (at least six, because each subresource generates its own go file):
+### `pkg/generated`
+
+All generated go code ends up in `pkg/generated/<kind name>/<kind version>`. For each kind, there are at least six files that are generated (at least six, because each subresource generates its own go file):
 * `foo_codec_gen.go` contains information for the kind to use to encode/decode the go type
 * `foo_metadata_gen.go` is a file that exists for legacy support, and will be eventually removed from codegen
 * `foo_object_gen.go` is a file that contains the `Foo` type, which implements `resource.Object`. For more information on `resource.Object`, see [Using Kinds](./using-kinds.md) or [Resource Objects](../resource-objects.md)
@@ -138,7 +145,7 @@ To use this generated code in your project, see [Using Kinds](./using-kinds.md),
 ### `plugin/src/generated`
 
 All generated TypeScript code ends up in `plugin/src/generated/<kind name>/<kind version>`. For each kind, there are at least three files that are generated (at least three, because each subresource generates its own TypeScript file):
-* `foo_object_gen.ts` contains the `Foo` interface, which is compatible with the kubernetes API server definition of the `Foo` kind for that version. 
+* `foo_object_gen.ts` contains the `Foo` interface, which matches the API representation of the `Foo` kind for that version. 
 * `types.spec.gen.ts` contains the `Spec` interface, defined by our CUE `spec` field
 * `types.status.gen.ts` contains the `Status` interface, defined by our CUE `status` field
 
@@ -146,54 +153,74 @@ Additional `types.x.gen.ts` files will be generated for each subresource in your
 
 ### `definitions`
 
-The `definitions` directory holds a JSON (or YAML, depending on CLI flags) Custom Resource Definition (CRD) file for each of your kinds. These files can be applied to a kubernetes API server to generate CRDs for your kinds, which you can then use the other generated code to interface with. For more about CRDs see [Kubernetes Concepts](../kubernetes.md).
+The `definitions` directory holds the generated JSON (or YAML, depending on your configuration) **[manifest](../app-manifest.md)** for your app, which is used to register your app and its kinds with the platform. 
+It also contains a Custom Resource Definition (CRD) file for each of your kinds, which the [local development environment](../local-development.md) uses.
 
-### Toggling Frontend/Backend Codegen
+### Toggling TypeScript/Go Codegen
 
-You can turn on or off code generation for front-end (TypeScript) and/or back-end (go) using the `codegen` property in your kind or version(s) in your CUE kind. The `codegen` field by default looks like:
+You can turn on or off code generation for front-end (TypeScript) and/or back-end (go) using the `codegen` property in your kind or version(s) in your CUE kind.
+
+> [!NOTE]
+> This is a per-kind (or per-version) toggle. To disable go code generation for the entire project, set `config.codegen.goEnabled` to `false` instead — see [Code Generation](../code-generation.md). That project-wide switch also removes the need for a `go.mod` and the `go` binary.
+
+The `codegen` field by default looks like:
 ```cue
 codegen: {
-    frontend: true
-    backend: true
+    ts: {
+    	enabled: true
+    }
+    go: {
+    	enabled: true
+    }
 }
 ```
-And can be overwritten at either the kind level, or the version level (version level will take precedence over the kind level declaration). For example, if we wanted to turn off front-end code from being generated for our kind, but keep it on for version `v2`, we could write a kind like this:
+And can be overwritten at either the kind level, or the version level. For example, if we wanted to turn off front-end code from being generated for `v1` of our kind, but keep it on for version `v2`, we could write a kind like this:
 ```cue
-myKind: {
-    kind: "MyKind"
-    group: "mygroup"
-    current: "v2"
-    apiResource: {}
-    codegen: {
-        frontend: false // Turn off front-end codegen for this kind
-    }
-    versions: {
-        "v1": {
-            schema: {
-                spec: {
-                    foo: string
-                }
-            }
-        }
-        "v2": {
-            schema: {
-                spec: {
-                    foo: string
-                    bar: int64
-                }
-            }
-            codegen: frontend: true // Turn on front-end codegen for this version
+fooKind: {
+    kind: "Foo"
+}
+
+foov1: fooKind & {
+    schema: {
+        spec: {
+            foo: string
         }
     }
+    codegen: ts: enabled: false // Turn on front-end codegen for this version
+}
+
+foov2: fooKind & {
+    schema: {
+        spec: {
+            foo: string
+            bar: int64
+        }
+    }
+    codegen: ts: enabled: true // Turn on front-end codegen for this version. This defaults to `true`, so we can also leave this out
 }
 ```
-(Here we also introduce a convience of CUE: nested struct fields in one line using the `:` separator. We also have a second entry in `versions` in our kind, for more details on multiple versions in a kind see [Managing Multiple Kind Versions](./managing-multiple-versions.md))
+(Here we also introduce a convenience of CUE: nested struct fields in one line using the `:` separator. We also have a second entry in `versions` in our kind, for more details on multiple versions in a kind see [Managing Multiple Kind Versions](./managing-multiple-versions.md))
+
+Keep in mind you would also need to add `foov2` to your manifest, like so:
+```cue
+manifest: {
+	appName: "my-app"
+	versions: {
+		"v1": {
+			kinds: [foov1] 
+		}
+		"v2": {
+			kinds: [foov2] 
+		}
+	}
+}
+```
 
 ## Complex Schemas
 
 ### Optional Fields
 
-To mark a field as optional, like in TypeScript, we use a `?` before the `:`. This results in it not being listed as `required` in the OpenAPI specification used for the CRD, and the field type in go uses a pointer. For example:
+To mark a field as optional, like in TypeScript, we use a `?` before the `:`. This results in it not being listed as `required` in the generated OpenAPI schema, and the field type in go uses a pointer. For example:
 ```cue
 {
     foo?: string
@@ -265,18 +292,14 @@ package kinds
 
 import "time"
 
-foo: {
+fooKind: {
     kind: "Foo"
-    group: "myapp"
-    apiResource: {}
-    currentVersion: "v1"
-    versions: {
-        "v1": {
-            schema: {
-                spec: {
-                    timeField: string & time.Time
-                }
-            }
+}
+
+foov1: fooKind & {
+    schema: {
+        spec: {
+            timeField: string & time.Time
         }
     }
 }
@@ -284,47 +307,32 @@ foo: {
 
 ### Constraints
 
-[Bounds](https://cuelang.org/docs/tour/types/bounds/) can be added to your types, such as numerical bounds, or non-nil checks. These will only apply to the generated OpenAPI spec for your CRD, and will not be checked in your go or TypeScript types themselves (or in the generated Codecs). As such, the validation of the bounds is only checked on admission by the kubernetes API (via the apiextensions server that manages CRDs).
+[Bounds](https://cuelang.org/docs/tour/types/bounds/) can be added to your types, such as numerical bounds, or non-nil checks. These will only apply to the generated OpenAPI schema for your kind, and will not be checked in your go or TypeScript types themselves (or in the generated Codecs). As such, the bounds are only checked by the platform when a resource is created or updated.
 
-You can define further, more complex validation and admission control via your operator using admission webhooks, see [Admission Control](../admission-control.md).
+You can define further, more complex validation and mutation in your app, see [Admission Control](../admission-control.md).
 
 ### Custom columns when using `kubectl`. aka `additionalPrinterColumns`
 
-The `kind` format allows for configuring the `additionalPrinterColumns` parameter on a [CRD](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#additional-printer-columns). The format is the same as a CRD, and you add this config as part of "version", next to the `schema`:
+You can configure extra columns shown by `kubectl get` with `additionalPrinterColumns` (the format matches [kubernetes `additionalPrinterColumns`](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#additional-printer-columns)). Add this config as part of the version, next to the `schema`:
 
 ```cue
-myKind: {
-    kind: "MyKind"
-    group: "mygroup"
-    current: "v1"
-[...]
-    versions: {
-        "v1": {
-            schema: {
-                spec: {
-                    foo: string
-                }
-            }
-            additionalPrinterColumns: [
-              {
-                name: "FOO"
-                type: "string"
-                jsonPath: ".spec.foo"
-              }
-            ]
-        }
-    }
+foov1: fooKind & {
+	schema: {
+		spec: {
+			foo: string
+		}
+	}
+	additionalPrinterColumns: [{
+		name: "FOO"
+		type: "string"
+		jsonPath: ".spec.foo"
+	}]
 }
-
 ```
 
 ### Examples
 
 Example complex schemas used for codegen testing can be found in the [cuekind codegen testing directory](../../codegen/cuekind/testing/).
-
-## Non-API Resource Kinds
-
-If you wish to use the kind codegen tooling for non-API Server resources, you can do so, with fewer restrictions on your schema. **Non-API Resource Kinds cannot be used with an API Server or with an operator**, but can sometimes be useful as contract guarantees between front-end and back-end, as the go and TypeScript are generated from the same source. For nearly all purposes where you would write a kind, you would want to use an API Resource Kind as described in previous sections. However, to create a non-API Resource Kind, you simply need to omit the `apiResource` field in your kind. By doing so, the `schema` for each of your versions no longer has the restriciton of needing a `spec` and other subresources. The generated go code will not include anything aside from the kind (no `resource.Object` implementation, `resource.Kind`, or `Codec`).
 
 ## Recommended Reading
 

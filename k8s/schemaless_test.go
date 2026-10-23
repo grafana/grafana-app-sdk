@@ -11,8 +11,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -67,9 +69,9 @@ func TestSchemalessClient_Get(t *testing.T) {
 		err := client.Get(ctx, id2, &into)
 		assert.Equal(t, resource.TypedSpecObject[any]{}, into)
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success, id1", func(t *testing.T) {
@@ -142,9 +144,9 @@ func TestSchemalessClient_Create(t *testing.T) {
 
 		err := client.Create(ctx, id, getTestObject(), resource.CreateOptions{}, &resource.TypedSpecObject[any]{})
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -209,9 +211,9 @@ func TestSchemalessClient_Update(t *testing.T) {
 
 		err := client.Update(ctx, id, getTestObject(), resource.UpdateOptions{}, getTestObject())
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success, explicit RV", func(t *testing.T) {
@@ -316,11 +318,11 @@ func TestSchemalessClient_Delete(t *testing.T) {
 			writer.WriteHeader(http.StatusBadRequest)
 		}
 
-		err := client.Delete(ctx, id)
+		err := client.Delete(ctx, id, resource.DeleteOptions{})
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -331,7 +333,54 @@ func TestSchemalessClient_Delete(t *testing.T) {
 			assert.Equal(t, fmt.Sprintf("/namespaces/%s/%s/%s", id.Namespace, fmt.Sprintf("%ss", id.Kind), id.Name), r.URL.Path)
 		}
 
-		err := client.Delete(ctx, id)
+		err := client.Delete(ctx, id, resource.DeleteOptions{})
+		assert.Nil(t, err)
+	})
+
+	t.Run("propagationPolicy", func(t *testing.T) {
+		server.responseFunc = func(writer http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method)
+			writer.Write(responseBytes)
+			writer.WriteHeader(http.StatusOK)
+			assert.Equal(t, fmt.Sprintf("/namespaces/%s/%s/%s", id.Namespace, fmt.Sprintf("%ss", id.Kind), id.Name), r.URL.Path)
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			opts := metav1.DeleteOptions{}
+			require.NoError(t, json.Unmarshal(body, &opts))
+			assert.Equal(t, "DeleteOptions", opts.Kind)
+			assert.Equal(t, "meta.k8s.io/v1", opts.APIVersion)
+			assert.Equal(t, metav1.DeletePropagationForeground, *opts.PropagationPolicy)
+		}
+
+		err := client.Delete(ctx, id, resource.DeleteOptions{
+			PropagationPolicy: resource.DeleteOptionsPropagationPolicyForeground,
+		})
+		assert.Nil(t, err)
+	})
+
+	t.Run("preconditions", func(t *testing.T) {
+		server.responseFunc = func(writer http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method)
+			writer.Write(responseBytes)
+			writer.WriteHeader(http.StatusOK)
+			assert.Equal(t, fmt.Sprintf("/namespaces/%s/%s/%s", id.Namespace, fmt.Sprintf("%ss", id.Kind), id.Name), r.URL.Path)
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			opts := metav1.DeleteOptions{}
+			require.NoError(t, json.Unmarshal(body, &opts))
+			assert.Equal(t, "DeleteOptions", opts.Kind)
+			assert.Equal(t, "meta.k8s.io/v1", opts.APIVersion)
+			assert.NotNil(t, opts.Preconditions)
+			assert.Equal(t, "123", *opts.Preconditions.ResourceVersion)
+			assert.Equal(t, types.UID("abc"), *opts.Preconditions.UID)
+		}
+
+		err := client.Delete(ctx, id, resource.DeleteOptions{
+			Preconditions: resource.DeleteOptionsPreconditions{
+				ResourceVersion: "123",
+				UID:             "abc",
+			},
+		})
 		assert.Nil(t, err)
 	})
 }
@@ -367,9 +416,9 @@ func TestSchemalessClient_List(t *testing.T) {
 		into := resource.TypedList[*resource.TypedSpecObject[testSpec]]{}
 		err := client.List(ctx, id, resource.ListOptions{}, &into, &resource.TypedSpecObject[testSpec]{})
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success, no options", func(t *testing.T) {

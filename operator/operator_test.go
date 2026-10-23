@@ -1,20 +1,26 @@
 package operator
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/goleak"
 )
 
-type mockController struct {
-	RunFunc func(<-chan struct{}) error
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 }
 
-func (m *mockController) Run(ch <-chan struct{}) error {
+type mockController struct {
+	RunFunc func(ctx context.Context) error
+}
+
+func (m *mockController) Run(ctx context.Context) error {
 	if m.RunFunc != nil {
-		return m.RunFunc(ch)
+		return m.RunFunc(ctx)
 	}
 	return nil
 }
@@ -32,49 +38,67 @@ func TestOperator_AddController(t *testing.T) {
 }
 
 func TestOperator_Run(t *testing.T) {
+	var expectedErr = errors.New("I AM ERROR")
+
 	t.Run("controller run error propagates up", func(t *testing.T) {
 		done := make(chan struct{}, 1)
 		o := New()
 		o.AddController(&mockController{
-			RunFunc: func(i <-chan struct{}) error {
-				<-i
+			RunFunc: func(ctx context.Context) error {
+				<-ctx.Done()
 				close(done)
 				return nil
 			},
 		})
 		o.AddController(&mockController{
-			RunFunc: func(<-chan struct{}) error {
+			RunFunc: func(_ context.Context) error {
 				time.Sleep(time.Second)
-				return errors.New("I AM ERROR")
+				return expectedErr
 			},
 		})
 
-		stopCh := make(chan struct{}, 1)
+		ctx := t.Context()
 
-		err := o.Run(stopCh)
-		assert.Equal(t, errors.New("I AM ERROR"), err)
+		err := o.Run(ctx)
+		assert.Equal(t, expectedErr, err)
 		_, open := <-done
 		assert.False(t, open)
+	})
+
+	t.Run("two failing controllers don't leak goroutines", func(t *testing.T) {
+		o := New()
+		o.AddController(&mockController{
+			RunFunc: func(ctx context.Context) error {
+				return expectedErr
+			},
+		})
+		o.AddController(&mockController{
+			RunFunc: func(_ context.Context) error {
+				return expectedErr
+			},
+		})
+
+		ctx := t.Context()
+
+		err := o.Run(ctx)
+		assert.Equal(t, expectedErr, err)
 	})
 
 	t.Run("stopping operator stops controllers", func(t *testing.T) {
 		done := make(chan struct{}, 1)
 		o := New()
 		o.AddController(&mockController{
-			RunFunc: func(i <-chan struct{}) error {
-				<-i
+			RunFunc: func(ctx context.Context) error {
+				<-ctx.Done()
 				close(done)
 				return nil
 			},
 		})
 
-		stopCh := make(chan struct{}, 1)
-		go func() {
-			time.Sleep(time.Second)
-			close(stopCh)
-		}()
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
 
-		err := o.Run(stopCh)
+		err := o.Run(ctx)
 		assert.Nil(t, err)
 		_, open := <-done
 		assert.False(t, open)

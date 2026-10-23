@@ -22,7 +22,7 @@ def decode(yaml):
     if r == None:
       continue
 
-    n = '%s:%s' % (name(r), r['kind'])
+    n = '%s:%s:%s' % (name(r), r['kind'], namespace(r))
     if n in names:
       continue
 
@@ -67,7 +67,8 @@ k8s_yaml(bundle)
 
 # Group CRD's together
 crds = [r for r in yaml_objects if (r['kind'] == 'CustomResourceDefinition')]
-k8s_resource(new_name='CustomResourceDefinitions', objects=[('%s' % name(r)) for r in yaml_objects if (r['kind'] == 'CustomResourceDefinition')], resource_deps=['uncategorized'])
+if len(crds) > 0:
+  k8s_resource(new_name='CustomResourceDefinitions', objects=[('%s' % name(r)) for r in yaml_objects if (r['kind'] == 'CustomResourceDefinition')], resource_deps=['uncategorized'])
 
 # Make webhooks dependent on all services starting
 services = [('%s' % name(r)) for r in yaml_objects if r['kind'] == 'Service']

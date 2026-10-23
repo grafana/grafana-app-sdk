@@ -46,7 +46,7 @@ func main() {
 
     // Create the operator config and the runner
     operatorConfig := operator.RunnerConfig{
-        KubeConfig: kubeConfig.RestConfig,
+        KubeConfig: *kubeConfig,
         WebhookConfig: operator.RunnerWebhookConfig{
             Port: cfg.WebhookServer.Port,
             TLSConfig: k8s.TLSConfig{

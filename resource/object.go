@@ -1,6 +1,7 @@
 package resource
 
 import (
+	"errors"
 	"reflect"
 	"time"
 
@@ -149,16 +150,179 @@ type CommonMetadata struct {
 //	    return resource.CopyObject(c)
 //	}
 func CopyObject(in any) Object {
+	if in == nil {
+		return nil
+	}
+
 	val := reflect.ValueOf(in).Elem()
 
-	cpy := reflect.New(val.Type())
-	cpy.Elem().Set(val)
+	cpy := reflect.New(val.Type()).Interface()
+
+	err := CopyObjectInto(cpy, in)
+	if err != nil {
+		return nil
+	}
 
 	// Using the <obj>, <ok> for the type conversion ensures that it doesn't panic if it can't be converted
-	if obj, ok := cpy.Interface().(Object); ok {
+	if obj, ok := cpy.(Object); ok {
 		return obj
 	}
 
 	// TODO: better return than nil?
+	return nil
+}
+
+// CopyObjectInto performs a deep copy of in to out using reflection. in and out must both be pointers to a struct.
+// If a copy cannot be performed, an error is returned.
+func CopyObjectInto[T any](out T, in T) error {
+	srcVal := reflect.ValueOf(in)
+	dstVal := reflect.ValueOf(out)
+	srcType := reflect.TypeOf(in)
+	dstType := reflect.TypeOf(out)
+	// T must be a pointer to a struct
+	if dstType.Kind() != reflect.Pointer {
+		return errors.New("out must be a pointer to a struct")
+	}
+	// srcType.NumField() panics on a nil type
+	if srcType.Kind() == reflect.Pointer && srcVal.IsNil() {
+		return errors.New("in must not be nil")
+	}
+	// Trying to set values on a nil panics
+	if dstVal.IsNil() {
+		return errors.New("out must not be nil")
+	}
+	// Before we can work with in and out, we actually need the values the T pointers are referencing
+	for dstType.Kind() == reflect.Pointer {
+		dstType = dstType.Elem()
+		dstVal = dstVal.Elem()
+	}
+	for srcType.Kind() == reflect.Pointer {
+		srcType = srcType.Elem()
+		srcVal = srcVal.Elem()
+	}
+
+	// For each field, deep copy the value into dstVal
+	for i := 0; i < srcType.NumField(); i++ {
+		srcFieldValue := srcVal.Field(i)
+		dstFieldValue := dstVal.Field(i)
+		if err := copyReflectValueInto(dstFieldValue, srcFieldValue); err != nil {
+			if errors.Is(err, errCannotSetValue) {
+				// Can't set the field, ignore
+				continue
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+var errCannotSetValue = errors.New("cannot set value")
+var reflectTypeTime = reflect.TypeFor[time.Time]()
+
+// nolint:gocognit,gocritic,funlen
+func copyReflectValueInto(dst reflect.Value, src reflect.Value) error {
+	// Check if we can set the value (Set panics if this is false)
+	if !dst.CanSet() {
+		return errCannotSetValue
+	}
+
+	switch src.Type().Kind() {
+	case reflect.Pointer:
+		// If the pointer is nil, just make a new one for the copy
+		if src.IsNil() {
+			if !dst.IsNil() {
+				dst.Set(reflect.Zero(src.Type()))
+			}
+			return nil
+		}
+		// find the type of the pointer, then copy that
+		typ := src.Type().Elem()
+		switch src.Type().Elem().Kind() { //nolint:revive
+		case reflect.Struct:
+			if src.Elem().Type() == reflectTypeTime {
+				dst.Set(src)
+				return nil
+			}
+			dstPtr := reflect.New(typ).Interface()
+			err := CopyObjectInto(dstPtr, src.Interface())
+			if err != nil {
+				return err
+			}
+			dst.Set(reflect.ValueOf(dstPtr))
+		case reflect.Slice:
+			if dst.IsNil() {
+				dst.Set(reflect.New(typ))
+			}
+			return copyReflectValueInto(dst.Elem(), src.Elem())
+		case reflect.Map:
+			if dst.IsNil() {
+				dst.Set(reflect.New(typ))
+			}
+			return copyReflectValueInto(dst.Elem(), src.Elem())
+		default:
+			ptrCopy := reflect.New(src.Type().Elem()) // new pointer of the same _value type_ as src
+			ptrCopy.Elem().Set(src.Elem())            // copy the value src is pointing to
+			dst.Set(ptrCopy)
+		}
+	case reflect.Struct:
+		// Special case for time.Time:
+		if src.Type() == reflectTypeTime {
+			dst.Set(src)
+			return nil
+		}
+		// Recursively copy the struct
+		dstStruct := reflect.New(dst.Type()).Interface()
+		err := CopyObjectInto(dstStruct, src.Interface())
+		if err != nil {
+			return err
+		}
+		dst.Set(reflect.ValueOf(dstStruct).Elem())
+	case reflect.Map:
+		if src.IsNil() {
+			if !dst.IsNil() {
+				dst.Set(reflect.New(src.Type()).Elem())
+			}
+			return nil
+		}
+		dstMap := reflect.MakeMap(src.Type())
+		for _, key := range src.MapKeys() {
+			srcKeyVal := src.MapIndex(key)
+			dstKeyVal := reflect.New(srcKeyVal.Type()).Elem()
+			if err := copyReflectValueInto(dstKeyVal, srcKeyVal); err != nil {
+				return err
+			}
+			dstMap.SetMapIndex(key, dstKeyVal)
+		}
+		dst.Set(dstMap)
+	case reflect.Slice:
+		if src.IsNil() {
+			if !dst.IsNil() {
+				dst.Set(reflect.New(src.Type()).Elem())
+			}
+			return nil
+		}
+		// Copy each element recursively: a new slice alone still shares nested maps, slices, and pointers.
+		dstSlice := reflect.MakeSlice(src.Type(), src.Len(), src.Cap())
+		for i := 0; i < src.Len(); i++ {
+			if err := copyReflectValueInto(dstSlice.Index(i), src.Index(i)); err != nil {
+				return err
+			}
+		}
+		dst.Set(dstSlice)
+	case reflect.Interface:
+		if src.IsNil() {
+			dst.SetZero()
+			return nil
+		}
+		dstValue := reflect.New(src.Elem().Type()).Elem()
+		if err := copyReflectValueInto(dstValue, src.Elem()); err != nil {
+			return err
+		}
+		dst.Set(dstValue)
+	default:
+		// Just copy the value over
+		dst.Set(src)
+	}
 	return nil
 }

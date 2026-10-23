@@ -2,6 +2,12 @@ package resource
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"net/url"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 const NamespaceAll = ""
@@ -15,17 +21,19 @@ type Identifier struct {
 // FullIdentifier is a globally-unique identifier, consisting of Schema identity information
 // (Group, Version, Kind, Plural) and within-schema identity information (Namespace, Name)
 type FullIdentifier struct {
-	Namespace string
-	Name      string
-	Group     string
-	Version   string
-	Kind      string
-	Plural    string
+	Namespace string `json:"namespace,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Group     string `json:"group,omitempty"`
+	Version   string `json:"version,omitempty"`
+	Kind      string `json:"kind,omitempty"`
+	Plural    string `json:"plural,omitempty"`
 }
 
 // CreateOptions are the options passed to a Client.Create call
 type CreateOptions struct {
-	// TODO: nothing at-present
+	// DryRun will perform a server-side dry-run of the request, if set to true.
+	// The server will return the object that would be created, but will not actually create it.
+	DryRun bool
 }
 
 // UpdateOptions are the options passed to a Client.Update call
@@ -37,6 +45,9 @@ type UpdateOptions struct {
 	// Subresource can be set to a non-empty subresource field name to update that subresource,
 	// instead of the main object
 	Subresource string
+	// DryRun will perform a server-side dry-run of the request, if set to true.
+	// The server will return the object that would be created, but will not actually create it.
+	DryRun bool
 }
 
 // ListOptions are the options passed to a Client.List call
@@ -85,7 +96,40 @@ type PatchOperation struct {
 
 // PatchOptions are the options passed to a Client.Patch call
 type PatchOptions struct {
-	// TODO: nothing at-present
+	// DryRun will perform a server-side dry-run of the request, if set to true.
+	// The server will return the result of the patch, but will not actually apply it.
+	DryRun bool
+	// Subresource can be set to a non-empty subresource field name to update that subresource,
+	// instead of the main object. It is not enough for a path in the patch request to use the subresource,
+	// this field must also be set to the subresource explicitly, as they are considered
+	// two distinct obejects for the purposes of mutation.
+	// If the subresource has not been set in any prior request, it will be empty,
+	// and a patch request should set the **entire object** (with the "/<subresource>" path),
+	// rather than a component of the subresource, as a JSON patch cannot alter an absent object.
+	Subresource string
+}
+
+type DeleteOptionsPropagationPolicy string
+
+const (
+	DeleteOptionsPropagationPolicyOrphan     DeleteOptionsPropagationPolicy = "Orphan"
+	DeleteOptionsPropagationPolicyBackground DeleteOptionsPropagationPolicy = "Background"
+	DeleteOptionsPropagationPolicyForeground DeleteOptionsPropagationPolicy = "Foreground"
+	DeleteOptionsPropagationPolicyDefault    DeleteOptionsPropagationPolicy = ""
+)
+
+// DeleteOptions are the options passed to a Client.Delete call
+type DeleteOptions struct {
+	// Preconditions describes any conditions that must be true for the delete request to be processed
+	Preconditions     DeleteOptionsPreconditions
+	PropagationPolicy DeleteOptionsPropagationPolicy
+}
+
+type DeleteOptionsPreconditions struct {
+	// ResourceVersion, if supplied, requires that the existing ResourceVersion in the API server must match for the delete request to be processed
+	ResourceVersion string
+	// UID, if supplied, requires that the existing UID in the API server must match for the delete request to be processed
+	UID string
 }
 
 // WatchOptions are the options passed to a Client.Watch call
@@ -101,7 +145,11 @@ type WatchOptions struct {
 	// LabelFilters are a set of label filter strings applied to watched resources
 	LabelFilters []string
 	// FieldSelectors are a set of field selector strings applied to watched resources
-	FieldSelectors []string
+	FieldSelectors      []string
+	AllowWatchBookmarks bool
+	TimeoutSeconds      *int64
+	// SendInitialEvents is used by streaming ListWatch
+	SendInitialEvents *bool
 }
 
 // WatchResponse is an interface describing the response to a Client.Watch call
@@ -118,6 +166,20 @@ type WatchEvent struct {
 	EventType string
 	// Object is the affected object
 	Object Object
+}
+
+// CustomRouteRequestOptions contains the options for a custom route request
+type CustomRouteRequestOptions struct {
+	// Path is the path of the custom route, from the base of the resource or namespace/api version
+	Path string
+	// Verb is the HTTP verb to use for the request
+	Verb string
+	// Body is the request body to supply. If nil, no body will be supplied in the request
+	Body io.ReadCloser
+	// Query is a set of UTL query parameters to supply in the request
+	Query url.Values
+	// Headers is the set of headers to pass in the request, in addition to any headers set by the client
+	Headers http.Header
 }
 
 // Client is any object which interfaces with schema Objects.
@@ -152,7 +214,7 @@ type Client interface {
 	PatchInto(ctx context.Context, identifier Identifier, patch PatchRequest, options PatchOptions, into Object) error
 
 	// Delete deletes an exiting resource
-	Delete(ctx context.Context, identifier Identifier) error
+	Delete(ctx context.Context, identifier Identifier, options DeleteOptions) error
 
 	// List lists objects based on the options criteria.
 	// For resources with a schema.Scope() of ClusterScope, `namespace` must be resource.NamespaceAll
@@ -164,6 +226,10 @@ type Client interface {
 
 	// Watch makes a watch request to the provided namespace, and returns an object which implements WatchResponse
 	Watch(ctx context.Context, namespace string, options WatchOptions) (WatchResponse, error)
+
+	// SubresourceRequest makes a request to a resource's subresource path using the provided verb.
+	// It returns the raw bytes of the response, or an error if the request returns an error.
+	SubresourceRequest(ctx context.Context, identifier Identifier, req CustomRouteRequestOptions) ([]byte, error)
 }
 
 // SchemalessClient is a Schema-agnostic version of the Client interface.
@@ -186,12 +252,12 @@ type SchemalessClient interface {
 	Patch(ctx context.Context, identifier FullIdentifier, path PatchRequest, options PatchOptions, into Object) error
 
 	// Delete deletes a resource identified by identifier
-	Delete(ctx context.Context, identifier FullIdentifier) error
+	Delete(ctx context.Context, identifier FullIdentifier, options DeleteOptions) error
 
 	// List lists all resources that satisfy identifier, ignoring `Name`. The response is marshaled into `into`.
 	// `exampleListItem` must be provided for proper type unmarshaling, and should be the same kind of object
 	// that would be passed to a Get call for `into`
-	List(ctx context.Context, identifier FullIdentifier, into ListObject, exampleListItem Object) error
+	List(ctx context.Context, identifier FullIdentifier, options ListOptions, into ListObject, exampleListItem Object) error
 
 	// Watch watches all resources that satisfy the identifier, ignoring `Name`.
 	// The WatchResponse's WatchEvent Objects are created by unmarshaling into an object created by calling
@@ -199,9 +265,32 @@ type SchemalessClient interface {
 	Watch(ctx context.Context, identifier FullIdentifier, options WatchOptions, example Object) (WatchResponse, error)
 }
 
+// CustomRouteClient is an interface for making requests to custom routes that are not covered by the standard CRUD operations of Client.
+type CustomRouteClient interface {
+	// NamespacedRequest makes a request to a namespaced custom route, using the provided verb and body, and returns the raw bytes of the response
+	NamespacedRequest(ctx context.Context, namespace string, opts CustomRouteRequestOptions) ([]byte, error)
+	// ClusteredRequest makes a request to a clustered custom route, using the provided verb and body, and returns the raw bytes of the response
+	ClusteredRequest(ctx context.Context, opts CustomRouteRequestOptions) ([]byte, error)
+}
+
 // ClientGenerator is used for creating clients to interface with given schemas
 type ClientGenerator interface {
 	// ClientFor returns a Client for the provided Schema. This returned Client is not guaranteed to be unique,
 	// and can be shared by other ClientFor calls.
 	ClientFor(Kind) (Client, error)
+	// GetCustomRouteClient returns a Client for the provided GroupVersion. This returned Client is not guaranteed to be unique,
+	// and can be shared by other ClientForGV calls.
+	GetCustomRouteClient(schema.GroupVersion, string) (CustomRouteClient, error)
+	// DiscoveryClient returns a DiscoveryClient that can be used to inspect API groups exposed by the
+	// underlying API server. Implementations may keep per-group clients internally to handle
+	// setups where different groups are routed to different hosts.
+	DiscoveryClient() (DiscoveryClient, error)
+}
+
+// DiscoveryClient inspects the API groups and resources exposed by the underlying API server.
+type DiscoveryClient interface {
+	// PreferredVersion returns the APIResourceList for the preferred version of the given API group.
+	// The returned list's GroupVersion is the preferred GroupVersion; each APIResource entry's
+	// Group and Version fields are also populated with that same GroupVersion for caller convenience.
+	PreferredVersion(apiGroup string) (*metav1.APIResourceList, error)
 }

@@ -3,6 +3,7 @@ package k8s
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -14,6 +15,10 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
+)
+
+var (
+	_ resource.SchemalessClient = &SchemalessClient{}
 )
 
 // SchemalessClient implements resource.SchemalessClient and allows for working with Schemas as kubernetes
@@ -37,6 +42,8 @@ type SchemalessClient struct {
 	// prometheus collectors for the client
 	requestDurations *prometheus.HistogramVec
 	totalRequests    *prometheus.CounterVec
+	watchEventsTotal *prometheus.CounterVec
+	watchErrorsTotal *prometheus.CounterVec
 }
 
 // NewSchemalessClient creates a new SchemalessClient using the provided rest.Config and ClientConfig.
@@ -68,6 +75,18 @@ func NewSchemalessClientWithCodec(kubeConfig rest.Config, clientConfig ClientCon
 			Namespace: clientConfig.MetricsConfig.Namespace,
 			Help:      "Total number of kubernetes requests",
 		}, []string{"status_code", "verb", "kind", "subresource"}),
+		watchEventsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name:      "watch_events_total",
+			Subsystem: "kubernetes_client",
+			Namespace: clientConfig.MetricsConfig.Namespace,
+			Help:      "Total number of watch events received by type",
+		}, []string{"event_type", "kind"}),
+		watchErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name:      "watch_errors_total",
+			Subsystem: "kubernetes_client",
+			Namespace: clientConfig.MetricsConfig.Namespace,
+			Help:      "Total number of watch event parsing/translation errors",
+		}, []string{"error_type", "kind"}),
 	}
 }
 
@@ -77,7 +96,7 @@ func NewSchemalessClientWithCodec(kubeConfig rest.Config, clientConfig ClientCon
 // The returned resource is marshaled into `into`.
 func (s *SchemalessClient) Get(ctx context.Context, identifier resource.FullIdentifier, into resource.Object) error {
 	if into == nil {
-		return fmt.Errorf("into cannot be nil")
+		return errors.New("into cannot be nil")
 	}
 	client, err := s.getClient(identifier)
 	if err != nil {
@@ -90,38 +109,39 @@ func (s *SchemalessClient) Get(ctx context.Context, identifier resource.FullIden
 }
 
 // Create creates a new resource, and marshals the storage response (the created object) into the `into` field.
-func (s *SchemalessClient) Create(ctx context.Context, identifier resource.FullIdentifier, obj resource.Object,
-	_ resource.CreateOptions, into resource.Object) error {
+func (s *SchemalessClient) Create(
+	ctx context.Context, id resource.FullIdentifier, obj resource.Object, opt resource.CreateOptions, out resource.Object,
+) error {
 	if obj == nil {
-		return fmt.Errorf("obj cannot be nil")
+		return errors.New("obj cannot be nil")
 	}
-	if into == nil {
-		return fmt.Errorf("into cannot be nil")
+	if out == nil {
+		return errors.New("into cannot be nil")
 	}
-	client, err := s.getClient(identifier)
+	client, err := s.getClient(id)
 	if err != nil {
 		return err
 	}
 
 	obj.SetStaticMetadata(resource.StaticMetadata{
-		Namespace: identifier.Namespace,
-		Name:      identifier.Name,
-		Group:     identifier.Group,
-		Version:   identifier.Version,
-		Kind:      identifier.Kind,
+		Namespace: id.Namespace,
+		Name:      id.Name,
+		Group:     id.Group,
+		Version:   id.Version,
+		Kind:      id.Kind,
 	})
 
-	return client.create(ctx, s.getPlural(identifier), obj, into, s.codec)
+	return client.create(ctx, s.getPlural(id), obj, out, opt, s.codec)
 }
 
 // Update updates an existing resource, and marshals the updated version into the `into` field
 func (s *SchemalessClient) Update(ctx context.Context, identifier resource.FullIdentifier, obj resource.Object,
 	options resource.UpdateOptions, into resource.Object) error {
 	if obj == nil {
-		return fmt.Errorf("obj cannot be nil")
+		return errors.New("obj cannot be nil")
 	}
 	if into == nil {
-		return fmt.Errorf("into cannot be nil")
+		return errors.New("into cannot be nil")
 	}
 	client, err := s.getClient(identifier)
 	if err != nil {
@@ -170,7 +190,7 @@ func (s *SchemalessClient) Patch(ctx context.Context, identifier resource.FullId
 }
 
 // Delete deletes a resource identified by identifier
-func (s *SchemalessClient) Delete(ctx context.Context, identifier resource.FullIdentifier) error {
+func (s *SchemalessClient) Delete(ctx context.Context, identifier resource.FullIdentifier, options resource.DeleteOptions) error {
 	client, err := s.getClient(identifier)
 	if err != nil {
 		return err
@@ -179,14 +199,14 @@ func (s *SchemalessClient) Delete(ctx context.Context, identifier resource.FullI
 	return client.delete(ctx, resource.Identifier{
 		Namespace: identifier.Namespace,
 		Name:      identifier.Name,
-	}, s.getPlural(identifier))
+	}, s.getPlural(identifier), options)
 }
 
 // List lists all resources that satisfy identifier, ignoring `Name`. The response is marshaled into `into`
 func (s *SchemalessClient) List(ctx context.Context, identifier resource.FullIdentifier,
 	options resource.ListOptions, into resource.ListObject, exampleListItem resource.Object) error {
 	if into == nil {
-		return fmt.Errorf("into cannot be nil")
+		return errors.New("into cannot be nil")
 	}
 	client, err := s.getClient(identifier)
 	if err != nil {
@@ -207,7 +227,7 @@ func (s *SchemalessClient) List(ctx context.Context, identifier resource.FullIde
 func (s *SchemalessClient) Watch(ctx context.Context, identifier resource.FullIdentifier, options resource.WatchOptions,
 	exampleObject resource.Object) (resource.WatchResponse, error) {
 	if exampleObject == nil {
-		return nil, fmt.Errorf("exampleItem cannot be nil")
+		return nil, errors.New("exampleItem cannot be nil")
 	}
 	client, err := s.getClient(identifier)
 	if err != nil {
@@ -219,7 +239,7 @@ func (s *SchemalessClient) Watch(ctx context.Context, identifier resource.FullId
 // PrometheusCollectors returns the prometheus metric collectors used by this client to allow for registration
 func (s *SchemalessClient) PrometheusCollectors() []prometheus.Collector {
 	return []prometheus.Collector{
-		s.totalRequests, s.requestDurations,
+		s.totalRequests, s.requestDurations, s.watchEventsTotal, s.watchErrorsTotal,
 	}
 }
 
@@ -246,6 +266,8 @@ func (s *SchemalessClient) getClient(identifier resource.FullIdentifier) (*group
 		config:           s.clientConfig,
 		requestDurations: s.requestDurations,
 		totalRequests:    s.totalRequests,
+		watchEventsTotal: s.watchEventsTotal,
+		watchErrorsTotal: s.watchErrorsTotal,
 	}
 	return s.clients[gv.Identifier()], nil
 }

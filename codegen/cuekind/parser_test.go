@@ -1,2 +1,431 @@
 package cuekind
 
+import (
+	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/grafana-app-sdk/codegen"
+)
+
+func TestParseManifestEmbedConfiguration(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		global       string
+		versionLocal string
+		field        string
+		wantErr      string
+	}{
+		{name: "global revision", global: "1"},
+		{name: "zero revision", global: "0", wantErr: "reembedVersion"},
+		{name: "negative revision", global: "-1", wantErr: "reembedVersion"},
+		{name: "version-local revision is rejected", global: "1", versionLocal: "reembedVersion: 1", wantErr: "reembedVersion"},
+		{name: "missing field path", global: "1", field: `name: "title"`, wantErr: "path"},
+		{name: "empty field path", global: "1", field: `name: "title", path: ""`, wantErr: "path"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c := testingCue(t)
+			field := tt.field
+			if field == "" {
+				field = `name: "title", path: "spec.title"`
+			}
+			c.Root = c.Root.Context().CompileString(fmt.Sprintf(`manifest: {
+				appName: "embed-app"
+				embed: foos: reembedVersion: %s
+				versions: v1: kinds: [{
+					kind: "Foo"
+					schema: spec: title: string
+					embed: {fields: [{%s}], %s}
+				}]
+			}`, tt.global, field, tt.versionLocal))
+			parser, err := NewParser(c, false)
+			require.NoError(t, err)
+			_, err = parser.ParseManifest("manifest")
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestParseManifestTestApp(t *testing.T) {
+	parser, err := NewParser(testingCue(t), false)
+	require.NoError(t, err)
+
+	manifest, err := parser.ParseManifest("testManifest")
+	require.NoError(t, err)
+
+	props := manifest.Properties()
+	assert.Equal(t, "test-app", props.AppName)
+	assert.Equal(t, "v1", props.PreferredVersion)
+
+	require.NotNil(t, props.Operator)
+	require.NotNil(t, props.Operator.URL)
+	assert.Equal(t, "https://foo.bar:8443", *props.Operator.URL)
+	require.NotNil(t, props.Operator.Webhooks)
+	assert.Equal(t, "/validate/test-app.ext.grafana.app/v1", props.Operator.Webhooks.ValidationPath)
+	assert.Equal(t, "/convert", props.Operator.Webhooks.ConversionPath)
+	assert.Equal(t, "/mutate", props.Operator.Webhooks.MutationPath)
+
+	require.Len(t, props.ExtraPermissions.AccessKinds, 1)
+	assert.Equal(t, "foo.bar", props.ExtraPermissions.AccessKinds[0].Group)
+	assert.Equal(t, "foos", props.ExtraPermissions.AccessKinds[0].Resource)
+	assert.Equal(t, []string{"get", "list", "watch"}, props.ExtraPermissions.AccessKinds[0].Actions)
+
+	require.Contains(t, props.Roles, "test-app:reader")
+	role := props.Roles["test-app:reader"]
+	assert.Equal(t, "Test App Viewer", role.Title)
+	assert.Equal(t, "View Test App Resources", role.Description)
+	assert.Equal(t, []string{"createFoobar"}, role.Routes)
+
+	require.NotNil(t, props.RoleBindings)
+	assert.Equal(t, map[string]codegen.ResourceEmbed{"testkinds": {ReembedVersion: 1}}, props.Embed)
+	assert.Equal(t, []string{"test-app:reader"}, props.RoleBindings.Viewer)
+
+	versions := manifest.Versions()
+	require.Len(t, versions, 4)
+	assert.Equal(t, "v1", versions[0].Name())
+	assert.Equal(t, "v2", versions[1].Name())
+	assert.Equal(t, "v3", versions[2].Name())
+	assert.Equal(t, "v4", versions[3].Name())
+
+	// v1 should have 2 kinds (testKind + testKind2)
+	assert.Len(t, versions[0].Kinds(), 2)
+	// v2, v3, and v4 should each have 1 kind (testKind only)
+	assert.Len(t, versions[1].Kinds(), 1)
+	assert.Len(t, versions[2].Kinds(), 1)
+	assert.Len(t, versions[3].Kinds(), 1)
+}
+
+func TestParseManifestKindProperties(t *testing.T) {
+	parser, err := NewParser(testingCue(t), false)
+	require.NoError(t, err)
+
+	manifest, err := parser.ParseManifest("testManifest")
+	require.NoError(t, err)
+
+	versions := manifest.Versions()
+
+	// v1 TestKind
+	var testKind codegen.VersionedKind
+	for _, k := range versions[0].Kinds() {
+		if k.Kind == "TestKind" {
+			testKind = k
+			break
+		}
+	}
+	assert.Equal(t, "TestKind", testKind.Kind)
+	assert.Equal(t, "TestKinds", testKind.PluralName)
+	assert.True(t, testKind.Conversion)
+	assert.Equal(t, "http://foo.bar/convert", testKind.ConversionWebhookProps.URL)
+	assert.Equal(t, []codegen.KindAdmissionCapabilityOperation{"create", "update"}, testKind.Validation.Operations)
+
+	// v1 TestKind declares a single string search field with several capabilities.
+	require.Len(t, testKind.SearchFields, 1)
+	assert.Equal(t, codegen.SearchField{
+		Name:         "stringField",
+		Path:         "spec.stringField",
+		Type:         "string",
+		Capabilities: []string{"filter", "text", "sort", "retrieve"},
+		Description:  "The string field",
+	}, testKind.SearchFields[0])
+
+	// v2 TestKind should have mutation and additional printer columns
+	v2Kind := versions[1].Kinds()[0]
+	assert.Equal(t, []codegen.KindAdmissionCapabilityOperation{"create", "update"}, v2Kind.Mutation.Operations)
+	require.Len(t, v2Kind.AdditionalPrinterColumns, 1)
+	assert.Equal(t, "STRING FIELD", v2Kind.AdditionalPrinterColumns[0].Name)
+	assert.Equal(t, ".spec.stringField", v2Kind.AdditionalPrinterColumns[0].JSONPath)
+
+	// v2 TestKind also declares search fields; the int64 field defaults emitZeroIfAbsent to true
+	// and array to false.
+	require.Len(t, v2Kind.SearchFields, 2)
+	assert.Equal(t, codegen.SearchField{
+		Name:         "stringField",
+		Path:         "spec.stringField",
+		Type:         "string",
+		Capabilities: []string{"filter", "text", "sort", "retrieve"},
+		Description:  "The string field",
+	}, v2Kind.SearchFields[0])
+	assert.Equal(t, codegen.SearchField{
+		Name:             "intField",
+		Path:             "spec.intField",
+		Type:             "int64",
+		Capabilities:     []string{"filter", "retrieve"},
+		EmitZeroIfAbsent: true,
+	}, v2Kind.SearchFields[1])
+
+	// Each API version declares its own inputs while sharing one resource re-embedding version.
+	assert.True(t, v2Kind.Search.Hybrid)
+	assert.True(t, v2Kind.Search.Global)
+	require.NotNil(t, v2Kind.Embed)
+	assert.Equal(t, &codegen.KindEmbed{
+		Fields: []codegen.EmbedField{
+			{Name: "details", Path: "spec.unionNull.str"},
+		},
+	}, v2Kind.Embed)
+	assert.False(t, testKind.Search.Hybrid)
+	assert.False(t, testKind.Search.Global)
+	assert.Equal(t, &codegen.KindEmbed{
+		Fields: []codegen.EmbedField{{Name: "details", Path: "spec.stringField"}},
+	}, testKind.Embed)
+
+	// v4 TestKind: selectable field path crosses a union parent (dashboard VariableKind pattern).
+	v4Kind := versions[3].Kinds()[0]
+	assert.Equal(t, "TestKind", v4Kind.Kind)
+	assert.Equal(t, []string{".spec.union.spec.name"}, v4Kind.SelectableFields)
+}
+
+func TestParseManifestRoutes(t *testing.T) {
+	parser, err := NewParser(testingCue(t), false)
+	require.NoError(t, err)
+
+	t.Run("testManifest v3", func(t *testing.T) {
+		manifest, err := parser.ParseManifest("testManifest")
+		require.NoError(t, err)
+
+		v3 := manifest.Versions()[2]
+
+		// Version-level namespaced route
+		routes := v3.Routes()
+		require.Contains(t, routes.Namespaced, "/foobar")
+		require.Contains(t, routes.Namespaced["/foobar"], "POST")
+		assert.Equal(t, "createFoobar", routes.Namespaced["/foobar"]["POST"].Name)
+
+		// Kind-level routes
+		v3Kind := v3.Kinds()[0]
+		require.Contains(t, v3Kind.Routes, "/reconcile")
+		assert.Equal(t, "createReconcileRequest", v3Kind.Routes["/reconcile"]["POST"].Name)
+		require.Contains(t, v3Kind.Routes, "/search")
+		assert.Equal(t, "getTestKindSearchResult", v3Kind.Routes["/search"]["GET"].Name)
+
+		// Route authz, fully and partially specified
+		require.NotNil(t, v3Kind.Routes["/reconcile"]["POST"].Authz)
+		assert.Equal(t, codegen.CustomRouteAuthz{
+			Resource:    "testkinds",
+			Subresource: new("reconcile"),
+			Verb:        new("create"),
+		}, *v3Kind.Routes["/reconcile"]["POST"].Authz)
+		require.NotNil(t, v3Kind.Routes["/search"]["GET"].Authz)
+		assert.Equal(t, codegen.CustomRouteAuthz{
+			Resource: "testkinds",
+		}, *v3Kind.Routes["/search"]["GET"].Authz)
+
+		// Route summary and description
+		assert.Equal(t, "Reconcile a TestKind", v3Kind.Routes["/reconcile"]["POST"].Summary)
+		assert.Empty(t, v3Kind.Routes["/search"]["GET"].Summary)
+		assert.Equal(t, "Triggers a reconcile of the TestKind.\nSet force to reconcile even if nothing changed.", v3Kind.Routes["/reconcile"]["POST"].Description)
+		assert.Empty(t, v3Kind.Routes["/search"]["GET"].Description)
+
+		// Routes with no authz section have no authz information
+		assert.Nil(t, routes.Namespaced["/foobar"]["POST"].Authz)
+	})
+
+	t.Run("integrationManifest", func(t *testing.T) {
+		manifest, err := parser.ParseManifest("integrationManifest")
+		require.NoError(t, err)
+
+		assert.Equal(t, "integration", manifest.Properties().AppName)
+
+		// The parser keeps CUE routes in their original scopes. Manifest generation
+		// combines them with inline and file-based OpenAPI in the output openapi section.
+		v1 := manifest.Versions()[0]
+		routes := v1.Routes()
+
+		// Namespaced route
+		require.Contains(t, routes.Namespaced, "/foo-from-routes-namespaced-cue")
+		assert.Equal(t, "getFoo", routes.Namespaced["/foo-from-routes-namespaced-cue"]["GET"].Name)
+
+		// Cluster route
+		require.Contains(t, routes.Cluster, "/bar-from-routes-cluster-cue")
+		assert.Equal(t, "createBar", routes.Cluster["/bar-from-routes-cluster-cue"]["POST"].Name)
+
+		// Kind-level route
+		v1Kind := v1.Kinds()[0]
+		assert.Equal(t, "Foo", v1Kind.Kind)
+		require.Contains(t, v1Kind.Routes, "/sub-kind-from-cue")
+		assert.Equal(t, "getDetails", v1Kind.Routes["/sub-kind-from-cue"]["GET"].Name)
+		assert.True(t, v1Kind.Routes["/sub-kind-from-cue"]["GET"].ResponseMetadata.ObjectMeta)
+	})
+}
+
+func TestParseManifestCustomApp(t *testing.T) {
+	parser, err := NewParser(testingCue(t), false)
+	require.NoError(t, err)
+
+	manifest, err := parser.ParseManifest("customManifest")
+	require.NoError(t, err)
+
+	props := manifest.Properties()
+	assert.Equal(t, "custom-app", props.AppName)
+	assert.Equal(t, "v1-0", props.PreferredVersion)
+
+	versions := manifest.Versions()
+	require.Len(t, versions, 2)
+	for _, v := range versions {
+		require.Len(t, v.Kinds(), 1)
+		assert.Equal(t, "CustomKind", v.Kinds()[0].Kind)
+	}
+}
+
+func TestParseManifestInvalidCases(t *testing.T) {
+	parser, err := NewParser(testingCue(t), false)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		selector    string
+		errContains string
+	}{
+		// Manifest-level validation
+		{
+			name:        "uppercase appName",
+			selector:    "invalidAppNameUppercase",
+			errContains: `appName: invalid value "BadApp"`,
+		},
+		{
+			name:        "missing appName",
+			selector:    "invalidAppNameMissing",
+			errContains: `appName: cannot convert non-concrete value`,
+		},
+		{
+			name:        "invalid groupOverride",
+			selector:    "invalidGroupOverride",
+			errContains: `groupOverride: invalid value "INVALID"`,
+		},
+		{
+			name:        "empty versions",
+			selector:    "invalidEmptyVersions",
+			errContains: `preferredVersion: cannot convert non-concrete value`,
+		},
+		{
+			name:        "nonexistent selector",
+			selector:    "nonExistentManifest",
+			errContains: "field not found: nonExistentManifest",
+		},
+		// Kind-level validation
+		{
+			name:        "lowercase kind name",
+			selector:    "invalidKindNameLowercase",
+			errContains: `kinds.0.kind: invalid value "lowercasekind"`,
+		},
+		{
+			name:        "invalid scope",
+			selector:    "invalidScope",
+			errContains: `kinds.0.scope`,
+		},
+		{
+			name:        "invalid pluralName",
+			selector:    "invalidPluralName",
+			errContains: `pluralName: 2 errors in empty disjunction`,
+		},
+		// Kind-level route validation
+		{
+			name:        "kind route missing name",
+			selector:    "invalidRouteNameMissing",
+			errContains: `routes."/noname".GET.name: cannot convert non-concrete value`,
+		},
+		{
+			name:        "kind route name bad prefix",
+			selector:    "invalidRouteNameBadPrefix",
+			errContains: `routes."/broken".GET.name: invalid value "badName"`,
+		},
+		{
+			name:        "kind route invalid method",
+			selector:    "invalidRouteMethod",
+			errContains: `routes."/test".INVALID: field not allowed`,
+		},
+		{
+			name:        "kind route invalid extension key",
+			selector:    "invalidExtensionKey",
+			errContains: `extensions."not-x-prefixed": field not allowed`,
+		},
+		{
+			name:        "kind route authz missing resource",
+			selector:    "invalidRouteAuthzMissingResource",
+			errContains: `routes."/authz".GET.authz.resource: cannot convert non-concrete value`,
+		},
+		{
+			name:        "kind route authz invalid verb",
+			selector:    "invalidRouteAuthzVerb",
+			errContains: `routes."/authz".GET.authz.verb: 8 errors in empty disjunction`,
+		},
+		{
+			name:        "printer column missing fields",
+			selector:    "invalidPrinterColumnMissingFields",
+			errContains: `additionalPrinterColumns.0.type: cannot convert non-concrete value`,
+		},
+		// Role validation (CUE pattern constraints don't enforce #Role, validated in Go)
+		{
+			name:        "role empty title",
+			selector:    "invalidRoleEmptyTitle",
+			errContains: `roles."role-app:reader".title: invalid value ""`,
+		},
+		{
+			name:        "role kind subresource",
+			selector:    "invalidRoleKindSubresource",
+			errContains: `roles."role-app:writer".kinds.0.kind: invalid value "RoleKind/status"`,
+		},
+		// Version-level route validation
+		{
+			name:        "version namespaced route bad name",
+			selector:    "invalidVersionRouteName",
+			errContains: `routes.namespaced."/bad".POST.name: invalid value "notAValidPrefix"`,
+		},
+		{
+			name:        "version namespaced route missing name",
+			selector:    "invalidNamespacedRouteMissingName",
+			errContains: `routes.namespaced."/noname".GET.name: cannot convert non-concrete value`,
+		},
+		{
+			name:        "version cluster route bad name",
+			selector:    "invalidClusterRouteBadName",
+			errContains: `routes.cluster."/bad".POST.name: invalid value "invalidPrefix"`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parser.ParseManifest(tt.selector)
+			require.ErrorContains(t, err, tt.errContains)
+		})
+	}
+}
+
+func TestParseManifestListKeys(t *testing.T) {
+	for _, tc := range []struct {
+		name, declaration string
+		want              bool
+	}{
+		{name: "omitted", want: true},
+		{name: "enabled", declaration: "listKeys: true", want: true},
+		{name: "disabled", declaration: "listKeys: false"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testingCue(t)
+			c.Root = c.Root.Context().CompileString(fmt.Sprintf(`
+				shared: {kind: "Foo", schema: spec: title: string, %s}
+				manifest: {
+					appName: "keys-app"
+					versions: {
+						v1: kinds: [shared]
+						v2: kinds: [shared]
+					}
+				}`, tc.declaration))
+			parser, err := NewParser(c, false)
+			require.NoError(t, err)
+			manifest, err := parser.ParseManifest("manifest")
+			require.NoError(t, err)
+			require.Len(t, manifest.Versions(), 2)
+			for _, version := range manifest.Versions() {
+				kinds := version.Kinds()
+				require.Len(t, kinds, 1)
+				require.NotNil(t, kinds[0].ListKeys)
+				assert.Equal(t, tc.want, *kinds[0].ListKeys)
+			}
+		})
+	}
+}

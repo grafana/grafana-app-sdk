@@ -21,7 +21,7 @@ func (*{{.FuncPrefix}}JSONCodec) Read(reader io.Reader, into resource.Object) er
 
 // Write writes JSON-encoded bytes into `writer` marshaled from `from`
 func (*{{.FuncPrefix}}JSONCodec) Write(writer io.Writer, from resource.Object) error {
-    return json.NewEncoder(writer).Encode(from)
+    {{ if .HasSecureValues }}return resource.NewJSONCodec().Write(writer, from){{ else }}return json.NewEncoder(writer).Encode(from){{ end }}
 }
 
 // Interface compliance checks

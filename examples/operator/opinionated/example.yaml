@@ -1,7 +1,0 @@
-apiVersion: example.grafana.com/v1
-kind: OpinionatedCustomResource
-metadata:
-  name: "test-resource"
-spec:
-  numField: 2
-  stringField: "foo"

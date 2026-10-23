@@ -1,0 +1,164 @@
+package v1alpha1
+
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/grafana/grafana-app-sdk/resource"
+)
+
+func TestAppManifestKind_Read(t *testing.T) {
+	kind := AppManifestKind()
+
+	// Valid JSON
+	file, err := os.ReadFile(filepath.Join("testfiles", "manifest-01.json"))
+	require.Nil(t, err)
+	obj, err := kind.Read(bytes.NewReader(file), resource.KindEncodingJSON)
+	require.Nil(t, err)
+	cast, ok := obj.(*AppManifest)
+	require.True(t, ok, "read object is not of type *AppManifest")
+	tm, _ := time.Parse(time.RFC3339, "2025-02-19T20:36:00Z")
+	schemaBytes, err := os.ReadFile(filepath.Join("testfiles", "schema-01.json"))
+	require.Nil(t, err)
+	schema := make(map[string]any)
+	require.Nil(t, json.Unmarshal(schemaBytes, &schema))
+	plural := "issues"
+	served := true
+	preferred := "v1"
+	dryRunKinds := false
+	assert.Equal(t, &AppManifest{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "AppManifest",
+			APIVersion: "apps.grafana.app/v1alpha1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "issue-tracker-project",
+			CreationTimestamp: metav1.NewTime(tm.Local()),
+		},
+		Spec: AppManifestSpec{
+			AppName:          "issue-tracker-project",
+			AppDisplayName:   "Issue Tracker",
+			Group:            "issuetrackerproject.ext.grafana.com",
+			PreferredVersion: &preferred,
+			Versions: []AppManifestManifestVersion{{
+				Name:   "v1",
+				Served: &served,
+				Kinds: []AppManifestManifestVersionKind{{
+					Kind:   "Issue",
+					Plural: &plural,
+					Scope:  "Namespaced",
+					Schema: schema,
+					Routes: map[string]any{
+						"/foo": map[string]any{
+							"GET": map[string]any{
+								"name": "getFoos",
+								"response": map[string]any{
+									"properties": map[string]any{
+										"foo": map[string]any{
+											"type": "string",
+										},
+									},
+								},
+								"responseMetadata": map[string]any{
+									"objectMeta": false,
+								},
+							},
+						},
+					},
+				}},
+			}},
+			DryRunKinds: &dryRunKinds,
+			Roles: map[string]AppManifestRole{
+				"issue-tracker-project:reader": {
+					Title:       "Issue Tracker Reader",
+					Description: "Read Issues",
+					Kinds: []AppManifestRoleKind{
+						AppManifestRoleKindWithPermissionSet{
+							Kind:          "Issue",
+							PermissionSet: "viewer",
+						},
+					},
+					Routes: []string{},
+				},
+				"issue-tracker-project:editor": {
+					Title:       "Issue Tracker Editor",
+					Description: "Edit Issues",
+					Kinds: []AppManifestRoleKind{
+						AppManifestRoleKindWithVerbs{
+							Kind:  "Issue",
+							Verbs: []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+						},
+					},
+					Routes: []string{},
+				},
+				"issue-tracker-project:admin": {
+					Title:       "Issue Tracker Admin",
+					Description: "Administrate Issues",
+					Kinds: []AppManifestRoleKind{
+						AppManifestRoleKindWithPermissionSet{
+							Kind:          "Issue",
+							PermissionSet: "admin",
+						},
+					},
+					Routes: []string{"getFoos"},
+				},
+			},
+			RoleBindings: &AppManifestV1alpha1SpecRoleBindings{
+				Viewer: []string{"issue-tracker-project:reader"},
+				Editor: []string{"issue-tracker-project:editor"},
+				Admin:  []string{"issue-tracker-project:admin"},
+			},
+		},
+		Status: AppManifestStatus{
+			Resources: map[string]AppManifeststatusApplyStatus{
+				"crds": {
+					Status: AppManifestStatusApplyStatusStatusSuccess,
+				},
+			},
+		},
+	}, cast)
+}
+
+func TestAppManifestKind_Write(t *testing.T) {
+	kind := AppManifestKind()
+
+	// Valid JSON
+	file, err := os.ReadFile(filepath.Join("testfiles", "manifest-01.json"))
+	require.Nil(t, err)
+	obj, err := kind.Read(bytes.NewReader(file), resource.KindEncodingJSON)
+	require.Nil(t, err)
+	cast, ok := obj.(*AppManifest)
+	require.True(t, ok, "read object is not of type *AppManifest")
+	// the default value for dryRunKinds is false, so it becomes *false when loaded from nil
+	// we need to make it nil again before writing so it will match the input file when written back out
+	// verify that it loaded as *false before we set it to nil, because if it loaded as nil that's a regression
+	require.NotNil(t, cast.Spec.DryRunKinds)
+	require.False(t, *cast.Spec.DryRunKinds)
+	cast.Spec.DryRunKinds = nil
+	out := bytes.Buffer{}
+	err = kind.Write(cast, &out, resource.KindEncodingJSON)
+	require.Nil(t, err)
+	assert.JSONEq(t, string(file), out.String())
+}
+
+func TestAppManifestKind_GroupVersionKind(t *testing.T) {
+	kind := AppManifestKind()
+	assert.Equal(t, "apps.grafana.app", kind.GroupVersionKind().Group)
+	assert.Equal(t, "v1alpha1", kind.GroupVersionKind().Version)
+	assert.Equal(t, "AppManifest", kind.GroupVersionKind().Kind)
+}
+
+func TestAppManifestKind_GroupVersionResource(t *testing.T) {
+	kind := AppManifestKind()
+	assert.Equal(t, "apps.grafana.app", kind.GroupVersionResource().Group)
+	assert.Equal(t, "v1alpha1", kind.GroupVersionResource().Version)
+	assert.Equal(t, "appmanifests", kind.GroupVersionResource().Resource)
+}

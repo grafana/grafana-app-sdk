@@ -4,21 +4,27 @@ on:
   pull_request:
     branches:
     - main
+    - "feat/*"
+
+permissions:
+  contents: read
 
 jobs:
   check:
     name: Go Workspace Check
     runs-on: ubuntu-latest
-    # Exlude dependabot from this check--it can't run make update-workspace, 
+    # Exlude dependency bots from this check--they can't run make update-workspace, 
     # We'll just force the next PR author to do it instead for now
-    if: ${{ github.actor != 'dependabot[bot]' }}
+    if: ${{ github.actor != 'dependabot[bot]' && github.actor != 'renovate[bot]' }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set go version
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: 'go.mod'
 
@@ -38,20 +44,17 @@ jobs:
     steps:
     # git checkout
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         fetch-depth: 0
+        persist-credentials: false
     # go env
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
       with:
         go-version-file: 'go.mod'
     # make lint
     - name: Lint
-      uses: golangci/golangci-lint-action@v3
-      with:
-        version: v1.60.3
-        only-new-issues: true
-        args: --timeout 5m $(go list -f '{{.Dir}}/...' -m  | tr '\n' ' ')
+      run: make lint
   test:
     uses: ./.github/workflows/test.yml

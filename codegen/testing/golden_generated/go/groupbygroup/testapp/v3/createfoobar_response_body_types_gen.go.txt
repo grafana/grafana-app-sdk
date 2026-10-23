@@ -1,0 +1,39 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package v3
+
+// Key identifies a foobar entry.
+// It is referenced by a custom route, so its multi-line
+// description exercises the route schema codegen path.
+// +k8s:openapi-gen=true
+type CreateFoobarKey struct {
+	Name  string  `json:"name"`
+	Match *string `json:"match,omitempty"`
+}
+
+// NewCreateFoobarKey creates a new CreateFoobarKey object.
+func NewCreateFoobarKey() *CreateFoobarKey {
+	return &CreateFoobarKey{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for CreateFoobarKey.
+func (CreateFoobarKey) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.CreateFoobarKey"
+}
+
+// +k8s:openapi-gen=true
+type CreateFoobarBody struct {
+	Altered []CreateFoobarKey `json:"altered"`
+}
+
+// NewCreateFoobarBody creates a new CreateFoobarBody object.
+func NewCreateFoobarBody() *CreateFoobarBody {
+	return &CreateFoobarBody{
+		Altered: []CreateFoobarKey{},
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for CreateFoobarBody.
+func (CreateFoobarBody) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.CreateFoobarBody"
+}

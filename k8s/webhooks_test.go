@@ -11,6 +11,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestNewWebhookServer(t *testing.T) {
@@ -80,13 +81,13 @@ func TestNewWebhookServer(t *testing.T) {
 		assert.Equal(t, defVal, srv.DefaultValidatingController)
 		assert.Equal(t, defMut, srv.DefaultMutatingController)
 		assert.Equal(t, map[string]validatingAdmissionControllerTuple{
-			gk(testSchema.Group(), testSchema.Kind()): {
+			gvk(&metav1.GroupVersionKind{Group: testSchema.Group(), Version: testSchema.Version(), Kind: testSchema.Kind()}): {
 				schema:     testKind,
 				controller: schVal,
 			},
 		}, srv.validatingControllers)
 		assert.Equal(t, map[string]mutatingAdmissionControllerTuple{
-			gk(testSchema.Group(), testSchema.Kind()): {
+			gvk(&metav1.GroupVersionKind{Group: testSchema.Group(), Version: testSchema.Version(), Kind: testSchema.Kind()}): {
 				schema:     testKind,
 				controller: schMut,
 			},
@@ -119,11 +120,11 @@ func TestWebhookServer_AddMutatingAdmissionController(t *testing.T) {
 	srv.AddMutatingAdmissionController(c1, sch1)
 	srv.AddMutatingAdmissionController(c2, sch2)
 	assert.Equal(t, map[string]mutatingAdmissionControllerTuple{
-		gk("foo", "bar"): {
+		gvk(&metav1.GroupVersionKind{Group: "foo", Version: "v1", Kind: "bar"}): {
 			schema:     sch1,
 			controller: c1,
 		},
-		gk("bar", "foo"): {
+		gvk(&metav1.GroupVersionKind{Group: "bar", Version: "v1", Kind: "foo"}): {
 			schema:     sch2,
 			controller: c2,
 		},
@@ -131,11 +132,11 @@ func TestWebhookServer_AddMutatingAdmissionController(t *testing.T) {
 	// Overwrite
 	srv.AddMutatingAdmissionController(c3, sch1)
 	assert.Equal(t, map[string]mutatingAdmissionControllerTuple{
-		gk("foo", "bar"): {
+		gvk(&metav1.GroupVersionKind{Group: "foo", Version: "v1", Kind: "bar"}): {
 			schema:     sch1,
 			controller: c3,
 		},
-		gk("bar", "foo"): {
+		gvk(&metav1.GroupVersionKind{Group: "bar", Version: "v1", Kind: "foo"}): {
 			schema:     sch2,
 			controller: c2,
 		},
@@ -167,11 +168,11 @@ func TestWebhookServer_AddValidatingAdmissionController(t *testing.T) {
 	srv.AddValidatingAdmissionController(c1, sch1)
 	srv.AddValidatingAdmissionController(c2, sch2)
 	assert.Equal(t, map[string]validatingAdmissionControllerTuple{
-		gk("foo", "bar"): {
+		gvk(&metav1.GroupVersionKind{Group: "foo", Version: "v1", Kind: "bar"}): {
 			schema:     sch1,
 			controller: c1,
 		},
-		gk("bar", "foo"): {
+		gvk(&metav1.GroupVersionKind{Group: "bar", Version: "v1", Kind: "foo"}): {
 			schema:     sch2,
 			controller: c2,
 		},
@@ -179,11 +180,11 @@ func TestWebhookServer_AddValidatingAdmissionController(t *testing.T) {
 	// Overwrite
 	srv.AddValidatingAdmissionController(c3, sch1)
 	assert.Equal(t, map[string]validatingAdmissionControllerTuple{
-		gk("foo", "bar"): {
+		gvk(&metav1.GroupVersionKind{Group: "foo", Version: "v1", Kind: "bar"}): {
 			schema:     sch1,
 			controller: c3,
 		},
-		gk("bar", "foo"): {
+		gvk(&metav1.GroupVersionKind{Group: "bar", Version: "v1", Kind: "foo"}): {
 			schema:     sch2,
 			controller: c2,
 		},
@@ -196,6 +197,11 @@ var _ = resource.NewJSONCodec().Write(admissionRequestObjectBytes, admissionRequ
 var admissionRequestBytes = []byte(`{
 	"request": {
 		"uid": "foo",
+		"kind": {
+			"group": "foo",
+			"version": "v1",
+			"kind": "bar"
+		},
 		"requestKind": {
 			"group": "foo",
 			"version": "v1",
@@ -207,6 +213,11 @@ var admissionRequestBytes = []byte(`{
 var admissionRequestBytesNoDefaults = []byte(`{
 	"request": {
 		"uid": "foo",
+		"kind": {
+			"group": "foo",
+			"version": "v1",
+			"kind": "bar"
+		},
 		"requestKind": {
 			"group": "foo",
 			"version": "v1",
@@ -222,6 +233,25 @@ var admissionRequestBytesNoDefaults = []byte(`{
 				"foo": "bar"
 			}
 		}
+	}
+}`)
+
+// admissionRequestBytesConverted simulates a converted resource where the resolved kind (v2)
+// differs from the original request kind (v1), as happens with CRD webhook conversion.
+var admissionRequestBytesConverted = []byte(`{
+	"request": {
+		"uid": "foo",
+		"kind": {
+			"group": "foo",
+			"version": "v2",
+			"kind": "bar"
+		},
+		"requestKind": {
+			"group": "foo",
+			"version": "v1",
+			"kind": "bar"
+		},
+		"object": ` + admissionRequestObjectBytes.String() + `
 	}
 }`)
 
@@ -259,7 +289,7 @@ func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 			serverConfig:       WebhookServerConfig{},
 			reqMethod:          http.MethodPost,
 			payload:            admissionRequestBytes,
-			expectedResponse:   []byte(`no mutating admission controller defined for group 'foo' and kind 'bar'`),
+			expectedResponse:   []byte(`no mutating admission controller defined for group 'foo', version 'v1', and kind 'bar'`),
 			expectedStatusCode: http.StatusInternalServerError,
 		},
 		{
@@ -351,6 +381,52 @@ func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 			payload:            []byte("{"),
 			expectedStatusCode: http.StatusBadRequest,
 		},
+		{
+			name:               "empty request body",
+			reqMethod:          http.MethodPost,
+			payload:            []byte("{}"),
+			expectedStatusCode: http.StatusBadRequest,
+		},
+		{
+			name: "converted resource uses resolved kind for lookup",
+			serverConfig: WebhookServerConfig{
+				MutatingControllers: map[*resource.Kind]resource.MutatingAdmissionController{
+					&resource.Kind{
+						Schema: resource.NewSimpleSchema("foo", "v2", &TestResourceObject{}, &TestResourceObjectList{}, resource.WithKind("bar")),
+						Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+					}: &testMutatingAdmissionController{
+						MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+							return &resource.MutatingResponse{
+								UpdatedObject: request.Object,
+							}, nil
+						},
+					},
+				},
+			},
+			reqMethod:          http.MethodPost,
+			payload:            admissionRequestBytesConverted,
+			expectedResponse:   []byte(`{"response":{"uid":"foo","allowed":true,"patchType":"JSONPatch","patch":"W10="}}`),
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "converted resource no controller for resolved version",
+			serverConfig: WebhookServerConfig{
+				MutatingControllers: map[*resource.Kind]resource.MutatingAdmissionController{
+					&resource.Kind{
+						Schema: resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, &TestResourceObjectList{}, resource.WithKind("bar")),
+						Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+					}: &testMutatingAdmissionController{
+						MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+							return nil, NewAdmissionError(fmt.Errorf("wrong controller"), http.StatusConflict, "err_reason")
+						},
+					},
+				},
+			},
+			reqMethod:          http.MethodPost,
+			payload:            admissionRequestBytesConverted,
+			expectedResponse:   []byte(`no mutating admission controller defined for group 'foo', version 'v2', and kind 'bar'`),
+			expectedStatusCode: http.StatusInternalServerError,
+		},
 	}
 
 	for _, test := range tests {
@@ -411,7 +487,7 @@ func TestWebhookServer_HandleValidateHTTP(t *testing.T) {
 			serverConfig:       WebhookServerConfig{},
 			reqMethod:          http.MethodPost,
 			payload:            admissionRequestBytes,
-			expectedResponse:   []byte(`no validating admission controller defined for group 'foo' and kind 'bar'`),
+			expectedResponse:   []byte(`no validating admission controller defined for group 'foo', version 'v1', and kind 'bar'`),
 			expectedStatusCode: http.StatusInternalServerError,
 		},
 		{
@@ -457,6 +533,50 @@ func TestWebhookServer_HandleValidateHTTP(t *testing.T) {
 			reqMethod:          http.MethodPost,
 			payload:            []byte("{"),
 			expectedStatusCode: http.StatusBadRequest,
+		},
+		{
+			name:               "empty request body",
+			reqMethod:          http.MethodPost,
+			payload:            []byte("{}"),
+			expectedStatusCode: http.StatusBadRequest,
+		},
+		{
+			name: "converted resource uses resolved kind for lookup",
+			serverConfig: WebhookServerConfig{
+				ValidatingControllers: map[*resource.Kind]resource.ValidatingAdmissionController{
+					&resource.Kind{
+						Schema: resource.NewSimpleSchema("foo", "v2", &TestResourceObject{}, &TestResourceObjectList{}, resource.WithKind("bar")),
+						Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+					}: &testValidatingAdmissionController{
+						ValidateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
+							return nil
+						},
+					},
+				},
+			},
+			reqMethod:          http.MethodPost,
+			payload:            admissionRequestBytesConverted,
+			expectedResponse:   []byte(`{"response":{"uid":"foo","allowed":true}}`),
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "converted resource no controller for resolved version",
+			serverConfig: WebhookServerConfig{
+				ValidatingControllers: map[*resource.Kind]resource.ValidatingAdmissionController{
+					&resource.Kind{
+						Schema: resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, &TestResourceObjectList{}, resource.WithKind("bar")),
+						Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+					}: &testValidatingAdmissionController{
+						ValidateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
+							return NewAdmissionError(fmt.Errorf("wrong controller"), http.StatusConflict, "err_reason")
+						},
+					},
+				},
+			},
+			reqMethod:          http.MethodPost,
+			payload:            admissionRequestBytesConverted,
+			expectedResponse:   []byte(`no validating admission controller defined for group 'foo', version 'v2', and kind 'bar'`),
+			expectedStatusCode: http.StatusInternalServerError,
 		},
 	}
 
@@ -504,4 +624,48 @@ func (tmac *testMutatingAdmissionController) Mutate(ctx context.Context, request
 		return tmac.MutateFunc(ctx, request)
 	}
 	return nil, nil
+}
+
+func TestWebhookServer_CustomRoutes(t *testing.T) {
+	t.Run("SetCustomRouteHandler post-construction", func(t *testing.T) {
+		srv, err := NewWebhookServer(WebhookServerConfig{
+			Port:      1234,
+			TLSConfig: TLSConfig{CertPath: "x", KeyPath: "y"},
+		})
+		require.NoError(t, err)
+		assert.Nil(t, srv.customRoutes)
+		stub := &stubApp{}
+		h, err := NewCustomRouteHandler(CustomRouteHandlerConfig{Caller: stub, Manifest: testManifest()})
+		require.NoError(t, err)
+		srv.SetCustomRouteHandler(h)
+		assert.Same(t, h, srv.customRoutes)
+	})
+
+	t.Run("served on shared mux alongside webhook paths", func(t *testing.T) {
+		// Mirror the mux that Run() builds, since Run() itself requires real TLS files.
+		stub := &stubApp{}
+		h, err := NewCustomRouteHandler(CustomRouteHandlerConfig{Caller: stub, Manifest: testManifest()})
+		require.NoError(t, err)
+		srv, err := NewWebhookServer(WebhookServerConfig{
+			Port:      1234,
+			TLSConfig: TLSConfig{CertPath: "x", KeyPath: "y"},
+		})
+		require.NoError(t, err)
+		srv.SetCustomRouteHandler(h)
+
+		mux := http.NewServeMux()
+		mux.HandleFunc("/validate", srv.HandleValidateHTTP)
+		mux.HandleFunc("/mutate", srv.HandleMutateHTTP)
+		mux.HandleFunc("/convert", srv.HandleConvertHTTP)
+		srv.customRoutes.Register(mux)
+
+		ts := httptest.NewServer(mux)
+		defer ts.Close()
+
+		resp, err := http.Get(ts.URL + "/apis/test.grafana.app/v1/namespaces/ns1/foos/myfoo/echo")
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		require.NotNil(t, stub.called, "custom route handler was not invoked through shared mux")
+		assert.Equal(t, "echo", stub.called.Path)
+	})
 }

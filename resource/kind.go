@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -20,9 +22,7 @@ const (
 	KindEncodingUnknown KindEncoding = ""
 )
 
-var (
-	_ Schema = &Kind{}
-)
+var _ Schema = &Kind{}
 
 // Codec is an interface which describes any object which can read and write Object implementations to/from bytes.
 // A codec is often specific to an encoding of the bytes in the reader/writer, and may also be specific to
@@ -72,7 +72,7 @@ func (k *Kind) Write(obj Object, out io.Writer, encoding KindEncoding) error {
 }
 
 // GroupVersionKind is a convenience method that assembles a schema.GroupVersionKind from Group(), Version(), and Kind()
-func (k *Kind) GroupVersionKind() schema.GroupVersionKind {
+func (k Kind) GroupVersionKind() schema.GroupVersionKind {
 	if k.Schema == nil {
 		return schema.GroupVersionKind{}
 	}
@@ -84,14 +84,20 @@ func (k *Kind) GroupVersionKind() schema.GroupVersionKind {
 }
 
 // GroupVersionResource is a convenience method that assembles a schema.GroupVersionResource from Group(), Version(), and Plural()
-func (k *Kind) GroupVersionResource() schema.GroupVersionResource {
+func (k Kind) GroupVersionResource() schema.GroupVersionResource {
 	if k.Schema == nil {
 		return schema.GroupVersionResource{}
 	}
+
+	resource := strings.ToLower(k.Plural())
+	if resource == "" {
+		resource = strings.ToLower(k.Kind()) + "s"
+	}
+
 	return schema.GroupVersionResource{
 		Group:    k.Group(),
 		Version:  k.Version(),
-		Resource: k.Plural(),
+		Resource: resource,
 	}
 }
 
@@ -111,6 +117,7 @@ func (*JSONCodec) Read(in io.Reader, out Object) error {
 }
 
 // Write marshals the provided Object into kubernetes-formatted JSON bytes.
+// Secure create values are written as plaintext without consuming them.
 func (*JSONCodec) Write(out io.Writer, in Object) error {
 	m := make(map[string]any)
 	m["apiVersion"], m["kind"] = in.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()
@@ -118,7 +125,7 @@ func (*JSONCodec) Write(out io.Writer, in Object) error {
 		Name:                       in.GetName(),
 		GenerateName:               in.GetGenerateName(),
 		Namespace:                  in.GetNamespace(),
-		SelfLink:                   in.GetSelfLink(),
+		SelfLink:                   in.GetSelfLink(), // nolint: staticcheck
 		UID:                        in.GetUID(),
 		ResourceVersion:            in.GetResourceVersion(),
 		Generation:                 in.GetGeneration(),
@@ -132,8 +139,24 @@ func (*JSONCodec) Write(out io.Writer, in Object) error {
 		ManagedFields:              in.GetManagedFields(),
 	}
 	m["spec"] = in.GetSpec()
-	for k, v := range in.GetSubresources() {
-		m[k] = v
+	maps.Copy(m, in.GetSubresources())
+	if secure, ok := in.(ObjectWithSecureValues); ok && len(secure.GetSecureValues()) > 0 {
+		// Use a string for create to bypass RawSecureValue's redacting marshaler.
+		type inlineSecureValueJSON struct {
+			Create      string  `json:"create,omitempty"`
+			Description *string `json:"description,omitempty"`
+			Name        string  `json:"name,omitempty"`
+			Remove      bool    `json:"remove,omitempty"`
+		}
+		values := secure.GetSecureValues()
+		encoded := make(map[string]inlineSecureValueJSON, len(values))
+		for key, value := range values {
+			encoded[key] = inlineSecureValueJSON{
+				Create: string(value.Create), Description: value.Description,
+				Name: value.Name, Remove: value.Remove,
+			}
+		}
+		m["secure"] = encoded
 	}
 	return json.NewEncoder(out).Encode(m)
 }
@@ -155,7 +178,7 @@ func (t *TypedList[T]) Copy() ListObject {
 		TypeMeta: t.TypeMeta,
 		Items:    make([]T, len(t.Items)),
 	}
-	t.ListMeta.DeepCopyInto(&cpy.ListMeta)
+	t.DeepCopyInto(&cpy.ListMeta)
 	for i := 0; i < len(t.Items); i++ {
 		cpy.Items[i], _ = t.Items[i].Copy().(T)
 	}

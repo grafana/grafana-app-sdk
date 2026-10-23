@@ -16,7 +16,7 @@ deps: $(VENDOR)
 
 .PHONY: lint
 lint:
-	golangci-lint run --max-same-issues=0 --max-issues-per-linter=0 --exclude-use-default=false
+	golangci-lint run --max-same-issues=0 --max-issues-per-linter=0
 
 .PHONY: test
 test:
@@ -50,15 +50,23 @@ endif
 
 .PHONY: build/operator
 build/operator:
+ifeq ("$(wildcard cmd/operator/Dockerfile)","cmd/operator/Dockerfile")
 	docker build -t $(OPERATOR_DOCKERIMAGE) -f cmd/operator/Dockerfile .
+else
+	@echo "No cmd/operator/Dockerfile, skipping operator build"
+endif
 
 .PHONY: compile/operator
 compile/operator:
-	@go build cmd/operator -o target/operator
+	if [ ! -d "./cmd/operator" ]; then
+		@echo "cmd/operator does not exist, skipping operator compile"
+	else
+		@go build -o "target/operator" cmd/operator/*.go
+	fi
 
 .PHONY: generate
 generate:
-	@grafana-app-sdk generate -c kinds
+	@grafana-app-sdk generate --source kinds --format cue
 
 .PHONY: local/up
 local/up: local/generate

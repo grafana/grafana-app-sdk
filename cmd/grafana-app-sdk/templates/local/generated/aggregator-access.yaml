@@ -1,0 +1,25 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aggregator-access
+rules:{{ range $group, $versions := $.APIGroups }}
+  - apiGroups: ["{{$group}}"]
+    resources: ["*"]
+    verbs: ["*"]{{ end }}
+  - nonResourceURLs:
+      - "/openapi/*"{{ range $group, $versions := $.APIGroups}}
+      - "/apis/{{$group}}/*"{{ end }}
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: aggregator-unauth-access-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: aggregator-access
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: system:unauthenticated

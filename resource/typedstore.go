@@ -2,11 +2,15 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"net/http"
 	"reflect"
 	"time"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
+
+var ErrMissingResourceVersion = errors.New("object is missing a ResourceVersion")
 
 // TypedStore is a single-Schema store where returned Objects from the underlying client are assumed
 // to be of ObjectType. It is a thin convenience layer over using a raw ClientGenerator.ClientFor()-created
@@ -20,10 +24,10 @@ type TypedStore[ObjectType Object] struct {
 // If they do not, an error is returned.
 func NewTypedStore[ObjectType Object](kind Kind, generator ClientGenerator) (*TypedStore[ObjectType], error) {
 	schemaType := reflect.TypeOf(kind.ZeroValue())
-	providedType := reflect.TypeOf(new(ObjectType)).Elem()
+	providedType := reflect.TypeFor[ObjectType]()
 	// Get the actual underlying types
 	// Do both at once, because there needs to be casting ability between them
-	for schemaType.Kind() == reflect.Ptr && providedType.Kind() == reflect.Ptr {
+	for schemaType.Kind() == reflect.Pointer && providedType.Kind() == reflect.Pointer {
 		schemaType = schemaType.Elem()
 		providedType = providedType.Elem()
 	}
@@ -58,17 +62,17 @@ func (t *TypedStore[T]) Add(ctx context.Context, obj T) (T, error) {
 	if t.sch.Scope() == ClusterScope {
 		if obj.GetNamespace() != "" {
 			var n T
-			return n, fmt.Errorf("obj.GetNamespace() must be empty for cluster-scoped objects")
+			return n, errors.New("obj.GetNamespace() must be empty for cluster-scoped objects")
 		}
 	} else {
 		if obj.GetNamespace() == "" {
 			var n T
-			return n, fmt.Errorf("obj.GetNamespace() must not be empty")
+			return n, errors.New("obj.GetNamespace() must not be empty")
 		}
 	}
 	if obj.GetName() == "" {
 		var n T
-		return n, fmt.Errorf("obj.GetName() must not be empty")
+		return n, errors.New("obj.GetName() must not be empty")
 	}
 	ret, err := t.client.Create(ctx, Identifier{
 		Namespace: obj.GetNamespace(),
@@ -91,7 +95,13 @@ func (t *TypedStore[T]) Update(ctx context.Context, identifier Identifier, obj T
 	md := obj.GetCommonMetadata()
 	md.UpdateTimestamp = time.Now().UTC()
 	obj.SetCommonMetadata(md)
-	ret, err := t.client.Update(ctx, identifier, obj, UpdateOptions{})
+	if obj.GetResourceVersion() == "" {
+		var n T
+		return n, ErrMissingResourceVersion
+	}
+	ret, err := t.client.Update(ctx, identifier, obj, UpdateOptions{
+		ResourceVersion: obj.GetResourceVersion(),
+	})
 	if err != nil {
 		var n T
 		return n, err
@@ -107,16 +117,11 @@ func (t *TypedStore[T]) Update(ctx context.Context, identifier Identifier, obj T
 // It returns the updated Object from the storage system.
 func (t *TypedStore[T]) Upsert(ctx context.Context, identifier Identifier, obj T) (T, error) {
 	resp, err := t.client.Get(ctx, identifier)
-
-	if err != nil {
+	if err != nil && !apierrors.IsNotFound(err) {
 		var n T
-		cast, ok := err.(APIServerResponseError)
-		if !ok {
-			return n, err
-		} else if cast.StatusCode() != http.StatusNotFound {
-			return n, err
-		}
+		return n, err
 	}
+
 	var ret Object
 
 	if resp != nil {
@@ -142,9 +147,15 @@ func (t *TypedStore[T]) Upsert(ctx context.Context, identifier Identifier, obj T
 // The provided obj parameter must have the specified subresource,
 // and only that subresource will be updated in the storage system.
 func (t *TypedStore[T]) UpdateSubresource(ctx context.Context, identifier Identifier,
-	subresource SubresourceName, obj Object) (T, error) {
+	subresource SubresourceName, obj Object,
+) (T, error) {
+	if obj.GetResourceVersion() == "" {
+		var n T
+		return n, ErrMissingResourceVersion
+	}
 	ret, err := t.client.Update(ctx, identifier, obj, UpdateOptions{
-		Subresource: string(subresource),
+		Subresource:     string(subresource),
+		ResourceVersion: obj.GetResourceVersion(),
 	})
 	if err != nil {
 		var n T
@@ -155,14 +166,14 @@ func (t *TypedStore[T]) UpdateSubresource(ctx context.Context, identifier Identi
 
 // Delete deletes a resource with the provided identifier
 func (t *TypedStore[T]) Delete(ctx context.Context, identifier Identifier) error {
-	return t.client.Delete(ctx, identifier)
+	return t.client.Delete(ctx, identifier, DeleteOptions{})
 }
 
 // ForceDelete deletes a resource with the provided identifier, ignores 404 errors
 func (t *TypedStore[T]) ForceDelete(ctx context.Context, identifier Identifier) error {
-	err := t.client.Delete(ctx, identifier)
+	err := t.client.Delete(ctx, identifier, DeleteOptions{})
 
-	if cast, ok := err.(APIServerResponseError); ok && cast.StatusCode() == http.StatusNotFound {
+	if apierrors.IsNotFound(err) {
 		return nil
 	}
 

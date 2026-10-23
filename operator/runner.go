@@ -8,16 +8,15 @@ import (
 	"io/fs"
 	"os"
 	"sync"
+	"sync/atomic"
+	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/metrics"
-	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 // Runner runs an app.App as a standalone operator, capable of exposing admission (validation, mutation)
@@ -26,12 +25,15 @@ import (
 // or another type. It does not support certain advanced app.App functionality which is not natively supported by
 // CRDs, such as arbitrary subresources (app.App.CallSubresource). It should be instantiated with NewRunner.
 type Runner struct {
-	config        RunnerConfig
-	webhookServer *webhookServerRunner
-	metricsServer *metricsServerRunner
-	startMux      sync.Mutex
-	running       bool
-	runningWG     sync.WaitGroup
+	config              RunnerConfig
+	webhookServer       *webhookServerRunner
+	metricsExporter     *metrics.Exporter
+	healthCheck         health.Check
+	metricsServer       *MetricsServer
+	metricsServerRunner *app.SingletonRunner
+	startMux            sync.Mutex
+	running             atomic.Bool
+	runningWG           sync.WaitGroup
 }
 
 // NewRunner creates a new, properly-initialized instance of a Runner
@@ -43,8 +45,20 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 	// 	return nil, fmt.Errorf("invalid KubeConfig: %w", err)
 	// }
 
+	if cfg.MetricsConfig.Port <= 0 {
+		cfg.MetricsConfig.Port = 9090
+	}
+
+	if cfg.MetricsConfig.HealthCheckInterval <= 0 {
+		cfg.MetricsConfig.HealthCheckInterval = 1 * time.Minute
+	}
+
+	metricsServer := NewMetricsServer(cfg.MetricsConfig.MetricsServerConfig)
 	op := Runner{
-		config: cfg,
+		config:              cfg,
+		healthCheck:         cfg.HealthCheck,
+		metricsServer:       metricsServer,
+		metricsServerRunner: app.NewSingletonRunner(metricsServer, false),
 	}
 
 	if cfg.WebhookConfig.TLSConfig.CertPath != "" {
@@ -61,18 +75,23 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 		op.webhookServer = newWebhookServerRunner(ws)
 	}
 	if cfg.MetricsConfig.Enabled {
-		exporter := metrics.NewExporter(cfg.MetricsConfig.ExporterConfig)
-		op.metricsServer = newMetricsServerRunner(exporter)
+		op.metricsExporter = metrics.NewExporter(cfg.MetricsConfig.ExporterConfig)
 	}
+
 	return &op, nil
 }
 
+// RunnerConfig contains configuration information for the Runner.
 type RunnerConfig struct {
-	// WebhookConfig contains configuration information for exposing k8s webhooks.
-	// This can be empty if your App does not implement ValidatorApp, MutatorApp, or ConversionApp
+	// WebhookConfig contains configuration information for exposing k8s webhooks and the App's
+	// custom routes. The webhook server hosts both admission/conversion endpoints and the
+	// /apis/... custom route paths on the same HTTPS port. This can be empty only if the App
+	// has no admission, conversion, or custom route capabilities.
 	WebhookConfig RunnerWebhookConfig
 	// MetricsConfig contains the configuration for exposing prometheus metrics, if desired
 	MetricsConfig RunnerMetricsConfig
+	// Health checks for liveness and readiness
+	HealthCheck health.Check
 	// KubeConfig is the kubernetes rest.Config to use when communicating with the API server
 	KubeConfig rest.Config
 	// Filesystem is an fs.FS that can be used in lieu of the OS filesystem.
@@ -83,21 +102,18 @@ type RunnerConfig struct {
 // RunnerMetricsConfig contains configuration information for exposing prometheus metrics
 type RunnerMetricsConfig struct {
 	metrics.ExporterConfig
-	Enabled   bool
-	Namespace string
+	MetricsServerConfig
+	Namespace        string
+	Enabled          bool
+	ProfilingEnabled bool
 }
 
 type RunnerWebhookConfig struct {
 	// Port is the port to open the webhook server on
 	Port int
 	// TLSConfig is the TLS Cert and Key to use for the HTTPS endpoints exposed for webhooks
+	// and custom routes.
 	TLSConfig k8s.TLSConfig
-}
-
-type capabilities struct {
-	conversion bool
-	mutation   bool
-	validation bool
 }
 
 // Run runs the Runner for the app built from the provided app.AppProvider, until the provided context.Context is closed,
@@ -133,11 +149,11 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	err = func() error {
 		s.startMux.Lock()
 		defer s.startMux.Unlock()
-		if !s.running {
-			s.running = true
+		if !s.running.Load() {
+			s.running.Store(true)
 			go func() {
 				s.runningWG.Wait()
-				s.running = false
+				s.running.Store(false)
 			}()
 		}
 		return nil
@@ -149,54 +165,13 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	// Build the operator
 	runner := app.NewMultiRunner()
 
-	// Admission control
-	anyWebhooks := false
-	vkCapabilities := make(map[string]capabilities)
-	for _, kind := range manifestData.Kinds {
-		for _, version := range kind.Versions {
-			if version.Admission == nil {
-				continue
-			}
-			vkCapabilities[fmt.Sprintf("%s/%s", kind.Kind, version.Name)] = capabilities{
-				conversion: kind.Conversion,
-				mutation:   version.Admission.SupportsAnyMutation(),
-				validation: version.Admission.SupportsAnyValidation(),
-			}
-			if kind.Conversion || version.Admission.SupportsAnyMutation() || version.Admission.SupportsAnyValidation() {
-				anyWebhooks = true
-			}
-		}
-	}
-	if anyWebhooks {
+	// Admission control and custom routes
+	if k8s.ManifestRequiresWebhooks(manifestData) {
 		if s.webhookServer == nil {
-			return errors.New("app has capabilities that require webhooks, but webhook server was not provided TLS config")
+			return errors.New("app has capabilities that require the webhook server (admission, conversion, or custom routes), but no TLS config was provided")
 		}
-		for _, kind := range a.ManagedKinds() {
-			c, ok := vkCapabilities[fmt.Sprintf("%s/%s", kind.Kind(), kind.Version())]
-			if !ok {
-				continue
-			}
-			if c.validation {
-				s.webhookServer.AddValidatingAdmissionController(&resource.SimpleValidatingAdmissionController{
-					ValidateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
-						return a.Validate(ctx, s.translateAdmissionRequest(request))
-					},
-				}, kind)
-			}
-			if c.mutation {
-				s.webhookServer.AddMutatingAdmissionController(&resource.SimpleMutatingAdmissionController{
-					MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
-						resp, err := a.Mutate(ctx, s.translateAdmissionRequest(request))
-						return s.translateMutatingResponse(resp), err
-					},
-				}, kind)
-			}
-			if c.conversion {
-				s.webhookServer.AddConverter(toWebhookConverter(a), metav1.GroupKind{
-					Group: kind.Group(),
-					Kind:  kind.Kind(),
-				})
-			}
+		if err := k8s.ConfigureWebhookHandler(s.webhookServer.server.WebhookHandler, a, manifestData); err != nil {
+			return err
 		}
 		runner.AddRunnable(s.webhookServer)
 	}
@@ -208,15 +183,37 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	}
 
 	// Metrics
-	if s.metricsServer != nil {
-		err = s.metricsServer.RegisterCollectors(runner.PrometheusCollectors()...)
-		if err != nil {
+	if s.metricsExporter != nil {
+		if err := s.metricsExporter.RegisterCollectors(a.PrometheusCollectors()...); err != nil {
 			return err
 		}
-		runner.AddRunnable(s.metricsServer)
+
+		s.metricsServer.RegisterMetricsHandler(s.metricsExporter.HTTPHandler())
 	}
 
+	// Profiles
+	if s.config.MetricsConfig.ProfilingEnabled {
+		s.metricsServer.RegisterProfilingHandlers()
+	}
+
+	// Health
+	s.metricsServer.RegisterHealthChecks(s)
+	s.metricsServer.RegisterHealthChecks(runner.HealthChecks()...)
+	s.metricsServer.RegisterHealthChecks(a.HealthChecks()...)
+	runner.AddRunnable(s.metricsServerRunner)
+
 	return runner.Run(ctx)
+}
+
+func (s *Runner) HealthCheck(_ context.Context) error {
+	if s.running.Load() {
+		return nil
+	}
+	return errors.New("app has not started yet")
+}
+
+func (*Runner) HealthCheckName() string {
+	return "operator-runner"
 }
 
 func (s *Runner) getManifestData(provider app.Provider) (*app.ManifestData, error) {
@@ -225,7 +222,7 @@ func (s *Runner) getManifestData(provider app.Provider) (*app.ManifestData, erro
 	switch manifest.Location.Type {
 	case app.ManifestLocationEmbedded:
 		if manifest.ManifestData == nil {
-			return nil, fmt.Errorf("no ManifestData in Manifest")
+			return nil, errors.New("no ManifestData in Manifest")
 		}
 		data = *manifest.ManifestData
 	case app.ManifestLocationFilePath:
@@ -238,62 +235,15 @@ func (s *Runner) getManifestData(provider app.Provider) (*app.ManifestData, erro
 		if err != nil {
 			return nil, fmt.Errorf("error reading manifest file from disk (path: %s): %w", manifest.Location.Path, err)
 		}
-		m := app.Manifest{}
-		if err = json.Unmarshal(contents, &m); err == nil && m.ManifestData != nil {
-			data = *m.ManifestData
-		} else {
+		if err = json.Unmarshal(contents, &data); err != nil {
 			return nil, fmt.Errorf("unable to unmarshal manifest data: %w", err)
 		}
 	case app.ManifestLocationAPIServerResource:
 		// TODO: fetch from API server
-		return nil, fmt.Errorf("apiserver location not supported yet")
+		return nil, errors.New("apiserver location not supported yet")
+	default:
 	}
 	return &data, nil
-}
-
-func (*Runner) translateAdmissionRequest(request *resource.AdmissionRequest) *app.AdmissionRequest {
-	if request == nil {
-		return nil
-	}
-	// app.AdmissionRequest is of type resource.AdmissionRequest
-	req := app.AdmissionRequest(*request)
-	return &req
-}
-
-func (*Runner) translateMutatingResponse(response *app.MutatingResponse) *resource.MutatingResponse {
-	if response == nil {
-		return nil
-	}
-	// app.MutatingResponse is of type resource.MutatingResponse
-	resp := resource.MutatingResponse(*response)
-	return &resp
-}
-
-func toWebhookConverter(a app.App) k8s.Converter {
-	return &simpleK8sConverter{
-		convertFunc: func(obj k8s.RawKind, targetAPIVersion string) ([]byte, error) {
-			converted, err := a.Convert(context.Background(), app.ConversionRequest{
-				SourceGVK: schema.FromAPIVersionAndKind(obj.APIVersion, obj.Kind),
-				TargetGVK: schema.FromAPIVersionAndKind(targetAPIVersion, obj.Kind),
-				Raw: app.RawObject{
-					Raw:      obj.Raw,
-					Encoding: resource.KindEncodingJSON,
-				},
-			})
-			if err != nil {
-				return nil, err
-			}
-			return converted.Raw, nil
-		},
-	}
-}
-
-type simpleK8sConverter struct {
-	convertFunc func(obj k8s.RawKind, targetAPIVersion string) ([]byte, error)
-}
-
-func (s *simpleK8sConverter) Convert(obj k8s.RawKind, targetAPIVersion string) ([]byte, error) {
-	return s.convertFunc(obj, targetAPIVersion)
 }
 
 func newWebhookServerRunner(ws *k8s.WebhookServer) *webhookServerRunner {
@@ -312,40 +262,6 @@ type webhookServerRunner struct {
 
 func (s *webhookServerRunner) Run(ctx context.Context) error {
 	return s.runner.Run(ctx)
-}
-
-func (s *webhookServerRunner) AddValidatingAdmissionController(controller resource.ValidatingAdmissionController, kind resource.Kind) {
-	s.server.AddValidatingAdmissionController(controller, kind)
-}
-
-func (s *webhookServerRunner) AddMutatingAdmissionController(controller resource.MutatingAdmissionController, kind resource.Kind) {
-	s.server.AddMutatingAdmissionController(controller, kind)
-}
-
-func (s *webhookServerRunner) AddConverter(converter k8s.Converter, groupKind metav1.GroupKind) {
-	s.server.AddConverter(converter, groupKind)
-}
-
-func newMetricsServerRunner(exporter *metrics.Exporter) *metricsServerRunner {
-	return &metricsServerRunner{
-		server: exporter,
-		runner: app.NewSingletonRunner(&k8sRunnable{
-			runner: exporter,
-		}, false),
-	}
-}
-
-type metricsServerRunner struct {
-	runner *app.SingletonRunner
-	server *metrics.Exporter
-}
-
-func (m *metricsServerRunner) Run(ctx context.Context) error {
-	return m.runner.Run(ctx)
-}
-
-func (m *metricsServerRunner) RegisterCollectors(collectors ...prometheus.Collector) error {
-	return m.server.RegisterCollectors(collectors...)
 }
 
 type k8sRunner interface {

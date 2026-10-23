@@ -1,10 +1,14 @@
 package codegen
 
-import "cuelang.org/go/cue"
+import (
+	"cuelang.org/go/cue"
+)
 
 // Kind is a common interface declaration for code generation.
 // Any type parser should be able to parse a kind into this definition to supply
 // to various common Jennies in the codegen package.
+//
+// Deprecated: use AppManifest instead
 type Kind interface {
 	Name() string
 	Properties() KindProperties
@@ -18,6 +22,8 @@ type KindProperties struct {
 	Kind string `json:"kind"`
 	// Group is the group the Kind is a part of
 	Group string `json:"group"`
+	// ManifestGroup is the group shortname used by the AppManifest this Kind belongs to
+	ManifestGroup string `json:"manifestGroup"`
 	// MachineName is the machine version of the Kind, which follows the regex: /^[a-z]+[a-z0-9]*$/
 	MachineName string `json:"machineName"`
 	// PluralMachineName is the plural of the MachineName
@@ -26,21 +32,20 @@ type KindProperties struct {
 	PluralName string `json:"pluralName"`
 	// Current is the version string of the version considered to be "current".
 	// This does not have to be the latest, but determines preference when generating code.
-	Current string `json:"current"`
-	// APIResource is an optional field which, if present, indicates that the Kind is expressible as a kubernetes API resource,
-	// and contains attributes which allow identification as such.
-	APIResource *APIResourceProperties `json:"apiResource"`
+	Current                string                      `json:"current"`
+	Scope                  string                      `json:"scope"`
+	UserReadable           bool                        `json:"userReadable"`
+	FolderScoped           bool                        `json:"folderScoped"`
+	Validation             KindAdmissionCapability     `json:"validation"`
+	Mutation               KindAdmissionCapability     `json:"mutation"`
+	Conversion             bool                        `json:"conversion"`
+	ConversionWebhookProps ConversionWebhookProperties `json:"conversionWebhookProps"`
 	// Codegen contains code-generation directives for the codegen pipeline
 	Codegen KindCodegenProperties `json:"codegen"`
 }
 
-// APIResourceProperties contains information about a Kind expressible as a kubernetes API resource
-type APIResourceProperties struct {
-	Group      string                  `json:"group"`
-	Scope      string                  `json:"scope"`
-	Validation KindAdmissionCapability `json:"validation"`
-	Mutation   KindAdmissionCapability `json:"mutation"`
-	Conversion bool                    `json:"conversion"`
+type ConversionWebhookProperties struct {
+	URL string `json:"url"`
 }
 
 type KindAdmissionCapabilityOperation string
@@ -59,8 +64,25 @@ type KindAdmissionCapability struct {
 
 // KindCodegenProperties contains code generation directives for a Kind or KindVersion
 type KindCodegenProperties struct {
-	Frontend bool `json:"frontend"`
-	Backend  bool `json:"backend"`
+	TS KindCodegenTSProperties `json:"ts"`
+	Go KindCodegenGoProperties `json:"go"`
+}
+
+type KindCodegenTSProperties struct {
+	Enabled bool                `json:"enabled"`
+	Config  KindCodegenTSConfig `json:"config"`
+}
+
+type KindCodegenGoProperties struct {
+	Enabled bool           `json:"enabled"`
+	Config  map[string]any `json:"config"`
+}
+
+// KindCodegenTSConfig is the TypeScript configuration options for codegen,
+// modeled after the cog TS codegen options.
+type KindCodegenTSConfig struct {
+	ImportsMap        map[string]string `json:"importsMap"`
+	EnumsAsUnionTypes bool              `json:"enumsAsUnionTypes"`
 }
 
 type AdditionalPrinterColumn struct {
@@ -72,17 +94,95 @@ type AdditionalPrinterColumn struct {
 	JSONPath    string  `json:"jsonPath"`
 }
 
+type SearchField struct {
+	Name             string   `json:"name"`
+	Path             string   `json:"path,omitempty"`
+	Type             string   `json:"type"`
+	Array            bool     `json:"array,omitempty"`
+	Capabilities     []string `json:"capabilities"`
+	EmitZeroIfAbsent bool     `json:"emitZeroIfAbsent,omitempty"`
+	Description      string   `json:"description,omitempty"`
+}
+
+// KindSearch controls which search endpoints are served for a kind.
+type KindSearch struct {
+	// Endpoint controls whether the kind serves the /search endpoint.
+	Endpoint bool `json:"endpoint"`
+	// Trash controls whether the kind serves the /trash endpoint.
+	Trash bool `json:"trash"`
+	// Hybrid controls whether the kind serves the /search/hybrid endpoint.
+	// Unlike the other two it is off unless the kind opts in.
+	Hybrid bool `json:"hybrid"`
+	// Global controls whether the kind is included in the namespace-wide search index.
+	// Off unless the kind opts in.
+	Global bool `json:"global"`
+}
+
+// KindEmbed defines the embedding document independently of search fields.
+// Kinds with a custom embedding builder omit this configuration.
+type KindEmbed struct {
+	// Fields supplies inputs, in declaration order, used only to generate the text to be embedded.
+	// Declaring an embedding field does not enable filtering embeddings by that field.
+	Fields []EmbedField `json:"fields"`
+}
+
+// EmbedField supplies text for the embedding document without exposing a search field.
+type EmbedField struct {
+	Name string `json:"name"`
+	// Path supplies a string or string array from the resource and must not be empty.
+	Path string `json:"path"`
+}
+
+// CustomRouteRequest represents the request part of a custom route definition.
+type CustomRouteRequest struct {
+	Query cue.Value `json:"query,omitempty"`
+	Body  cue.Value `json:"body,omitempty"`
+}
+
+type CustomRouteResponseMetadata struct {
+	TypeMeta   bool `json:"typeMeta"`
+	ListMeta   bool `json:"listMeta"`
+	ObjectMeta bool `json:"objectMeta"`
+}
+
+// CustomRouteAuthz represents the declared authorization attributes of a custom route.
+// Each set field is emitted as an openAPI extension on the generated route.
+type CustomRouteAuthz struct {
+	// Resource is the resource the authz check is performed against.
+	Resource string `json:"resource"`
+	// Subresource is the subresource the authz check is performed against, if applicable.
+	Subresource *string `json:"subresource,omitempty"`
+	// Verb is the verb the authz check is performed with, if it differs from the one implied by the route's method.
+	Verb *string `json:"verb,omitempty"`
+}
+
+// CustomRoute represents a single custom route definition for a specific HTTP method.
+type CustomRoute struct {
+	Name             string                      `json:"name"`
+	Summary          string                      `json:"summary,omitempty"`
+	Description      string                      `json:"description,omitempty"`
+	Request          CustomRouteRequest          `json:"request"`
+	Response         cue.Value                   `json:"response"`
+	ResponseMetadata CustomRouteResponseMetadata `json:"responseMetadata"`
+	Extensions       map[string]any              `json:"extensions,omitempty"`
+	// Authz is the optional declared authorization information for the route. If nil,
+	// no authz openAPI extensions are added to the generated route.
+	Authz *CustomRouteAuthz `json:"authz,omitempty"`
+}
+
 type KindVersion struct {
 	Version string `json:"version"`
 	// Schema is the CUE schema for the version
 	// This should eventually be changed to JSONSchema/OpenAPI(/AST?)
-	Schema                   cue.Value                 `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
-	Codegen                  KindCodegenProperties     `json:"codegen"`
-	Served                   bool                      `json:"served"`
-	SelectableFields         []string                  `json:"selectableFields"`
-	Validation               KindAdmissionCapability   `json:"validation"`
-	Mutation                 KindAdmissionCapability   `json:"mutation"`
-	AdditionalPrinterColumns []AdditionalPrinterColumn `json:"additionalPrinterColumns"`
+	Schema                   cue.Value                         `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
+	Codegen                  KindCodegenProperties             `json:"codegen"`
+	Served                   bool                              `json:"served"`
+	SelectableFields         []string                          `json:"selectableFields"`
+	Validation               KindAdmissionCapability           `json:"validation"`
+	Mutation                 KindAdmissionCapability           `json:"mutation"`
+	AdditionalPrinterColumns []AdditionalPrinterColumn         `json:"additionalPrinterColumns"`
+	SearchFields             []SearchField                     `json:"searchFields,omitempty"`
+	Routes                   map[string]map[string]CustomRoute `json:"routes,omitempty"`
 }
 
 // AnyKind is a simple implementation of Kind

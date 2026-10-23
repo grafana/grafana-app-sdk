@@ -3,16 +3,78 @@ package simple
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
-	"github.com/grafana/grafana-app-sdk/app"
-	"github.com/grafana/grafana-app-sdk/k8s"
-	"github.com/grafana/grafana-app-sdk/resource"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/rest"
+
+	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/k8s"
+	"github.com/grafana/grafana-app-sdk/operator"
+	"github.com/grafana/grafana-app-sdk/resource"
 )
+
+func TestNewApp(t *testing.T) {
+	t.Run("empty managed kind", func(t *testing.T) {
+		a, err := NewApp(AppConfig{
+			ManagedKinds: []AppManagedKind{{}},
+		})
+		assert.Nil(t, a)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "cannot manage an empty kind")
+	})
+	t.Run("empty unmanaged kind", func(t *testing.T) {
+		a, err := NewApp(AppConfig{
+			UnmanagedKinds: []AppUnmanagedKind{{}},
+		})
+		assert.Nil(t, a)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "cannot watch an empty kind")
+	})
+	t.Run("success", func(t *testing.T) {
+		a, err := NewApp(AppConfig{
+			ManagedKinds: []AppManagedKind{{
+				Kind: testKind(),
+			}},
+		})
+		assert.NoError(t, err)
+		assert.NotNil(t, a)
+	})
+}
+
+func TestApp_PrometheusCollectors(t *testing.T) {
+	t.Run("default ClientGenerator", func(t *testing.T) {
+		a, err := NewApp(AppConfig{})
+		require.NoError(t, err)
+		reg, ok := a.clientGenerator.(*k8s.ClientRegistry)
+		require.True(t, ok)
+		assert.Subset(t, a.PrometheusCollectors(), reg.PrometheusCollectors())
+	})
+	t.Run("provided ClientGenerator with metrics.Provider", func(t *testing.T) {
+		reg := k8s.NewClientRegistry(rest.Config{}, k8s.DefaultClientConfig())
+		a, err := NewApp(AppConfig{ClientGenerator: reg})
+		require.NoError(t, err)
+		assert.Subset(t, a.PrometheusCollectors(), reg.PrometheusCollectors())
+	})
+	t.Run("manual registration does not duplicate", func(t *testing.T) {
+		reg := k8s.NewClientRegistry(rest.Config{}, k8s.DefaultClientConfig())
+		a, err := NewApp(AppConfig{ClientGenerator: reg})
+		require.NoError(t, err)
+		before := len(a.PrometheusCollectors())
+		a.RegisterMetricsCollectors(reg.PrometheusCollectors()...)
+		assert.Len(t, a.PrometheusCollectors(), before)
+		promReg := prometheus.NewRegistry()
+		for _, c := range a.PrometheusCollectors() {
+			assert.NoError(t, promReg.Register(c))
+		}
+	})
+}
 
 func TestApp_Convert(t *testing.T) {
 	t.Run("no converter", func(t *testing.T) {
@@ -94,7 +156,7 @@ func TestApp_Convert(t *testing.T) {
 	})
 }
 
-func TestApp_CallResourceCustomRoute(t *testing.T) {
+func TestApp_CallCustomRoute(t *testing.T) {
 	kind := testKind()
 	id := resource.FullIdentifier{
 		Group:     kind.Group(),
@@ -106,12 +168,12 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 
 	t.Run("no kind", func(t *testing.T) {
 		a := createTestApp(t, AppConfig{})
-		resp, err := a.CallResourceCustomRoute(context.TODO(), &app.ResourceCustomRouteRequest{
+		rw := httptest.NewRecorder()
+		err := a.CallCustomRoute(context.TODO(), rw, &app.CustomRouteRequest{
 			ResourceIdentifier: id,
-			SubresourcePath:    "foo",
+			Path:               "foo",
 			Method:             http.MethodPost,
 		})
-		assert.Nil(t, resp)
 		assert.Equal(t, app.ErrCustomRouteNotFound, err)
 	})
 
@@ -122,8 +184,8 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 				CustomRoutes: AppCustomRouteHandlers{
 					AppCustomRoute{
 						Path: "baz",
-					}: func(ctx context.Context, request *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
-						return nil, errors.New("error")
+					}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
+						return errors.New("error")
 					},
 				},
 			}},
@@ -140,8 +202,8 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 				CustomRoutes: AppCustomRouteHandlers{
 					AppCustomRoute{
 						Method: AppCustomRouteMethodGet,
-					}: func(ctx context.Context, request *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
-						return nil, errors.New("error")
+					}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
+						return errors.New("error")
 					},
 				},
 			}},
@@ -174,7 +236,7 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 			a, err := NewApp(AppConfig{
 				ManagedKinds: []AppManagedKind{{
 					Kind: kind,
-					CustomRoutes: AppCustomRouteHandlers{
+					Routes: AppCustomRouteHandlers{
 						AppCustomRoute{
 							Method: AppCustomRouteMethodGet,
 							Path:   "baz",
@@ -204,18 +266,18 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 					AppCustomRoute{
 						Method: AppCustomRouteMethodGet,
 						Path:   "baz",
-					}: func(ctx context.Context, request *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
-						return nil, errors.New("error")
+					}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
+						return errors.New("error")
 					},
 				},
 			}},
 		})
-		resp, err := a.CallResourceCustomRoute(context.TODO(), &app.ResourceCustomRouteRequest{
+		rw := httptest.NewRecorder()
+		err := a.CallCustomRoute(context.TODO(), rw, &app.CustomRouteRequest{
 			ResourceIdentifier: id,
-			SubresourcePath:    "foo",
+			Path:               "foo",
 			Method:             http.MethodPost,
 		})
-		assert.Nil(t, resp)
 		assert.Equal(t, app.ErrCustomRouteNotFound, err)
 	})
 
@@ -227,18 +289,18 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 					AppCustomRoute{
 						Method: AppCustomRouteMethodGet,
 						Path:   "baz",
-					}: func(ctx context.Context, request *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
-						return nil, errors.New("error")
+					}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
+						return errors.New("error")
 					},
 				},
 			}},
 		})
-		resp, err := a.CallResourceCustomRoute(context.TODO(), &app.ResourceCustomRouteRequest{
+		rw := httptest.NewRecorder()
+		err := a.CallCustomRoute(context.TODO(), rw, &app.CustomRouteRequest{
 			ResourceIdentifier: id,
-			SubresourcePath:    "baz",
+			Path:               "baz",
 			Method:             http.MethodPost,
 		})
-		assert.Nil(t, resp)
 		assert.Equal(t, app.ErrCustomRouteNotFound, err)
 	})
 
@@ -253,24 +315,62 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 					AppCustomRoute{
 						Method: AppCustomRouteMethodPost,
 						Path:   "baz",
-					}: func(ctx context.Context, request *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
-						return &app.ResourceCustomRouteResponse{
-							StatusCode: expectedStatus,
-							Body:       expectedBody,
-						}, expectedErr
+					}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
+						writer.WriteHeader(expectedStatus)
+						writer.Write(expectedBody)
+						return expectedErr
 					},
 				},
 			}},
 		})
-		resp, err := a.CallResourceCustomRoute(context.TODO(), &app.ResourceCustomRouteRequest{
+		rw := httptest.NewRecorder()
+		err := a.CallCustomRoute(context.TODO(), rw, &app.CustomRouteRequest{
 			ResourceIdentifier: id,
-			SubresourcePath:    "baz",
+			Path:               "baz",
 			Method:             http.MethodPost,
 		})
 		assert.Equal(t, expectedErr, err)
-		assert.NotNil(t, resp)
-		assert.Equal(t, expectedStatus, resp.StatusCode)
-		assert.Equal(t, expectedBody, resp.Body)
+		assert.Equal(t, expectedStatus, rw.Result().StatusCode)
+		resBody, err := io.ReadAll(rw.Result().Body)
+		assert.Nil(t, err)
+		assert.Equal(t, expectedBody, resBody)
+	})
+	t.Run("success, plural instead of kind", func(t *testing.T) {
+		expectedErr := errors.New("error")
+		expectedStatus := http.StatusConflict
+		expectedBody := []byte("foo")
+		a := createTestApp(t, AppConfig{
+			ManagedKinds: []AppManagedKind{{
+				Kind: kind,
+				CustomRoutes: AppCustomRouteHandlers{
+					AppCustomRoute{
+						Method: AppCustomRouteMethodPost,
+						Path:   "baz",
+					}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
+						writer.WriteHeader(expectedStatus)
+						writer.Write(expectedBody)
+						return expectedErr
+					},
+				},
+			}},
+		})
+		rw := httptest.NewRecorder()
+		err := a.CallCustomRoute(context.TODO(), rw, &app.CustomRouteRequest{
+			ResourceIdentifier: resource.FullIdentifier{
+				Name:      id.Name,
+				Namespace: id.Namespace,
+				Group:     kind.Group(),
+				Version:   kind.Version(),
+				Plural:    kind.Plural(),
+			},
+			Path:   "baz",
+			Method: http.MethodPost,
+		})
+		require.Equal(t, expectedErr, err)
+		assert.Equal(t, expectedStatus, rw.Result().StatusCode)
+		resBody, err := io.ReadAll(rw.Result().Body)
+		assert.Nil(t, err)
+		assert.Equal(t, expectedBody, resBody)
 	})
 }
 
@@ -423,6 +523,54 @@ func TestApp_Validate(t *testing.T) {
 	})
 }
 
+func TestApp_ManageKind(t *testing.T) {
+	t.Run("error creating informer", func(t *testing.T) {
+		expected := errors.New("I AM ERROR")
+		a, err := NewApp(AppConfig{
+			InformerConfig: AppInformerConfig{
+				InformerSupplier: func(kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions) (operator.Informer, error) {
+					return nil, expected
+				},
+			},
+			ManagedKinds: []AppManagedKind{{
+				Kind:       testKind(),
+				Reconciler: &Reconciler{},
+			}},
+		})
+		assert.Nil(t, a)
+		assert.Equal(t, expected, err)
+	})
+	t.Run("custom InformerSupplier", func(t *testing.T) {
+		supplierCalled := false
+		kind := testKind()
+		options := operator.ListWatchOptions{
+			Namespace:      "ns",
+			FieldSelectors: []string{"f1", "f2"},
+			LabelFilters:   []string{"l1", "l2"},
+		}
+		createTestApp(t, AppConfig{
+			InformerConfig: AppInformerConfig{
+				InformerSupplier: func(k resource.Kind, clients resource.ClientGenerator, opts operator.InformerOptions) (operator.Informer, error) {
+					supplierCalled = true
+					assert.Equal(t, kind, k)
+					assert.Equal(t, options, opts.ListWatchOptions)
+					return &mockInformer{}, nil
+				},
+			},
+			ManagedKinds: []AppManagedKind{{
+				Kind:       kind,
+				Reconciler: &Reconciler{},
+				ReconcileOptions: BasicReconcileOptions{
+					Namespace:      options.Namespace,
+					LabelFilters:   options.LabelFilters,
+					FieldSelectors: options.FieldSelectors,
+				},
+			}},
+		})
+		assert.True(t, supplierCalled, "custom InformerSupplier was not called")
+	})
+}
+
 func TestApp_Runner(t *testing.T) {
 	// TODO
 }
@@ -452,4 +600,27 @@ func (c *testConverter) Convert(obj k8s.RawKind, targetAPIVersion string) ([]byt
 		return c.convertFunc(obj, targetAPIVersion)
 	}
 	return nil, nil
+}
+
+type mockInformer struct {
+	RunFunc             func(context.Context) error
+	AddEventHandlerFunc func(operator.ResourceWatcher) error
+}
+
+func (m mockInformer) Run(ctx context.Context) error {
+	if m.RunFunc != nil {
+		return m.RunFunc(ctx)
+	}
+	return nil
+}
+
+func (m mockInformer) AddEventHandler(handler operator.ResourceWatcher) error {
+	if m.AddEventHandlerFunc != nil {
+		return m.AddEventHandlerFunc(handler)
+	}
+	return nil
+}
+
+func (m mockInformer) WaitForSync(ctx context.Context) error {
+	return nil
 }

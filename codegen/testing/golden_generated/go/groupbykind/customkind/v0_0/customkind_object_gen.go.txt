@@ -16,10 +16,20 @@ import (
 
 // +k8s:openapi-gen=true
 type CustomKind struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata"`
-	Spec              Spec   `json:"spec"`
-	Status            Status `json:"status"`
+	metav1.TypeMeta   `json:",inline" yaml:",inline"`
+	metav1.ObjectMeta `json:"metadata" yaml:"metadata"`
+
+	// Spec is the spec of the CustomKind
+	Spec Spec `json:"spec" yaml:"spec"`
+
+	Status Status `json:"status" yaml:"status"`
+}
+
+func NewCustomKind() *CustomKind {
+	return &CustomKind{
+		Spec:   *NewSpec(),
+		Status: *NewStatus(),
+	}
 }
 
 func (o *CustomKind) GetSpec() any {
@@ -219,14 +229,32 @@ func (o *CustomKind) DeepCopyObject() runtime.Object {
 	return o.Copy()
 }
 
+func (o *CustomKind) DeepCopy() *CustomKind {
+	cpy := &CustomKind{}
+	o.DeepCopyInto(cpy)
+	return cpy
+}
+
+func (o *CustomKind) DeepCopyInto(dst *CustomKind) {
+	dst.TypeMeta.APIVersion = o.TypeMeta.APIVersion
+	dst.TypeMeta.Kind = o.TypeMeta.Kind
+	o.ObjectMeta.DeepCopyInto(&dst.ObjectMeta)
+	o.Spec.DeepCopyInto(&dst.Spec)
+	o.Status.DeepCopyInto(&dst.Status)
+}
+
+func (CustomKind) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v0_0.CustomKind"
+}
+
 // Interface compliance compile-time check
 var _ resource.Object = &CustomKind{}
 
 // +k8s:openapi-gen=true
 type CustomKindList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata"`
-	Items           []CustomKind `json:"items"`
+	metav1.TypeMeta `json:",inline" yaml:",inline"`
+	metav1.ListMeta `json:"metadata" yaml:"metadata"`
+	Items           []CustomKind `json:"items" yaml:"items"`
 }
 
 func (o *CustomKindList) DeepCopyObject() runtime.Object {
@@ -262,5 +290,45 @@ func (o *CustomKindList) SetItems(items []resource.Object) {
 	}
 }
 
+func (o *CustomKindList) DeepCopy() *CustomKindList {
+	cpy := &CustomKindList{}
+	o.DeepCopyInto(cpy)
+	return cpy
+}
+
+func (o *CustomKindList) DeepCopyInto(dst *CustomKindList) {
+	resource.CopyObjectInto(dst, o)
+}
+
+func (CustomKindList) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v0_0.CustomKindList"
+}
+
 // Interface compliance compile-time check
 var _ resource.ListObject = &CustomKindList{}
+
+// Copy methods for all subresource types
+
+// DeepCopy creates a full deep copy of Spec
+func (s *Spec) DeepCopy() *Spec {
+	cpy := &Spec{}
+	s.DeepCopyInto(cpy)
+	return cpy
+}
+
+// DeepCopyInto deep copies Spec into another Spec object
+func (s *Spec) DeepCopyInto(dst *Spec) {
+	resource.CopyObjectInto(dst, s)
+}
+
+// DeepCopy creates a full deep copy of Status
+func (s *Status) DeepCopy() *Status {
+	cpy := &Status{}
+	s.DeepCopyInto(cpy)
+	return cpy
+}
+
+// DeepCopyInto deep copies Status into another Status object
+func (s *Status) DeepCopyInto(dst *Status) {
+	resource.CopyObjectInto(dst, s)
+}

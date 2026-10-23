@@ -1,0 +1,99 @@
+package v1
+
+import (
+	"context"
+
+	"github.com/grafana/grafana-app-sdk/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+type TestKind2Client struct {
+	client *resource.TypedClient[*TestKind2, *TestKind2List]
+}
+
+func NewTestKind2Client(client resource.Client) *TestKind2Client {
+	return &TestKind2Client{
+		client: resource.NewTypedClient[*TestKind2, *TestKind2List](client, TestKind2Kind()),
+	}
+}
+
+func NewTestKind2ClientFromGenerator(generator resource.ClientGenerator) (*TestKind2Client, error) {
+	c, err := generator.ClientFor(TestKind2Kind())
+	if err != nil {
+		return nil, err
+	}
+	return NewTestKind2Client(c), nil
+}
+
+func (c *TestKind2Client) Get(ctx context.Context, identifier resource.Identifier) (*TestKind2, error) {
+	return c.client.Get(ctx, identifier)
+}
+
+func (c *TestKind2Client) List(ctx context.Context, namespace string, opts resource.ListOptions) (*TestKind2List, error) {
+	return c.client.List(ctx, namespace, opts)
+}
+
+func (c *TestKind2Client) ListAll(ctx context.Context, namespace string, opts resource.ListOptions) (*TestKind2List, error) {
+	resp, err := c.client.List(ctx, namespace, resource.ListOptions{
+		ResourceVersion: opts.ResourceVersion,
+		Limit:           opts.Limit,
+		LabelFilters:    opts.LabelFilters,
+		FieldSelectors:  opts.FieldSelectors,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for resp.GetContinue() != "" {
+		page, err := c.client.List(ctx, namespace, resource.ListOptions{
+			Continue:        resp.GetContinue(),
+			ResourceVersion: opts.ResourceVersion,
+			Limit:           opts.Limit,
+			LabelFilters:    opts.LabelFilters,
+			FieldSelectors:  opts.FieldSelectors,
+		})
+		if err != nil {
+			return nil, err
+		}
+		resp.SetContinue(page.GetContinue())
+		resp.SetResourceVersion(page.GetResourceVersion())
+		resp.SetItems(append(resp.GetItems(), page.GetItems()...))
+	}
+	return resp, nil
+}
+
+func (c *TestKind2Client) Create(ctx context.Context, obj *TestKind2, opts resource.CreateOptions) (*TestKind2, error) {
+	// Make sure apiVersion and kind are set
+	obj.APIVersion = GroupVersion.Identifier()
+	obj.Kind = TestKind2Kind().Kind()
+	return c.client.Create(ctx, obj, opts)
+}
+
+func (c *TestKind2Client) Update(ctx context.Context, obj *TestKind2, opts resource.UpdateOptions) (*TestKind2, error) {
+	return c.client.Update(ctx, obj, opts)
+}
+
+func (c *TestKind2Client) Patch(ctx context.Context, identifier resource.Identifier, req resource.PatchRequest, opts resource.PatchOptions) (*TestKind2, error) {
+	return c.client.Patch(ctx, identifier, req, opts)
+}
+
+func (c *TestKind2Client) UpdateStatus(ctx context.Context, identifier resource.Identifier, newStatus TestKind2Status, opts resource.UpdateOptions) (*TestKind2, error) {
+	return c.client.Update(ctx, &TestKind2{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       TestKind2Kind().Kind(),
+			APIVersion: GroupVersion.Identifier(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			ResourceVersion: opts.ResourceVersion,
+			Namespace:       identifier.Namespace,
+			Name:            identifier.Name,
+		},
+		Status: newStatus,
+	}, resource.UpdateOptions{
+		Subresource:     "status",
+		ResourceVersion: opts.ResourceVersion,
+	})
+}
+
+func (c *TestKind2Client) Delete(ctx context.Context, identifier resource.Identifier, opts resource.DeleteOptions) error {
+	return c.client.Delete(ctx, identifier, opts)
+}
