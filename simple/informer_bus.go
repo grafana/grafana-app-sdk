@@ -49,8 +49,14 @@ type BusInformerConfig struct {
 	// ListerFactory replaces the whole ResourceLister for a kind, for a server whose list does not fit either shape
 	// above. When nil, the lister is built from KeyListerFactory and the kind's client.
 	ListerFactory func(kind resource.Kind, client resource.Client, opts operator.ClientListerOptions) (operator.ResourceLister, error)
-	// MetricsConfig controls the namespace and histogram settings of the bus informer metrics. The collectors are
-	// shared by every kind the supplier creates an informer for.
+	// Metrics are the collectors every informer this supplier creates will share. Set it when an app builds more
+	// than one bus supplier — a per-kind InformerSupplier alongside the app-level one, say: each supplier would
+	// otherwise build its own collectors with identical descriptors, and registration keeps only the first, leaving
+	// the rest updating vectors nothing exports. When nil, the supplier builds one set from MetricsConfig and
+	// shares it across the kinds it serves.
+	Metrics *operator.BusInformerMetrics
+	// MetricsConfig controls the namespace and histogram settings of the collectors the supplier builds when
+	// Metrics is nil. It is ignored when Metrics is set.
 	MetricsConfig metrics.Config
 	// ResourceVersionTime decodes the timestamp a resource version embeds, which is what dates a change for the
 	// delivery latency histograms. Resource versions are opaque in the kubernetes API contract, so there is no
@@ -69,10 +75,13 @@ func BusInformerSupplier(sub resourcebus.Subscriber, cfg BusInformerConfig) Info
 	if sub == nil {
 		return DefaultInformerSupplier
 	}
-	busMetrics := operator.NewBusInformerMetrics(operator.BusInformerMetricsConfig{
-		MetricsConfig:       cfg.MetricsConfig,
-		ResourceVersionTime: cfg.ResourceVersionTime,
-	})
+	busMetrics := cfg.Metrics
+	if busMetrics == nil {
+		busMetrics = operator.NewBusInformerMetrics(operator.BusInformerMetricsConfig{
+			MetricsConfig:       cfg.MetricsConfig,
+			ResourceVersionTime: cfg.ResourceVersionTime,
+		})
+	}
 	return func(kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions) (operator.Informer, error) {
 		client, err := clients.ClientFor(kind)
 		if err != nil {

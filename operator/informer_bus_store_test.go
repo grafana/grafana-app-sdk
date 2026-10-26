@@ -241,3 +241,50 @@ func TestBusStore_ReplaceReportsPreviousStateForUpdates(t *testing.T) {
 	assert.Equal(t, "100", updated[0].previous.GetResourceVersion())
 	assert.Equal(t, "200", updated[0].current.GetResourceVersion())
 }
+
+// The bus does not order events, and the queue between delivery and application adds latency a re-list can complete
+// inside. A write or delete older than what the store already holds is therefore stale, and applying it would roll
+// the key back to a state storage has moved past.
+func TestBusStore_RefusesWritesOlderThanWhatItHolds(t *testing.T) {
+	t.Run("an older write is refused", func(t *testing.T) {
+		s := newBusStore()
+		s.Update(busObjRV("x", 300))
+
+		_, took := s.Update(busObjRV("x", 200))
+		assert.False(t, took)
+
+		stored, _ := s.Get(busTestNamespace, "x")
+		assert.Equal(t, "300", stored.GetResourceVersion(), "the newer object is kept")
+	})
+
+	t.Run("an older delete is refused", func(t *testing.T) {
+		s := newBusStore()
+		// A re-list lists the object as re-created at 300; a delete published at 200 is still queued.
+		s.Replace([]resource.Object{busObjRV("x", 300)}, "300")
+
+		previous, applied := s.DeleteAt(busTestNamespace, "x", "200")
+		assert.False(t, applied, "the delete has been superseded by the re-creation")
+		assert.Nil(t, previous)
+		assert.Equal(t, []string{"x"}, busNames(s.List()), "the live object is not evicted")
+	})
+
+	t.Run("an equal or newer write is taken", func(t *testing.T) {
+		s := newBusStore()
+		s.Update(busObjRV("x", 200))
+
+		_, took := s.Update(busObjRV("x", 200))
+		assert.True(t, took, "the same version is idempotent, not stale")
+		_, took = s.Update(busObjRV("x", 201))
+		assert.True(t, took)
+	})
+
+	t.Run("opaque versions disable the comparison", func(t *testing.T) {
+		s := newBusStore()
+		s.Update(busObjRV("x", 300))
+		opaque := busObj("x")
+		opaque.ResourceVersion = "opaque"
+
+		_, took := s.Update(opaque)
+		assert.True(t, took, "with nothing to compare, the write is taken")
+	})
+}

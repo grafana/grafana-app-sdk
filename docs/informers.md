@@ -139,6 +139,10 @@ reconcile's correctness depends on must be read from the API.
   `informer_bus_dropped_events_total`, which climbing means the informer is not keeping up.
 * **One order for live and re-list deliveries.** Both are applied on that same goroutine, so a live delete cannot
   land between a re-list computing its diff and delivering it.
+* **A completed re-list supersedes older queued events.** A list read after an event was published already accounts
+  for it, so applying it afterwards would roll the snapshot back — a queued delete would evict a re-creation the list
+  saw, a queued add would resurrect a key it confirmed absent. Such events are dropped and counted by
+  `informer_bus_superseded_events_total`. Opaque resource versions disable the comparison, as they do the snapshot's.
 
 ### Starting without the bus
 

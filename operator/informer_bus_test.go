@@ -873,6 +873,8 @@ func busMetricValue(t *testing.T, m *BusInformerMetrics, name string, extra ...s
 		return testutil.ToFloat64(m.liveSubscription.WithLabelValues(labels...))
 	case "relist_requests":
 		return testutil.ToFloat64(m.relistRequests.WithLabelValues(labels...))
+	case "superseded_events":
+		return testutil.ToFloat64(m.supersededEvents.WithLabelValues(labels...))
 	case "dropped_events":
 		return testutil.ToFloat64(m.droppedEvents.WithLabelValues(labels...))
 	case "relist_projection":
@@ -998,7 +1000,7 @@ func TestBusInformer_MetricsDegradedStartGauge(t *testing.T) {
 }
 
 func TestBusInformerMetrics_PrometheusCollectors(t *testing.T) {
-	assert.Len(t, newTestBusMetrics().PrometheusCollectors(), 9)
+	assert.Len(t, newTestBusMetrics().PrometheusCollectors(), 10)
 	assert.Nil(t, (*BusInformerMetrics)(nil).PrometheusCollectors())
 
 	inf := newBusInformer(t, resourcebus.NewFake(), staticLister(), nil, BusInformerOptions{})
@@ -1131,5 +1133,63 @@ func TestBusInformer_LiveEventsAndRelistsShareOneOrder(t *testing.T) {
 		assert.Empty(t, inf.store.List(), "the delete at 200 outranks the snapshot read at 150")
 		assert.Equal(t, []string{"x"}, watcher.deletedNames(), "and it is the last thing watchers saw")
 		assert.Empty(t, watcher.addedNames(), "the stale re-list must not add a deleted object")
+	})
+}
+
+// An event waits in the queue, and a re-list can finish while it waits. A list read after the event was published
+// already accounts for it, so applying it would roll the snapshot back past what storage has confirmed. The store
+// catches this for a key it still holds; the completed list's version is what catches it for a key it does not.
+func TestBusInformer_DropsEventsASupersedingListAlreadyAccountsFor(t *testing.T) {
+	t.Run("a queued delete cannot evict a re-creation the list saw", func(t *testing.T) {
+		watcher := &recordingWatcher{}
+		lister := listerFunc(func(context.Context) ([]resource.Object, string, error) {
+			return []resource.Object{busObjRV("x", 300)}, "300", nil
+		})
+		inf := newBusInformer(t, resourcebus.NewFake(), lister, watcher, BusInformerOptions{
+			ErrorHandler: func(context.Context, error) {},
+		})
+		require.NoError(t, inf.relist(context.Background(), initialRelist))
+
+		inf.handleEvent(context.Background(), busEvent(resourcebus.VerbDeleted, "x", "200"))
+
+		assert.Empty(t, watcher.deletedNames(), "the delete predates the listed re-creation")
+		assert.Equal(t, []string{"x"}, busNames(inf.store.List()))
+	})
+
+	t.Run("a queued add cannot resurrect a key the list confirmed absent", func(t *testing.T) {
+		m := newTestBusMetrics()
+		watcher := &recordingWatcher{}
+		lister := listerFunc(func(context.Context) ([]resource.Object, string, error) { return nil, "300", nil })
+		inf := newBusInformer(t, resourcebus.NewFake(), lister, watcher, BusInformerOptions{Metrics: m})
+		require.NoError(t, inf.relist(context.Background(), initialRelist))
+
+		inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "200"))
+
+		assert.Empty(t, watcher.addedNames(), "the list read at 300 already accounts for the add at 200")
+		assert.Empty(t, inf.store.List())
+		assert.Equal(t, float64(1), busMetricValue(t, m, "superseded_events"))
+	})
+
+	t.Run("an event newer than the list is applied", func(t *testing.T) {
+		watcher := &recordingWatcher{}
+		lister := listerFunc(func(context.Context) ([]resource.Object, string, error) { return nil, "300", nil })
+		inf := newBusInformer(t, resourcebus.NewFake(), lister, watcher, BusInformerOptions{})
+		require.NoError(t, inf.relist(context.Background(), initialRelist))
+
+		inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "400"))
+
+		assert.Equal(t, []string{"x"}, watcher.addedNames())
+	})
+
+	// The whole comparison rests on numeric versions, so an opaque one leaves it off rather than guessing.
+	t.Run("opaque versions disable the check", func(t *testing.T) {
+		watcher := &recordingWatcher{}
+		lister := listerFunc(func(context.Context) ([]resource.Object, string, error) { return nil, "opaque", nil })
+		inf := newBusInformer(t, resourcebus.NewFake(), lister, watcher, BusInformerOptions{})
+		require.NoError(t, inf.relist(context.Background(), initialRelist))
+
+		inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "200"))
+
+		assert.Equal(t, []string{"x"}, watcher.addedNames())
 	})
 }

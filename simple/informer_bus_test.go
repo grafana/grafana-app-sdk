@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-app-sdk/resourcebus"
@@ -360,4 +361,22 @@ func TestBusInformerSupplier_KeyListerFactory(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, keysBuilt, "a whole-lister replacement does not also build a key lister")
 	})
+}
+
+// Two suppliers sharing a metrics namespace would otherwise each build collectors with identical descriptors, and
+// registration keeps only the first — leaving the second supplier's informers updating vectors nothing exports.
+func TestBusInformerSupplier_SharesInjectedMetrics(t *testing.T) {
+	shared := operator.NewBusInformerMetrics(operator.BusInformerMetricsConfig{
+		MetricsConfig: metrics.DefaultConfig("test"),
+	})
+	cfg := BusInformerConfig{Metrics: shared}
+
+	first, err := BusInformerSupplier(resourcebus.NewFake(), cfg)(testKind(), stubClients{}, operator.InformerOptions{})
+	require.NoError(t, err)
+	second, err := BusInformerSupplier(resourcebus.NewFake(), cfg)(testKind(), stubClients{}, operator.InformerOptions{})
+	require.NoError(t, err)
+
+	assert.Equal(t, shared.PrometheusCollectors(), first.(*operator.BusInformer).PrometheusCollectors())
+	assert.Equal(t, shared.PrometheusCollectors(), second.(*operator.BusInformer).PrometheusCollectors(),
+		"both suppliers report the collectors that were actually registered")
 }

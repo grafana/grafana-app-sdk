@@ -47,6 +47,7 @@ type BusInformerMetrics struct {
 	relistRequests   *prometheus.CounterVec
 	relistProjection *prometheus.CounterVec
 	droppedEvents    *prometheus.CounterVec
+	supersededEvents *prometheus.CounterVec
 
 	resourceVersionTime func(int64) time.Time
 }
@@ -117,6 +118,11 @@ func NewBusInformerMetrics(cfg BusInformerMetricsConfig) *BusInformerMetrics {
 			Name:      "informer_bus_dropped_events_total",
 			Help:      "Live events dropped because the informer's queue was full, meaning it is not applying events as fast as the bus delivers them. Each one forces a re-list, so the change is recovered rather than lost, at the cost of a full list.",
 		}, []string{"group", "version", "kind"}),
+		supersededEvents: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: cfg.MetricsConfig.Namespace,
+			Name:      "informer_bus_superseded_events_total",
+			Help:      "Live events dropped because a re-list completed while they waited in the queue and read a newer version of the resource, so the snapshot already accounts for them. Expected in small numbers under load; sustained growth means events are queued for longer than the re-list cadence.",
+		}, []string{"group", "version", "kind"}),
 		relistProjection: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: cfg.MetricsConfig.Namespace,
 			Name:      "informer_bus_relist_projection_total",
@@ -133,7 +139,7 @@ func (m *BusInformerMetrics) PrometheusCollectors() []prometheus.Collector {
 	}
 	return []prometheus.Collector{
 		m.liveEvents, m.relistEvents, m.liveLatency, m.relistLatency,
-		m.reconnects, m.liveSubscription, m.relistRequests, m.relistProjection, m.droppedEvents,
+		m.reconnects, m.liveSubscription, m.relistRequests, m.relistProjection, m.droppedEvents, m.supersededEvents,
 	}
 }
 
@@ -213,6 +219,13 @@ func (k kindMetrics) observeDroppedEvent() {
 		return
 	}
 	k.metrics.droppedEvents.WithLabelValues(k.group, k.version, k.kind).Inc()
+}
+
+func (k kindMetrics) observeSupersededEvent() {
+	if k.metrics == nil {
+		return
+	}
+	k.metrics.supersededEvents.WithLabelValues(k.group, k.version, k.kind).Inc()
 }
 
 func (k kindMetrics) observeReconnect() {

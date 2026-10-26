@@ -83,3 +83,27 @@ func TestFake_SubscribeRejectsNilHandler(t *testing.T) {
 	_, err := NewFake().Subscribe(context.Background(), testGVR, testNamespace, nil)
 	assert.Error(t, err)
 }
+
+// A group shares delivery: each event reaches one member, in turn, which is what lets a test exercise the events a
+// replica never sees live and recovers from its next re-list.
+func TestFake_GroupSharesDelivery(t *testing.T) {
+	f := NewFake()
+	ctx := context.Background()
+	group := Group{Name: "replicas", Delivery: GroupDeliveryRoundRobin}
+
+	var first, second, ungrouped int
+	_, err := f.Subscribe(ctx, testGVR, testNamespace, func(context.Context, Event) { first++ }, WithGroup(group))
+	require.NoError(t, err)
+	_, err = f.Subscribe(ctx, testGVR, testNamespace, func(context.Context, Event) { second++ }, WithGroup(group))
+	require.NoError(t, err)
+	_, err = f.Subscribe(ctx, testGVR, testNamespace, func(context.Context, Event) { ungrouped++ })
+	require.NoError(t, err)
+
+	for range 4 {
+		require.NoError(t, f.Publish(ctx, testGVR, testNamespace, Event{Verb: VerbAdded, Name: "a"}))
+	}
+
+	assert.Equal(t, 2, first, "each member takes its turn")
+	assert.Equal(t, 2, second)
+	assert.Equal(t, 4, ungrouped, "a subscription outside any group still receives every event")
+}

@@ -88,7 +88,13 @@ func (s *busStore) Update(obj resource.Object) (previous resource.Object, ok boo
 		}
 		delete(s.tombstones, key)
 	}
-	existing := s.items[key]
+	// An event can be applied after a newer one for the same key: the bus does not promise ordering, and the queue
+	// between delivery and here adds latency a re-list can complete inside. A write older than what the store holds
+	// is therefore stale, and installing it would roll the key back to a superseded state.
+	existing, held := s.items[key]
+	if held && rv > 0 && existing.rv > rv {
+		return nil, false
+	}
 	s.items[key] = busEntry{obj: obj, rv: rv}
 	return existing.obj, true
 }
@@ -98,18 +104,25 @@ func (s *busStore) Update(obj resource.Object) (previous resource.Object, ok boo
 // absent version records no tombstone: there is nothing to arbitrate against.
 //
 // It returns the object it evicted, if the store held one, so that a delete can be dispatched with the last-known
-// state under the same lock that removed it.
-func (s *busStore) DeleteAt(namespace, name, resourceVersion string) (previous resource.Object) {
+// state under the same lock that removed it, and whether the delete was applied at all: a delete a newer write
+// supersedes is refused, and the caller must not dispatch it.
+func (s *busStore) DeleteAt(namespace, name, resourceVersion string) (previous resource.Object, ok bool) {
 	key := busStoreKey(namespace, name)
 	rv := parseResourceVersion(resourceVersion)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	existing := s.items[key]
+	// A delete older than the object the store holds has been superseded — the object was re-created at a higher
+	// version, or a re-list listed it at one. Evicting would drop a live object, and the caller would dispatch the
+	// delete carrying that newer object's state.
+	existing, held := s.items[key]
+	if held && rv > 0 && existing.rv > rv {
+		return nil, false
+	}
 	delete(s.items, key)
 	if rv > 0 {
 		s.tombstones[key] = rv
 	}
-	return existing.obj
+	return existing.obj, true
 }
 
 // Replace swaps the store's contents for objs — the snapshot a list read at listResourceVersion — and reports the

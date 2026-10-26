@@ -141,6 +141,10 @@ type BusInformer struct {
 	synced   atomic.Bool
 	syncedCh chan struct{}
 	stopped  atomic.Bool
+
+	// lastListRV is the resource version of the most recently installed snapshot, so a queued event older than it
+	// can be recognized as superseded. Zero means no list has been dated, which disables the check.
+	lastListRV atomic.Int64
 }
 
 var _ Informer = (*BusInformer)(nil)
@@ -430,12 +434,26 @@ func (b *BusInformer) onEvent(_ context.Context, evt resourcebus.Event) {
 func (b *BusInformer) handleEvent(ctx context.Context, evt resourcebus.Event) {
 	ctx = ContextWithDelivery(ctx, DeliveryLive)
 	rv := parseResourceVersion(evt.ResourceVersion)
+	// An event waits in the queue, and a re-list can complete while it waits. A list read after the event was
+	// published already accounts for it — including by listing a re-creation, or by confirming an absence — so
+	// applying it now would roll the snapshot back to a state storage has already moved past. The store catches
+	// this for a key it still holds; only the completed list's version catches it for a key it does not.
+	if listRV := b.lastListRV.Load(); rv > 0 && listRV > 0 && rv < listRV {
+		b.metrics.observeSupersededEvent()
+		b.logger(ctx).Debug("dropping event superseded by a newer list",
+			"namespace", evt.Namespace, "name", evt.Name, "resourceVersion", evt.ResourceVersion)
+		return
+	}
 	switch evt.Verb {
 	case resourcebus.VerbDeleted:
 		// The object is already gone from storage, so there is nothing to read: dispatch the last-known object the
 		// eviction returns, and the identity when the store held none. Evicting keeps the next re-list from diffing
 		// a delivered delete as a change the live stream missed.
-		obj := b.store.DeleteAt(evt.Namespace, evt.Name, evt.ResourceVersion)
+		obj, applied := b.store.DeleteAt(evt.Namespace, evt.Name, evt.ResourceVersion)
+		if !applied {
+			b.handleError(ctx, fmt.Errorf("dropping delete for %s/%s: superseded by a newer write", evt.Namespace, evt.Name))
+			return
+		}
 		if obj == nil {
 			obj = b.identityObject(evt)
 		}
@@ -515,6 +533,12 @@ func (b *BusInformer) relist(ctx context.Context, pass relistPass) error {
 
 	ctx = ContextWithDelivery(ctx, DeliveryRelist)
 	added, updated, removed := b.store.Replace(objs, listRV)
+	// Recorded after Replace, so a queued event is only judged against a snapshot already installed. An
+	// unparseable version leaves it at zero, which disables the check — the same fallback the store's arbitration
+	// makes.
+	if parsed := parseResourceVersion(listRV); parsed > b.lastListRV.Load() {
+		b.lastListRV.Store(parsed)
+	}
 	b.logger(ctx).Debug("re-listed", "initial", pass == initialRelist, "count", len(objs),
 		"added", len(added), "updated", len(updated), "removed", len(removed))
 

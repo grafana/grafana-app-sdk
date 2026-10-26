@@ -263,15 +263,21 @@ func BenchmarkBusInformerLiveEvents(b *testing.B) {
 				inf, err := operator.NewBusInformer(kind, sub, emptyLister{}, operator.BusInformerOptions{
 					Payload:        operator.PayloadIdentity,
 					ResyncInterval: time.Hour,
+					// The subscriber callback only enqueues, so the whole burst has to fit: a full queue drops
+					// events and forces a re-list, and emptyLister has nothing to recover them from.
+					EventQueueSize: eventCount,
 				})
 				if err != nil {
 					b.Fatalf("failed to create informer: %v", err)
 				}
 
 				var received atomic.Int32
+				done := make(chan struct{})
 				if err := inf.AddEventHandler(&operator.SimpleWatcher{
 					AddFunc: func(context.Context, resource.Object) error {
-						received.Add(1)
+						if int(received.Add(1)) == eventCount {
+							close(done)
+						}
 						return nil
 					},
 				}); err != nil {
@@ -279,9 +285,9 @@ func BenchmarkBusInformerLiveEvents(b *testing.B) {
 				}
 
 				ctx, cancel := context.WithCancel(b.Context())
-				done := make(chan struct{})
+				runDone := make(chan struct{})
 				go func() {
-					defer close(done)
+					defer close(runDone)
 					_ = inf.Run(ctx)
 				}()
 				if err := inf.WaitForSync(ctx); err != nil {
@@ -300,13 +306,17 @@ func BenchmarkBusInformerLiveEvents(b *testing.B) {
 					}
 				}
 
-				if got := int(received.Load()); got != eventCount {
+				// Publish returns once the event is queued, so wait for the handler to have seen all of them
+				// before stopping: the measurement is of delivery through to the watcher, not of enqueueing.
+				select {
+				case <-done:
+				case <-ctx.Done():
 					cancel()
-					b.Fatalf("expected %d events, got %d", eventCount, got)
+					b.Fatalf("timeout waiting for events, got %d of %d", received.Load(), eventCount)
 				}
 
 				cancel()
-				<-done
+				<-runDone
 			}
 		})
 	}
