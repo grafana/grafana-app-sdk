@@ -1,0 +1,97 @@
+package simple
+
+import (
+	"time"
+
+	"github.com/grafana/grafana-app-sdk/metrics"
+	"github.com/grafana/grafana-app-sdk/operator"
+	"github.com/grafana/grafana-app-sdk/resource"
+	"github.com/grafana/grafana-app-sdk/resourcebus"
+)
+
+// identityPayloadInformer is implemented by an informer which delivers identity-only objects. watchKind asserts it
+// to refuse a pairing with an opinionated reconciler or watcher, which reads the deletion timestamp and the
+// finalizer list off the delivered object and would see both as absent.
+type identityPayloadInformer interface {
+	IdentityPayload() bool
+}
+
+var _ identityPayloadInformer = (*operator.BusInformer)(nil)
+
+// BusInformerConfig configures the informers BusInformerSupplier creates.
+type BusInformerConfig struct {
+	// Payload selects which object live events deliver. An empty value is operator.PayloadIdentity, which delivers
+	// identity only and so cannot be combined with an opinionated reconciler or watcher.
+	Payload operator.BusPayload
+	// ResyncInterval is how often the full set is re-listed. The re-list is what catches changes the live stream did
+	// not deliver, so it is a correctness interval, not a nicety.
+	// A non-positive value uses operator.DefaultBusResyncInterval.
+	ResyncInterval time.Duration
+	// SharedGroup is the name of a group of subscribers which share delivery, so that each event reaches exactly one
+	// replica of the app rather than all of them. An empty name delivers every event to every replica.
+	SharedGroup string
+	// AllowDegradedStart lets an informer start re-list-only when the bus is unavailable, instead of holding its
+	// initial list until a subscription opens. See operator.BusInformerOptions.AllowDegradedStart.
+	AllowDegradedStart bool
+	// PageSize is the page size the default lister requests. An empty value uses operator.DefaultListerPageSize.
+	PageSize int
+	// ListerFactory builds the ResourceLister for a kind, for a server which can list identities alone rather than
+	// full objects. When nil, a paginated full-object list over the kind's client is used.
+	ListerFactory func(kind resource.Kind, client resource.Client, opts operator.ClientListerOptions) (operator.ResourceLister, error)
+	// MetricsConfig controls the namespace and histogram settings of the bus informer metrics. The collectors are
+	// shared by every kind the supplier creates an informer for.
+	MetricsConfig metrics.Config
+	// ResourceVersionTime decodes the timestamp a resource version embeds, which is what dates a change for the
+	// delivery latency histograms. Resource versions are opaque in the kubernetes API contract, so there is no
+	// portable decoding: when this is nil no latency is observed.
+	ResourceVersionTime func(int64) time.Time
+}
+
+// BusInformerSupplier returns an InformerSupplier which creates operator.BusInformer instances driven by sub.
+// A nil subscriber returns DefaultInformerSupplier, so that an app can be wired for a bus which is switched off
+// without branching at every call site.
+//
+// Every informer the returned supplier creates shares one set of metric collectors, since they differ only by label.
+func BusInformerSupplier(sub resourcebus.Subscriber, cfg BusInformerConfig) InformerSupplier {
+	if sub == nil {
+		return DefaultInformerSupplier
+	}
+	busMetrics := operator.NewBusInformerMetrics(operator.BusInformerMetricsConfig{
+		MetricsConfig:       cfg.MetricsConfig,
+		ResourceVersionTime: cfg.ResourceVersionTime,
+	})
+	return func(kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions) (operator.Informer, error) {
+		client, err := clients.ClientFor(kind)
+		if err != nil {
+			return nil, err
+		}
+
+		listerOpts := operator.ClientListerOptions{
+			ListWatchOptions: options.ListWatchOptions,
+			PageSize:         cfg.PageSize,
+			Recorder:         busMetrics.RelistRecorder(kind),
+		}
+		lister, err := cfg.lister(kind, client, listerOpts)
+		if err != nil {
+			return nil, err
+		}
+
+		return operator.NewBusInformer(kind, sub, lister, operator.BusInformerOptions{
+			Namespace:          options.ListWatchOptions.Namespace,
+			Payload:            cfg.Payload,
+			Getter:             client,
+			ResyncInterval:     cfg.ResyncInterval,
+			SharedGroup:        cfg.SharedGroup,
+			AllowDegradedStart: cfg.AllowDegradedStart,
+			ErrorHandler:       options.ErrorHandler,
+			Metrics:            busMetrics,
+		})
+	}
+}
+
+func (c BusInformerConfig) lister(kind resource.Kind, client resource.Client, opts operator.ClientListerOptions) (operator.ResourceLister, error) {
+	if c.ListerFactory != nil {
+		return c.ListerFactory(kind, client, opts)
+	}
+	return operator.NewClientLister(client, kind, opts)
+}

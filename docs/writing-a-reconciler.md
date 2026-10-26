@@ -29,6 +29,21 @@ When writing a reconciler, it's important to take a few things into consideratio
 * When you have multiple versions of a kind, your reconciliation should only deal with one of them (typically the latest), as events are always issued for any version as the version requested by the operator's watch (so a user creating a `v1` version of a resource will still produce a `v2` version of that resource in a watch request for the `v2` of the kind).
 * The default conversion between versions is roughly equivalent to running `json.Marshal` on the stored version and then `json.Unmarshal` into the requested version. If this is not good enough for your purposes, add conversion to your app (for `simple.App`, use `AppConfig.Converters`, or implement `Convert` if you're implementing `app.App` yourself. Don't forget to add conversion in your manifest as well).
 
+## Identity Payloads and Opinionated Reconcilers
+
+A delta source does not have to deliver the whole object. `operator.BusInformer` with
+`operator.PayloadIdentity` delivers the kind's zero value carrying namespace, name and resource version, on the
+premise that a reconcile reads the object it acts on for itself (see [Delta Sources](operators.md#delta-sources)).
+
+The `Opinionated` variants cannot be used with such a source. `OpinionatedWatcher` and `OpinionatedReconciler` read
+the deletion timestamp and the finalizer list off the delivered object to decide whether an event is a create, a
+sync, or a delete in progress. On an identity object both are empty, so an object which is tombstoning reads as a
+fresh add and an attached finalizer reads as absent.
+
+`simple.App` refuses the pairing when the app is constructed, rather than letting it fail at the first tombstone. If
+you need the opinionated behaviour, use `operator.PayloadHydrated`; if you need the identity payload, set
+`ReconcileOptions.UsePlain` and handle the deletion timestamp in your own reconcile, after reading the object.
+
 ## An Example Reconciler
 
 Let's consider an example reconciler for a kind defined by the CUE:
