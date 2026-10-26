@@ -83,7 +83,9 @@ func (s *busStore) Update(obj resource.Object) (previous resource.Object, ok boo
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if trv, tombstoned := s.tombstones[key]; tombstoned {
-		if rv < trv {
+		// rv > 0 keeps the documented fallback: an unparseable version cannot be compared, so it does not lose to
+		// a dated delete — arbitration is disabled for it rather than resolved against it.
+		if rv > 0 && rv < trv {
 			return nil, false
 		}
 		delete(s.tombstones, key)
@@ -118,11 +120,40 @@ func (s *busStore) DeleteAt(namespace, name, resourceVersion string) (previous r
 	if held && rv > 0 && existing.rv > rv {
 		return nil, false
 	}
+	// A delete older than a tombstone already recorded has been superseded by a newer one. Overwriting would move
+	// the tombstone backwards, and a write between the two versions would then be accepted — resurrecting an object
+	// the newer delete removed.
+	if trv, tombstoned := s.tombstones[key]; tombstoned && rv > 0 && rv < trv {
+		return nil, false
+	}
 	delete(s.items, key)
 	if rv > 0 {
 		s.tombstones[key] = rv
 	}
 	return existing.obj, true
+}
+
+// Touch advances the version a key is ordered by without replacing the object it holds, and reports whether it was
+// applied. It is what an identity-mode modification needs: the delivered object carries no deletion timestamp, so
+// storing it would overwrite the stored object's real one, but leaving the version behind would let a later
+// out-of-order delete at a version between the two read as newer than the key and evict it.
+//
+// A key the store does not hold cannot be advanced, and a version older than the one held is stale; both report
+// false.
+func (s *busStore) Touch(namespace, name, resourceVersion string) bool {
+	key := busStoreKey(namespace, name)
+	rv := parseResourceVersion(resourceVersion)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	existing, held := s.items[key]
+	if !held || (rv > 0 && existing.rv > rv) {
+		return false
+	}
+	if rv > existing.rv {
+		existing.rv = rv
+		s.items[key] = existing
+	}
+	return true
 }
 
 // Replace swaps the store's contents for objs — the snapshot a list read at listResourceVersion — and reports the

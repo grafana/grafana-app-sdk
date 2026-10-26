@@ -42,50 +42,84 @@ func (f *Fake) FailSubscribes(n int) {
 }
 
 // Subscribe implements Subscriber.
-func (f *Fake) Subscribe(_ context.Context, gvr schema.GroupVersionResource, namespace string,
+func (f *Fake) Subscribe(ctx context.Context, gvr schema.GroupVersionResource, namespace string,
 	handler func(context.Context, Event), opts ...SubscribeOption) (Subscription, error) {
 	if handler == nil {
 		return nil, errors.New("handler cannot be nil")
 	}
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	if f.failN > 0 {
 		f.failN--
+		f.mu.Unlock()
 		return nil, errors.New("bus unavailable")
 	}
 	key := fakeKey(gvr, namespace)
 	sub := &fakeSubscription{fake: f, key: key, handler: handler, cfg: NewSubscribeConfig(opts...)}
 	f.subs[key] = append(f.subs[key], sub)
+	f.mu.Unlock()
+
+	// Delivery stops when ctx is done as well as on Close, per Subscription. An already-canceled context releases
+	// the subscription before this returns, so a caller which cancels and then publishes sees no delivery.
+	if ctx.Done() != nil {
+		go func() {
+			<-ctx.Done()
+			_ = sub.Close()
+		}()
+	}
 	return sub, nil
 }
 
-// Subscribed reports whether anything is currently subscribed to the resource and namespace.
+// Subscribed reports whether anything is currently subscribed to the resource and namespace, counting an
+// all-namespace subscription as covering it.
 func (f *Fake) Subscribed(gvr schema.GroupVersionResource, namespace string) bool {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return len(f.subs[fakeKey(gvr, namespace)]) > 0
+	return len(f.matching(gvr, namespace)) > 0
+}
+
+// matching returns the subscriptions an event in the namespace reaches: those scoped to it, and those which asked
+// for every namespace. The two scopes stay separate for group selection, so a group in each takes its own turn.
+func (f *Fake) matching(gvr schema.GroupVersionResource, namespace string) map[string][]*fakeSubscription {
+	out := map[string][]*fakeSubscription{}
+	for _, key := range f.scopeKeys(gvr, namespace) {
+		if subs := f.subscriptions(key); len(subs) > 0 {
+			out[key] = subs
+		}
+	}
+	return out
+}
+
+// scopeKeys are the subscription scopes an event in the namespace belongs to: the namespace itself, plus the
+// all-namespace scope, which the contract defines as covering every namespace.
+func (*Fake) scopeKeys(gvr schema.GroupVersionResource, namespace string) []string {
+	keys := []string{fakeKey(gvr, namespace)}
+	if namespace != "" {
+		keys = append(keys, fakeKey(gvr, ""))
+	}
+	return keys
 }
 
 // Publish delivers evt to the handlers subscribed to the resource and namespace: every ungrouped subscription, and
 // one member of each group, taken in turn. It returns ErrNoSubscription if there are none.
 func (f *Fake) Publish(ctx context.Context, gvr schema.GroupVersionResource, namespace string, evt Event) error {
-	key := fakeKey(gvr, namespace)
-	subs := f.subscriptions(key)
-	if len(subs) == 0 {
+	scopes := f.matching(gvr, namespace)
+	if len(scopes) == 0 {
 		return fmt.Errorf("%w for %s in namespace %q", ErrNoSubscription, gvr.String(), namespace)
 	}
-	for _, sub := range f.recipients(key, subs) {
-		sub.handler(ctx, evt)
+	for _, key := range f.scopeKeys(gvr, namespace) {
+		for _, sub := range f.recipients(key, scopes[key]) {
+			sub.handler(ctx, evt)
+		}
 	}
 	return nil
 }
 
-// Reconnect invokes the OnReconnect callback of every subscription to the resource and namespace, as a bus does when
-// it re-establishes a subscription after a gap.
+// Reconnect invokes the OnReconnect callback of every subscription covering the resource and namespace, as a bus
+// does when it re-establishes a subscription after a gap.
 func (f *Fake) Reconnect(gvr schema.GroupVersionResource, namespace string) {
-	for _, sub := range f.subscriptions(fakeKey(gvr, namespace)) {
-		if sub.cfg.OnReconnect != nil {
-			sub.cfg.OnReconnect()
+	for _, subs := range f.matching(gvr, namespace) {
+		for _, sub := range subs {
+			if sub.cfg.OnReconnect != nil {
+				sub.cfg.OnReconnect()
+			}
 		}
 	}
 }
@@ -93,11 +127,12 @@ func (f *Fake) Reconnect(gvr schema.GroupVersionResource, namespace string) {
 // Group returns the group of the first subscription to the resource and namespace, or the zero Group if there is
 // none.
 func (f *Fake) Group(gvr schema.GroupVersionResource, namespace string) Group {
-	subs := f.subscriptions(fakeKey(gvr, namespace))
-	if len(subs) == 0 {
-		return Group{}
+	for _, key := range f.scopeKeys(gvr, namespace) {
+		if subs := f.subscriptions(key); len(subs) > 0 {
+			return subs[0].cfg.Group
+		}
 	}
-	return subs[0].cfg.Group
+	return Group{}
 }
 
 // recipients picks who receives one event: every ungrouped subscription, plus one member of each group, taken in

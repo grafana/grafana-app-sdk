@@ -475,19 +475,28 @@ func (b *BusInformer) handleEvent(ctx context.Context, evt resourcebus.Event) {
 // as an add: there is no previous state to pair it with, and a first-seen key is what the re-list diff would call an
 // add too.
 func (b *BusInformer) handleWrite(ctx context.Context, evt resourcebus.Event, obj resource.Object, rv int64) {
-	// An identity object carries no deletion timestamp, so writing a modification of a known object through would
-	// overwrite the stored object's real one and mislead the next re-list's diff. Everything else is written
-	// through: without it the object is absent until the next re-list, which would then re-report a delivered event
-	// as a change the live stream missed.
+	// Reading before writing is safe because every store mutation runs on the run loop: handleEvent and relist are
+	// both called from it, so nothing can land between the two calls below.
 	previous, held := b.store.Get(evt.Namespace, evt.Name)
-	writeThrough := !held || evt.Verb == resourcebus.VerbAdded || b.opts.Payload == PayloadHydrated
-	if writeThrough {
+
+	// An identity object carries no deletion timestamp, so storing a modification of a known object would overwrite
+	// the stored object's real one and mislead the next re-list's diff. Its version still has to advance, or a later
+	// out-of-order delete at a version between the two would read as newer than the key and evict it. Everything
+	// else is stored outright: without that the object is absent until the next re-list, which would then re-report
+	// a delivered event as a change the live stream missed.
+	//
+	// Either way the store can refuse — a newer delete may have been applied while the payload was being read — and
+	// dispatching regardless would leave watchers holding an event for a state the snapshot does not have, with no
+	// later re-list able to correct it.
+	if held && evt.Verb == resourcebus.VerbModified && b.opts.Payload == PayloadIdentity {
+		if !b.store.Touch(evt.Namespace, evt.Name, evt.ResourceVersion) {
+			b.handleError(ctx, fmt.Errorf("dropping event for %s/%s: superseded by a newer write", evt.Namespace, evt.Name))
+			return
+		}
+	} else {
 		var taken bool
-		// A newer delete may have been applied between the payload read and here. The store refuses the write, and
-		// dispatching anyway would leave watchers holding an add or update for an object the snapshot does not
-		// have — with no later re-list able to correct it, since there is nothing to diff away.
 		if previous, taken = b.store.Update(obj); !taken {
-			b.handleError(ctx, fmt.Errorf("dropping event for %s/%s: superseded by a newer delete", evt.Namespace, evt.Name))
+			b.handleError(ctx, fmt.Errorf("dropping event for %s/%s: superseded by a newer write", evt.Namespace, evt.Name))
 			return
 		}
 	}

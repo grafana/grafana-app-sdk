@@ -288,3 +288,65 @@ func TestBusStore_RefusesWritesOlderThanWhatItHolds(t *testing.T) {
 		assert.True(t, took, "with nothing to compare, the write is taken")
 	})
 }
+
+// A delete must not move a newer tombstone backwards: a write dated between the two versions would then be accepted,
+// resurrecting an object the newer delete removed.
+func TestBusStore_DeleteDoesNotRegressANewerTombstone(t *testing.T) {
+	s := newBusStore()
+	s.Update(busObjRV("x", 100))
+
+	_, applied := s.DeleteAt(busTestNamespace, "x", "300")
+	require.True(t, applied)
+	_, applied = s.DeleteAt(busTestNamespace, "x", "200")
+	assert.False(t, applied, "the older delete has been superseded")
+
+	_, took := s.Update(busObjRV("x", 250))
+	assert.False(t, took, "the tombstone still stands at 300, so a write below it is refused")
+	assert.Empty(t, s.List())
+}
+
+// An unparseable write version cannot be compared with a dated tombstone, so arbitration is disabled for it rather
+// than resolved against it — the documented fallback.
+func TestBusStore_OpaqueWriteIsNotRefusedByATombstone(t *testing.T) {
+	s := newBusStore()
+	s.Update(busObjRV("x", 100))
+	s.DeleteAt(busTestNamespace, "x", "20")
+
+	opaque := busObj("x")
+	opaque.ResourceVersion = "opaque"
+	_, took := s.Update(opaque)
+
+	assert.True(t, took, "with no comparable version the write is taken")
+	assert.Equal(t, []string{"x"}, busNames(s.List()))
+}
+
+// Touch advances the version a key is ordered by while keeping the object it holds, which is what an identity-mode
+// modification needs: storing the identity would drop the stored object's deletion timestamp, but leaving the
+// version behind would let a later out-of-order delete between the two versions evict the key.
+func TestBusStore_Touch(t *testing.T) {
+	t.Run("advances the version without replacing the object", func(t *testing.T) {
+		s := newBusStore()
+		listed := busObjRV("x", 100)
+		listed.Spec = map[string]any{"field": "value"}
+		s.Replace([]resource.Object{listed}, "100")
+
+		assert.True(t, s.Touch(busTestNamespace, "x", "300"))
+
+		stored, ok := s.Get(busTestNamespace, "x")
+		require.True(t, ok)
+		assert.Equal(t, map[string]any{"field": "value"}, stored.GetSpec(), "the stored object is untouched")
+
+		_, applied := s.DeleteAt(busTestNamespace, "x", "200")
+		assert.False(t, applied, "a delete below the advanced version is now recognized as stale")
+	})
+
+	t.Run("refuses a key it does not hold", func(t *testing.T) {
+		assert.False(t, newBusStore().Touch(busTestNamespace, "absent", "300"))
+	})
+
+	t.Run("refuses a version older than the one held", func(t *testing.T) {
+		s := newBusStore()
+		s.Update(busObjRV("x", 300))
+		assert.False(t, s.Touch(busTestNamespace, "x", "200"))
+	})
+}

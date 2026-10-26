@@ -3,6 +3,7 @@ package resourcebus
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -106,4 +107,76 @@ func TestFake_GroupSharesDelivery(t *testing.T) {
 	assert.Equal(t, 2, first, "each member takes its turn")
 	assert.Equal(t, 2, second)
 	assert.Equal(t, 4, ungrouped, "a subscription outside any group still receives every event")
+}
+
+// An empty namespace means every namespace, per Subscriber, so a namespaced publish has to reach it.
+func TestFake_AllNamespaceSubscriptionReceivesNamespacedEvents(t *testing.T) {
+	f := NewFake()
+	ctx := context.Background()
+
+	var all, scoped int
+	_, err := f.Subscribe(ctx, testGVR, "", func(context.Context, Event) { all++ })
+	require.NoError(t, err)
+	_, err = f.Subscribe(ctx, testGVR, testNamespace, func(context.Context, Event) { scoped++ })
+	require.NoError(t, err)
+
+	assert.True(t, f.Subscribed(testGVR, testNamespace))
+	assert.True(t, f.Subscribed(testGVR, "other"), "the all-namespace subscription covers it")
+
+	require.NoError(t, f.Publish(ctx, testGVR, testNamespace, Event{Verb: VerbAdded, Name: "a"}))
+	require.NoError(t, f.Publish(ctx, testGVR, "other", Event{Verb: VerbAdded, Name: "b"}))
+
+	assert.Equal(t, 2, all, "both namespaces reach the all-namespace subscription")
+	assert.Equal(t, 1, scoped, "only its own namespace reaches the scoped one")
+}
+
+// Each scope picks its own group member, so an all-namespace group and a namespaced one do not share a turn.
+func TestFake_GroupTurnsArePerScope(t *testing.T) {
+	f := NewFake()
+	ctx := context.Background()
+	group := Group{Name: "replicas"}
+
+	var all, scoped int
+	_, err := f.Subscribe(ctx, testGVR, "", func(context.Context, Event) { all++ }, WithGroup(group))
+	require.NoError(t, err)
+	_, err = f.Subscribe(ctx, testGVR, testNamespace, func(context.Context, Event) { scoped++ }, WithGroup(group))
+	require.NoError(t, err)
+
+	require.NoError(t, f.Publish(ctx, testGVR, testNamespace, Event{Verb: VerbAdded, Name: "a"}))
+
+	assert.Equal(t, 1, all, "the sole member of the all-namespace group takes its turn")
+	assert.Equal(t, 1, scoped, "as does the sole member of the namespaced group")
+}
+
+// Delivery stops when the subscribe context is done, as well as on Close.
+func TestFake_CancellingTheContextStopsDelivery(t *testing.T) {
+	f := NewFake()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	var received int
+	_, err := f.Subscribe(ctx, testGVR, testNamespace, func(context.Context, Event) { received++ })
+	require.NoError(t, err)
+	require.NoError(t, f.Publish(context.Background(), testGVR, testNamespace, Event{Verb: VerbAdded, Name: "a"}))
+	require.Equal(t, 1, received)
+
+	cancel()
+	assert.Eventually(t, func() bool { return !f.Subscribed(testGVR, testNamespace) }, time.Second, time.Millisecond)
+
+	assert.ErrorIs(t, f.Publish(context.Background(), testGVR, testNamespace, Event{Verb: VerbAdded, Name: "b"}),
+		ErrNoSubscription)
+	assert.Equal(t, 1, received, "nothing is delivered after cancellation")
+}
+
+// A context which is already done releases the subscription without a publish ever reaching it.
+func TestFake_AlreadyCancelledContextDeliversNothing(t *testing.T) {
+	f := NewFake()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	var received int
+	_, err := f.Subscribe(ctx, testGVR, testNamespace, func(context.Context, Event) { received++ })
+	require.NoError(t, err)
+
+	assert.Eventually(t, func() bool { return !f.Subscribed(testGVR, testNamespace) }, time.Second, time.Millisecond)
+	assert.Zero(t, received)
 }

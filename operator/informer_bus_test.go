@@ -286,7 +286,7 @@ func TestBusInformer_DoesNotDispatchAWriteTheStoreRefuses(t *testing.T) {
 	assert.Equal(t, []string{"x"}, watcher.deletedNames(), "the delete is the last thing watchers saw")
 	assert.Empty(t, inf.store.List())
 	require.Len(t, handled, 1)
-	assert.Contains(t, handled[0].Error(), "superseded by a newer delete")
+	assert.Contains(t, handled[0].Error(), "superseded by a newer write")
 }
 
 // The subscriber callback must not block, so a full queue drops the event and forces a re-list rather than waiting
@@ -1104,13 +1104,19 @@ func TestBusInformer_Snapshot(t *testing.T) {
 		"the re-list drops what storage no longer lists")
 }
 
-// A live delete and a re-list diff are applied and delivered on one goroutine, so a delete cannot land between a
-// re-list computing its diff and dispatching it. Were it to, watchers would end on an add for an object the store
-// no longer holds, with nothing left for a later re-list to diff away.
+// A live delete and a re-list diff are applied and delivered on one goroutine, so one finishes before the other
+// starts. Which goes first is the run loop's select, and both orders are correct: either the delete lands alone and
+// the stale re-list is suppressed, or the re-list adds the listed object and the newer delete removes it again.
+// What must hold in both is that the delete is last and the snapshot ends empty — were the two to interleave,
+// watchers could finish on an add for an object the store no longer holds.
 func TestBusInformer_LiveEventsAndRelistsShareOneOrder(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		sub := resourcebus.NewFake()
-		watcher := &recordingWatcher{}
+		var order []string
+		watcher := &SimpleWatcher{
+			AddFunc:    func(context.Context, resource.Object) error { order = append(order, "add"); return nil },
+			DeleteFunc: func(context.Context, resource.Object) error { order = append(order, "delete"); return nil },
+		}
 		var calls int
 		lister := listerFunc(func(context.Context) ([]resource.Object, string, error) {
 			calls++
@@ -1123,22 +1129,19 @@ func TestBusInformer_LiveEventsAndRelistsShareOneOrder(t *testing.T) {
 		stop := startBusInformer(t, inf)
 		defer stop()
 
-		// Queue a delete and ask for a re-list which lists the same key. Whichever the loop takes first, it
-		// finishes before the other starts, so the two never interleave.
+		// Queue a delete and ask for a re-list which lists the same key.
 		require.NoError(t, sub.Publish(context.Background(), busTestGVR(), busTestNamespace,
 			busEvent(resourcebus.VerbDeleted, "x", "200")))
 		sub.Reconnect(busTestGVR(), busTestNamespace)
 		synctest.Wait()
 
 		assert.Empty(t, inf.store.List(), "the delete at 200 outranks the snapshot read at 150")
-		assert.Equal(t, []string{"x"}, watcher.deletedNames(), "and it is the last thing watchers saw")
-		assert.Empty(t, watcher.addedNames(), "the stale re-list must not add a deleted object")
+		require.NotEmpty(t, order)
+		assert.Equal(t, "delete", order[len(order)-1], "whichever ran first, the delete is the last thing watchers saw")
+		assert.Contains(t, [][]string{{"delete"}, {"add", "delete"}}, order)
 	})
 }
 
-// An event waits in the queue, and a re-list can finish while it waits. A list read after the event was published
-// already accounts for it, so applying it would roll the snapshot back past what storage has confirmed. The store
-// catches this for a key it still holds; the completed list's version is what catches it for a key it does not.
 func TestBusInformer_DropsEventsASupersedingListAlreadyAccountsFor(t *testing.T) {
 	t.Run("a queued delete cannot evict a re-creation the list saw", func(t *testing.T) {
 		watcher := &recordingWatcher{}
@@ -1192,4 +1195,29 @@ func TestBusInformer_DropsEventsASupersedingListAlreadyAccountsFor(t *testing.T)
 
 		assert.Equal(t, []string{"x"}, watcher.addedNames())
 	})
+}
+
+// An identity-mode modification keeps the stored object but must still advance the version the key is ordered by,
+// or a later out-of-order delete between the listed and modified versions reads as newer and evicts it.
+func TestBusInformer_IdentityModificationAdvancesTheOrderingVersion(t *testing.T) {
+	watcher := &recordingWatcher{}
+	var handled []error
+	inf := newBusInformer(t, resourcebus.NewFake(), staticLister(busObjRV("x", 100)), watcher, BusInformerOptions{
+		ErrorHandler: func(_ context.Context, err error) { handled = append(handled, err) },
+	})
+	require.NoError(t, inf.relist(context.Background(), initialRelist))
+
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbModified, "x", "300"))
+	assert.Equal(t, []string{"x"}, watcher.updatedNames())
+	stored, ok := inf.store.Get(busTestNamespace, "x")
+	require.True(t, ok)
+	assert.Equal(t, "100", stored.GetResourceVersion(), "the listed object is kept, identity not stored over it")
+
+	// The delete at 200 predates the modification at 300, so it must not evict the key.
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbDeleted, "x", "200"))
+
+	assert.Empty(t, watcher.deletedNames(), "the stale delete is not delivered")
+	assert.Equal(t, []string{"x"}, busNames(inf.store.List()))
+	require.Len(t, handled, 1)
+	assert.Contains(t, handled[0].Error(), "superseded by a newer write")
 }
