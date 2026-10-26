@@ -15,6 +15,8 @@ import (
 )
 
 // PeriodicInformerOptions are the options for a PeriodicInformer.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type PeriodicInformerOptions struct {
 	// ResyncInterval is how often the full set is re-listed.
 	// A non-positive value uses DefaultBusResyncInterval.
@@ -32,6 +34,8 @@ type PeriodicInformerOptions struct {
 // It suits idempotent, cadence-driven work which re-evaluates every object on each pass regardless of whether it
 // changed — age-based cleanup, for instance — where a live delta stream buys nothing. For anything which should
 // react to changes promptly, use a BusInformer or a watch-backed informer instead.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type PeriodicInformer struct {
 	kind   resource.Kind
 	lister ResourceLister
@@ -47,6 +51,8 @@ type PeriodicInformer struct {
 var _ Informer = (*PeriodicInformer)(nil)
 
 // NewPeriodicInformer creates a PeriodicInformer for one kind, reading the set to deliver from lister.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 func NewPeriodicInformer(kind resource.Kind, lister ResourceLister, opts PeriodicInformerOptions) (*PeriodicInformer, error) {
 	if kind.Schema == nil {
 		return nil, errors.New("kind cannot be empty")

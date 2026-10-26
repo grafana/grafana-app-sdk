@@ -35,6 +35,10 @@ A delta source does not have to deliver the whole object. `operator.BusInformer`
 `operator.PayloadIdentity` delivers the kind's zero value carrying namespace, name and resource version, on the
 premise that a reconcile reads the object it acts on for itself (see [Delta Sources](operators.md#delta-sources)).
 
+> [!CAUTION]
+> The bus informer and the `resourcebus` contract are **experimental**. Their Go APIs may change or be removed in any
+> release.
+
 The `Opinionated` variants cannot be used with such a source. `OpinionatedWatcher` and `OpinionatedReconciler` read
 the deletion timestamp and the finalizer list off the delivered object to decide whether an event is a create, a
 sync, or a delete in progress. On an identity object both are empty, so an object which is tombstoning reads as a

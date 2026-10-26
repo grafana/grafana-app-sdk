@@ -33,6 +33,8 @@ To work directly with resources, you can use an instance of a `resource.Client`,
 
 An important component of the SDK is the use of the operator pattern. Using the `operator` package, you can set up an operator to watch for changes to one or more kinds, and take actions based on the nature of those changes. This allows behavior to be decoupled from the actual input API, which is especially useful because users can create, modify, or delete resources through many paths (your UI, `kubectl`, gitops tooling, other apps). For more details on this, see [Design Patterns](./application-design/README.md).
 
+The experimental `resourcebus` package, with `operator.BusInformer`, is an alternative source of those change events: an app whose reconcilers read the object they act on can take its deltas from a message bus the storage layer publishes to instead of a watch, and keep no per-object cache (see [Delta Sources](./operators.md#delta-sources)).
+
 Finally, the experimental `plugin` package runs an `app.App` inside a grafana app plugin's backend (see [the plugin protocol v3 example](../examples/plugin/README.md)).
 Frontends should call the platform API directly, and use custom routes if they need non-standard endpoints (see [Applications with Custom APIs](./application-design/README.md#applications-with-custom-apis)).
 

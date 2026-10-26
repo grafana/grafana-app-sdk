@@ -19,11 +19,15 @@ const DefaultListerPageSize = 500
 // The single method is the seam for a server-specific projection: an implementation which can ask storage for
 // identities alone (namespace, name and resource version, which is all the diff keys off and all a reconcile needs
 // to re-fetch the object) returns those instead of full objects, without the SDK knowing that endpoint exists.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type ResourceLister interface {
 	List(ctx context.Context) (objs []resource.Object, listResourceVersion string, err error)
 }
 
 // ClientListerOptions configures the default ResourceLister.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type ClientListerOptions struct {
 	// ListWatchOptions are the namespace and filters to apply to the list request.
 	ListWatchOptions ListWatchOptions
@@ -39,6 +43,8 @@ type ClientListerOptions struct {
 // It follows continue tokens to the end of the set, because a truncated snapshot does not read as stale — the
 // informer diffs it as a mass deletion. An error on any page therefore fails the whole re-list rather than returning
 // what was read so far; the informer retries on its next tick.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 func NewClientLister(client ListWatchClient, kind resource.Kind, opts ClientListerOptions) (ResourceLister, error) {
 	if client == nil {
 		return nil, errors.New("client cannot be nil")

@@ -20,6 +20,8 @@ import (
 )
 
 // BusPayload selects which object a BusInformer hands its watchers for a live event.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type BusPayload string
 
 const (
@@ -56,11 +58,15 @@ const (
 )
 
 // BusObjectGetter reads a single object, for the hydrated payload mode. resource.Client satisfies it.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type BusObjectGetter interface {
 	Get(ctx context.Context, identifier resource.Identifier) (resource.Object, error)
 }
 
 // BusInformerOptions are the options for a BusInformer.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type BusInformerOptions struct {
 	// Namespace scopes the subscription and must match the namespace the ResourceLister lists.
 	// An empty namespace covers every namespace.
@@ -99,6 +105,8 @@ type BusInformerOptions struct {
 // next re-list, which diffs the listed set against the previous snapshot and dispatches the difference: a key seen
 // for the first time as an add, a key seen before as an update, and a key which has vanished as a delete carrying
 // its last-known state.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type BusInformer struct {
 	kind       resource.Kind
 	gvr        schema.GroupVersionResource
@@ -125,6 +133,8 @@ var _ Informer = (*BusInformer)(nil)
 
 // NewBusInformer creates a BusInformer for one kind. subscriber announces live changes; lister reads the full set
 // for the initial list and each re-list, and must list the same namespace and filters the subscription covers.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 func NewBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, lister ResourceLister, opts BusInformerOptions) (*BusInformer, error) {
 	if kind.Schema == nil {
 		return nil, errors.New("kind cannot be empty")

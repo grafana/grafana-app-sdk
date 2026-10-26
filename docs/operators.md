@@ -42,6 +42,10 @@ app with `AppInformerConfig.InformerSupplier` or per kind with `ReconcileOptions
 * `simple.OptimizedInformerSupplier` — a watch-backed `operator.CustomCacheInformer`, for large object counts;
 * `simple.BusInformerSupplier` — an `operator.BusInformer`, driven by a `resourcebus.Subscriber` instead of a watch.
 
+> [!CAUTION]
+> The bus informer, the periodic informer and the `resourcebus` contract are **experimental**. Their Go APIs may
+> change or be removed in any release. The watch-backed suppliers above are not affected.
+
 ### The bus informer
 
 A `BusInformer` takes its deltas from a bus the storage layer publishes change notifications to, rather than from a

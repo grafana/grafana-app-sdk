@@ -19,6 +19,8 @@ type identityPayloadInformer interface {
 var _ identityPayloadInformer = (*operator.BusInformer)(nil)
 
 // BusInformerConfig configures the informers BusInformerSupplier creates.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type BusInformerConfig struct {
 	// Payload selects which object live events deliver. An empty value is operator.PayloadIdentity, which delivers
 	// identity only and so cannot be combined with an opinionated reconciler or watcher.
@@ -52,6 +54,8 @@ type BusInformerConfig struct {
 // without branching at every call site.
 //
 // Every informer the returned supplier creates shares one set of metric collectors, since they differ only by label.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 func BusInformerSupplier(sub resourcebus.Subscriber, cfg BusInformerConfig) InformerSupplier {
 	if sub == nil {
 		return DefaultInformerSupplier

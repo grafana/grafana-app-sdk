@@ -3,6 +3,9 @@
 //
 // It is deliberately a leaf package: it depends on the standard library and apimachinery's schema types only, so an
 // adapter for a concrete bus can implement it without taking on the rest of the SDK.
+//
+// Experimental: the resource change bus is a work in progress. Its APIs may change or be removed
+// without notice. Use it only for experimentation.
 package resourcebus
 
 import (
@@ -26,6 +29,8 @@ const (
 
 // Event is a single change announcement. It carries identity only: a subscriber which needs the object reads it from
 // the API, because the bus is a signal that something changed, not a replica of storage.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type Event struct {
 	// Verb is the kind of change which occurred.
 	Verb Verb
@@ -40,6 +45,8 @@ type Event struct {
 }
 
 // Subscriber opens subscriptions to a bus which announces resource changes.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type Subscriber interface {
 	// Subscribe delivers every change to the given resource in the given namespace (an empty namespace means every
 	// namespace) to handler until ctx is done or the returned Subscription is closed.
@@ -49,6 +56,8 @@ type Subscriber interface {
 }
 
 // Subscription is an open subscription to a bus.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type Subscription interface {
 	// WaitReady blocks until the subscription is able to receive events, or ctx is done.
 	// ctx must carry a deadline: an implementation which cannot report readiness otherwise never returns.
@@ -58,6 +67,8 @@ type Subscription interface {
 }
 
 // SubscribeConfig is the set of options a Subscriber applies to one subscription.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type SubscribeConfig struct {
 	// SharedGroup is the name of a group of subscribers which share delivery: each event reaches exactly one member
 	// of the group rather than all of them. An empty name subscribes outside any group, so every subscriber receives

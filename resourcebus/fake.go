@@ -14,6 +14,8 @@ var ErrNoSubscription = errors.New("no subscription")
 
 // Fake is an in-memory Subscriber for tests: it records subscriptions and delivers published events to their handlers
 // synchronously, on the calling goroutine, so a test needs no bus and no waiting.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type Fake struct {
 	mu    sync.Mutex
 	subs  map[string][]*fakeSubscription

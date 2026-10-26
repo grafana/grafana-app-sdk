@@ -17,6 +17,8 @@ const (
 )
 
 // ListProjection is what a server returned for a re-list.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type ListProjection string
 
 const (
@@ -33,6 +35,8 @@ const (
 // Live events and re-list events are separate families on purpose. A live event is a delivery; a re-list add or
 // delete is a change the live stream did not deliver to this replica, so counting them together would hide exactly
 // the thing the pair is there to measure.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type BusInformerMetrics struct {
 	liveEvents       *prometheus.CounterVec
 	relistEvents     *prometheus.CounterVec
@@ -47,6 +51,8 @@ type BusInformerMetrics struct {
 }
 
 // BusInformerMetricsConfig configures the bus informer metrics.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type BusInformerMetricsConfig struct {
 	// MetricsConfig controls the namespace and native histogram settings of the collectors.
 	MetricsConfig metrics.Config
@@ -58,6 +64,8 @@ type BusInformerMetricsConfig struct {
 }
 
 // NewBusInformerMetrics builds the delivery metrics for every bus informer in a process.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 func NewBusInformerMetrics(cfg BusInformerMetricsConfig) *BusInformerMetrics {
 	histogram := func(name, help string) prometheus.HistogramOpts {
 		return prometheus.HistogramOpts{
@@ -138,6 +146,8 @@ func (m *BusInformerMetrics) RelistRecorder(kind resource.Kind) RelistRecorder {
 }
 
 // RelistRecorder records one kind's re-list outcomes. Its zero value discards, so a lister needs no nil checks.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type RelistRecorder struct {
 	requests   prometheus.Counter
 	identities prometheus.Counter
