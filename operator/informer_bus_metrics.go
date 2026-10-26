@@ -81,41 +81,41 @@ func NewBusInformerMetrics(cfg BusInformerMetricsConfig) *BusInformerMetrics {
 		liveEvents: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: cfg.MetricsConfig.Namespace,
 			Name:      "informer_bus_live_events_total",
-			Help:      "Events delivered to informer handlers from the live subscription, by kind and verb.",
-		}, []string{"kind", "verb"}),
+			Help:      "Events delivered to informer handlers from the live subscription, by group, version, kind and verb.",
+		}, []string{"group", "version", "kind", "verb"}),
 		relistEvents: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: cfg.MetricsConfig.Namespace,
 			Name:      "informer_bus_relist_events_total",
-			Help:      "Events delivered to informer handlers by the periodic re-list, by kind and verb. Adds and deletes are changes the live stream did not deliver here; updates are re-deliveries of unchanged objects.",
-		}, []string{"kind", "verb"}),
+			Help:      "Events delivered to informer handlers by the periodic re-list, by group, version, kind and verb. Adds and deletes are changes the live stream did not deliver here; updates are re-deliveries of unchanged objects.",
+		}, []string{"group", "version", "kind", "verb"}),
 		liveLatency: prometheus.NewHistogramVec(histogram(
 			"informer_bus_live_event_latency_seconds",
 			"Time from a change's resource version being issued to its live event reaching the informer handlers.",
-		), []string{"kind"}),
+		), []string{"group", "version", "kind"}),
 		relistLatency: prometheus.NewHistogramVec(histogram(
 			"informer_bus_relist_event_latency_seconds",
 			"Time from a change's resource version being issued to its recovery by a re-list, for adds the live stream did not deliver. The initial list and re-deliveries of unchanged objects carry no latency.",
-		), []string{"kind"}),
+		), []string{"group", "version", "kind"}),
 		reconnects: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: cfg.MetricsConfig.Namespace,
 			Name:      "informer_bus_reconnects_total",
 			Help:      "Times an informer's live subscription was (re)established after a gap. Events published during the gap never reach this replica; the informer forces a re-list to recover them.",
-		}, []string{"kind"}),
+		}, []string{"group", "version", "kind"}),
 		liveSubscription: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: cfg.MetricsConfig.Namespace,
 			Name:      "informer_bus_live_subscription",
 			Help:      "Whether an informer currently holds an open live subscription (1) or is running re-list-only (0), before its subscription first opens or in degraded-start mode.",
-		}, []string{"kind"}),
+		}, []string{"group", "version", "kind"}),
 		relistRequests: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: cfg.MetricsConfig.Namespace,
 			Name:      "informer_bus_relist_requests_total",
 			Help:      "List requests the re-list issued, one per page followed. Divided by the number of re-lists it is the average page count per snapshot; a rising ratio means the kind is outgrowing a single page.",
-		}, []string{"kind"}),
+		}, []string{"group", "version", "kind"}),
 		relistProjection: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: cfg.MetricsConfig.Namespace,
 			Name:      "informer_bus_relist_projection_total",
 			Help:      "Re-lists by what the server returned: identities is a projection carrying namespace, name and resource version only, objects is a full list. Shows whether an identity projection took effect, and the fallback when a server does not serve one.",
-		}, []string{"kind", "projection"}),
+		}, []string{"group", "version", "kind", "projection"}),
 		resourceVersionTime: cfg.ResourceVersionTime,
 	}
 }
@@ -137,11 +137,11 @@ func (m *BusInformerMetrics) RelistRecorder(kind resource.Kind) RelistRecorder {
 	if m == nil {
 		return RelistRecorder{}
 	}
-	label := kind.GroupVersionKind().String()
+	gvk := kind.GroupVersionKind()
 	return RelistRecorder{
-		requests:   m.relistRequests.WithLabelValues(label),
-		identities: m.relistProjection.WithLabelValues(label, string(ProjectionIdentities)),
-		objects:    m.relistProjection.WithLabelValues(label, string(ProjectionObjects)),
+		requests:   m.relistRequests.WithLabelValues(gvk.Group, gvk.Version, gvk.Kind),
+		identities: m.relistProjection.WithLabelValues(gvk.Group, gvk.Version, gvk.Kind, string(ProjectionIdentities)),
+		objects:    m.relistProjection.WithLabelValues(gvk.Group, gvk.Version, gvk.Kind, string(ProjectionObjects)),
 	}
 }
 
@@ -175,14 +175,22 @@ func (r RelistRecorder) Projection(projection ListProjection) {
 // kindMetrics binds the delivery metrics to one kind. Its zero value discards.
 type kindMetrics struct {
 	metrics *BusInformerMetrics
+	group   string
+	version string
 	kind    string
+}
+
+// newKindMetrics resolves one kind's label values once.
+func newKindMetrics(collectors *BusInformerMetrics, kind resource.Kind) kindMetrics {
+	gvk := kind.GroupVersionKind()
+	return kindMetrics{metrics: collectors, group: gvk.Group, version: gvk.Version, kind: gvk.Kind}
 }
 
 func (k kindMetrics) observeLiveEvent(verb string, rv int64) {
 	if k.metrics == nil {
 		return
 	}
-	k.metrics.liveEvents.WithLabelValues(k.kind, verb).Inc()
+	k.metrics.liveEvents.WithLabelValues(k.group, k.version, k.kind, verb).Inc()
 	k.observeLatency(k.metrics.liveLatency, rv)
 }
 
@@ -190,7 +198,7 @@ func (k kindMetrics) observeRelistEvent(verb string, rv int64) {
 	if k.metrics == nil {
 		return
 	}
-	k.metrics.relistEvents.WithLabelValues(k.kind, verb).Inc()
+	k.metrics.relistEvents.WithLabelValues(k.group, k.version, k.kind, verb).Inc()
 	k.observeLatency(k.metrics.relistLatency, rv)
 }
 
@@ -198,7 +206,7 @@ func (k kindMetrics) observeReconnect() {
 	if k.metrics == nil {
 		return
 	}
-	k.metrics.reconnects.WithLabelValues(k.kind).Inc()
+	k.metrics.reconnects.WithLabelValues(k.group, k.version, k.kind).Inc()
 }
 
 func (k kindMetrics) observeSubscriptionOpen() { k.setLiveSubscription(1) }
@@ -209,7 +217,7 @@ func (k kindMetrics) setLiveSubscription(value float64) {
 	if k.metrics == nil {
 		return
 	}
-	k.metrics.liveSubscription.WithLabelValues(k.kind).Set(value)
+	k.metrics.liveSubscription.WithLabelValues(k.group, k.version, k.kind).Set(value)
 }
 
 func (k kindMetrics) observeLatency(latency *prometheus.HistogramVec, rv int64) {
@@ -218,6 +226,6 @@ func (k kindMetrics) observeLatency(latency *prometheus.HistogramVec, rv int64) 
 	}
 	// A negative result is clock skew, not delivery.
 	if seconds := time.Since(k.metrics.resourceVersionTime(rv)).Seconds(); seconds > 0 {
-		latency.WithLabelValues(k.kind).Observe(seconds)
+		latency.WithLabelValues(k.group, k.version, k.kind).Observe(seconds)
 	}
 }

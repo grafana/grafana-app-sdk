@@ -1,6 +1,7 @@
 package simple
 
 import (
+	"errors"
 	"time"
 
 	"github.com/grafana/grafana-app-sdk/metrics"
@@ -40,10 +41,11 @@ type BusInformerConfig struct {
 	// KeyListerFactory builds a ResourceKeyLister for a kind, for a server which can list identities without object
 	// bodies. When set, each kind's re-list reads identities through that projection and falls back to the paginated
 	// full-object list for a re-list the server cannot serve that way. Ignored when ListerFactory is set.
-	KeyListerFactory func(kind resource.Kind) (operator.ResourceKeyLister, error)
-	// HonorsListWatchOptions declares that KeyListerFactory's listers apply the namespace and filters server-side.
-	// See operator.IdentityListerOptions.HonorsListWatchOptions.
-	HonorsListWatchOptions bool
+	//
+	// The lister it returns must honor the given ListWatchOptions, or report operator.ErrProjectionUnsupported —
+	// from the factory or from the list — so that the re-list falls back rather than watching objects the app did
+	// not ask for. See operator.ResourceKeyLister.
+	KeyListerFactory func(kind resource.Kind, opts operator.ListWatchOptions) (operator.ResourceKeyLister, error)
 	// ListerFactory replaces the whole ResourceLister for a kind, for a server whose list does not fit either shape
 	// above. When nil, the lister is built from KeyListerFactory and the kind's client.
 	ListerFactory func(kind resource.Kind, client resource.Client, opts operator.ClientListerOptions) (operator.ResourceLister, error)
@@ -112,15 +114,16 @@ func (c BusInformerConfig) lister(kind resource.Kind, client resource.Client, op
 		return objects, nil
 	}
 
-	keys, err := c.KeyListerFactory(kind)
+	keys, err := c.KeyListerFactory(kind, opts.ListWatchOptions)
 	if err != nil {
+		// A factory which reports the projection unsupported for this kind's scope leaves the full-object list,
+		// rather than failing the informer: that is the same decision the fallback lister makes per re-list.
+		if errors.Is(err, operator.ErrProjectionUnsupported) {
+			return objects, nil
+		}
 		return nil, err
 	}
-	identities, err := operator.NewIdentityLister(kind, keys, operator.IdentityListerOptions{
-		ListWatchOptions:       opts.ListWatchOptions,
-		HonorsListWatchOptions: c.HonorsListWatchOptions,
-		Recorder:               opts.Recorder,
-	})
+	identities, err := operator.NewIdentityLister(kind, keys, operator.IdentityListerOptions{Recorder: opts.Recorder})
 	if err != nil {
 		return nil, err
 	}

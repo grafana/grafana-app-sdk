@@ -777,8 +777,12 @@ func newTestBusMetrics() *BusInformerMetrics {
 	})
 }
 
-func busMetricValue(t *testing.T, m *BusInformerMetrics, name string, labels ...string) float64 {
+// busKindLabels is the label prefix every bus metric carries, one dimension per GVK component.
+var busKindLabels = []string{busTestKind.Group(), busTestKind.Version(), busTestKind.Kind()}
+
+func busMetricValue(t *testing.T, m *BusInformerMetrics, name string, extra ...string) float64 {
 	t.Helper()
+	labels := append(append([]string(nil), busKindLabels...), extra...)
 	switch name {
 	case "live_events":
 		return testutil.ToFloat64(m.liveEvents.WithLabelValues(labels...))
@@ -801,7 +805,6 @@ func busMetricValue(t *testing.T, m *BusInformerMetrics, name string, labels ...
 // is a change the live stream did not deliver here.
 func TestBusInformer_MetricsSeparateLiveFromRelist(t *testing.T) {
 	m := newTestBusMetrics()
-	kindLabel := busTestKind.GroupVersionKind().String()
 	var calls int
 	lister := listerFunc(func(context.Context) ([]resource.Object, string, error) {
 		calls++
@@ -820,24 +823,23 @@ func TestBusInformer_MetricsSeparateLiveFromRelist(t *testing.T) {
 	require.NoError(t, inf.relist(context.Background(), periodicRelist))
 	require.NoError(t, inf.relist(context.Background(), periodicRelist))
 
-	assert.Equal(t, float64(2), busMetricValue(t, m, "relist_events", kindLabel, busVerbAdd), "a on the initial list, b recovered")
-	assert.Equal(t, float64(2), busMetricValue(t, m, "relist_events", kindLabel, busVerbUpdate), "a retained twice")
-	assert.Equal(t, float64(1), busMetricValue(t, m, "relist_events", kindLabel, busVerbDelete), "b vanished")
-	assert.Zero(t, busMetricValue(t, m, "live_events", kindLabel, busVerbAdd), "re-list deliveries are not live events")
+	assert.Equal(t, float64(2), busMetricValue(t, m, "relist_events", busVerbAdd), "a on the initial list, b recovered")
+	assert.Equal(t, float64(2), busMetricValue(t, m, "relist_events", busVerbUpdate), "a retained twice")
+	assert.Equal(t, float64(1), busMetricValue(t, m, "relist_events", busVerbDelete), "b vanished")
+	assert.Zero(t, busMetricValue(t, m, "live_events", busVerbAdd), "re-list deliveries are not live events")
 
 	for _, verb := range []resourcebus.Verb{resourcebus.VerbAdded, resourcebus.VerbModified, resourcebus.VerbDeleted} {
 		inf.onEvent(context.Background(), busEvent(verb, "x", "101"))
 	}
-	assert.Equal(t, float64(1), busMetricValue(t, m, "live_events", kindLabel, busVerbAdd))
-	assert.Equal(t, float64(1), busMetricValue(t, m, "live_events", kindLabel, busVerbUpdate))
-	assert.Equal(t, float64(1), busMetricValue(t, m, "live_events", kindLabel, busVerbDelete))
+	assert.Equal(t, float64(1), busMetricValue(t, m, "live_events", busVerbAdd))
+	assert.Equal(t, float64(1), busMetricValue(t, m, "live_events", busVerbUpdate))
+	assert.Equal(t, float64(1), busMetricValue(t, m, "live_events", busVerbDelete))
 }
 
 // Latency is only observed where the version dates the change: not for the initial list, not for a re-delivery of an
 // unchanged object, and not for a re-list-detected delete whose last-known version predates it.
 func TestBusInformer_MetricsLatencyOnlyWhereVersionDatesTheChange(t *testing.T) {
 	m := newTestBusMetrics()
-	kindLabel := busTestKind.GroupVersionKind().String()
 	recent := time.Now().Add(-time.Second).UnixMilli()
 	var calls int
 	lister := listerFunc(func(context.Context) ([]resource.Object, string, error) {
@@ -857,7 +859,7 @@ func TestBusInformer_MetricsLatencyOnlyWhereVersionDatesTheChange(t *testing.T) 
 
 	inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "opaque"))
 	assert.Zero(t, testutil.CollectAndCount(m.liveLatency), "an opaque version cannot date the change")
-	assert.Equal(t, float64(1), busMetricValue(t, m, "live_events", kindLabel, busVerbAdd), "but the event is still counted")
+	assert.Equal(t, float64(1), busMetricValue(t, m, "live_events", busVerbAdd), "but the event is still counted")
 
 	inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, "y", fmt.Sprint(recent)))
 	assert.Equal(t, 1, testutil.CollectAndCount(m.liveLatency))
@@ -868,7 +870,6 @@ func TestBusInformer_MetricsLatencyOnlyWhereVersionDatesTheChange(t *testing.T) 
 func TestBusInformer_MetricsObserveSubscriptionAndReconnects(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		m := newTestBusMetrics()
-		kindLabel := busTestKind.GroupVersionKind().String()
 		sub := resourcebus.NewFake()
 		inf := newBusInformer(t, sub, staticLister(), &recordingWatcher{}, BusInformerOptions{
 			ResyncInterval: time.Hour,
@@ -876,14 +877,14 @@ func TestBusInformer_MetricsObserveSubscriptionAndReconnects(t *testing.T) {
 		})
 
 		stop := startBusInformer(t, inf)
-		assert.Equal(t, float64(1), busMetricValue(t, m, "live_subscription", kindLabel))
+		assert.Equal(t, float64(1), busMetricValue(t, m, "live_subscription"))
 
 		sub.Reconnect(busTestGVR(), busTestNamespace)
 		synctest.Wait()
-		assert.Equal(t, float64(1), busMetricValue(t, m, "reconnects", kindLabel))
+		assert.Equal(t, float64(1), busMetricValue(t, m, "reconnects"))
 
 		stop()
-		assert.Equal(t, float64(0), busMetricValue(t, m, "live_subscription", kindLabel))
+		assert.Equal(t, float64(0), busMetricValue(t, m, "live_subscription"))
 	})
 }
 
@@ -891,7 +892,6 @@ func TestBusInformer_MetricsObserveSubscriptionAndReconnects(t *testing.T) {
 func TestBusInformer_MetricsDegradedStartGauge(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		m := newTestBusMetrics()
-		kindLabel := busTestKind.GroupVersionKind().String()
 		sub := resourcebus.NewFake()
 		sub.FailSubscribes(1)
 		inf := newBusInformer(t, sub, staticLister(), &recordingWatcher{}, BusInformerOptions{
@@ -907,12 +907,12 @@ func TestBusInformer_MetricsDegradedStartGauge(t *testing.T) {
 
 		synctest.Wait()
 		require.True(t, inf.HasSynced(), "degraded start syncs from the list alone")
-		assert.Equal(t, float64(0), busMetricValue(t, m, "live_subscription", kindLabel))
+		assert.Equal(t, float64(0), busMetricValue(t, m, "live_subscription"))
 
 		time.Sleep(DefaultBusRetryInterval)
 		synctest.Wait()
 		require.True(t, sub.Subscribed(busTestGVR(), busTestNamespace))
-		assert.Equal(t, float64(1), busMetricValue(t, m, "live_subscription", kindLabel))
+		assert.Equal(t, float64(1), busMetricValue(t, m, "live_subscription"))
 	})
 }
 
@@ -933,7 +933,6 @@ func TestRelistRecorder_ZeroValueDiscards(t *testing.T) {
 
 func TestRelistRecorder_RecordsRequestsAndProjection(t *testing.T) {
 	m := newTestBusMetrics()
-	kindLabel := busTestKind.GroupVersionKind().String()
 	recorder := m.RelistRecorder(busTestKind)
 
 	recorder.Request()
@@ -941,7 +940,7 @@ func TestRelistRecorder_RecordsRequestsAndProjection(t *testing.T) {
 	recorder.Projection(ProjectionIdentities)
 	recorder.Projection(ProjectionObjects)
 
-	assert.Equal(t, float64(2), busMetricValue(t, m, "relist_requests", kindLabel))
-	assert.Equal(t, float64(1), busMetricValue(t, m, "relist_projection", kindLabel, string(ProjectionIdentities)))
-	assert.Equal(t, float64(1), busMetricValue(t, m, "relist_projection", kindLabel, string(ProjectionObjects)))
+	assert.Equal(t, float64(2), busMetricValue(t, m, "relist_requests"))
+	assert.Equal(t, float64(1), busMetricValue(t, m, "relist_projection", string(ProjectionIdentities)))
+	assert.Equal(t, float64(1), busMetricValue(t, m, "relist_projection", string(ProjectionObjects)))
 }

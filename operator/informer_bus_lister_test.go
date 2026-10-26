@@ -84,7 +84,6 @@ func TestClientLister_List(t *testing.T) {
 
 	t.Run("records a request per page and the projection", func(t *testing.T) {
 		m := newTestBusMetrics()
-		kindLabel := busTestKind.GroupVersionKind().String()
 		client := mockListWatchClient{
 			ListIntoFunc: func(_ context.Context, _ string, options resource.ListOptions, into resource.ListObject) error {
 				page := into.(*resource.UntypedList)
@@ -100,8 +99,8 @@ func TestClientLister_List(t *testing.T) {
 		_, _, err = lister.List(context.Background())
 		require.NoError(t, err)
 
-		assert.Equal(t, float64(2), busMetricValue(t, m, "relist_requests", kindLabel))
-		assert.Equal(t, float64(1), busMetricValue(t, m, "relist_projection", kindLabel, string(ProjectionObjects)),
+		assert.Equal(t, float64(2), busMetricValue(t, m, "relist_requests"))
+		assert.Equal(t, float64(1), busMetricValue(t, m, "relist_projection", string(ProjectionObjects)),
 			"the default lister serves full objects")
 	})
 
@@ -152,7 +151,6 @@ func TestNewIdentityLister_Validation(t *testing.T) {
 func TestIdentityLister_List(t *testing.T) {
 	t.Run("builds identity objects from keys", func(t *testing.T) {
 		m := newTestBusMetrics()
-		kindLabel := busTestKind.GroupVersionKind().String()
 		lister, err := NewIdentityLister(busTestKind, staticKeys("150",
 			ResourceKey{Namespace: busTestNamespace, Name: "a", ResourceVersion: "11"},
 			ResourceKey{Namespace: busTestNamespace, Name: "b", ResourceVersion: "22"},
@@ -166,8 +164,8 @@ func TestIdentityLister_List(t *testing.T) {
 		assert.Equal(t, "150", listRV)
 		assert.Equal(t, "22", objs[1].GetResourceVersion(), "the version the snapshot arbitrates on is carried")
 		assert.Equal(t, busTestKind.GroupVersionKind(), objs[1].GroupVersionKind())
-		assert.Equal(t, float64(1), busMetricValue(t, m, "relist_requests", kindLabel))
-		assert.Equal(t, float64(1), busMetricValue(t, m, "relist_projection", kindLabel, string(ProjectionIdentities)))
+		assert.Equal(t, float64(1), busMetricValue(t, m, "relist_requests"))
+		assert.Equal(t, float64(1), busMetricValue(t, m, "relist_projection", string(ProjectionIdentities)))
 	})
 
 	// A stream which fails part-way fails the re-list: the informer diffs the snapshot whole, so a truncated one
@@ -191,34 +189,25 @@ func TestIdentityLister_List(t *testing.T) {
 
 	// An identity carries no labels and no fields, so a lister which does not apply them server-side cannot serve a
 	// scoped or filtered re-list at all.
-	t.Run("reports unsupported for a scope it cannot honor", func(t *testing.T) {
-		for _, tt := range []struct {
-			name string
-			opts ListWatchOptions
-		}{
-			{"namespaced", ListWatchOptions{Namespace: "ns"}},
-			{"label filtered", ListWatchOptions{LabelFilters: []string{"app=test"}}},
-			{"field selected", ListWatchOptions{FieldSelectors: []string{"spec.x=1"}}},
-		} {
-			t.Run(tt.name, func(t *testing.T) {
-				lister, err := NewIdentityLister(busTestKind, staticKeys("150"), IdentityListerOptions{
-					ListWatchOptions: tt.opts,
-				})
-				require.NoError(t, err)
+	// Honoring the namespace and filters is the key lister's obligation: it is the only part that knows what its
+	// endpoint can do, and the identities it returns carry nothing for anything downstream to filter on.
+	t.Run("a key lister which cannot honor the scope reports it", func(t *testing.T) {
+		keys := keyListerFunc(func(context.Context) (string, iter.Seq2[ResourceKey, error]) {
+			return "", func(yield func(ResourceKey, error) bool) {
+				yield(ResourceKey{}, fmt.Errorf("cannot filter: %w", ErrProjectionUnsupported))
+			}
+		})
+		lister, err := NewIdentityLister(busTestKind, keys, IdentityListerOptions{})
+		require.NoError(t, err)
 
-				_, _, err = lister.List(context.Background())
-				assert.ErrorIs(t, err, ErrProjectionUnsupported)
-			})
-		}
+		_, _, err = lister.List(context.Background())
+		assert.ErrorIs(t, err, ErrProjectionUnsupported)
 	})
 
-	t.Run("a lister which honors the scope serves it", func(t *testing.T) {
+	t.Run("a key lister which honors the scope serves it", func(t *testing.T) {
 		lister, err := NewIdentityLister(busTestKind, staticKeys("150",
 			ResourceKey{Namespace: "ns", Name: "a"},
-		), IdentityListerOptions{
-			ListWatchOptions:       ListWatchOptions{Namespace: "ns"},
-			HonorsListWatchOptions: true,
-		})
+		), IdentityListerOptions{})
 		require.NoError(t, err)
 
 		objs, _, err := lister.List(context.Background())

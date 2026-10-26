@@ -166,7 +166,7 @@ func NewBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, liste
 		subscriber: subscriber,
 		lister:     lister,
 		opts:       opts,
-		metrics:    kindMetrics{metrics: opts.Metrics, kind: kind.GroupVersionKind().String()},
+		metrics:    newKindMetrics(opts.Metrics, kind),
 		store:      newBusStore(),
 		reconnect:  make(chan struct{}, 1),
 		syncedCh:   make(chan struct{}),

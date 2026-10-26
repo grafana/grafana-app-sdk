@@ -119,9 +119,13 @@ type ResourceKey struct {
 	ResourceVersion string
 }
 
-// ResourceKeyLister reads one kind's identities from a server which can serve them without object bodies. It
-// returns the resource version the snapshot was read at and a sequence which yields an error if the stream fails
-// part-way; an implementation which cannot serve the projection returns ErrProjectionUnsupported from the sequence.
+// ResourceKeyLister reads one kind's identities from a server which can serve them without object bodies. It returns
+// the resource version the snapshot was read at and a sequence which yields an error if the stream fails part-way.
+//
+// An implementation must honor the namespace and filters its re-list was built for, and must report
+// ErrProjectionUnsupported — at construction, or from the sequence — when it cannot: the identities it returns carry
+// no labels and no fields, so nothing downstream can apply a filter it did not, and listing the whole set instead
+// would hand the informer objects the app never asked to watch.
 //
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type ResourceKeyLister interface {
@@ -132,12 +136,6 @@ type ResourceKeyLister interface {
 //
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type IdentityListerOptions struct {
-	// ListWatchOptions are the namespace and filters the re-list asks for.
-	ListWatchOptions ListWatchOptions
-	// HonorsListWatchOptions declares that the key lister applies ListWatchOptions server-side. An identity carries
-	// no labels and no fields, so a lister which does not cannot be filtered at all: leaving this false makes a
-	// scoped or filtered re-list report ErrProjectionUnsupported instead of silently listing the whole set.
-	HonorsListWatchOptions bool
 	// Recorder observes the list requests this lister issues and the projection which served them.
 	// Its zero value discards the observations.
 	Recorder RelistRecorder
@@ -167,10 +165,6 @@ type identityLister struct {
 var _ ResourceLister = (*identityLister)(nil)
 
 func (l *identityLister) List(ctx context.Context) ([]resource.Object, string, error) {
-	if !l.opts.HonorsListWatchOptions && l.opts.ListWatchOptions.isFiltered() {
-		return nil, "", fmt.Errorf("%w: the key lister cannot apply a namespace or filters", ErrProjectionUnsupported)
-	}
-
 	l.opts.Recorder.Request()
 	listRV, keys := l.keys.ListKeys(ctx)
 	var out []resource.Object
@@ -229,9 +223,4 @@ func NewIdentityObject(kind resource.Kind, namespace, name, resourceVersion stri
 	obj.SetName(name)
 	obj.SetResourceVersion(resourceVersion)
 	return obj
-}
-
-// isFiltered reports whether the re-list asks for anything narrower than every object of the kind.
-func (o ListWatchOptions) isFiltered() bool {
-	return o.Namespace != "" || len(o.LabelFilters) > 0 || len(o.FieldSelectors) > 0
 }

@@ -3,6 +3,7 @@ package simple
 import (
 	"context"
 	"errors"
+	"fmt"
 	"iter"
 	"testing"
 	"time"
@@ -260,7 +261,7 @@ func keysReturning(listRV string, keys ...operator.ResourceKey) operator.Resourc
 func TestBusInformerSupplier_KeyListerFactory(t *testing.T) {
 	t.Run("identities serve the re-list", func(t *testing.T) {
 		cfg := BusInformerConfig{
-			KeyListerFactory: func(resource.Kind) (operator.ResourceKeyLister, error) {
+			KeyListerFactory: func(resource.Kind, operator.ListWatchOptions) (operator.ResourceKeyLister, error) {
 				return keysReturning("150", operator.ResourceKey{Name: "a", ResourceVersion: "11"}), nil
 			},
 		}
@@ -275,12 +276,14 @@ func TestBusInformerSupplier_KeyListerFactory(t *testing.T) {
 		assert.Equal(t, "150", listRV)
 	})
 
-	// A re-list the key lister cannot serve falls back to full objects rather than failing: a full list is still a
-	// correct snapshot, and failing the tick would stop the informer reconciling altogether.
-	t.Run("a scoped re-list falls back to the object lister", func(t *testing.T) {
+	// A factory which cannot honor the kind's scope says so, and that kind lists full objects rather than failing
+	// the informer: a full list is still a correct snapshot, and it is the one which can apply the filters.
+	t.Run("a factory which cannot honor the scope leaves the object lister", func(t *testing.T) {
+		var gotOpts operator.ListWatchOptions
 		cfg := BusInformerConfig{
-			KeyListerFactory: func(resource.Kind) (operator.ResourceKeyLister, error) {
-				return keysReturning("150"), nil
+			KeyListerFactory: func(_ resource.Kind, opts operator.ListWatchOptions) (operator.ResourceKeyLister, error) {
+				gotOpts = opts
+				return nil, fmt.Errorf("the keys endpoint cannot filter: %w", operator.ErrProjectionUnsupported)
 			},
 		}
 
@@ -288,6 +291,7 @@ func TestBusInformerSupplier_KeyListerFactory(t *testing.T) {
 			ListWatchOptions: operator.ListWatchOptions{Namespace: "ns"},
 		})
 		require.NoError(t, err)
+		assert.Equal(t, "ns", gotOpts.Namespace, "the factory is told what scope it has to honor")
 
 		objs, _, err := lister.List(context.Background())
 		require.NoError(t, err)
@@ -298,7 +302,9 @@ func TestBusInformerSupplier_KeyListerFactory(t *testing.T) {
 	t.Run("its error fails informer creation", func(t *testing.T) {
 		expected := errors.New("I AM ERROR")
 		supplier := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{
-			KeyListerFactory: func(resource.Kind) (operator.ResourceKeyLister, error) { return nil, expected },
+			KeyListerFactory: func(resource.Kind, operator.ListWatchOptions) (operator.ResourceKeyLister, error) {
+				return nil, expected
+			},
 		})
 
 		_, err := supplier(testKind(), stubClients{}, operator.InformerOptions{})
@@ -308,7 +314,7 @@ func TestBusInformerSupplier_KeyListerFactory(t *testing.T) {
 	t.Run("ListerFactory takes precedence", func(t *testing.T) {
 		var keysBuilt bool
 		supplier := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{
-			KeyListerFactory: func(resource.Kind) (operator.ResourceKeyLister, error) {
+			KeyListerFactory: func(resource.Kind, operator.ListWatchOptions) (operator.ResourceKeyLister, error) {
 				keysBuilt = true
 				return keysReturning("150"), nil
 			},

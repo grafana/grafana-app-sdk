@@ -93,14 +93,15 @@ lists through those instead: implement `operator.ResourceKeyLister` and set `Bus
 SDK builds the identity objects, records the projection, and falls back to the full-object list for a re-list the
 projection cannot serve. Three things follow:
 
-* An identity carries no labels or fields, so a scoped or filtered re-list falls back. Set
-  `IdentityListerOptions.HonorsListWatchOptions` if your key lister applies them server-side.
+* Your key lister must honor the namespace and filters it is given, and report
+  `operator.ErrProjectionUnsupported` when it cannot — an identity carries no labels or fields, so nothing
+  downstream can apply a filter it did not.
 * Only `operator.ErrProjectionUnsupported` falls back. Any other error fails the re-list, so a transient outage is
   retried next tick rather than served by the expensive path forever.
 * `PayloadHydrated` needs full objects, or re-list deliveries would carry less than live ones.
 
-`informer_bus_relist_projection_total` reports which projection served each re-list, and
-`BusInformerConfig.ListerFactory` replaces the lister outright for a list which fits neither shape.
+`informer_bus_relist_projection_total{group,version,kind,projection}` reports which projection served each re-list,
+and `BusInformerConfig.ListerFactory` replaces the lister outright for a list which fits neither shape.
 
 ### Starting without the bus
 
