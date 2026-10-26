@@ -225,6 +225,21 @@ func (b *BusInformer) HealthCheckName() string {
 // Schema returns the resource.Schema the informer is set up for.
 func (b *BusInformer) Schema() resource.Schema { return b.kind.Schema }
 
+// Snapshot returns the identities the informer last reconciled with storage: every object its most recent re-list
+// listed, plus the live adds delivered since, minus the live deletes.
+//
+// It is not a cache for serving reads. It lags storage by up to one re-list interval, it holds only what this
+// informer was delivered — under a shared delivery group that is a subset of the live stream until the next re-list
+// — and it is the informer's own diffing state rather than a view of the API. It suits a staleness-tolerant count,
+// such as a quota check which would otherwise cost an API list per reconcile, and nothing a reconcile's correctness
+// depends on. Read the object from the API for that.
+//
+// Identities, rather than objects, are deliberate: the informer keeps no per-object cache worth reading, and in
+// identity payload mode the stored objects carry nothing else anyway.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+func (b *BusInformer) Snapshot() []resource.Identifier { return b.store.Identifiers() }
+
 // PrometheusCollectors implements metrics.Provider. The collectors are shared by every informer given the same
 // BusInformerMetrics, so registering an already-registered collector is expected and must be tolerated.
 func (b *BusInformer) PrometheusCollectors() []prometheus.Collector {
@@ -364,6 +379,7 @@ func (b *BusInformer) signalReconnect() {
 // onEvent handles one live event. An event whose object cannot be read is dropped rather than dispatched: a delete
 // arrives as its own event or on the next re-list, and anything else is recovered by the next re-list.
 func (b *BusInformer) onEvent(ctx context.Context, evt resourcebus.Event) {
+	ctx = ContextWithDelivery(ctx, DeliveryLive)
 	rv := parseResourceVersion(evt.ResourceVersion)
 	switch evt.Verb {
 	case resourcebus.VerbDeleted:
@@ -432,6 +448,7 @@ func (b *BusInformer) relist(ctx context.Context, pass relistPass) error {
 		return err
 	}
 
+	ctx = ContextWithDelivery(ctx, DeliveryRelist)
 	added, updated, removed := b.store.Replace(objs, listRV)
 	b.logger(ctx).Debug("re-listed", "initial", pass == initialRelist, "count", len(objs),
 		"added", len(added), "updated", len(updated), "removed", len(removed))

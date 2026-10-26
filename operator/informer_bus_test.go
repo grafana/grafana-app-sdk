@@ -944,3 +944,79 @@ func TestRelistRecorder_RecordsRequestsAndProjection(t *testing.T) {
 	assert.Equal(t, float64(1), busMetricValue(t, m, "relist_projection", string(ProjectionIdentities)))
 	assert.Equal(t, float64(1), busMetricValue(t, m, "relist_projection", string(ProjectionObjects)))
 }
+
+// A watcher can tell a live event from a re-list one, which instrumentation that attributes an event to its cause
+// needs and a watcher that does not care never looks at.
+func TestBusInformer_DispatchesWithTheDeliveryOnTheContext(t *testing.T) {
+	var deliveries []Delivery
+	record := &SimpleWatcher{
+		AddFunc: func(ctx context.Context, _ resource.Object) error {
+			deliveries = append(deliveries, DeliveryFromContext(ctx))
+			return nil
+		},
+		UpdateFunc: func(ctx context.Context, _, _ resource.Object) error {
+			deliveries = append(deliveries, DeliveryFromContext(ctx))
+			return nil
+		},
+		DeleteFunc: func(ctx context.Context, _ resource.Object) error {
+			deliveries = append(deliveries, DeliveryFromContext(ctx))
+			return nil
+		},
+	}
+
+	var calls int
+	lister := listerFunc(func(context.Context) ([]resource.Object, string, error) {
+		calls++
+		if calls == 1 {
+			return []resource.Object{busObj("a")}, "", nil
+		}
+		return nil, "", nil
+	})
+	inf := newBusInformer(t, resourcebus.NewFake(), lister, record, BusInformerOptions{})
+
+	require.NoError(t, inf.relist(context.Background(), initialRelist))
+	inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, "live", "11"))
+	inf.onEvent(context.Background(), busEvent(resourcebus.VerbModified, "live", "12"))
+	inf.onEvent(context.Background(), busEvent(resourcebus.VerbDeleted, "live", "13"))
+	require.NoError(t, inf.relist(context.Background(), periodicRelist))
+
+	assert.Equal(t, []Delivery{
+		DeliveryRelist, // the initial list's add
+		DeliveryLive,   // the live add
+		DeliveryLive,   // the live update
+		DeliveryLive,   // the live delete
+		DeliveryRelist, // the re-list's delete of "a"
+	}, deliveries)
+}
+
+// The snapshot reports what the informer last reconciled with storage, so a staleness-tolerant count costs no API
+// list. It tracks the re-list diff and the live write-throughs alike.
+func TestBusInformer_Snapshot(t *testing.T) {
+	var calls int
+	lister := listerFunc(func(context.Context) ([]resource.Object, string, error) {
+		calls++
+		if calls == 1 {
+			return []resource.Object{busObj("a"), busObj("b")}, "", nil
+		}
+		return []resource.Object{busObj("a")}, "", nil
+	})
+	inf := newBusInformer(t, resourcebus.NewFake(), lister, &recordingWatcher{}, BusInformerOptions{})
+
+	assert.Empty(t, inf.Snapshot(), "nothing is listed before the first re-list")
+
+	require.NoError(t, inf.relist(context.Background(), initialRelist))
+	assert.ElementsMatch(t, []resource.Identifier{
+		{Namespace: busTestNamespace, Name: "a"},
+		{Namespace: busTestNamespace, Name: "b"},
+	}, inf.Snapshot())
+
+	inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, "live", "11"))
+	assert.Len(t, inf.Snapshot(), 3, "a live add is written through")
+
+	inf.onEvent(context.Background(), busEvent(resourcebus.VerbDeleted, "live", "12"))
+	assert.Len(t, inf.Snapshot(), 2, "a live delete is evicted")
+
+	require.NoError(t, inf.relist(context.Background(), periodicRelist))
+	assert.Equal(t, []resource.Identifier{{Namespace: busTestNamespace, Name: "a"}}, inf.Snapshot(),
+		"the re-list drops what storage no longer lists")
+}

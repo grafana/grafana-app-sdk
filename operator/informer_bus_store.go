@@ -42,6 +42,19 @@ func (s *busStore) List() []resource.Object {
 	return out
 }
 
+// Identifiers returns the namespace and name of every object in the store, empty but non-nil before the first
+// Replace. It is the read a snapshot accessor serves: identities only, so no caller can mistake the store for a view
+// of the objects themselves.
+func (s *busStore) Identifiers() []resource.Identifier {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]resource.Identifier, 0, len(s.items))
+	for _, e := range s.items {
+		out = append(out, resource.Identifier{Namespace: e.obj.GetNamespace(), Name: e.obj.GetName()})
+	}
+	return out
+}
+
 // Get returns the stored object for a namespace and name, if there is one.
 func (s *busStore) Get(namespace, name string) (resource.Object, bool) {
 	s.mu.Lock()

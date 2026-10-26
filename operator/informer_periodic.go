@@ -160,6 +160,8 @@ func (p *PeriodicInformer) relist(ctx context.Context) error {
 		return err
 	}
 
+	// Every pass is a list, so every delivery is a re-list one.
+	ctx = ContextWithDelivery(ctx, DeliveryRelist)
 	p.mu.Lock()
 	handlers := p.handlers
 	p.mu.Unlock()

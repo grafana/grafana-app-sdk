@@ -103,6 +103,30 @@ projection cannot serve. Three things follow:
 `informer_bus_relist_projection_total{group,version,kind,projection}` reports which projection served each re-list,
 and `BusInformerConfig.ListerFactory` replaces the lister outright for a list which fits neither shape.
 
+### What a watcher can observe
+
+A `ResourceWatcher` sees `Add` the same way whether the event came from the live stream or from a re-list, which is
+usually what you want. Instrumentation that attributes an event to its cause is the exception, so the informer puts
+the distinction on the dispatch context:
+
+```go
+func (w *watcher) Add(ctx context.Context, obj resource.Object) error {
+    if operator.DeliveryFromContext(ctx) == operator.DeliveryLive {
+        // The change source announced this, at the resource version the object carries.
+    }
+}
+```
+
+`DeliveryRelist` covers the initial list, a re-delivery of an unchanged object, and a change the live stream did not
+deliver here — all of them carrying a version the lister read rather than one an announcement was made at. A
+watch-backed informer reports `DeliveryUnknown`, because a resync replays its cache rather than re-listing.
+
+`BusInformer.Snapshot()` returns the identities the informer last reconciled with storage: everything its most recent
+re-list listed, plus the live adds since, minus the live deletes. It is **not** a cache for serving reads — it lags by
+up to one re-list, holds only what this informer was delivered, and is the informer's own diffing state. It exists for
+a staleness-tolerant count, such as a quota check that would otherwise cost an API list per reconcile. Anything a
+reconcile's correctness depends on must be read from the API.
+
 ### Starting without the bus
 
 By default an informer does not list, and so does not report synced, until its subscription opens: re-listing a kind

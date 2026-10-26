@@ -120,3 +120,20 @@ func TestPeriodicInformer_WaitForSyncHonorsContext(t *testing.T) {
 	cancel()
 	assert.ErrorIs(t, inf.WaitForSync(ctx), context.Canceled)
 }
+
+// Every pass is a list, so a watcher shared with a BusInformer reads the same signal for both.
+func TestPeriodicInformer_DispatchesAsRelist(t *testing.T) {
+	var deliveries []Delivery
+	inf, err := NewPeriodicInformer(busTestKind, staticLister(busObj("a")), PeriodicInformerOptions{})
+	require.NoError(t, err)
+	require.NoError(t, inf.AddEventHandler(&SimpleWatcher{
+		AddFunc: func(ctx context.Context, _ resource.Object) error {
+			deliveries = append(deliveries, DeliveryFromContext(ctx))
+			return nil
+		},
+	}))
+
+	require.NoError(t, inf.relist(context.Background()))
+
+	assert.Equal(t, []Delivery{DeliveryRelist}, deliveries)
+}
