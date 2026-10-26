@@ -420,12 +420,7 @@ func (b *BusInformer) payloadObject(ctx context.Context, evt resourcebus.Event) 
 // identityObject is the kind's zero value carrying the event's identity, which is all a consumer needs to read the
 // object for itself.
 func (b *BusInformer) identityObject(evt resourcebus.Event) resource.Object {
-	obj := b.kind.ZeroValue()
-	obj.SetGroupVersionKind(b.kind.GroupVersionKind())
-	obj.SetNamespace(evt.Namespace)
-	obj.SetName(evt.Name)
-	obj.SetResourceVersion(evt.ResourceVersion)
-	return obj
+	return NewIdentityObject(b.kind, evt.Namespace, evt.Name, evt.ResourceVersion)
 }
 
 // relist reads the full set and dispatches the diff against the previous snapshot. On the initial list the snapshot

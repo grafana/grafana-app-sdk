@@ -497,7 +497,7 @@ func TestBusInformer_DoesNotSyncUntilInitialListSucceeds(t *testing.T) {
 }
 
 // WaitForSync returns the context's error rather than blocking forever when the informer never syncs.
-func TestBusInformer_WaitForSyncHonoursContext(t *testing.T) {
+func TestBusInformer_WaitForSyncHonorsContext(t *testing.T) {
 	inf := newBusInformer(t, resourcebus.NewFake(), staticLister(), nil, BusInformerOptions{})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

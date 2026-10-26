@@ -37,8 +37,15 @@ type BusInformerConfig struct {
 	AllowDegradedStart bool
 	// PageSize is the page size the default lister requests. An empty value uses operator.DefaultListerPageSize.
 	PageSize int
-	// ListerFactory builds the ResourceLister for a kind, for a server which can list identities alone rather than
-	// full objects. When nil, a paginated full-object list over the kind's client is used.
+	// KeyListerFactory builds a ResourceKeyLister for a kind, for a server which can list identities without object
+	// bodies. When set, each kind's re-list reads identities through that projection and falls back to the paginated
+	// full-object list for a re-list the server cannot serve that way. Ignored when ListerFactory is set.
+	KeyListerFactory func(kind resource.Kind) (operator.ResourceKeyLister, error)
+	// HonorsListWatchOptions declares that KeyListerFactory's listers apply the namespace and filters server-side.
+	// See operator.IdentityListerOptions.HonorsListWatchOptions.
+	HonorsListWatchOptions bool
+	// ListerFactory replaces the whole ResourceLister for a kind, for a server whose list does not fit either shape
+	// above. When nil, the lister is built from KeyListerFactory and the kind's client.
 	ListerFactory func(kind resource.Kind, client resource.Client, opts operator.ClientListerOptions) (operator.ResourceLister, error)
 	// MetricsConfig controls the namespace and histogram settings of the bus informer metrics. The collectors are
 	// shared by every kind the supplier creates an informer for.
@@ -97,5 +104,25 @@ func (c BusInformerConfig) lister(kind resource.Kind, client resource.Client, op
 	if c.ListerFactory != nil {
 		return c.ListerFactory(kind, client, opts)
 	}
-	return operator.NewClientLister(client, kind, opts)
+	objects, err := operator.NewClientLister(client, kind, opts)
+	if err != nil {
+		return nil, err
+	}
+	if c.KeyListerFactory == nil {
+		return objects, nil
+	}
+
+	keys, err := c.KeyListerFactory(kind)
+	if err != nil {
+		return nil, err
+	}
+	identities, err := operator.NewIdentityLister(kind, keys, operator.IdentityListerOptions{
+		ListWatchOptions:       opts.ListWatchOptions,
+		HonorsListWatchOptions: c.HonorsListWatchOptions,
+		Recorder:               opts.Recorder,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return operator.NewFallbackLister(identities, objects)
 }

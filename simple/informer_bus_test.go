@@ -3,11 +3,13 @@ package simple
 import (
 	"context"
 	"errors"
+	"iter"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/grafana/grafana-app-sdk/operator"
@@ -116,6 +118,12 @@ func (stubClients) GetCustomRouteClient(schema.GroupVersion, string) (resource.C
 func (stubClients) DiscoveryClient() (resource.DiscoveryClient, error) { return nil, nil }
 
 type stubClient struct{ resource.Client }
+
+// ListInto serves the full-object fallback, so a test can tell which lister a re-list went through.
+func (stubClient) ListInto(_ context.Context, _ string, _ resource.ListOptions, into resource.ListObject) error {
+	into.SetItems([]resource.Object{&resource.UntypedObject{ObjectMeta: metav1.ObjectMeta{Name: "from-objects"}}})
+	return nil
+}
 
 type listerFunc func(ctx context.Context) ([]resource.Object, string, error)
 
@@ -226,4 +234,91 @@ func testUnmanagedKind() resource.Kind {
 			resource.WithKind("Unmanaged")),
 		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
 	}
+}
+
+// keyListerFunc adapts a function to operator.ResourceKeyLister.
+type keyListerFunc func(ctx context.Context) (string, iter.Seq2[operator.ResourceKey, error])
+
+func (f keyListerFunc) ListKeys(ctx context.Context) (string, iter.Seq2[operator.ResourceKey, error]) {
+	return f(ctx)
+}
+
+func keysReturning(listRV string, keys ...operator.ResourceKey) operator.ResourceKeyLister {
+	return keyListerFunc(func(context.Context) (string, iter.Seq2[operator.ResourceKey, error]) {
+		return listRV, func(yield func(operator.ResourceKey, error) bool) {
+			for _, key := range keys {
+				if !yield(key, nil) {
+					return
+				}
+			}
+		}
+	})
+}
+
+// A key lister factory is all an adopter with an identity-serving endpoint supplies: the supplier composes the
+// identity lister and the full-object fallback around it.
+func TestBusInformerSupplier_KeyListerFactory(t *testing.T) {
+	t.Run("identities serve the re-list", func(t *testing.T) {
+		cfg := BusInformerConfig{
+			KeyListerFactory: func(resource.Kind) (operator.ResourceKeyLister, error) {
+				return keysReturning("150", operator.ResourceKey{Name: "a", ResourceVersion: "11"}), nil
+			},
+		}
+
+		lister, err := cfg.lister(testKind(), stubClient{}, operator.ClientListerOptions{})
+		require.NoError(t, err)
+
+		objs, listRV, err := lister.List(context.Background())
+		require.NoError(t, err)
+		require.Len(t, objs, 1)
+		assert.Equal(t, "a", objs[0].GetName())
+		assert.Equal(t, "150", listRV)
+	})
+
+	// A re-list the key lister cannot serve falls back to full objects rather than failing: a full list is still a
+	// correct snapshot, and failing the tick would stop the informer reconciling altogether.
+	t.Run("a scoped re-list falls back to the object lister", func(t *testing.T) {
+		cfg := BusInformerConfig{
+			KeyListerFactory: func(resource.Kind) (operator.ResourceKeyLister, error) {
+				return keysReturning("150"), nil
+			},
+		}
+
+		lister, err := cfg.lister(testKind(), stubClient{}, operator.ClientListerOptions{
+			ListWatchOptions: operator.ListWatchOptions{Namespace: "ns"},
+		})
+		require.NoError(t, err)
+
+		objs, _, err := lister.List(context.Background())
+		require.NoError(t, err)
+		require.Len(t, objs, 1)
+		assert.Equal(t, "from-objects", objs[0].GetName())
+	})
+
+	t.Run("its error fails informer creation", func(t *testing.T) {
+		expected := errors.New("I AM ERROR")
+		supplier := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{
+			KeyListerFactory: func(resource.Kind) (operator.ResourceKeyLister, error) { return nil, expected },
+		})
+
+		_, err := supplier(testKind(), stubClients{}, operator.InformerOptions{})
+		assert.ErrorIs(t, err, expected)
+	})
+
+	t.Run("ListerFactory takes precedence", func(t *testing.T) {
+		var keysBuilt bool
+		supplier := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{
+			KeyListerFactory: func(resource.Kind) (operator.ResourceKeyLister, error) {
+				keysBuilt = true
+				return keysReturning("150"), nil
+			},
+			ListerFactory: func(resource.Kind, resource.Client, operator.ClientListerOptions) (operator.ResourceLister, error) {
+				return listerFunc(func(context.Context) ([]resource.Object, string, error) { return nil, "", nil }), nil
+			},
+		})
+
+		_, err := supplier(testKind(), stubClients{}, operator.InformerOptions{})
+		require.NoError(t, err)
+		assert.False(t, keysBuilt, "a whole-lister replacement does not also build a key lister")
+	})
 }

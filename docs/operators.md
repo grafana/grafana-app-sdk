@@ -80,10 +80,20 @@ full objects over the kind's client, which follows continue tokens to the end of
 on any error: a truncated snapshot does not read as stale, it diffs as a mass deletion.
 
 A server which can return identities alone — namespace, name and resource version, which is all the diff keys off and
-all a reconcile needs to re-fetch the object — supplies a `ResourceLister` which does that instead, and the informer
-is none the wiser. `informer_bus_relist_projection_total` reports which of the two served each re-list, so a
-fallback is visible. With `PayloadHydrated` the lister must return full objects, or re-list deliveries would carry
-less than live ones.
+all a reconcile needs to re-fetch the object — lists through those instead. Implement `ResourceKeyLister` over that
+endpoint and hand it to `operator.NewIdentityLister`, which builds the identity objects and records the projection;
+the informer is none the wiser. With `PayloadHydrated` the lister must return full objects, or re-list deliveries
+would carry less than live ones.
+
+Not every server has the endpoint, and not every re-list can use it. `operator.NewFallbackLister` wraps an identity
+lister and a full-object one: a re-list whose projection comes back `operator.ErrProjectionUnsupported` — the server
+predates the endpoint, or the request asks for a scope the key lister cannot apply — re-lists full objects instead,
+because a full list is still a correct snapshot and failing the tick would stop the informer reconciling altogether.
+Any other error fails the re-list, so a transient outage is retried next tick rather than quietly served by the more
+expensive path on every pass. An identity carries no labels and no fields, so a key lister which does not apply them
+server-side reports a scoped or filtered re-list as unsupported rather than silently listing the whole set; set
+`IdentityListerOptions.HonorsListWatchOptions` when it does apply them. `informer_bus_relist_projection_total`
+reports which projection served each re-list, so a fallback is visible rather than guessed at.
 
 #### Resource versions
 

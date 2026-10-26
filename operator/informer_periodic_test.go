@@ -113,7 +113,7 @@ func TestPeriodicInformer_WatcherErrorsReachTheErrorHandler(t *testing.T) {
 	assert.EqualError(t, handled[0], "boom")
 }
 
-func TestPeriodicInformer_WaitForSyncHonoursContext(t *testing.T) {
+func TestPeriodicInformer_WaitForSyncHonorsContext(t *testing.T) {
 	inf, err := NewPeriodicInformer(busTestKind, staticLister(), PeriodicInformerOptions{})
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())

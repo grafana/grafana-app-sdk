@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -97,4 +99,139 @@ func (l *clientLister) List(ctx context.Context) ([]resource.Object, string, err
 	}
 	l.opts.Recorder.Projection(ProjectionObjects)
 	return out, listRV, nil
+}
+
+// ErrProjectionUnsupported is returned by a ResourceLister whose projection is not available for a re-list: the
+// server does not serve it, or it cannot honor the scope and filters the re-list asks for. It is what tells a
+// fallback lister to re-list another way rather than fail the re-list, so an adopter whose server may or may not
+// serve a projection wraps the two and lets the fallback decide per call.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+var ErrProjectionUnsupported = errors.New("list projection unsupported")
+
+// ResourceKey is one object's identity from a list projection which carries no object bodies: all a snapshot diff
+// keys off, and all a reconcile needs to read the object for itself.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+type ResourceKey struct {
+	Namespace       string
+	Name            string
+	ResourceVersion string
+}
+
+// ResourceKeyLister reads one kind's identities from a server which can serve them without object bodies. It
+// returns the resource version the snapshot was read at and a sequence which yields an error if the stream fails
+// part-way; an implementation which cannot serve the projection returns ErrProjectionUnsupported from the sequence.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+type ResourceKeyLister interface {
+	ListKeys(ctx context.Context) (listResourceVersion string, keys iter.Seq2[ResourceKey, error])
+}
+
+// IdentityListerOptions configures the identity ResourceLister.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+type IdentityListerOptions struct {
+	// ListWatchOptions are the namespace and filters the re-list asks for.
+	ListWatchOptions ListWatchOptions
+	// HonorsListWatchOptions declares that the key lister applies ListWatchOptions server-side. An identity carries
+	// no labels and no fields, so a lister which does not cannot be filtered at all: leaving this false makes a
+	// scoped or filtered re-list report ErrProjectionUnsupported instead of silently listing the whole set.
+	HonorsListWatchOptions bool
+	// Recorder observes the list requests this lister issues and the projection which served them.
+	// Its zero value discards the observations.
+	Recorder RelistRecorder
+}
+
+// NewIdentityLister returns a ResourceLister which builds identity objects from a kind's keys, for a server which
+// can list identities without object bodies. Pair it with NewFallbackLister so that a server which cannot serve the
+// projection re-lists full objects instead.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+func NewIdentityLister(kind resource.Kind, keys ResourceKeyLister, opts IdentityListerOptions) (ResourceLister, error) {
+	if keys == nil {
+		return nil, errors.New("key lister cannot be nil")
+	}
+	if kind.Schema == nil {
+		return nil, errors.New("kind cannot be empty")
+	}
+	return &identityLister{kind: kind, keys: keys, opts: opts}, nil
+}
+
+type identityLister struct {
+	kind resource.Kind
+	keys ResourceKeyLister
+	opts IdentityListerOptions
+}
+
+var _ ResourceLister = (*identityLister)(nil)
+
+func (l *identityLister) List(ctx context.Context) ([]resource.Object, string, error) {
+	if !l.opts.HonorsListWatchOptions && l.opts.ListWatchOptions.isFiltered() {
+		return nil, "", fmt.Errorf("%w: the key lister cannot apply a namespace or filters", ErrProjectionUnsupported)
+	}
+
+	l.opts.Recorder.Request()
+	listRV, keys := l.keys.ListKeys(ctx)
+	var out []resource.Object
+	for key, err := range keys {
+		// The snapshot is diffed whole, so a stream which fails part-way fails the re-list: a shorter set does not
+		// read as stale, it diffs as a mass deletion.
+		if err != nil {
+			return nil, "", err
+		}
+		out = append(out, NewIdentityObject(l.kind, key.Namespace, key.Name, key.ResourceVersion))
+	}
+	l.opts.Recorder.Projection(ProjectionIdentities)
+	return out, listRV, nil
+}
+
+// NewFallbackLister returns a ResourceLister which lists through primary, and through fallback for a re-list whose
+// projection primary reports as unsupported. Any other error fails the re-list, so a transient outage is retried on
+// the next tick rather than quietly served by the more expensive path.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+func NewFallbackLister(primary, fallback ResourceLister) (ResourceLister, error) {
+	if primary == nil || fallback == nil {
+		return nil, errors.New("both listers are required")
+	}
+	return &fallbackLister{primary: primary, fallback: fallback}, nil
+}
+
+type fallbackLister struct {
+	primary  ResourceLister
+	fallback ResourceLister
+}
+
+var _ ResourceLister = (*fallbackLister)(nil)
+
+func (l *fallbackLister) List(ctx context.Context) ([]resource.Object, string, error) {
+	objs, listRV, err := l.primary.List(ctx)
+	if err == nil {
+		return objs, listRV, nil
+	}
+	if !errors.Is(err, ErrProjectionUnsupported) {
+		return nil, "", err
+	}
+	logging.FromContext(ctx).Warn("list projection unsupported, re-listing the fallback way", "error", err)
+	return l.fallback.List(ctx)
+}
+
+// NewIdentityObject returns the kind's zero value carrying one object's identity and nothing else. It is what an
+// identity payload delivers and what an identity projection snapshots, so a lister built against a server-specific
+// projection produces the same shape the informer does.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+func NewIdentityObject(kind resource.Kind, namespace, name, resourceVersion string) resource.Object {
+	obj := kind.ZeroValue()
+	obj.SetGroupVersionKind(kind.GroupVersionKind())
+	obj.SetNamespace(namespace)
+	obj.SetName(name)
+	obj.SetResourceVersion(resourceVersion)
+	return obj
+}
+
+// isFiltered reports whether the re-list asks for anything narrower than every object of the kind.
+func (o ListWatchOptions) isFiltered() bool {
+	return o.Namespace != "" || len(o.LabelFilters) > 0 || len(o.FieldSelectors) > 0
 }
