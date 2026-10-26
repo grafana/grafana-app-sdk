@@ -46,6 +46,7 @@ type BusInformerMetrics struct {
 	liveSubscription *prometheus.GaugeVec
 	relistRequests   *prometheus.CounterVec
 	relistProjection *prometheus.CounterVec
+	droppedEvents    *prometheus.CounterVec
 
 	resourceVersionTime func(int64) time.Time
 }
@@ -111,6 +112,11 @@ func NewBusInformerMetrics(cfg BusInformerMetricsConfig) *BusInformerMetrics {
 			Name:      "informer_bus_relist_requests_total",
 			Help:      "List requests the re-list issued, one per page followed. Divided by the number of re-lists it is the average page count per snapshot; a rising ratio means the kind is outgrowing a single page.",
 		}, []string{"group", "version", "kind"}),
+		droppedEvents: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: cfg.MetricsConfig.Namespace,
+			Name:      "informer_bus_dropped_events_total",
+			Help:      "Live events dropped because the informer's queue was full, meaning it is not applying events as fast as the bus delivers them. Each one forces a re-list, so the change is recovered rather than lost, at the cost of a full list.",
+		}, []string{"group", "version", "kind"}),
 		relistProjection: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: cfg.MetricsConfig.Namespace,
 			Name:      "informer_bus_relist_projection_total",
@@ -127,7 +133,7 @@ func (m *BusInformerMetrics) PrometheusCollectors() []prometheus.Collector {
 	}
 	return []prometheus.Collector{
 		m.liveEvents, m.relistEvents, m.liveLatency, m.relistLatency,
-		m.reconnects, m.liveSubscription, m.relistRequests, m.relistProjection,
+		m.reconnects, m.liveSubscription, m.relistRequests, m.relistProjection, m.droppedEvents,
 	}
 }
 
@@ -200,6 +206,13 @@ func (k kindMetrics) observeRelistEvent(verb string, rv int64) {
 	}
 	k.metrics.relistEvents.WithLabelValues(k.group, k.version, k.kind, verb).Inc()
 	k.observeLatency(k.metrics.relistLatency, rv)
+}
+
+func (k kindMetrics) observeDroppedEvent() {
+	if k.metrics == nil {
+		return
+	}
+	k.metrics.droppedEvents.WithLabelValues(k.group, k.version, k.kind).Inc()
 }
 
 func (k kindMetrics) observeReconnect() {

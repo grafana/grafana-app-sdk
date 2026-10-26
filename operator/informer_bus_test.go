@@ -37,11 +37,12 @@ func staticLister(objs ...resource.Object) ResourceLister {
 
 // recordingWatcher captures every dispatch a BusInformer makes.
 type recordingWatcher struct {
-	mu      sync.Mutex
-	adds    []resource.Object
-	updates []resource.Object
-	deletes []resource.Object
-	addErr  error
+	mu            sync.Mutex
+	adds          []resource.Object
+	updates       []resource.Object
+	updateSources []resource.Object
+	deletes       []resource.Object
+	addErr        error
 }
 
 func (w *recordingWatcher) Add(_ context.Context, obj resource.Object) error {
@@ -51,9 +52,10 @@ func (w *recordingWatcher) Add(_ context.Context, obj resource.Object) error {
 	return w.addErr
 }
 
-func (w *recordingWatcher) Update(_ context.Context, _, tgt resource.Object) error {
+func (w *recordingWatcher) Update(_ context.Context, src, tgt resource.Object) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	w.updateSources = append(w.updateSources, src)
 	w.updates = append(w.updates, tgt)
 	return nil
 }
@@ -204,13 +206,13 @@ func TestBusInformer_SubscribesWithoutAGroupByDefault(t *testing.T) {
 	})
 }
 
-// A live added goes through Add, a modified through Update, and a deleted through Delete. In identity mode the
-// delivered object carries the event's identity and nothing else.
+// A live added goes through Add, a modified of a known object through Update, and a deleted through Delete. In
+// identity mode the delivered object carries the event's identity and nothing else.
 func TestBusInformer_LiveEventsDispatchIdentity(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		sub := resourcebus.NewFake()
 		watcher := &recordingWatcher{}
-		inf := newBusInformer(t, sub, staticLister(), watcher, BusInformerOptions{})
+		inf := newBusInformer(t, sub, staticLister(busObj("changed")), watcher, BusInformerOptions{})
 		stop := startBusInformer(t, inf)
 		defer stop()
 
@@ -220,15 +222,92 @@ func TestBusInformer_LiveEventsDispatchIdentity(t *testing.T) {
 		require.NoError(t, sub.Publish(ctx, busTestGVR(), busTestNamespace, busEvent(resourcebus.VerbDeleted, "gone", "13")))
 		synctest.Wait()
 
-		assert.Equal(t, []string{"fresh"}, watcher.addedNames())
+		assert.Equal(t, []string{"changed", "fresh"}, watcher.addedNames(), "the initial list, then the live add")
 		assert.Equal(t, []string{"changed"}, watcher.updatedNames())
 		assert.Equal(t, []string{"gone"}, watcher.deletedNames())
 
-		delivered := watcher.added()[0]
+		delivered := watcher.added()[1]
 		assert.Equal(t, busTestNamespace, delivered.GetNamespace())
 		assert.Equal(t, "11", delivered.GetResourceVersion())
 		assert.Equal(t, busTestKind.GroupVersionKind(), delivered.GroupVersionKind())
 	})
+}
+
+// A modification of an object the informer has never seen has no previous state to pair it with, so it is delivered
+// as an add — which is what the re-list diff calls a first-seen key too. Dispatching it as an update with the same
+// object on both sides would read as a resync to the InformerController and be dropped by an opinionated watcher.
+func TestBusInformer_FirstSeenModificationIsAnAdd(t *testing.T) {
+	watcher := &recordingWatcher{}
+	inf := newBusInformer(t, resourcebus.NewFake(), staticLister(), watcher, BusInformerOptions{})
+
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbModified, "unseen", "11"))
+
+	assert.Equal(t, []string{"unseen"}, watcher.addedNames())
+	assert.Empty(t, watcher.updatedNames())
+	assert.Equal(t, []string{"unseen"}, busNames(inf.store.List()), "and it is written through, so the next re-list does not re-report it")
+}
+
+// An update carries the previous and current state, never the same object twice: the InformerController reads equal
+// resource versions as a resync, and OpinionatedWatcher drops an update whose generations match.
+func TestBusInformer_UpdatesCarryPreviousAndCurrent(t *testing.T) {
+	watcher := &recordingWatcher{}
+	first, second := busObjRV("x", 100), busObjRV("x", 200)
+	getter := &fakeGetter{objects: map[string]resource.Object{busStoreKey(busTestNamespace, "x"): first}}
+	inf := newBusInformer(t, resourcebus.NewFake(), staticLister(), watcher, BusInformerOptions{
+		Payload: PayloadHydrated,
+		Getter:  getter,
+	})
+
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "100"))
+	getter.objects[busStoreKey(busTestNamespace, "x")] = second
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbModified, "x", "200"))
+
+	watcher.mu.Lock()
+	defer watcher.mu.Unlock()
+	require.Len(t, watcher.updates, 1)
+	assert.Equal(t, "100", watcher.updateSources[0].GetResourceVersion(), "the previous state is the one the store held")
+	assert.Equal(t, "200", watcher.updates[0].GetResourceVersion())
+}
+
+// A write the store refuses — a newer delete landed while the payload was being read — must not be dispatched: the
+// snapshot does not hold the object, so no later re-list can diff away a spurious add.
+func TestBusInformer_DoesNotDispatchAWriteTheStoreRefuses(t *testing.T) {
+	watcher := &recordingWatcher{}
+	var handled []error
+	inf := newBusInformer(t, resourcebus.NewFake(), staticLister(), watcher, BusInformerOptions{
+		ErrorHandler: func(_ context.Context, err error) { handled = append(handled, err) },
+	})
+
+	// The delete at 300 tombstones the key; the add at 200 predates it.
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbDeleted, "x", "300"))
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "200"))
+
+	assert.Empty(t, watcher.addedNames(), "the superseded add is not delivered")
+	assert.Equal(t, []string{"x"}, watcher.deletedNames(), "the delete is the last thing watchers saw")
+	assert.Empty(t, inf.store.List())
+	require.Len(t, handled, 1)
+	assert.Contains(t, handled[0].Error(), "superseded by a newer delete")
+}
+
+// The subscriber callback must not block, so a full queue drops the event and forces a re-list rather than waiting
+// on the bus's delivery path.
+func TestBusInformer_FullQueueDropsAndForcesARelist(t *testing.T) {
+	m := newTestBusMetrics()
+	inf := newBusInformer(t, resourcebus.NewFake(), staticLister(), &recordingWatcher{}, BusInformerOptions{
+		EventQueueSize: 1,
+		Metrics:        m,
+	})
+
+	// Nothing is draining the queue: the first event fills it, the second is dropped.
+	inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, "queued", "1"))
+	inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, "dropped", "2"))
+
+	assert.Equal(t, float64(1), busMetricValue(t, m, "dropped_events"))
+	select {
+	case <-inf.relistSignal:
+	default:
+		t.Fatal("a dropped event must force a re-list to recover it")
+	}
 }
 
 // A live delete drops the object from the snapshot, and a live add writes through to it, so the next re-list diffs
@@ -289,7 +368,7 @@ func TestBusInformer_SkipsUnknownVerb(t *testing.T) {
 		require.NoError(t, sub.Publish(ctx, busTestGVR(), busTestNamespace, busEvent(resourcebus.VerbModified, "survivor", "2")))
 		synctest.Wait()
 
-		assert.Equal(t, []string{"survivor"}, watcher.updatedNames())
+		assert.Equal(t, []string{"survivor"}, watcher.addedNames(), "first seen, so delivered as an add")
 		assert.Len(t, handled, 1)
 		assert.Contains(t, handled[0], "unknown verb")
 	})
@@ -556,7 +635,7 @@ func TestBusInformer_LiveAddNotReCountedAsRelistRecovery(t *testing.T) {
 	inf := newBusInformer(t, resourcebus.NewFake(), lister, watcher, BusInformerOptions{})
 
 	require.NoError(t, inf.relist(context.Background(), initialRelist))
-	inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "55"))
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "55"))
 	require.NoError(t, inf.relist(context.Background(), periodicRelist))
 
 	assert.Equal(t, []string{"x"}, watcher.addedNames(), "the live add is the only add")
@@ -573,7 +652,7 @@ func TestBusInformer_LiveAddNewerThanRelistSnapshotIsNotDeleted(t *testing.T) {
 	inf := newBusInformer(t, resourcebus.NewFake(), lister, watcher, BusInformerOptions{})
 
 	require.NoError(t, inf.relist(context.Background(), initialRelist))
-	inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "200"))
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "200"))
 	require.NoError(t, inf.relist(context.Background(), periodicRelist))
 
 	assert.Equal(t, []string{"x"}, watcher.addedNames(), "the live add is the only add")
@@ -592,7 +671,7 @@ func TestBusInformer_LiveDeleteNewerThanRelistSnapshotIsNotResurrected(t *testin
 	inf := newBusInformer(t, resourcebus.NewFake(), lister, watcher, BusInformerOptions{})
 
 	require.NoError(t, inf.relist(context.Background(), initialRelist))
-	inf.onEvent(context.Background(), busEvent(resourcebus.VerbDeleted, "x", "200"))
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbDeleted, "x", "200"))
 	require.NoError(t, inf.relist(context.Background(), periodicRelist))
 
 	assert.Equal(t, []string{"x"}, watcher.addedNames(), "x is added once, by the initial list")
@@ -618,7 +697,7 @@ func TestBusInformer_OpaqueResourceVersionsDegradeToSpuriousPair(t *testing.T) {
 	inf := newBusInformer(t, resourcebus.NewFake(), lister, watcher, BusInformerOptions{})
 
 	require.NoError(t, inf.relist(context.Background(), initialRelist))
-	inf.onEvent(context.Background(), busEvent(resourcebus.VerbDeleted, "x", "opaque-200"))
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbDeleted, "x", "opaque-200"))
 	require.NoError(t, inf.relist(context.Background(), periodicRelist))
 
 	assert.Equal(t, []string{"x", "x"}, watcher.addedNames(), "the stale snapshot re-adds the deleted object")
@@ -673,7 +752,7 @@ func TestBusInformer_HydratedPayload(t *testing.T) {
 		})
 		assert.False(t, inf.IdentityPayload())
 
-		inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "200"))
+		inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "200"))
 
 		require.Len(t, watcher.added(), 1)
 		assert.Equal(t, map[string]any{"field": "x"}, watcher.added()[0].GetSpec())
@@ -689,7 +768,7 @@ func TestBusInformer_HydratedPayload(t *testing.T) {
 			Getter:  getter,
 		})
 
-		inf.onEvent(context.Background(), busEvent(resourcebus.VerbModified, "x", "300"))
+		inf.handleEvent(context.Background(), busEvent(resourcebus.VerbModified, "x", "300"))
 
 		stored, ok := inf.store.Get(busTestNamespace, "x")
 		require.True(t, ok, "a hydrated modification carries the whole object, so it is safe to store")
@@ -706,7 +785,7 @@ func TestBusInformer_HydratedPayload(t *testing.T) {
 			ErrorHandler: func(_ context.Context, err error) { handled = append(handled, err) },
 		})
 
-		inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "200"))
+		inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "200"))
 
 		assert.Empty(t, watcher.addedNames(), "nothing is dispatched for an event whose object cannot be read")
 		require.Len(t, handled, 1)
@@ -722,7 +801,7 @@ func TestBusInformer_HydratedPayload(t *testing.T) {
 			ErrorHandler: func(_ context.Context, err error) { handled = append(handled, err) },
 		})
 
-		inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "200"))
+		inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "200"))
 
 		assert.Empty(t, watcher.addedNames())
 		assert.Empty(t, busNames(inf.store.List()), "a dropped event leaves no trace in the snapshot")
@@ -740,7 +819,7 @@ func TestBusInformer_HydratedPayload(t *testing.T) {
 		})
 		require.NoError(t, inf.relist(context.Background(), initialRelist))
 
-		inf.onEvent(context.Background(), busEvent(resourcebus.VerbDeleted, "x", "200"))
+		inf.handleEvent(context.Background(), busEvent(resourcebus.VerbDeleted, "x", "200"))
 
 		assert.Zero(t, gets, "the object is already gone from storage, so there is nothing to read")
 		assert.Equal(t, []string{"x"}, watcher.deletedNames())
@@ -761,7 +840,7 @@ func TestBusInformer_HydratedPayload(t *testing.T) {
 		require.NoError(t, inf.relist(context.Background(), initialRelist))
 		// The read happens while a re-list is in flight; whichever order they complete in, the version the hydrated
 		// object carries is what the snapshot arbitrates against.
-		inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "200"))
+		inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "200"))
 		require.NoError(t, inf.relist(context.Background(), periodicRelist))
 
 		assert.Equal(t, []string{"x"}, watcher.addedNames())
@@ -794,6 +873,8 @@ func busMetricValue(t *testing.T, m *BusInformerMetrics, name string, extra ...s
 		return testutil.ToFloat64(m.liveSubscription.WithLabelValues(labels...))
 	case "relist_requests":
 		return testutil.ToFloat64(m.relistRequests.WithLabelValues(labels...))
+	case "dropped_events":
+		return testutil.ToFloat64(m.droppedEvents.WithLabelValues(labels...))
 	case "relist_projection":
 		return testutil.ToFloat64(m.relistProjection.WithLabelValues(labels...))
 	}
@@ -829,7 +910,7 @@ func TestBusInformer_MetricsSeparateLiveFromRelist(t *testing.T) {
 	assert.Zero(t, busMetricValue(t, m, "live_events", busVerbAdd), "re-list deliveries are not live events")
 
 	for _, verb := range []resourcebus.Verb{resourcebus.VerbAdded, resourcebus.VerbModified, resourcebus.VerbDeleted} {
-		inf.onEvent(context.Background(), busEvent(verb, "x", "101"))
+		inf.handleEvent(context.Background(), busEvent(verb, "x", "101"))
 	}
 	assert.Equal(t, float64(1), busMetricValue(t, m, "live_events", busVerbAdd))
 	assert.Equal(t, float64(1), busMetricValue(t, m, "live_events", busVerbUpdate))
@@ -857,11 +938,11 @@ func TestBusInformer_MetricsLatencyOnlyWhereVersionDatesTheChange(t *testing.T) 
 	require.NoError(t, inf.relist(context.Background(), periodicRelist))
 	assert.Equal(t, 1, testutil.CollectAndCount(m.relistLatency), "only the recovered add is timed")
 
-	inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "opaque"))
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "opaque"))
 	assert.Zero(t, testutil.CollectAndCount(m.liveLatency), "an opaque version cannot date the change")
 	assert.Equal(t, float64(1), busMetricValue(t, m, "live_events", busVerbAdd), "but the event is still counted")
 
-	inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, "y", fmt.Sprint(recent)))
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "y", fmt.Sprint(recent)))
 	assert.Equal(t, 1, testutil.CollectAndCount(m.liveLatency))
 }
 
@@ -917,7 +998,7 @@ func TestBusInformer_MetricsDegradedStartGauge(t *testing.T) {
 }
 
 func TestBusInformerMetrics_PrometheusCollectors(t *testing.T) {
-	assert.Len(t, newTestBusMetrics().PrometheusCollectors(), 8)
+	assert.Len(t, newTestBusMetrics().PrometheusCollectors(), 9)
 	assert.Nil(t, (*BusInformerMetrics)(nil).PrometheusCollectors())
 
 	inf := newBusInformer(t, resourcebus.NewFake(), staticLister(), nil, BusInformerOptions{})
@@ -975,9 +1056,9 @@ func TestBusInformer_DispatchesWithTheDeliveryOnTheContext(t *testing.T) {
 	inf := newBusInformer(t, resourcebus.NewFake(), lister, record, BusInformerOptions{})
 
 	require.NoError(t, inf.relist(context.Background(), initialRelist))
-	inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, "live", "11"))
-	inf.onEvent(context.Background(), busEvent(resourcebus.VerbModified, "live", "12"))
-	inf.onEvent(context.Background(), busEvent(resourcebus.VerbDeleted, "live", "13"))
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "live", "11"))
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbModified, "live", "12"))
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbDeleted, "live", "13"))
 	require.NoError(t, inf.relist(context.Background(), periodicRelist))
 
 	assert.Equal(t, []Delivery{
@@ -1010,13 +1091,45 @@ func TestBusInformer_Snapshot(t *testing.T) {
 		{Namespace: busTestNamespace, Name: "b"},
 	}, inf.Snapshot())
 
-	inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, "live", "11"))
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "live", "11"))
 	assert.Len(t, inf.Snapshot(), 3, "a live add is written through")
 
-	inf.onEvent(context.Background(), busEvent(resourcebus.VerbDeleted, "live", "12"))
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbDeleted, "live", "12"))
 	assert.Len(t, inf.Snapshot(), 2, "a live delete is evicted")
 
 	require.NoError(t, inf.relist(context.Background(), periodicRelist))
 	assert.Equal(t, []resource.Identifier{{Namespace: busTestNamespace, Name: "a"}}, inf.Snapshot(),
 		"the re-list drops what storage no longer lists")
+}
+
+// A live delete and a re-list diff are applied and delivered on one goroutine, so a delete cannot land between a
+// re-list computing its diff and dispatching it. Were it to, watchers would end on an add for an object the store
+// no longer holds, with nothing left for a later re-list to diff away.
+func TestBusInformer_LiveEventsAndRelistsShareOneOrder(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		sub := resourcebus.NewFake()
+		watcher := &recordingWatcher{}
+		var calls int
+		lister := listerFunc(func(context.Context) ([]resource.Object, string, error) {
+			calls++
+			if calls == 1 {
+				return nil, "100", nil
+			}
+			return []resource.Object{busObjRV("x", 120)}, "150", nil
+		})
+		inf := newBusInformer(t, sub, lister, watcher, BusInformerOptions{ResyncInterval: time.Hour})
+		stop := startBusInformer(t, inf)
+		defer stop()
+
+		// Queue a delete and ask for a re-list which lists the same key. Whichever the loop takes first, it
+		// finishes before the other starts, so the two never interleave.
+		require.NoError(t, sub.Publish(context.Background(), busTestGVR(), busTestNamespace,
+			busEvent(resourcebus.VerbDeleted, "x", "200")))
+		sub.Reconnect(busTestGVR(), busTestNamespace)
+		synctest.Wait()
+
+		assert.Empty(t, inf.store.List(), "the delete at 200 outranks the snapshot read at 150")
+		assert.Equal(t, []string{"x"}, watcher.deletedNames(), "and it is the last thing watchers saw")
+		assert.Empty(t, watcher.addedNames(), "the stale re-list must not add a deleted object")
+	})
 }

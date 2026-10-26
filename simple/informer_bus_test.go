@@ -84,13 +84,46 @@ func TestBusInformerSupplier_ListerFactory(t *testing.T) {
 		})
 
 		_, err := supplier(testKind(), stubClients{}, operator.InformerOptions{
-			ListWatchOptions: operator.ListWatchOptions{Namespace: "ns", LabelFilters: []string{"app=test"}},
+			ListWatchOptions: operator.ListWatchOptions{Namespace: "ns"},
 		})
 		require.NoError(t, err)
 
 		assert.Equal(t, 25, gotOpts.PageSize)
 		assert.Equal(t, "ns", gotOpts.ListWatchOptions.Namespace)
-		assert.Equal(t, []string{"app=test"}, gotOpts.ListWatchOptions.LabelFilters)
+	})
+
+	// The bus delivers by namespace only, so a selector could be applied to the list alone. The live stream would
+	// keep delivering excluded objects, which the next filtered re-list would then diff as deletes.
+	t.Run("selectors are rejected rather than applied to the list alone", func(t *testing.T) {
+		supplier := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{})
+
+		for _, tt := range []struct {
+			name string
+			opts operator.ListWatchOptions
+		}{
+			{"label filters", operator.ListWatchOptions{LabelFilters: []string{"app=test"}}},
+			{"field selectors", operator.ListWatchOptions{FieldSelectors: []string{"spec.x=1"}}},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				_, err := supplier(testKind(), stubClients{}, operator.InformerOptions{ListWatchOptions: tt.opts})
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "not supported by the bus informer")
+			})
+		}
+	})
+
+	// A hydrated payload promises whole objects; an identity projection would deliver less on every re-list.
+	t.Run("a key lister factory is rejected with the hydrated payload", func(t *testing.T) {
+		supplier := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{
+			Payload: operator.PayloadHydrated,
+			KeyListerFactory: func(resource.Kind, operator.ListWatchOptions) (operator.ResourceKeyLister, error) {
+				return keysReturning("150"), nil
+			},
+		})
+
+		_, err := supplier(testKind(), stubClients{}, operator.InformerOptions{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "cannot be used with PayloadHydrated")
 	})
 
 	t.Run("its error fails informer creation", func(t *testing.T) {

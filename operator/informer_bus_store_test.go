@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -26,6 +27,15 @@ func busObjRV(name string, rv int64) *resource.UntypedObject {
 	return o
 }
 
+// busUpdateNames is the current side of each update pair.
+func busUpdateNames(updates []busUpdate) []string {
+	out := make([]string, len(updates))
+	for i, u := range updates {
+		out[i] = u.current.GetName()
+	}
+	return out
+}
+
 func busNames(objs []resource.Object) []string {
 	out := make([]string, len(objs))
 	for i, o := range objs {
@@ -45,7 +55,7 @@ func TestBusStore_ReplaceReportsDiff(t *testing.T) {
 
 	added, updated, removed = s.Replace([]resource.Object{busObj("a"), busObj("c")}, "")
 	assert.Equal(t, []string{"c"}, busNames(added), "c newly appeared")
-	assert.Equal(t, []string{"a"}, busNames(updated), "a was present before and now")
+	assert.Equal(t, []string{"a"}, busUpdateNames(updated), "a was present before and now")
 	assert.Equal(t, []string{"b"}, busNames(removed), "b vanished")
 	assert.ElementsMatch(t, []string{"a", "c"}, busNames(s.List()))
 }
@@ -54,7 +64,8 @@ func TestBusStore_WriteThrough(t *testing.T) {
 	s := newBusStore()
 	s.Replace([]resource.Object{busObj("a")}, "")
 
-	assert.True(t, s.Update(busObj("b")))
+	_, took := s.Update(busObj("b"))
+	assert.True(t, took)
 	assert.ElementsMatch(t, []string{"a", "b"}, busNames(s.List()))
 
 	s.DeleteAt(busTestNamespace, "a", "1")
@@ -78,13 +89,13 @@ func TestBusStore_ReplaceCarriesForwardLiveWriteNewerThanSnapshot(t *testing.T) 
 
 	added, updated, removed := s.Replace([]resource.Object{busObjRV("a", 100)}, "150")
 	assert.Empty(t, added)
-	assert.Equal(t, []string{"a"}, busNames(updated))
+	assert.Equal(t, []string{"a"}, busUpdateNames(updated))
 	assert.Empty(t, removed, "a live write newer than the snapshot must not be reported removed")
 	assert.ElementsMatch(t, []string{"a", "b"}, busNames(s.List()), "b is carried forward")
 
 	added, updated, _ = s.Replace([]resource.Object{busObjRV("a", 100), busObjRV("b", 200)}, "250")
 	assert.Empty(t, added, "b is already in the store, not a new add")
-	assert.ElementsMatch(t, []string{"a", "b"}, busNames(updated))
+	assert.ElementsMatch(t, []string{"a", "b"}, busUpdateNames(updated))
 }
 
 // An object a newer live delete already evicted is suppressed rather than resurrected as a spurious add. Once a
@@ -114,7 +125,7 @@ func TestBusStore_UndatedSnapshotDoesWholesaleSwap(t *testing.T) {
 
 	added, updated, removed := s.Replace([]resource.Object{busObjRV("a", 100)}, "")
 	assert.Empty(t, added)
-	assert.Equal(t, []string{"a"}, busNames(updated))
+	assert.Equal(t, []string{"a"}, busUpdateNames(updated))
 	assert.Equal(t, []string{"b"}, busNames(removed), "an undated snapshot must remove a vanished object")
 
 	s.DeleteAt(busTestNamespace, "a", "300")
@@ -151,7 +162,8 @@ func TestBusStore_ListEmpty(t *testing.T) {
 func TestBusStore_UpdateReportsWhetherItTookTheWrite(t *testing.T) {
 	t.Run("plain write", func(t *testing.T) {
 		s := newBusStore()
-		assert.True(t, s.Update(busObjRV("a", 10)))
+		_, took := s.Update(busObjRV("a", 10))
+		assert.True(t, took)
 		assert.Equal(t, []string{"a"}, busNames(s.List()))
 	})
 
@@ -160,7 +172,8 @@ func TestBusStore_UpdateReportsWhetherItTookTheWrite(t *testing.T) {
 		s.Update(busObjRV("a", 10))
 		s.DeleteAt(busTestNamespace, "a", "20")
 
-		assert.False(t, s.Update(busObjRV("a", 10)), "the delete is newer, so the write is dropped")
+		_, took := s.Update(busObjRV("a", 10))
+		assert.False(t, took, "the delete is newer, so the write is dropped")
 		assert.Empty(t, s.List(), "and the object stays evicted")
 	})
 
@@ -168,14 +181,17 @@ func TestBusStore_UpdateReportsWhetherItTookTheWrite(t *testing.T) {
 		s := newBusStore()
 		s.DeleteAt(busTestNamespace, "a", "20")
 
-		assert.True(t, s.Update(busObjRV("a", 20)))
+		_, took := s.Update(busObjRV("a", 20))
+		assert.True(t, took)
 		assert.Equal(t, []string{"a"}, busNames(s.List()))
 	})
 
 	t.Run("no name to key it by", func(t *testing.T) {
 		s := newBusStore()
-		assert.False(t, s.Update(&resource.UntypedObject{}))
-		assert.False(t, s.Update(nil))
+		_, took := s.Update(&resource.UntypedObject{})
+		assert.False(t, took)
+		_, tookNil := s.Update(nil)
+		assert.False(t, tookNil)
 		assert.Empty(t, s.List())
 	})
 }
@@ -189,4 +205,39 @@ func TestParseResourceVersion(t *testing.T) {
 	assert.Equal(t, int64(42), parseResourceVersion("42"))
 	assert.Equal(t, int64(0), parseResourceVersion(""))
 	assert.Equal(t, int64(0), parseResourceVersion("opaque"))
+}
+
+// A stored object newer than the list snapshot must survive a re-list that still lists an older copy of it. Taking
+// the listed state would roll the snapshot back to a superseded object and re-deliver it as an update.
+func TestBusStore_ReplaceKeepsNewerStoredEntryForRetainedKeys(t *testing.T) {
+	s := newBusStore()
+	s.Replace([]resource.Object{busObjRV("x", 120)}, "120")
+
+	// A live write lands at 200, after the snapshot the next re-list reads at 150.
+	s.Update(busObjRV("x", 200))
+
+	added, updated, removed := s.Replace([]resource.Object{busObjRV("x", 120)}, "150")
+	assert.Empty(t, added)
+	assert.Empty(t, removed)
+	assert.Empty(t, updated, "the live write already delivered the newer state; the stale one is not re-delivered")
+
+	stored, ok := s.Get(busTestNamespace, "x")
+	require.True(t, ok)
+	assert.Equal(t, "200", stored.GetResourceVersion(), "the newer stored object is kept")
+
+	// A snapshot that postdates the write lists it normally again.
+	_, updated, _ = s.Replace([]resource.Object{busObjRV("x", 200)}, "250")
+	assert.Equal(t, []string{"x"}, busUpdateNames(updated))
+}
+
+// Replace reports the previous state alongside the current one, so a watcher receives a real before/after pair.
+func TestBusStore_ReplaceReportsPreviousStateForUpdates(t *testing.T) {
+	s := newBusStore()
+	s.Replace([]resource.Object{busObjRV("x", 100)}, "100")
+
+	_, updated, _ := s.Replace([]resource.Object{busObjRV("x", 200)}, "200")
+
+	require.Len(t, updated, 1)
+	assert.Equal(t, "100", updated[0].previous.GetResourceVersion())
+	assert.Equal(t, "200", updated[0].current.GetResourceVersion())
 }

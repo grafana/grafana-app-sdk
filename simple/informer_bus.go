@@ -91,6 +91,7 @@ func BusInformerSupplier(sub resourcebus.Subscriber, cfg BusInformerConfig) Info
 
 		return operator.NewBusInformer(kind, sub, lister, operator.BusInformerOptions{
 			Namespace:          options.ListWatchOptions.Namespace,
+			ListWatchOptions:   options.ListWatchOptions,
 			Payload:            cfg.Payload,
 			Getter:             client,
 			ResyncInterval:     cfg.ResyncInterval,
@@ -112,6 +113,11 @@ func (c BusInformerConfig) lister(kind resource.Kind, client resource.Client, op
 	}
 	if c.KeyListerFactory == nil {
 		return objects, nil
+	}
+	// A hydrated payload promises watchers whole objects. Listing identities would hand them full objects live and
+	// near-empty ones on every re-list and initial list, which no caller can detect from a resource.Object.
+	if c.Payload == operator.PayloadHydrated {
+		return nil, errors.New("KeyListerFactory cannot be used with PayloadHydrated: re-lists would deliver less than live events")
 	}
 
 	keys, err := c.KeyListerFactory(kind, opts.ListWatchOptions)

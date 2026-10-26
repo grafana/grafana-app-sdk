@@ -98,7 +98,8 @@ projection cannot serve. Three things follow:
   downstream can apply a filter it did not.
 * Only `operator.ErrProjectionUnsupported` falls back. Any other error fails the re-list, so a transient outage is
   retried next tick rather than served by the expensive path forever.
-* `PayloadHydrated` needs full objects, or re-list deliveries would carry less than live ones.
+* `PayloadHydrated` needs full objects, so configuring `KeyListerFactory` with it is rejected: re-lists would carry
+  less than live events.
 
 `informer_bus_relist_projection_total{group,version,kind,projection}` reports which projection served each re-list,
 and `BusInformerConfig.ListerFactory` replaces the lister outright for a list which fits neither shape.
@@ -126,6 +127,18 @@ re-list listed, plus the live adds since, minus the live deletes. It is **not** 
 up to one re-list, holds only what this informer was delivered, and is the informer's own diffing state. It exists for
 a staleness-tolerant count, such as a quota check that would otherwise cost an API list per reconcile. Anything a
 reconcile's correctness depends on must be read from the API.
+
+### Limits
+
+* **No selectors.** The bus delivers by namespace, so `LabelFilters` and `FieldSelectors` are rejected when the
+  informer is built rather than applied to the re-list alone — otherwise live events would keep arriving for excluded
+  objects, land in the snapshot, and be diffed as deletes by the next filtered re-list.
+* **Events are queued, not handled inline.** The subscriber callback only enqueues; the informer applies and
+  dispatches on its own goroutine, so a slow API read or handler cannot stall the bus. `EventQueueSize` bounds the
+  queue, and a full queue drops the event and forces a re-list to recover it — counted by
+  `informer_bus_dropped_events_total`, which climbing means the informer is not keeping up.
+* **One order for live and re-list deliveries.** Both are applied on that same goroutine, so a live delete cannot
+  land between a re-list computing its diff and delivering it.
 
 ### Starting without the bus
 

@@ -45,6 +45,8 @@ const (
 	DefaultBusResyncJitterFactor = 0.1
 	// DefaultBusRetryInterval is how often a BusInformer retries a failing subscription or initial list.
 	DefaultBusRetryInterval = 5 * time.Second
+	// DefaultBusEventQueueSize is how many live events a BusInformer buffers when none is configured.
+	DefaultBusEventQueueSize = 1000
 )
 
 // relistPass distinguishes the initial list from a later one. They differ in one way: an add on a later pass is a
@@ -71,6 +73,11 @@ type BusInformerOptions struct {
 	// Namespace scopes the subscription and must match the namespace the ResourceLister lists.
 	// An empty namespace covers every namespace.
 	Namespace string
+	// ListWatchOptions are the namespace and filters the informer was configured with. The bus contract carries a
+	// namespace and nothing else, so a label or field selector here is rejected by NewBusInformer rather than
+	// applied to the list alone: live events would then arrive for objects the selector excludes, be written into
+	// the snapshot, and be diffed as deletes by the next filtered re-list. See NewBusInformer.
+	ListWatchOptions ListWatchOptions
 	// Payload selects which object live events deliver. An empty value is PayloadIdentity.
 	Payload BusPayload
 	// Getter reads objects for PayloadHydrated. It is required in that mode and ignored otherwise.
@@ -92,6 +99,10 @@ type BusInformerOptions struct {
 	// ErrorHandler is called for errors which do not stop the informer, such as a watcher returning an error or an
 	// event dropped because its object could not be read.
 	ErrorHandler func(context.Context, error)
+	// EventQueueSize is how many live events may be waiting to be applied. The subscriber callback must not block,
+	// so events are queued rather than handled on the delivery path; a full queue drops the event and forces a
+	// re-list to recover it. A non-positive value uses DefaultBusEventQueueSize.
+	EventQueueSize int
 	// Metrics are the shared delivery metrics. A nil value disables observation.
 	Metrics *BusInformerMetrics
 }
@@ -117,10 +128,13 @@ type BusInformer struct {
 
 	store *busStore
 
-	// reconnect signals the run loop to re-list after the subscription is re-established, since events published
-	// while it was down were never delivered. Buffered depth 1 with a non-blocking send coalesces bursts into one
-	// re-list.
-	reconnect chan struct{}
+	// events carries live events from the subscriber callback to the run loop, which applies and dispatches them.
+	// See onEvent.
+	events chan resourcebus.Event
+
+	// relist signals the run loop to re-list out of band, after a reconnect or a dropped event. Buffered depth 1
+	// with a non-blocking send coalesces bursts into one re-list.
+	relistSignal chan struct{}
 
 	mu       sync.Mutex
 	handlers []ResourceWatcher
@@ -154,22 +168,32 @@ func NewBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, liste
 	if opts.Payload == PayloadHydrated && opts.Getter == nil {
 		return nil, errors.New("getter is required for the hydrated payload")
 	}
+	// The subscription is scoped by namespace alone, so a selector could only ever be applied to the list. The live
+	// stream would keep delivering excluded objects, each written into the snapshot and then diffed as a delete by
+	// the next re-list — a stream of phantom adds and deletes for objects the app never asked to watch.
+	if len(opts.ListWatchOptions.LabelFilters) > 0 || len(opts.ListWatchOptions.FieldSelectors) > 0 {
+		return nil, errors.New("label and field selectors are not supported by the bus informer: the bus delivers events by namespace only")
+	}
 	if opts.ResyncInterval <= 0 {
 		opts.ResyncInterval = DefaultBusResyncInterval
 	}
 	if opts.RetryInterval <= 0 {
 		opts.RetryInterval = DefaultBusRetryInterval
 	}
+	if opts.EventQueueSize <= 0 {
+		opts.EventQueueSize = DefaultBusEventQueueSize
+	}
 	return &BusInformer{
-		kind:       kind,
-		gvr:        kind.GroupVersionResource(),
-		subscriber: subscriber,
-		lister:     lister,
-		opts:       opts,
-		metrics:    newKindMetrics(opts.Metrics, kind),
-		store:      newBusStore(),
-		reconnect:  make(chan struct{}, 1),
-		syncedCh:   make(chan struct{}),
+		kind:         kind,
+		gvr:          kind.GroupVersionResource(),
+		subscriber:   subscriber,
+		lister:       lister,
+		opts:         opts,
+		metrics:      newKindMetrics(opts.Metrics, kind),
+		store:        newBusStore(),
+		events:       make(chan resourcebus.Event, opts.EventQueueSize),
+		relistSignal: make(chan struct{}, 1),
+		syncedCh:     make(chan struct{}),
 	}, nil
 }
 
@@ -300,9 +324,11 @@ func (b *BusInformer) Run(ctx context.Context) error {
 		case <-resync.C:
 			resync.Reset(wait.Jitter(b.opts.ResyncInterval, DefaultBusResyncJitterFactor))
 			_ = b.relist(ctx, periodicRelist)
-		case <-b.reconnect:
-			b.logger(ctx).Debug("subscription re-established, re-listing")
+		case <-b.relistSignal:
+			b.logger(ctx).Debug("re-listing out of band")
 			_ = b.relist(ctx, periodicRelist)
+		case evt := <-b.events:
+			b.handleEvent(ctx, evt)
 		}
 	}
 }
@@ -366,31 +392,53 @@ func (b *BusInformer) retrySubscribe(ctx context.Context, opts []resourcebus.Sub
 	}
 }
 
-// signalReconnect nudges the run loop to re-list. It is the reconnect callback, so it must not block: the send is
-// non-blocking and a pending signal coalesces further reconnects into the next re-list.
+// signalReconnect records the reconnect and nudges the run loop to re-list, since events published while the
+// subscription was down were never delivered. It is the reconnect callback, so it must not block.
 func (b *BusInformer) signalReconnect() {
 	b.metrics.observeReconnect()
+	b.signalRelist()
+}
+
+// signalRelist asks the run loop for an out-of-band re-list. The send is non-blocking and a pending signal
+// coalesces further requests into the next re-list, so callers on a delivery path never wait.
+func (b *BusInformer) signalRelist() {
 	select {
-	case b.reconnect <- struct{}{}:
+	case b.relistSignal <- struct{}{}:
 	default:
 	}
 }
 
-// onEvent handles one live event. An event whose object cannot be read is dropped rather than dispatched: a delete
-// arrives as its own event or on the next re-list, and anything else is recovered by the next re-list.
-func (b *BusInformer) onEvent(ctx context.Context, evt resourcebus.Event) {
+// onEvent is the subscriber callback. The contract requires it not to block, so it only hands the event to the run
+// loop: hydration reads the API and watchers run arbitrary code, neither of which may sit on the bus's delivery path.
+//
+// A full queue means the informer is not keeping up. The event is dropped and a re-list forced, which is the same
+// recovery the informer already runs for events published while the subscription was down — dropping is preferable
+// to blocking the bus or growing the queue without bound.
+func (b *BusInformer) onEvent(_ context.Context, evt resourcebus.Event) {
+	select {
+	case b.events <- evt:
+	default:
+		b.metrics.observeDroppedEvent()
+		b.signalRelist()
+	}
+}
+
+// handleEvent applies one live event and dispatches it. It runs on the run loop, so a live event and a re-list diff
+// are applied and delivered in one order: without that, a live delete could evict a key between a re-list computing
+// its diff and delivering it, leaving watchers with an add for an object the store no longer holds and no
+// corrective delete to follow.
+func (b *BusInformer) handleEvent(ctx context.Context, evt resourcebus.Event) {
 	ctx = ContextWithDelivery(ctx, DeliveryLive)
 	rv := parseResourceVersion(evt.ResourceVersion)
 	switch evt.Verb {
 	case resourcebus.VerbDeleted:
-		// The object is already gone from storage, so there is nothing to read: dispatch the last-known object if
-		// the snapshot still holds one, and the identity otherwise. Evicting it keeps the next re-list from diffing
+		// The object is already gone from storage, so there is nothing to read: dispatch the last-known object the
+		// eviction returns, and the identity when the store held none. Evicting keeps the next re-list from diffing
 		// a delivered delete as a change the live stream missed.
-		obj, ok := b.store.Get(evt.Namespace, evt.Name)
-		if !ok {
+		obj := b.store.DeleteAt(evt.Namespace, evt.Name, evt.ResourceVersion)
+		if obj == nil {
 			obj = b.identityObject(evt)
 		}
-		b.store.DeleteAt(evt.Namespace, evt.Name, evt.ResourceVersion)
 		b.metrics.observeLiveEvent(busVerbDelete, rv)
 		b.dispatch(ctx, func(ctx context.Context, w ResourceWatcher) error { return w.Delete(ctx, obj) })
 	case resourcebus.VerbAdded, resourcebus.VerbModified:
@@ -399,23 +447,40 @@ func (b *BusInformer) onEvent(ctx context.Context, evt resourcebus.Event) {
 			b.handleError(ctx, err)
 			return
 		}
-		// An identity object carries no deletion timestamp, so writing a modification through would overwrite a
-		// stored object's real one and mislead the next re-list's diff. Writing an add through is still necessary:
-		// without it the object is absent until the next re-list, which would then re-report a delivered add as a
-		// change the live stream missed.
-		if evt.Verb == resourcebus.VerbAdded || b.opts.Payload == PayloadHydrated {
-			b.store.Update(obj)
-		}
-		if evt.Verb == resourcebus.VerbAdded {
-			b.metrics.observeLiveEvent(busVerbAdd, rv)
-			b.dispatch(ctx, func(ctx context.Context, w ResourceWatcher) error { return w.Add(ctx, obj) })
-			return
-		}
-		b.metrics.observeLiveEvent(busVerbUpdate, rv)
-		b.dispatch(ctx, func(ctx context.Context, w ResourceWatcher) error { return w.Update(ctx, obj, obj) })
+		b.handleWrite(ctx, evt, obj, rv)
 	default:
 		b.handleError(ctx, fmt.Errorf("dropping event with unknown verb '%s' for %s/%s", evt.Verb, evt.Namespace, evt.Name))
 	}
+}
+
+// handleWrite applies an added or modified event. A modification of an object the informer has not seen is delivered
+// as an add: there is no previous state to pair it with, and a first-seen key is what the re-list diff would call an
+// add too.
+func (b *BusInformer) handleWrite(ctx context.Context, evt resourcebus.Event, obj resource.Object, rv int64) {
+	// An identity object carries no deletion timestamp, so writing a modification of a known object through would
+	// overwrite the stored object's real one and mislead the next re-list's diff. Everything else is written
+	// through: without it the object is absent until the next re-list, which would then re-report a delivered event
+	// as a change the live stream missed.
+	previous, held := b.store.Get(evt.Namespace, evt.Name)
+	writeThrough := !held || evt.Verb == resourcebus.VerbAdded || b.opts.Payload == PayloadHydrated
+	if writeThrough {
+		var taken bool
+		// A newer delete may have been applied between the payload read and here. The store refuses the write, and
+		// dispatching anyway would leave watchers holding an add or update for an object the snapshot does not
+		// have — with no later re-list able to correct it, since there is nothing to diff away.
+		if previous, taken = b.store.Update(obj); !taken {
+			b.handleError(ctx, fmt.Errorf("dropping event for %s/%s: superseded by a newer delete", evt.Namespace, evt.Name))
+			return
+		}
+	}
+
+	if evt.Verb == resourcebus.VerbAdded || previous == nil {
+		b.metrics.observeLiveEvent(busVerbAdd, rv)
+		b.dispatch(ctx, func(ctx context.Context, w ResourceWatcher) error { return w.Add(ctx, obj) })
+		return
+	}
+	b.metrics.observeLiveEvent(busVerbUpdate, rv)
+	b.dispatch(ctx, func(ctx context.Context, w ResourceWatcher) error { return w.Update(ctx, previous, obj) })
 }
 
 // payloadObject builds the object to dispatch for a live event, per the configured payload mode.
@@ -461,9 +526,11 @@ func (b *BusInformer) relist(ctx context.Context, pass relistPass) error {
 		b.metrics.observeRelistEvent(busVerbAdd, rv)
 		b.dispatch(ctx, func(ctx context.Context, w ResourceWatcher) error { return w.Add(ctx, obj) })
 	}
-	for _, obj := range updated {
+	for _, upd := range updated {
 		b.metrics.observeRelistEvent(busVerbUpdate, 0)
-		b.dispatch(ctx, func(ctx context.Context, w ResourceWatcher) error { return w.Update(ctx, obj, obj) })
+		b.dispatch(ctx, func(ctx context.Context, w ResourceWatcher) error {
+			return w.Update(ctx, upd.previous, upd.current)
+		})
 	}
 	for _, obj := range removed {
 		// The last-known version predates the delete, so it cannot date it.
