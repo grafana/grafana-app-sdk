@@ -32,84 +32,14 @@ As for the reconciler, the SDK also offers an _Opinionated_ reconciler, called `
 
 Please note that it's enough to specify a Watcher or a Reconciler for a resource. The choice between the two depends on operator needs. 
 
-## Delta Sources
+## Informers
 
-An Informer is the operator's _delta source_: where the add/update/delete events it dispatches come from. By default
-that is a kubernetes watch, backed by a cache of every object it has seen. The SDK ships three suppliers, selected per
-app with `AppInformerConfig.InformerSupplier` or per kind with `ReconcileOptions.InformerSupplier`:
+The `Informer` is where the controller's events come from, and the SDK ships more than one: a kubernetes watch
+backed by a cache of every object, a memory-tuned variant of the same for large object counts, and an experimental
+one driven by a bus the storage layer publishes change notifications to. Which one an app uses is set per app with
+`AppInformerConfig.InformerSupplier`, or per kind with `ReconcileOptions.InformerSupplier`.
 
-* `simple.DefaultInformerSupplier` — a watch-backed `operator.KubernetesBasedInformer`;
-* `simple.OptimizedInformerSupplier` — a watch-backed `operator.CustomCacheInformer`, for large object counts;
-* `simple.BusInformerSupplier` — an `operator.BusInformer`, driven by a `resourcebus.Subscriber` instead of a watch.
-
-> [!CAUTION]
-> The bus informer, the periodic informer and the `resourcebus` contract are **experimental**. Their Go APIs may
-> change or be removed in any release. The watch-backed suppliers above are not affected.
-
-### The bus informer
-
-A `BusInformer` takes its deltas from a bus the storage layer publishes change notifications to, rather than from a
-watch. It keeps no per-object cache a reader can serve from. Two things follow:
-
-* **A re-list is what makes it correct, not just live.** On a fixed cadence (5 minutes by default, with 10% jitter)
-  the informer lists the whole kind and diffs the result against its previous snapshot: a key seen for the first time
-  is an add, a key seen before is an update, and a key which has vanished is a delete carrying its last-known state.
-  An event which was published while the subscription was down, routed to another replica of a shared group, or never
-  announced at all is caught there. The cadence is therefore an upper bound on how stale a replica can be, not a
-  tuning nicety.
-* **The live stream decides latency, not coverage.** `BusInformerConfig.SharedGroup` joins the app's replicas into a
-  group across which each event is delivered once rather than to all of them. That reduces live volume per replica; it
-  does not reduce correctness, because the re-list covers what the replica did not see live.
-
-#### Payload
-
-`BusInformerConfig.Payload` decides what a live event delivers:
-
-* `operator.PayloadIdentity` (the default) delivers the kind's zero value with namespace, name and resource version
-  set, and nothing else. It costs no API request per event and suits a reconciler which treats the event as a signal
-  and reads the object itself. It **cannot** be combined with an opinionated reconciler or watcher — see
-  [Writing a Reconciler](writing-a-reconciler.md#identity-payloads-and-opinionated-reconcilers).
-* `operator.PayloadHydrated` reads the object from the API before dispatching, so watchers receive a full object as
-  they would from a watch, at one request per event. An event whose object cannot be read is dropped and reported to
-  the error handler; the delete arrives as its own event or on the next re-list.
-
-#### Listing
-
-`BusInformerConfig.ListerFactory` replaces the list the informer re-lists with. The default is a paginated list of
-full objects over the kind's client, which follows continue tokens to the end of the set and fails the whole re-list
-on any error: a truncated snapshot does not read as stale, it diffs as a mass deletion.
-
-A server which can return identities alone — namespace, name and resource version, which is all the diff keys off and
-all a reconcile needs to re-fetch the object — lists through those instead. Implement `ResourceKeyLister` over that
-endpoint and hand it to `operator.NewIdentityLister`, which builds the identity objects and records the projection;
-the informer is none the wiser. With `PayloadHydrated` the lister must return full objects, or re-list deliveries
-would carry less than live ones.
-
-Not every server has the endpoint, and not every re-list can use it. `operator.NewFallbackLister` wraps an identity
-lister and a full-object one: a re-list whose projection comes back `operator.ErrProjectionUnsupported` — the server
-predates the endpoint, or the request asks for a scope the key lister cannot apply — re-lists full objects instead,
-because a full list is still a correct snapshot and failing the tick would stop the informer reconciling altogether.
-Any other error fails the re-list, so a transient outage is retried next tick rather than quietly served by the more
-expensive path on every pass. An identity carries no labels and no fields, so a key lister which does not apply them
-server-side reports a scoped or filtered re-list as unsupported rather than silently listing the whole set; set
-`IdentityListerOptions.HonorsListWatchOptions` when it does apply them. `informer_bus_relist_projection_total`
-reports which projection served each re-list, so a fallback is visible rather than guessed at.
-
-#### Resource versions
-
-The bus contract carries resource versions as opaque strings, as the kubernetes API contract requires. The SDK
-assumes they are numeric in exactly two places: the snapshot's arbitration between a re-list and the live writes that
-raced it, and the delivery latency histograms. A version which does not parse reads as zero, which disables the
-arbitration — a live delete racing a re-list then produces a spurious add/delete pair, corrected on the next re-list —
-and records no latency. Supply `BusInformerConfig.ResourceVersionTime` to decode the timestamp a version embeds;
-without it the histograms stay empty and the counters are unaffected.
-
-### The periodic informer
-
-`operator.PeriodicInformer` has no watch and no subscription, and keeps no snapshot: each pass lists the kind and
-delivers every object as an add. It suits idempotent, cadence-driven work which re-evaluates every object on each
-pass regardless of whether it changed — age-based cleanup, for instance. For anything which should react to a change
-promptly, use one of the informers above.
+See [Informers](informers.md) for how to choose between them and configure the one you pick.
 
 ## Event-Based Design
 

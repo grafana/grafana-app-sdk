@@ -77,10 +77,10 @@ type BusInformerOptions struct {
 	Getter BusObjectGetter
 	// ResyncInterval is how often the full set is re-listed. A non-positive value uses DefaultBusResyncInterval.
 	ResyncInterval time.Duration
-	// SharedGroup is the name of a group of subscribers which share delivery, so that each event reaches exactly one
-	// replica. An empty name delivers every event to every replica. Either way the periodic re-list is what keeps a
-	// replica reconciled, so a shared group trades live coverage for live volume, not for correctness.
-	SharedGroup string
+	// Group joins this app's replicas into a group across which the bus shares delivery, so that each event reaches
+	// one replica rather than all of them. A zero Group delivers every event to every replica. Either way the
+	// periodic re-list is what keeps a replica reconciled, so a group trades live volume, not correctness.
+	Group resourcebus.Group
 	// AllowDegradedStart lets Run fall back to re-list-only operation when the subscription cannot be opened,
 	// instead of holding the initial list (and so WaitForSync) until it succeeds. The subscription keeps retrying in
 	// the background and forces a re-list once it opens. Consumers whose progress must not stall with the bus opt
@@ -296,8 +296,8 @@ func (b *BusInformer) Run(ctx context.Context) error {
 // starting degraded, in which case a background goroutine keeps retrying and owns the subscription it opens.
 func (b *BusInformer) subscribe(ctx context.Context) resourcebus.Subscription {
 	opts := []resourcebus.SubscribeOption{resourcebus.WithOnReconnect(b.signalReconnect)}
-	if b.opts.SharedGroup != "" {
-		opts = append(opts, resourcebus.WithSharedGroup(b.opts.SharedGroup))
+	if b.opts.Group.Name != "" {
+		opts = append(opts, resourcebus.WithGroup(b.opts.Group))
 	}
 
 	sub, err := b.subscriber.Subscribe(ctx, b.gvr, b.opts.Namespace, b.onEvent, opts...)

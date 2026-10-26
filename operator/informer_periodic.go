@@ -28,7 +28,7 @@ type PeriodicInformerOptions struct {
 	ErrorHandler func(context.Context, error)
 }
 
-// PeriodicInformer is a re-list-only delta source: it has no watch and no subscription, and keeps no cache. On each
+// PeriodicInformer is a re-list-only informer: it has no watch and no subscription, and keeps no cache. On each
 // pass it lists the kind and delivers every listed object to its watchers as an add.
 //
 // It suits idempotent, cadence-driven work which re-evaluates every object on each pass regardless of whether it

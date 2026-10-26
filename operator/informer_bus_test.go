@@ -176,6 +176,34 @@ func TestBusInformer_InitialListDeliversAdds(t *testing.T) {
 	})
 }
 
+// The group reaches the bus whole, delivery included: a subscriber which cannot provide the requested sharing has
+// to be able to see what was asked for in order to refuse it.
+func TestBusInformer_SubscribesWithTheConfiguredGroup(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		sub := resourcebus.NewFake()
+		group := resourcebus.Group{Name: "widgets-operator", Delivery: resourcebus.GroupDeliveryRoundRobin}
+		inf := newBusInformer(t, sub, staticLister(), &recordingWatcher{}, BusInformerOptions{Group: group})
+
+		stop := startBusInformer(t, inf)
+		defer stop()
+
+		assert.Equal(t, group, sub.Group(busTestGVR(), busTestNamespace))
+	})
+}
+
+// With no group every replica receives every event, so nothing is passed to the bus.
+func TestBusInformer_SubscribesWithoutAGroupByDefault(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		sub := resourcebus.NewFake()
+		inf := newBusInformer(t, sub, staticLister(), &recordingWatcher{}, BusInformerOptions{})
+
+		stop := startBusInformer(t, inf)
+		defer stop()
+
+		assert.Equal(t, resourcebus.Group{}, sub.Group(busTestGVR(), busTestNamespace))
+	})
+}
+
 // A live added goes through Add, a modified through Update, and a deleted through Delete. In identity mode the
 // delivered object carries the event's identity and nothing else.
 func TestBusInformer_LiveEventsDispatchIdentity(t *testing.T) {

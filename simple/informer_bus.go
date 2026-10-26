@@ -29,9 +29,9 @@ type BusInformerConfig struct {
 	// not deliver, so it is a correctness interval, not a nicety.
 	// A non-positive value uses operator.DefaultBusResyncInterval.
 	ResyncInterval time.Duration
-	// SharedGroup is the name of a group of subscribers which share delivery, so that each event reaches exactly one
-	// replica of the app rather than all of them. An empty name delivers every event to every replica.
-	SharedGroup string
+	// Group joins the app's replicas into a group across which the bus shares delivery, so that each event reaches
+	// one replica rather than all of them. A zero Group delivers every event to every replica.
+	Group resourcebus.Group
 	// AllowDegradedStart lets an informer start re-list-only when the bus is unavailable, instead of holding its
 	// initial list until a subscription opens. See operator.BusInformerOptions.AllowDegradedStart.
 	AllowDegradedStart bool
@@ -92,7 +92,7 @@ func BusInformerSupplier(sub resourcebus.Subscriber, cfg BusInformerConfig) Info
 			Payload:            cfg.Payload,
 			Getter:             client,
 			ResyncInterval:     cfg.ResyncInterval,
-			SharedGroup:        cfg.SharedGroup,
+			Group:              cfg.Group,
 			AllowDegradedStart: cfg.AllowDegradedStart,
 			ErrorHandler:       options.ErrorHandler,
 			Metrics:            busMetrics,

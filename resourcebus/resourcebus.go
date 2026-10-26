@@ -1,5 +1,6 @@
-// Package resourcebus describes the contract between an app and a delta source which announces resource changes out
-// of band of the kubernetes watch, such as a message bus the storage layer publishes change notifications to.
+// Package resourcebus describes the contract between an app and a bus which announces resource changes out of band
+// of the kubernetes watch, such as a message bus the storage layer publishes change notifications to. It is what an
+// informer subscribes to in place of a watch.
 //
 // It is deliberately a leaf package: it depends on the standard library and apimachinery's schema types only, so an
 // adapter for a concrete bus can implement it without taking on the rest of the SDK.
@@ -66,15 +67,47 @@ type Subscription interface {
 	Close() error
 }
 
+// GroupDelivery is how a bus shares delivery of an event among the members of a Group.
+//
+// A Subscriber which cannot provide the requested delivery must fail the subscription rather than substituting
+// another: the difference decides whether an event reaches one member or all of them, so a silent substitution would
+// either duplicate every event across the members or drop the events a member was meant to handle.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+type GroupDelivery string
+
+const (
+	// GroupDeliveryDefault leaves the sharing to the bus, which is what a subscriber asks for when it needs the
+	// members to divide the events between them and does not care how.
+	GroupDeliveryDefault GroupDelivery = ""
+	// GroupDeliveryRoundRobin asks the bus to hand each event to one member in turn, with no affinity between an
+	// object and the member which handles its events.
+	GroupDeliveryRoundRobin GroupDelivery = "round-robin"
+)
+
+// Group is a set of subscribers which share delivery of a resource's events: each event reaches one member of the
+// group rather than all of them, so a member sees only a subset of the live stream. A consumer which must observe
+// every change therefore cannot rely on the live stream alone — an informer over a group stays reconciled through
+// its periodic re-list.
+//
+// A zero Group is no group at all: every subscriber receives every event.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+type Group struct {
+	// Name identifies the group. Subscribers which pass the same name for the same resource and namespace share
+	// delivery; an empty name is no group.
+	Name string
+	// Delivery is how the bus shares events among the members. An empty value leaves it to the bus.
+	Delivery GroupDelivery
+}
+
 // SubscribeConfig is the set of options a Subscriber applies to one subscription.
 //
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type SubscribeConfig struct {
-	// SharedGroup is the name of a group of subscribers which share delivery: each event reaches exactly one member
-	// of the group rather than all of them. An empty name subscribes outside any group, so every subscriber receives
-	// every event. A grouped subscriber sees only a subset of the live events, which is why an informer over a shared
-	// group relies on its periodic re-list rather than the live stream to stay reconciled.
-	SharedGroup string
+	// Group is the group of subscribers this subscription joins, which share delivery between them rather than each
+	// receiving every event. A zero Group subscribes outside any group. See Group.
+	Group Group
 	// OnReconnect is called each time the subscription is re-established after a gap. Events published during the gap
 	// were never delivered, so a consumer uses this to trigger whatever recovery it has. It must not block.
 	OnReconnect func()
@@ -83,11 +116,10 @@ type SubscribeConfig struct {
 // SubscribeOption configures one subscription.
 type SubscribeOption func(*SubscribeConfig)
 
-// WithSharedGroup joins the subscription to a named group of subscribers which share delivery.
-// See SubscribeConfig.SharedGroup.
-func WithSharedGroup(name string) SubscribeOption {
+// WithGroup joins the subscription to a group of subscribers which share delivery. See Group.
+func WithGroup(group Group) SubscribeOption {
 	return func(cfg *SubscribeConfig) {
-		cfg.SharedGroup = name
+		cfg.Group = group
 	}
 }
 

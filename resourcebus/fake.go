@@ -84,14 +84,14 @@ func (f *Fake) Reconnect(gvr schema.GroupVersionResource, namespace string) {
 	}
 }
 
-// SharedGroup returns the shared group name of the first subscription to the resource and namespace, or an empty
-// string if there is none.
-func (f *Fake) SharedGroup(gvr schema.GroupVersionResource, namespace string) string {
+// Group returns the group of the first subscription to the resource and namespace, or the zero Group if there is
+// none.
+func (f *Fake) Group(gvr schema.GroupVersionResource, namespace string) Group {
 	subs := f.subscriptions(fakeKey(gvr, namespace))
 	if len(subs) == 0 {
-		return ""
+		return Group{}
 	}
-	return subs[0].cfg.SharedGroup
+	return subs[0].cfg.Group
 }
 
 // subscriptions returns a copy of the subscription list, so that a handler which subscribes or closes during delivery

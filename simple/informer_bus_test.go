@@ -50,7 +50,7 @@ func TestBusInformerSupplier_CreatesBusInformers(t *testing.T) {
 	clients := stubClients{}
 	supplier := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{
 		ResyncInterval: time.Minute,
-		SharedGroup:    "group",
+		Group:          resourcebus.Group{Name: "group"},
 	})
 
 	inf, err := supplier(kind, clients, operator.InformerOptions{

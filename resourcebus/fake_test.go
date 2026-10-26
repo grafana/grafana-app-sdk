@@ -14,8 +14,9 @@ var testGVR = schema.GroupVersionResource{Group: "example.grafana.app", Version:
 const testNamespace = "default"
 
 func TestNewSubscribeConfig(t *testing.T) {
-	cfg := NewSubscribeConfig(WithSharedGroup("group"), WithOnReconnect(func() {}), nil)
-	assert.Equal(t, "group", cfg.SharedGroup)
+	cfg := NewSubscribeConfig(WithGroup(Group{Name: "group", Delivery: GroupDeliveryRoundRobin}),
+		WithOnReconnect(func() {}), nil)
+	assert.Equal(t, Group{Name: "group", Delivery: GroupDeliveryRoundRobin}, cfg.Group)
 	assert.NotNil(t, cfg.OnReconnect)
 	assert.Equal(t, SubscribeConfig{}, NewSubscribeConfig())
 }
@@ -27,7 +28,7 @@ func TestFake_DeliversToEverySubscription(t *testing.T) {
 	var first, second []Event
 	_, err := f.Subscribe(ctx, testGVR, testNamespace, func(_ context.Context, evt Event) {
 		first = append(first, evt)
-	}, WithSharedGroup("group"))
+	}, WithGroup(Group{Name: "group"}))
 	require.NoError(t, err)
 	sub2, err := f.Subscribe(ctx, testGVR, testNamespace, func(_ context.Context, evt Event) {
 		second = append(second, evt)
@@ -35,7 +36,7 @@ func TestFake_DeliversToEverySubscription(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.True(t, f.Subscribed(testGVR, testNamespace))
-	assert.Equal(t, "group", f.SharedGroup(testGVR, testNamespace))
+	assert.Equal(t, Group{Name: "group"}, f.Group(testGVR, testNamespace))
 
 	evt := Event{Verb: VerbAdded, Namespace: testNamespace, Name: "a", ResourceVersion: "1"}
 	require.NoError(t, f.Publish(ctx, testGVR, testNamespace, evt))
