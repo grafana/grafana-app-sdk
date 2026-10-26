@@ -73,27 +73,22 @@ all of them.
 
 ### Listing
 
-The default list is a paginated list of full objects over the kind's client, which follows continue tokens to the end
-of the set and fails the whole re-list on any error: a truncated snapshot does not read as stale, it diffs as a mass
-deletion.
+By default the re-list is a paginated list of full objects over the kind's client. It follows continue tokens to the
+end of the set and fails on any error, because a truncated snapshot diffs as a mass deletion.
 
-A server which can return identities alone — namespace, name and resource version, which is all the diff keys off and
-all a reconcile needs to re-fetch the object — lists through those instead. Implement `operator.ResourceKeyLister`
-over that endpoint and set `BusInformerConfig.KeyListerFactory`; the SDK builds the identity objects, records the
-projection, and wraps the full-object list as a fallback. With `PayloadHydrated` the list must return full objects,
-or re-list deliveries would carry less than live ones.
+A server which can return identities alone — namespace, name and resource version, which is all the diff needs —
+lists through those instead: implement `operator.ResourceKeyLister` and set `BusInformerConfig.KeyListerFactory`. The
+SDK builds the identity objects, records the projection, and falls back to the full-object list for a re-list the
+projection cannot serve. Three things follow:
 
-Not every server has the endpoint, and not every re-list can use it. A re-list whose projection comes back
-`operator.ErrProjectionUnsupported` — the server predates the endpoint, or the request asks for a scope the key
-lister cannot apply — re-lists full objects instead, because a full list is still a correct snapshot and failing the
-tick would stop the informer reconciling altogether. Any other error fails the re-list, so a transient outage is
-retried on the next tick rather than quietly served by the more expensive path on every pass. An identity carries no
-labels and no fields, so a key lister which does not apply them server-side reports a scoped or filtered re-list as
-unsupported rather than silently listing the whole set; set `IdentityListerOptions.HonorsListWatchOptions` when it
-does apply them. `informer_bus_relist_projection_total` reports which projection served each re-list, so a fallback
-is visible rather than guessed at.
+* An identity carries no labels or fields, so a scoped or filtered re-list falls back. Set
+  `IdentityListerOptions.HonorsListWatchOptions` if your key lister applies them server-side.
+* Only `operator.ErrProjectionUnsupported` falls back. Any other error fails the re-list, so a transient outage is
+  retried next tick rather than served by the expensive path forever.
+* `PayloadHydrated` needs full objects, or re-list deliveries would carry less than live ones.
 
-`BusInformerConfig.ListerFactory` replaces the lister outright, for a server whose list fits neither shape.
+`informer_bus_relist_projection_total` reports which projection served each re-list, and
+`BusInformerConfig.ListerFactory` replaces the lister outright for a list which fits neither shape.
 
 ### Starting without the bus
 
