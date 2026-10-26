@@ -47,6 +47,18 @@ caught there. The cadence is an upper bound on how stale a replica can be, not a
 **The live stream decides latency, not coverage.** Because the re-list covers what a replica did not see live, a
 replica does not have to see every event.
 
+The two overlap, because the subscription stays open while the list runs. A change can land after the list read its
+snapshot but before the diff, and taking the list as authoritative would then undo it:
+
+* An object created at version 200, when the list was read at 150, is missing from the list. The live add already
+  delivered it, so the diff sees a key in the snapshot and not in the list — a delete that never happened.
+* An object deleted at version 200, when the list was read at 150, is still in the list. The live delete already
+  evicted it, so the diff sees a key in the list and not in the snapshot — an add that resurrects it.
+
+The informer settles this by comparing versions. A stored object newer than the list is carried forward, because the
+list's silence about it is stale rather than authoritative; a listed object that a newer delete already evicted is
+dropped.
+
 ### Groups
 
 `BusInformerConfig.Group` joins the app's replicas into a group across which the bus shares delivery, so each event
@@ -99,12 +111,18 @@ background and a re-list covering the gap once it opens. Opt in when progress mu
 
 ### Resource versions
 
-The bus contract carries resource versions as opaque strings, as the kubernetes API contract requires. The SDK
-assumes they are numeric in exactly two places: the snapshot's arbitration between a re-list and the live writes that
-raced it, and the delivery latency histograms. A version which does not parse reads as zero, which disables the
-arbitration — a live delete racing a re-list then produces a spurious add/delete pair, corrected on the next re-list
-— and records no latency. Supply `BusInformerConfig.ResourceVersionTime` to decode the timestamp a version embeds;
-without it the histograms stay empty and the counters are unaffected.
+The contract carries resource versions as opaque strings, because that is all the Kubernetes API guarantees. But
+settling a re-list against the live events that raced it means comparing them, and comparing them needs numbers. The
+SDK parses them in two places only:
+
+* **That comparison.** A version which does not parse reads as zero, which switches the comparison off: the informer
+  does a plain wholesale swap instead, taking each list as authoritative. A live add the list is too old to include
+  is then diffed as a delete, and a live delete the list still lists is diffed as an add — in both cases the next
+  re-list corrects it. Nothing else about the informer changes, so an opaque version costs a redundant event per
+  racing change, not correctness.
+* **The delivery latency histograms**, which date a change from the timestamp its version embeds. There is no
+  portable way to decode that, so supply `BusInformerConfig.ResourceVersionTime`. Without it the histograms stay
+  empty; the event counters are unaffected either way.
 
 ## The periodic informer
 
