@@ -637,6 +637,8 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		// An opinionated reconciler or watcher reads the deletion timestamp and the finalizer list off the delivered
 		// object. On an identity-only object both are empty, so a tombstoning object looks like a fresh add and an
 		// attached finalizer looks absent; failing here beats failing at the first tombstone.
+		// FIXME: narrow this once the bus contract carries the deletion timestamp and labels (grafana/grafana#135910):
+		// that fixes the tombstone half, but the finalizer list is still absent, so the guard shrinks rather than goes.
 		if identity, ok := inf.(identityPayloadInformer); ok && identity.IdentityPayload() && kind.ReconcileOptions.UseOpinionated {
 			return fmt.Errorf("kind '%s' cannot use an identity-payload informer with an opinionated reconciler or watcher", kind.Kind.GroupVersionKind().String())
 		}
