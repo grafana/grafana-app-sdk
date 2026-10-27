@@ -7,7 +7,7 @@ replace github.com/grafana/grafana-app-sdk => ../../
 require (
 	github.com/emicklei/go-restful-openapi/v2 v2.12.1
 	github.com/emicklei/go-restful/v3 v3.14.0
-	github.com/getkin/kin-openapi v0.151.0
+	github.com/getkin/kin-openapi v0.152.0
 	github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815
 	github.com/grafana/grafana-app-sdk v0.60.16
 	github.com/grafana/grafana-plugin-sdk-go v0.297.0
