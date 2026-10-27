@@ -89,15 +89,24 @@ all of them.
 
 ### Announced metadata
 
-A bus may announce part of an object's metadata alongside the change: labels, annotations, finalizers, the
-generation, and the creation and deletion timestamps. The informer copies whatever arrives onto the delivered
-object, and the identity projection keeps the same fields, so a re-list never delivers less than the live stream.
+A bus may announce part of an object's metadata with the change — labels, annotations, finalizers, generation, and
+the creation and deletion timestamps. Whatever arrives is copied onto the delivered object, on live events and
+re-list deliveries alike.
 
-What is announced is an allowlist the resource's owner registers, so **an absent field means unknown, not empty** —
-an empty finalizer list does not say the object has no finalizers. The SDK cannot see that registration, so an app
-which relies on a field declares it with `BusInformerConfig.AnnouncedMetadata`. Declaring the deletion timestamp,
-finalizers and generation is what lets an identity payload be used with an opinionated reconciler or watcher, which
-read exactly those three.
+Which keys arrive is an allowlist the resource's owner registers, and an unregistered resource announces none, so
+**an absent field means unknown, not empty**: an empty finalizer list does not say the object has no finalizers. The
+SDK cannot read that registration, so an app declares what it has arranged.
+
+```go
+AnnouncedMetadata: operator.AnnouncedMetadata{
+    DeletionTimestamp: true,
+    Finalizers:        true,
+    Generation:        true,
+},
+```
+
+Those three are what an opinionated reconciler or watcher reads off the object, so declaring them is what lets one be
+paired with an identity payload.
 
 ### Listing
 
