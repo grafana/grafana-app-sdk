@@ -149,10 +149,13 @@ reconcile's correctness depends on must be read from the API.
 
 ### Starting without the bus
 
-By default an informer does not list, and so does not report synced, until its subscription opens: re-listing a kind
-it cannot watch would start your reconcilers against a snapshot with no live updates until the next re-list. Set
-`BusInformerConfig.AllowDegradedStart` to list and start reconciling anyway, with the subscription retrying in the
-background and a re-list covering the gap once it opens. Opt in when progress must not stall with the bus.
+By default an informer does not list, and so does not report synced, until its subscription is open **and ready to
+receive**: re-listing a kind it cannot watch would start your reconcilers against a snapshot with no live updates
+until the next re-list. A subscription which is accepted but does not become ready within
+`SubscriptionReadyTimeout` is closed and retried, since accepting is not delivering.
+
+Set `BusInformerConfig.AllowDegradedStart` to list and start reconciling anyway, with the subscription retrying in
+the background and a re-list covering the gap once it opens. Opt in when progress must not stall with the bus.
 
 ### Resource versions
 

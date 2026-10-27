@@ -1290,3 +1290,87 @@ func TestBusInformer_DrainEventsStopsOnContextCancellation(t *testing.T) {
 	assert.Empty(t, watcher.addedNames())
 	assert.Len(t, inf.events, 5, "the queue is left for a later pass")
 }
+
+// Subscribe returning is not delivery being ready. A subscription which never becomes ready must be closed and
+// retried, and must not let the initial list run — listing against it would report synced while changes are still
+// being missed, which is the whole reason the subscription is opened before the list.
+func TestBusInformer_WaitsForTheSubscriptionToBeReady(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		sub := resourcebus.NewFake()
+		sub.FailReady(1)
+		watcher := &recordingWatcher{}
+		var lists atomic.Int64
+		lister := listerFunc(func(context.Context) ([]resource.Object, string, error) {
+			lists.Add(1)
+			return []resource.Object{busObj("a")}, "", nil
+		})
+		inf := newBusInformer(t, sub, lister, watcher, BusInformerOptions{
+			ResyncInterval:           time.Hour,
+			SubscriptionReadyTimeout: 5 * time.Second,
+		})
+
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() { defer close(done); _ = inf.Run(ctx) }()
+		defer func() { cancel(); <-done; synctest.Wait() }()
+
+		synctest.Wait()
+		require.False(t, inf.HasSynced(), "the initial list must not run against a subscription which cannot deliver")
+		require.Zero(t, lists.Load())
+
+		// The readiness deadline expires, that handle is closed, and the retry opens one which is ready.
+		time.Sleep(5*time.Second + DefaultBusRetryInterval + time.Second)
+		synctest.Wait()
+
+		require.True(t, inf.HasSynced(), "the retry's subscription is ready, so the list runs")
+		assert.True(t, sub.Subscribed(busTestGVR(), busTestNamespace))
+		assert.Equal(t, []string{"a"}, watcher.addedNames())
+
+		require.NoError(t, sub.Publish(context.Background(), busTestGVR(), busTestNamespace,
+			busEvent(resourcebus.VerbAdded, "fresh", "11")))
+		synctest.Wait()
+		assert.Equal(t, []string{"a", "fresh"}, watcher.addedNames(), "and live events flow on it")
+	})
+}
+
+// A degraded start must not leave degraded mode on a subscription which is accepted but cannot deliver.
+func TestBusInformer_DegradedStartWaitsForReadiness(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		sub := resourcebus.NewFake()
+		sub.FailSubscribes(1)
+		sub.FailReady(1)
+		m := newTestBusMetrics()
+		var lists atomic.Int64
+		lister := listerFunc(func(context.Context) ([]resource.Object, string, error) {
+			lists.Add(1)
+			return nil, "", nil
+		})
+		inf := newBusInformer(t, sub, lister, &recordingWatcher{}, BusInformerOptions{
+			ResyncInterval:           time.Hour,
+			AllowDegradedStart:       true,
+			SubscriptionReadyTimeout: 5 * time.Second,
+			Metrics:                  m,
+		})
+
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() { defer close(done); _ = inf.Run(ctx) }()
+		defer func() { cancel(); <-done; synctest.Wait() }()
+
+		synctest.Wait()
+		require.True(t, inf.HasSynced(), "a degraded start still lists")
+
+		// The first retry is accepted but never becomes ready, so the gauge stays closed.
+		time.Sleep(DefaultBusRetryInterval + 5*time.Second + time.Second)
+		synctest.Wait()
+		assert.Equal(t, float64(0), busMetricValue(t, m, "live_subscription"),
+			"a subscription which cannot deliver is not an open one")
+
+		// The next retry is ready, which opens the gauge and forces the gap-closing re-list.
+		before := lists.Load()
+		time.Sleep(DefaultBusRetryInterval + time.Second)
+		synctest.Wait()
+		assert.Equal(t, float64(1), busMetricValue(t, m, "live_subscription"))
+		assert.Greater(t, lists.Load(), before, "leaving degraded mode re-lists to cover the gap")
+	})
+}

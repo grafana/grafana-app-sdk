@@ -20,9 +20,10 @@ var ErrNoSubscription = errors.New("no subscription")
 //
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type Fake struct {
-	mu    sync.Mutex
-	subs  map[string][]*fakeSubscription
-	failN int
+	mu         sync.Mutex
+	subs       map[string][]*fakeSubscription
+	failN      int
+	failReadyN int
 	// next is the round-robin cursor per resource, namespace and group name, so grouped subscriptions take turns.
 	next map[string]int
 }
@@ -41,6 +42,14 @@ func (f *Fake) FailSubscribes(n int) {
 	f.failN = n
 }
 
+// FailReady makes the next n subscriptions never become ready, mimicking a bus which accepts a subscription before
+// it can deliver on it. Their WaitReady blocks until the context is done and then reports its error.
+func (f *Fake) FailReady(n int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failReadyN = n
+}
+
 // Subscribe implements Subscriber.
 func (f *Fake) Subscribe(ctx context.Context, gvr schema.GroupVersionResource, namespace string,
 	handler func(context.Context, Event), opts ...SubscribeOption) (Subscription, error) {
@@ -55,6 +64,10 @@ func (f *Fake) Subscribe(ctx context.Context, gvr schema.GroupVersionResource, n
 	}
 	key := fakeKey(gvr, namespace)
 	sub := &fakeSubscription{fake: f, key: key, handler: handler, cfg: NewSubscribeConfig(opts...)}
+	if f.failReadyN > 0 {
+		f.failReadyN--
+		sub.neverReady = true
+	}
 	// A context which is already done must never be registered, synchronously: an immediate Publish would otherwise
 	// reach its handler, and in a group it would take that event away from a member which is still live.
 	if ctx.Err() != nil {
@@ -176,6 +189,10 @@ type fakeSubscription struct {
 	handler func(context.Context, Event)
 	cfg     SubscribeConfig
 
+	// neverReady makes WaitReady wait out its deadline, for a test exercising a subscription which is accepted but
+	// cannot deliver. See Fake.FailReady.
+	neverReady bool
+
 	mu        sync.Mutex
 	stopWatch func() bool
 	closed    bool
@@ -196,7 +213,13 @@ func (s *fakeSubscription) watch(stop func() bool) {
 
 var _ Subscription = (*fakeSubscription)(nil)
 
-func (*fakeSubscription) WaitReady(context.Context) error { return nil }
+func (s *fakeSubscription) WaitReady(ctx context.Context) error {
+	if !s.neverReady {
+		return nil
+	}
+	<-ctx.Done()
+	return ctx.Err()
+}
 
 // Close stops delivery and releases the context watcher. It is idempotent, so the watcher firing after an explicit
 // Close is harmless.

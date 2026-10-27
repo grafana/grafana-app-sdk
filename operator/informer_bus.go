@@ -45,6 +45,9 @@ const (
 	DefaultBusResyncJitterFactor = 0.1
 	// DefaultBusRetryInterval is how often a BusInformer retries a failing subscription or initial list.
 	DefaultBusRetryInterval = 5 * time.Second
+	// DefaultBusSubscriptionReadyTimeout is how long a new subscription is given to become able to receive when no
+	// timeout is configured.
+	DefaultBusSubscriptionReadyTimeout = 30 * time.Second
 	// DefaultBusEventQueueSize is how many live events a BusInformer buffers when none is configured.
 	DefaultBusEventQueueSize = 1000
 	// DefaultBusEventDrainBatch is how many queued events a BusInformer applies per pass when none is configured.
@@ -100,6 +103,9 @@ type BusInformerOptions struct {
 	// RetryInterval is how often a failing subscription or initial list is retried.
 	// A non-positive value uses DefaultBusRetryInterval.
 	RetryInterval time.Duration
+	// SubscriptionReadyTimeout bounds how long a new subscription is given to become able to receive before it is
+	// closed and retried. A non-positive value uses DefaultBusSubscriptionReadyTimeout.
+	SubscriptionReadyTimeout time.Duration
 	// ErrorHandler is called for errors which do not stop the informer, such as a watcher returning an error or an
 	// event dropped because its object could not be read.
 	ErrorHandler func(context.Context, error)
@@ -199,6 +205,9 @@ func NewBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, liste
 	}
 	if opts.RetryInterval <= 0 {
 		opts.RetryInterval = DefaultBusRetryInterval
+	}
+	if opts.SubscriptionReadyTimeout <= 0 {
+		opts.SubscriptionReadyTimeout = DefaultBusSubscriptionReadyTimeout
 	}
 	if opts.EventQueueSize <= 0 {
 		opts.EventQueueSize = DefaultBusEventQueueSize
@@ -385,13 +394,35 @@ func (b *BusInformer) drainEvents(ctx context.Context) {
 
 // subscribe opens the live subscription, retrying while it fails. It returns a nil Subscription when the informer is
 // starting degraded, in which case a background goroutine keeps retrying and owns the subscription it opens.
+// openSubscription subscribes and waits for the subscription to be able to receive, closing the handle when it
+// cannot. Subscribe returning is not delivery being ready: listing against a subscription which is not yet
+// receiving would report synced while changes are still being missed, which is the gap subscribing before listing
+// exists to close. A readiness failure is therefore reported like a subscribe failure, and retried the same way.
+func (b *BusInformer) openSubscription(ctx context.Context, opts []resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
+	sub, err := b.subscriber.Subscribe(ctx, b.gvr, b.opts.Namespace, b.onEvent, opts...)
+	if err != nil {
+		return nil, err
+	}
+	// WaitReady requires a deadline, per Subscription: without one an implementation which cannot report readiness
+	// never returns.
+	readyCtx, cancel := context.WithTimeout(ctx, b.opts.SubscriptionReadyTimeout)
+	defer cancel()
+	if err := sub.WaitReady(readyCtx); err != nil {
+		if closeErr := sub.Close(); closeErr != nil {
+			b.logger(ctx).Debug("failed to close a subscription which never became ready", "error", closeErr)
+		}
+		return nil, fmt.Errorf("subscription never became ready: %w", err)
+	}
+	return sub, nil
+}
+
 func (b *BusInformer) subscribe(ctx context.Context) resourcebus.Subscription {
 	opts := []resourcebus.SubscribeOption{resourcebus.WithOnReconnect(b.signalReconnect)}
 	if b.opts.Group.Name != "" {
 		opts = append(opts, resourcebus.WithGroup(b.opts.Group))
 	}
 
-	sub, err := b.subscriber.Subscribe(ctx, b.gvr, b.opts.Namespace, b.onEvent, opts...)
+	sub, err := b.openSubscription(ctx, opts)
 	if err == nil {
 		b.metrics.observeSubscriptionOpen()
 		return sub
@@ -408,7 +439,7 @@ func (b *BusInformer) subscribe(ctx context.Context) resourcebus.Subscription {
 			return nil
 		case <-time.After(b.opts.RetryInterval):
 		}
-		sub, err = b.subscriber.Subscribe(ctx, b.gvr, b.opts.Namespace, b.onEvent, opts...)
+		sub, err = b.openSubscription(ctx, opts)
 		if err == nil {
 			b.metrics.observeSubscriptionOpen()
 			return sub
@@ -426,7 +457,7 @@ func (b *BusInformer) retrySubscribe(ctx context.Context, opts []resourcebus.Sub
 			return
 		case <-time.After(b.opts.RetryInterval):
 		}
-		sub, err := b.subscriber.Subscribe(ctx, b.gvr, b.opts.Namespace, b.onEvent, opts...)
+		sub, err := b.openSubscription(ctx, opts)
 		if err != nil {
 			b.logger(ctx).Warn("failed to subscribe, will retry", "error", err)
 			continue
