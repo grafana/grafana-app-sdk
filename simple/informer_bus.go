@@ -98,7 +98,7 @@ func BusInformerSupplier(sub resourcebus.Subscriber, cfg BusInformerConfig) Info
 			return nil, err
 		}
 
-		return operator.NewBusInformer(kind, sub, lister, operator.BusInformerOptions{
+		inf, err := operator.NewBusInformer(kind, sub, lister, operator.BusInformerOptions{
 			Namespace:          options.ListWatchOptions.Namespace,
 			ListWatchOptions:   options.ListWatchOptions,
 			Payload:            cfg.Payload,
@@ -109,6 +109,13 @@ func BusInformerSupplier(sub resourcebus.Subscriber, cfg BusInformerConfig) Info
 			ErrorHandler:       options.ErrorHandler,
 			Metrics:            busMetrics,
 		})
+		if err != nil {
+			return nil, err
+		}
+		// Watchers run on their own per-key workers, as they do under the other suppliers: the informer's loop owns
+		// snapshot mutation and the re-list, and a slow reconcile on that loop would block unrelated objects and
+		// the recovery it depends on. Ordering per object is preserved, since a key always lands on one worker.
+		return operator.NewConcurrentInformerFromOptions(inf, options)
 	}
 }
 

@@ -21,13 +21,16 @@ kind with `ReconcileOptions.InformerSupplier` (the per-kind one wins). The SDK s
 | --- | --- | --- |
 | `simple.DefaultInformerSupplier` | kubernetes watch | every object of the kind |
 | `simple.OptimizedInformerSupplier` | kubernetes watch | every object, in a cache tuned for large counts |
-| `simple.BusInformerSupplier` | a `resourcebus.Subscriber` | identity per object |
+| `simple.BusInformerSupplier` | a `resourcebus.Subscriber` | identity per object, in identity mode |
 
 `DefaultInformerSupplier` is the one to use unless you have a reason not to. Reach for
 `OptimizedInformerSupplier` when a kind has more than ~10k objects, you watch cluster-scoped resources, or you are
 memory constrained; it respects `UseWatchList` and `WatchListPageSize`, which the default supplier ignores. Reach for
 `BusInformerSupplier` when your reconcilers read the object they act on anyway, so the cache earns nothing — see
-below.
+below. Its snapshot holds namespace, name and resource version per object, and no object bodies, whatever the lister
+returns: with `PayloadIdentity` the informer projects listed objects onto their identities before retaining them, so
+a full-object list and an identity list cost the same to hold. `PayloadHydrated` retains whole objects by
+definition, since that is what it delivers.
 
 > [!CAUTION]
 > The bus informer, the periodic informer and the `resourcebus` contract are **experimental**. Their Go APIs may

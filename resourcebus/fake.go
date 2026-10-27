@@ -122,6 +122,11 @@ func (f *Fake) Publish(ctx context.Context, gvr schema.GroupVersionResource, nam
 	}
 	for _, key := range f.scopeKeys(gvr, namespace) {
 		for _, sub := range f.recipients(key, scopes[key]) {
+			// Re-checked per recipient: an earlier handler in this same publish may have closed a later one, and
+			// delivery stops at Close.
+			if sub.isClosed() {
+				continue
+			}
 			sub.handler(ctx, evt)
 		}
 	}
@@ -196,6 +201,13 @@ type fakeSubscription struct {
 	mu        sync.Mutex
 	stopWatch func() bool
 	closed    bool
+}
+
+// isClosed reports whether delivery to this subscription has stopped.
+func (s *fakeSubscription) isClosed() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.closed
 }
 
 // watch takes ownership of the context watcher's stop function, so Close can release it. A subscription already

@@ -527,6 +527,9 @@ func (b *BusInformer) signalOverflowRelist() {
 // corrective delete to follow.
 func (b *BusInformer) handleEvent(ctx context.Context, evt resourcebus.Event) {
 	ctx = ContextWithDelivery(ctx, DeliveryLive)
+	// The delivered object is the last-known one for a delete and whatever the API returned for a hydrated read, so
+	// the version the announcement was made at is carried separately rather than stamped onto the object.
+	ctx = ContextWithAnnouncedVersion(ctx, evt.ResourceVersion)
 	rv := parseResourceVersion(evt.ResourceVersion)
 	// An event waits in the queue, and a re-list can complete while it waits. A list read after the event was
 	// published already accounts for it — including by listing a re-creation, or by confirming an absence — so
@@ -619,6 +622,17 @@ func (b *BusInformer) payloadObject(ctx context.Context, evt resourcebus.Event) 
 	return obj, nil
 }
 
+// toIdentities projects listed objects onto their identities, in place, so the snapshot retains no object bodies.
+func (b *BusInformer) toIdentities(objs []resource.Object) []resource.Object {
+	for i, obj := range objs {
+		if obj == nil {
+			continue
+		}
+		objs[i] = NewIdentityObject(b.kind, obj.GetNamespace(), obj.GetName(), obj.GetResourceVersion())
+	}
+	return objs
+}
+
 // identityObject is the kind's zero value carrying the event's identity, which is all a consumer needs to read the
 // object for itself.
 func (b *BusInformer) identityObject(evt resourcebus.Event) resource.Object {
@@ -635,6 +649,13 @@ func (b *BusInformer) relist(ctx context.Context, pass relistPass) error {
 	}
 
 	ctx = ContextWithDelivery(ctx, DeliveryRelist)
+	// In identity mode the snapshot exists to key the diff and date the arbitration, and watchers are handed
+	// identities for live events anyway. Retaining the listed bodies would make steady-state memory scale with
+	// total payload size — the cost this informer exists to avoid — whenever the lister returns full objects,
+	// which the default one always does and an identity lister does on its fallback.
+	if b.opts.Payload == PayloadIdentity {
+		objs = b.toIdentities(objs)
+	}
 	added, updated, removed := b.store.Replace(objs, listRV)
 	// Recorded after Replace, so a queued event is only judged against a snapshot already installed. An
 	// unparseable version leaves it at zero, which disables the check — the same fallback the store's arbitration

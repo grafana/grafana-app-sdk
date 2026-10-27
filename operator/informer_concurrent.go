@@ -155,9 +155,23 @@ func (ci *ConcurrentInformer) WaitForSync(ctx context.Context) error {
 	return ci.informer.WaitForSync(ctx)
 }
 
+// IdentityPayload forwards the wrapped informer's payload mode, so wrapping does not hide it from wiring which
+// refuses to pair an identity payload with a watcher that reads more than the identity. An informer which does not
+// declare one reports false.
+func (ci *ConcurrentInformer) IdentityPayload() bool {
+	identity, ok := ci.informer.(interface{ IdentityPayload() bool })
+	return ok && identity.IdentityPayload()
+}
+
 // PrometheusCollectors implements metrics.Provider.
 func (ci *ConcurrentInformer) PrometheusCollectors() []prometheus.Collector {
-	return []prometheus.Collector{ci.queueDepth}
+	collectors := []prometheus.Collector{ci.queueDepth}
+	// Forwarded for the same reason HealthChecks forwards: wrapping an informer must not silently drop the metrics
+	// it exposes.
+	if provider, ok := ci.informer.(metrics.Provider); ok {
+		collectors = append(collectors, provider.PrometheusCollectors()...)
+	}
+	return collectors
 }
 
 // QueueDepth returns the number of events waiting in the worker queues.

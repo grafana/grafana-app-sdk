@@ -239,3 +239,29 @@ func TestFake_CloseIsIdempotent(t *testing.T) {
 	cancel()
 	assert.False(t, f.Subscribed(testGVR, testNamespace))
 }
+
+// A handler which closes another subscription stops delivery to it, including within the same publish: the
+// recipient list is resolved before the first handler runs, so each one is re-checked before it is invoked.
+func TestFake_HandlerClosingAnotherSubscriptionStopsItsDelivery(t *testing.T) {
+	f := NewFake()
+	ctx := context.Background()
+
+	var firstCalls, secondCalls int
+	var second Subscription
+	_, err := f.Subscribe(ctx, testGVR, testNamespace, func(context.Context, Event) {
+		firstCalls++
+		require.NoError(t, second.Close())
+	})
+	require.NoError(t, err)
+	second, err = f.Subscribe(ctx, testGVR, testNamespace, func(context.Context, Event) { secondCalls++ })
+	require.NoError(t, err)
+
+	require.NoError(t, f.Publish(ctx, testGVR, testNamespace, Event{Verb: VerbAdded, Name: "a"}))
+
+	assert.Equal(t, 1, firstCalls)
+	assert.Zero(t, secondCalls, "closed before its turn in this very publish")
+
+	require.NoError(t, f.Publish(ctx, testGVR, testNamespace, Event{Verb: VerbAdded, Name: "b"}))
+	assert.Equal(t, 2, firstCalls)
+	assert.Zero(t, secondCalls)
+}

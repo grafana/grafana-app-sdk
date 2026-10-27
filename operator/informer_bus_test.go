@@ -329,27 +329,119 @@ func TestBusInformer_LiveEventsWriteThroughToSnapshot(t *testing.T) {
 	})
 }
 
-// A live delete delivers the last-known object when the snapshot still holds one, so a watcher which reads the
-// object on delete is not handed a bare identity.
-func TestBusInformer_LiveDeleteDeliversLastKnownObject(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		sub := resourcebus.NewFake()
-		watcher := &recordingWatcher{}
-		listed := busObj("gone")
-		listed.Spec = map[string]any{"field": "value"}
-		inf := newBusInformer(t, sub, staticLister(listed), watcher, BusInformerOptions{})
-		stop := startBusInformer(t, inf)
-		defer stop()
-
-		require.NoError(t, sub.Publish(context.Background(), busTestGVR(), busTestNamespace,
-			busEvent(resourcebus.VerbDeleted, "gone", "13")))
-		synctest.Wait()
-
-		watcher.mu.Lock()
-		defer watcher.mu.Unlock()
-		require.Len(t, watcher.deletes, 1)
-		assert.Equal(t, map[string]any{"field": "value"}, watcher.deletes[0].GetSpec())
+// In hydrated mode the snapshot holds whole objects, so a live delete delivers the last-known one rather than a
+// bare identity.
+func TestBusInformer_HydratedLiveDeleteDeliversLastKnownObject(t *testing.T) {
+	watcher := &recordingWatcher{}
+	listed := busObjRV("gone", 100)
+	listed.Spec = map[string]any{"field": "value"}
+	inf := newBusInformer(t, resourcebus.NewFake(), staticLister(listed), watcher, BusInformerOptions{
+		Payload: PayloadHydrated,
+		Getter:  &fakeGetter{objects: map[string]resource.Object{}},
 	})
+	require.NoError(t, inf.relist(context.Background(), initialRelist))
+
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbDeleted, "gone", "200"))
+
+	watcher.mu.Lock()
+	defer watcher.mu.Unlock()
+	require.Len(t, watcher.deletes, 1)
+	assert.Equal(t, map[string]any{"field": "value"}, watcher.deletes[0].GetSpec())
+}
+
+// In identity mode the snapshot retains identities only. Keeping the listed bodies would make steady-state memory
+// scale with total payload size, which is the cost this informer exists to avoid — and the default lister returns
+// full objects, as does an identity lister falling back.
+func TestBusInformer_IdentityModeRetainsNoObjectBodies(t *testing.T) {
+	listed := busObjRV("x", 100)
+	listed.Spec = map[string]any{"field": "value"}
+	listed.Labels = map[string]string{"app": "test"}
+	watcher := &recordingWatcher{}
+	inf := newBusInformer(t, resourcebus.NewFake(), staticLister(listed), watcher, BusInformerOptions{})
+
+	require.NoError(t, inf.relist(context.Background(), initialRelist))
+
+	stored, ok := inf.store.Get(busTestNamespace, "x")
+	require.True(t, ok)
+	assert.Empty(t, stored.GetSpec(), "no spec is retained")
+	assert.Empty(t, stored.GetLabels(), "nor any other body")
+	assert.Equal(t, "100", stored.GetResourceVersion(), "but the version the arbitration needs is kept")
+	assert.Equal(t, busTestNamespace, stored.GetNamespace())
+
+	// An identity modification keeps that identity rather than reintroducing a body.
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbModified, "x", "200"))
+	stored, ok = inf.store.Get(busTestNamespace, "x")
+	require.True(t, ok)
+	assert.Empty(t, stored.GetSpec())
+}
+
+// A live event carries the version it was announced at on the context, which the delivered object does not in
+// general have: a delete delivers the last-known object and a hydrated read whatever the API returned.
+func TestBusInformer_AnnouncedVersionIsCarriedSeparately(t *testing.T) {
+	type seen struct {
+		announced string
+		onObject  string
+	}
+
+	t.Run("a delete delivers the last-known object, not the announcement", func(t *testing.T) {
+		var deletes []seen
+		watcher := &SimpleWatcher{
+			DeleteFunc: func(ctx context.Context, obj resource.Object) error {
+				deletes = append(deletes, seen{AnnouncedVersionFromContext(ctx), obj.GetResourceVersion()})
+				return nil
+			},
+		}
+		inf := newBusInformer(t, resourcebus.NewFake(), staticLister(busObjRV("x", 100)), watcher, BusInformerOptions{
+			Payload: PayloadHydrated,
+			Getter:  &fakeGetter{objects: map[string]resource.Object{}},
+		})
+		require.NoError(t, inf.relist(context.Background(), initialRelist))
+
+		inf.handleEvent(context.Background(), busEvent(resourcebus.VerbDeleted, "x", "200"))
+
+		require.Len(t, deletes, 1)
+		assert.Equal(t, "200", deletes[0].announced, "the announcement's version is on the context")
+		assert.Equal(t, "100", deletes[0].onObject, "the object keeps its own, not the announcement's")
+	})
+
+	t.Run("a hydrated read delivers the version the API returned", func(t *testing.T) {
+		var adds []seen
+		watcher := &SimpleWatcher{
+			AddFunc: func(ctx context.Context, obj resource.Object) error {
+				adds = append(adds, seen{AnnouncedVersionFromContext(ctx), obj.GetResourceVersion()})
+				return nil
+			},
+		}
+		// The announcement says 200; the read returns 250, having picked up a later write.
+		getter := &fakeGetter{objects: map[string]resource.Object{
+			busStoreKey(busTestNamespace, "x"): busObjRV("x", 250),
+		}}
+		inf := newBusInformer(t, resourcebus.NewFake(), staticLister(), watcher, BusInformerOptions{
+			Payload: PayloadHydrated,
+			Getter:  getter,
+		})
+
+		inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "200"))
+
+		require.Len(t, adds, 1)
+		assert.Equal(t, "200", adds[0].announced)
+		assert.Equal(t, "250", adds[0].onObject, "the read's version is not overwritten by the announcement's")
+	})
+}
+
+// A re-list delivery was caused by no announcement, so there is no version to report.
+func TestBusInformer_RelistDeliveriesCarryNoAnnouncedVersion(t *testing.T) {
+	var announced []string
+	inf := newBusInformer(t, resourcebus.NewFake(), staticLister(busObjRV("x", 100)), &SimpleWatcher{
+		AddFunc: func(ctx context.Context, _ resource.Object) error {
+			announced = append(announced, AnnouncedVersionFromContext(ctx))
+			return nil
+		},
+	}, BusInformerOptions{})
+
+	require.NoError(t, inf.relist(context.Background(), initialRelist))
+
+	assert.Equal(t, []string{""}, announced)
 }
 
 // An unknown verb is reported to the error handler and skipped; a valid event after it still arrives.

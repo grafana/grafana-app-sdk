@@ -7,9 +7,12 @@ import "context"
 // unaffected.
 //
 // The distinction is load-bearing for instrumentation which attributes an event to its cause: a live event is one the
-// change source announced, carrying the version that announcement was made at, while a re-list event is the
-// informer's own diff of a list against its snapshot, carrying a version the lister read. Measuring one against the
-// other — the delay between a notification and a reconcile's read of it, say — is only meaningful for live events.
+// change source announced, while a re-list event is the informer's own diff of a list against its snapshot.
+// Measuring the delay between a notification and a reconcile's read of it, say, is only meaningful for the first.
+//
+// The delivered object does not necessarily carry the announced version — a delete delivers the last-known object,
+// and a hydrated read delivers whatever the API returned — so instrumentation which needs the version the
+// announcement was made at reads it with AnnouncedVersionFromContext rather than off the object.
 //
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type Delivery string
@@ -45,4 +48,28 @@ func DeliveryFromContext(ctx context.Context) Delivery {
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 func ContextWithDelivery(ctx context.Context, delivery Delivery) context.Context {
 	return context.WithValue(ctx, deliveryContextKey{}, delivery)
+}
+
+type announcedVersionContextKey struct{}
+
+// AnnouncedVersionFromContext reports the resource version the change source announced the event at, which is not
+// in general the version the delivered object carries: a delete delivers the last-known object, and a hydrated read
+// delivers whatever the API returned, either of which may be older or newer than the announcement.
+//
+// It is empty for a re-list delivery, which no announcement caused, and outside a dispatch.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+func AnnouncedVersionFromContext(ctx context.Context) string {
+	version, ok := ctx.Value(announcedVersionContextKey{}).(string)
+	if !ok {
+		return ""
+	}
+	return version
+}
+
+// ContextWithAnnouncedVersion returns ctx carrying the version a live event was announced at.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+func ContextWithAnnouncedVersion(ctx context.Context, resourceVersion string) context.Context {
+	return context.WithValue(ctx, announcedVersionContextKey{}, resourceVersion)
 }

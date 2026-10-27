@@ -60,17 +60,16 @@ func TestBusInformerSupplier_CreatesBusInformers(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	busInf, ok := inf.(*operator.BusInformer)
-	require.True(t, ok, "the supplier must return a BusInformer")
-	assert.True(t, busInf.IdentityPayload(), "the identity payload is the default")
-	assert.Equal(t, kind.Schema, busInf.Schema())
+	wrapped, ok := inf.(*operator.ConcurrentInformer)
+	require.True(t, ok, "watchers run on per-key workers, as under the other suppliers")
+	assert.True(t, wrapped.IdentityPayload(), "the identity payload is the default, and survives wrapping")
 }
 
 func TestBusInformerSupplier_HydratedPayload(t *testing.T) {
 	inf, err := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{Payload: operator.PayloadHydrated})(
 		testKind(), stubClients{}, operator.InformerOptions{})
 	require.NoError(t, err)
-	assert.False(t, inf.(*operator.BusInformer).IdentityPayload())
+	assert.False(t, inf.(*operator.ConcurrentInformer).IdentityPayload())
 }
 
 func TestBusInformerSupplier_ListerFactory(t *testing.T) {
@@ -208,6 +207,20 @@ func TestApp_RejectsIdentityPayloadWithOpinionated(t *testing.T) {
 				Reconciler:       &Reconciler{},
 				ReconcileOptions: BasicReconcileOptions{InformerSupplier: supplierFor(identityInformer{identity: false})},
 			},
+		},
+		{
+			name: "an identity informer behind the concurrent wrapper",
+			kind: AppManagedKind{
+				Kind:       testKind(),
+				Reconciler: &Reconciler{},
+				ReconcileOptions: BasicReconcileOptions{InformerSupplier: func(
+					k resource.Kind, _ resource.ClientGenerator, opts operator.InformerOptions,
+				) (operator.Informer, error) {
+					// What the bus supplier itself returns: wrapping must not hide the payload mode.
+					return operator.NewConcurrentInformerFromOptions(identityInformer{identity: true}, opts)
+				}},
+			},
+			wantErr: true,
 		},
 		{
 			name: "an informer which declares no payload",
@@ -376,7 +389,8 @@ func TestBusInformerSupplier_SharesInjectedMetrics(t *testing.T) {
 	second, err := BusInformerSupplier(resourcebus.NewFake(), cfg)(testKind(), stubClients{}, operator.InformerOptions{})
 	require.NoError(t, err)
 
-	assert.Equal(t, shared.PrometheusCollectors(), first.(*operator.BusInformer).PrometheusCollectors())
-	assert.Equal(t, shared.PrometheusCollectors(), second.(*operator.BusInformer).PrometheusCollectors(),
+	// The wrapper adds its own queue-depth collector; what matters is that both carry the shared set.
+	assert.Subset(t, first.(*operator.ConcurrentInformer).PrometheusCollectors(), shared.PrometheusCollectors())
+	assert.Subset(t, second.(*operator.ConcurrentInformer).PrometheusCollectors(), shared.PrometheusCollectors(),
 		"both suppliers report the collectors that were actually registered")
 }
