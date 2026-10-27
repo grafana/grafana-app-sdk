@@ -32,14 +32,17 @@ func TestCustomCacheInformer_Run(t *testing.T) {
 			},
 		}, untypedKind, CustomCacheInformerOptions{})
 		ctx, cancel := context.WithCancel(context.Background())
-		stopped := false
+		stopped := make(chan struct{})
 		go func() {
 			inf.Run(ctx)
-			stopped = true
+			close(stopped)
 		}()
 		cancel()
-		time.Sleep(time.Second)
-		assert.True(t, stopped, "informer did not stop when stopCh was closed")
+		select {
+		case <-stopped:
+		case <-time.After(time.Second):
+			t.Fatal("informer did not stop when the context was cancelled")
+		}
 	})
 }
 

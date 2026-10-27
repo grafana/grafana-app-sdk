@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -281,18 +282,24 @@ func TestConcurrentWatcher(t *testing.T) {
 	})
 
 	t.Run("event for the same object should be processed sequentially (ie by the same worker)", func(t *testing.T) {
+		var eventsMu sync.Mutex
 		events := make([]string, 0)
+		record := func(event string) {
+			eventsMu.Lock()
+			defer eventsMu.Unlock()
+			events = append(events, event)
+		}
 		mock := &mockWatcher{}
 		mock.AddFunc = func(ctx context.Context, o resource.Object) error {
-			events = append(events, "add")
+			record("add")
 			return nil
 		}
 		mock.UpdateFunc = func(ctx context.Context, _, _ resource.Object) error {
-			events = append(events, "update")
+			record("update")
 			return nil
 		}
 		mock.DeleteFunc = func(ctx context.Context, o resource.Object) error {
-			events = append(events, "delete")
+			record("delete")
 			return nil
 		}
 		var errCount atomic.Int64
@@ -318,6 +325,8 @@ func TestConcurrentWatcher(t *testing.T) {
 		assert.Equal(t, int64(1), mock.deleteAttempts.Load())
 		assert.Equal(t, int64(0), errCount.Load())
 		// Events received should be in the same order of events triggered always.
+		eventsMu.Lock()
+		defer eventsMu.Unlock()
 		assert.Equal(t, []string{"add", "update", "update", "delete"}, events)
 	})
 
