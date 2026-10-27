@@ -222,6 +222,36 @@ up to one re-list, holds only what this informer was delivered, and is the infor
 a staleness-tolerant count, such as a quota check that would otherwise cost an API list per reconcile. Anything a
 reconcile's correctness depends on must be read from the API.
 
+### Read freshness
+
+A change source can announce a write to this replica before the read path can serve it, and a reconcile which reads
+a version older than the one it was woken for is acting on state the system already knows is stale. That is what
+`operator.FreshnessMetrics` measures, and it is the one thing the informer's own metrics cannot see — the informer
+knows what it delivered, not what the handler's read came back with.
+
+```go
+freshness := operator.NewFreshnessMetrics(operator.FreshnessMetricsConfig{
+    MetricsConfig:       metrics.DefaultConfig("myapp"),
+    ResourceVersionTime: decodeVersionTimestamp,
+})
+tracker := operator.NewAnnouncementTracker(operator.AnnouncementTrackerOptions{})
+// Registered before the watchers which act on the events, since informers dispatch in order.
+_ = informer.AddEventHandler(tracker.Watcher())
+
+// Around your own read, with the announcement sampled first:
+announced := tracker.Announced(id)
+obj, err := client.Get(ctx, id)
+freshness.Recorder(kind).Observe(ctx, id, announced, obj, err)
+```
+
+Two outcomes are excluded by construction, so a non-zero `behind` cannot be dismissed as ordinary concurrency: the
+announcement is sampled **before** the read is issued, because a read already in flight when a newer write commits
+may legitimately return the earlier state; and a `NotFound` is its own outcome and never `behind`, because an object
+deleted after its announcement is correctly absent.
+
+A handler which reads inside the dispatch needs no tracker — `operator.AnnouncedVersionFromContext(ctx)` has the
+version. The tracker is for a work queue, where the read happens long after the event that enqueued the key.
+
 ### Limits
 
 * **No selectors.** The bus delivers by namespace, so `LabelFilters` and `FieldSelectors` are rejected when the
