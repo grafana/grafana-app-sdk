@@ -106,7 +106,24 @@ AnnouncedMetadata: operator.AnnouncedMetadata{
 ```
 
 Those three are what an opinionated reconciler or watcher reads off the object, so declaring them is what lets one be
-paired with an identity payload.
+paired with an identity payload. Labels and annotations have no equivalent flag because nothing in the SDK branches
+on them — your handler reads them off the delivered object, and skips the API read when they answer the question:
+
+```go
+func (w *watcher) Add(ctx context.Context, obj resource.Object) error {
+    if obj.GetLabels()["app"] != "mine" {
+        return nil // not ours; no read needed
+    }
+    if obj.GetAnnotations()["myapp.grafana.app/paused"] == "true" {
+        return nil
+    }
+    full, err := w.client.Get(ctx, resource.Identifier{Namespace: obj.GetNamespace(), Name: obj.GetName()})
+    ...
+}
+```
+
+Both are empty when the bus announced none, which is indistinguishable from the object genuinely having none — so a
+handler which must tell those apart reads the object rather than trusting the absence.
 
 ### Listing
 
