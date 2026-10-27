@@ -177,6 +177,29 @@ func (w *watcher) Add(ctx context.Context, obj resource.Object) error {
 Both are empty when the bus announced none, which is indistinguishable from the object genuinely having none — so a
 handler which must tell those apart reads the object rather than trusting the absence.
 
+### Selectors
+
+The subscription is scoped by namespace alone, so the informer matches selectors itself rather than leaving the list
+the only thing narrowed by them. Every live event and every listed object is checked against the same
+`LabelFilters` and `FieldSelectors` the server narrowed the list by, so an excluded object reaches neither the
+snapshot nor a watcher and the two paths cannot disagree. The listed objects are filtered as well as the live ones,
+because the snapshot is what the live path arbitrates against and must hold only what is in scope however the lister
+was written.
+
+Objects move in and out of scope, and that is delivered as it would be by a filtered watch: an object whose labels
+change so it no longer matches is gone as far as a watcher is concerned, so it arrives as a delete, and one which
+starts matching arrives as an add.
+
+A selector which cannot be evaluated against what the payload delivers is refused when the informer is built, naming
+which and why:
+
+* a **field selector** needs `PayloadHydrated`, and a kind which declares the field in `selectableFields` — it is
+  evaluated through that field's value function, so an undeclared field cannot be read off a delivered object;
+* a **label filter** on an identity payload needs every key it reads to be announced in `watch.metadata.labels`.
+  Matching on an unannounced label would read "not set" for an object which has it, which is the absent-means-unknown
+  trap in its sharpest form. `AnnouncedMetadataFromManifest` intersects the announced keys across declaring kinds,
+  since a filter is evaluated against whichever kind the informer serves.
+
 ### Listing
 
 By default the re-list is a paginated list of full objects over the kind's client. It follows continue tokens to the
@@ -254,13 +277,6 @@ version. The tracker is for a work queue, where the read happens long after the 
 
 ### Limits
 
-* **Selectors are honoured on both paths, or refused.** The server narrows the list; the informer checks every live
-  event and every listed object against the same selectors, so an excluded object never reaches the snapshot or a
-  watcher. An object whose labels change so it leaves the selector is delivered as a delete, as a filtered watch
-  reports it. A selector which cannot be evaluated against what a payload delivers is refused when the informer is
-  built, naming it: a field selector needs `PayloadHydrated` and a kind which declares the field selectable, and a
-  label filter on an identity payload needs every key it reads to be announced — matching on an unannounced label
-  would read "not set" for an object which has it.
 * **Events are queued, not handled inline.** The subscriber callback only enqueues; the informer applies and
   dispatches on its own goroutine, so a slow API read or handler cannot stall the bus. `EventQueueSize` bounds the
   queue, and a full queue drops the event and forces a re-list to recover it — counted by
