@@ -483,6 +483,20 @@ func TestConcurrentInformer_PrometheusCollectors(t *testing.T) {
 		collectors := ci.PrometheusCollectors()
 		assert.Len(t, collectors, 1)
 	})
+
+	t.Run("forwards the wrapped informer's collectors", func(t *testing.T) {
+		wrapped := &collectorInformer{collectors: []prometheus.Collector{
+			prometheus.NewCounter(prometheus.CounterOpts{Name: "wrapped_events_total"}),
+			prometheus.NewGauge(prometheus.GaugeOpts{Name: "wrapped_queue_size"}),
+		}}
+
+		ci, err := NewConcurrentInformerFromOptions(wrapped, InformerOptions{
+			MetricsConfig: metrics.DefaultConfig("test"),
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, append([]prometheus.Collector{ci.queueDepth}, wrapped.collectors...), ci.PrometheusCollectors())
+	})
 }
 
 type noopInformer struct{}
@@ -490,3 +504,10 @@ type noopInformer struct{}
 func (m *noopInformer) AddEventHandler(_ ResourceWatcher) error { return nil }
 func (m *noopInformer) Run(ctx context.Context) error           { <-ctx.Done(); return nil }
 func (m *noopInformer) WaitForSync(ctx context.Context) error   { return nil }
+
+type collectorInformer struct {
+	noopInformer
+	collectors []prometheus.Collector
+}
+
+func (m *collectorInformer) PrometheusCollectors() []prometheus.Collector { return m.collectors }
