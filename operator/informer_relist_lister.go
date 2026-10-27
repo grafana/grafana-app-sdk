@@ -13,23 +13,25 @@ import (
 // DefaultListerPageSize is the page size the default ResourceLister requests when none is configured.
 const DefaultListerPageSize = 500
 
-// ResourceLister reads every object of one kind, for a BusInformer or PeriodicInformer to diff or re-deliver.
+// ResourceLister reads every object of one kind, for a RelistInformer or PeriodicInformer to diff or re-deliver.
 //
 // listResourceVersion is the version the snapshot was read at, which the informer's snapshot uses to arbitrate the
 // re-list against live events which raced it; an empty or non-numeric version disables that arbitration.
 //
 // The single method is the seam for a server-specific projection: an implementation which can ask storage for
 // identities alone (namespace, name and resource version, which is all the diff keys off and all a reconcile needs
-// to re-fetch the object) returns those instead of full objects, without the SDK knowing that endpoint exists.
+// to re-fetch the object) returns those instead of full objects, without the SDK knowing that endpoint exists. Such a
+// lister declares it with an IdentityPayload() bool method returning true, as NewIdentityLister's does, so that the
+// informer can report that its deliveries may carry identity only.
 //
-// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+// Experimental: the relist informer is a work in progress and may change or be removed without notice.
 type ResourceLister interface {
 	List(ctx context.Context) (objs []resource.Object, listResourceVersion string, err error)
 }
 
 // ClientListerOptions configures the default ResourceLister.
 //
-// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+// Experimental: the relist informer is a work in progress and may change or be removed without notice.
 type ClientListerOptions struct {
 	// ListWatchOptions are the namespace and filters to apply to the list request.
 	ListWatchOptions ListWatchOptions
@@ -46,7 +48,7 @@ type ClientListerOptions struct {
 // informer diffs it as a mass deletion. An error on any page therefore fails the whole re-list rather than returning
 // what was read so far; the informer retries on its next tick.
 //
-// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+// Experimental: the relist informer is a work in progress and may change or be removed without notice.
 func NewClientLister(client ListWatchClient, kind resource.Kind, opts ClientListerOptions) (ResourceLister, error) {
 	if client == nil {
 		return nil, errors.New("client cannot be nil")
@@ -106,13 +108,13 @@ func (l *clientLister) List(ctx context.Context) ([]resource.Object, string, err
 // fallback lister to re-list another way rather than fail the re-list, so an adopter whose server may or may not
 // serve a projection wraps the two and lets the fallback decide per call.
 //
-// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+// Experimental: the relist informer is a work in progress and may change or be removed without notice.
 var ErrProjectionUnsupported = errors.New("list projection unsupported")
 
 // ResourceKey is one object's identity from a list projection which carries no object bodies: all a snapshot diff
 // keys off, and all a reconcile needs to read the object for itself.
 //
-// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+// Experimental: the relist informer is a work in progress and may change or be removed without notice.
 type ResourceKey struct {
 	Namespace       string
 	Name            string
@@ -123,14 +125,14 @@ type ResourceKey struct {
 // returns the resource version the snapshot was read at and a sequence which yields an error if the stream fails
 // part-way; an implementation which cannot serve the projection returns ErrProjectionUnsupported from the sequence.
 //
-// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+// Experimental: the relist informer is a work in progress and may change or be removed without notice.
 type ResourceKeyLister interface {
 	ListKeys(ctx context.Context) (listResourceVersion string, keys iter.Seq2[ResourceKey, error])
 }
 
 // IdentityListerOptions configures the identity ResourceLister.
 //
-// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+// Experimental: the relist informer is a work in progress and may change or be removed without notice.
 type IdentityListerOptions struct {
 	// ListWatchOptions are the namespace and filters the re-list asks for.
 	ListWatchOptions ListWatchOptions
@@ -147,7 +149,7 @@ type IdentityListerOptions struct {
 // can list identities without object bodies. Pair it with NewFallbackLister so that a server which cannot serve the
 // projection re-lists full objects instead.
 //
-// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+// Experimental: the relist informer is a work in progress and may change or be removed without notice.
 func NewIdentityLister(kind resource.Kind, keys ResourceKeyLister, opts IdentityListerOptions) (ResourceLister, error) {
 	if keys == nil {
 		return nil, errors.New("key lister cannot be nil")
@@ -165,6 +167,10 @@ type identityLister struct {
 }
 
 var _ ResourceLister = (*identityLister)(nil)
+
+// IdentityPayload reports that the lister delivers identity-only objects, so that an informer re-listing through it
+// is refused an opinionated reconciler or watcher just as an identity-payload source would be.
+func (*identityLister) IdentityPayload() bool { return true }
 
 func (l *identityLister) List(ctx context.Context) ([]resource.Object, string, error) {
 	if !l.opts.HonorsListWatchOptions && l.opts.ListWatchOptions.isFiltered() {
@@ -190,7 +196,7 @@ func (l *identityLister) List(ctx context.Context) ([]resource.Object, string, e
 // projection primary reports as unsupported. Any other error fails the re-list, so a transient outage is retried on
 // the next tick rather than quietly served by the more expensive path.
 //
-// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+// Experimental: the relist informer is a work in progress and may change or be removed without notice.
 func NewFallbackLister(primary, fallback ResourceLister) (ResourceLister, error) {
 	if primary == nil || fallback == nil {
 		return nil, errors.New("both listers are required")
@@ -204,6 +210,12 @@ type fallbackLister struct {
 }
 
 var _ ResourceLister = (*fallbackLister)(nil)
+
+// IdentityPayload reports whether either lister may deliver identity-only objects: which one serves a re-list is
+// decided per call, so the declaration has to cover both.
+func (l *fallbackLister) IdentityPayload() bool {
+	return isIdentityPayload(l.primary) || isIdentityPayload(l.fallback)
+}
 
 func (l *fallbackLister) List(ctx context.Context) ([]resource.Object, string, error) {
 	objs, listRV, err := l.primary.List(ctx)
@@ -221,7 +233,7 @@ func (l *fallbackLister) List(ctx context.Context) ([]resource.Object, string, e
 // identity payload delivers and what an identity projection snapshots, so a lister built against a server-specific
 // projection produces the same shape the informer does.
 //
-// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+// Experimental: the relist informer is a work in progress and may change or be removed without notice.
 func NewIdentityObject(kind resource.Kind, namespace, name, resourceVersion string) resource.Object {
 	obj := kind.ZeroValue()
 	obj.SetGroupVersionKind(kind.GroupVersionKind())

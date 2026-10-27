@@ -14,7 +14,7 @@ import (
 )
 
 func TestNewClientLister_Validation(t *testing.T) {
-	_, err := NewClientLister(nil, busTestKind, ClientListerOptions{})
+	_, err := NewClientLister(nil, relistTestKind, ClientListerOptions{})
 	assert.Error(t, err, "a nil client is rejected")
 
 	_, err = NewClientLister(mockListWatchClient{}, resource.Kind{}, ClientListerOptions{})
@@ -32,19 +32,19 @@ func TestClientLister_List(t *testing.T) {
 				case "":
 					page.ResourceVersion = "150"
 					page.Continue = "page-2"
-					page.Items = []resource.Object{busObj("a")}
+					page.Items = []resource.Object{relistObj("a")}
 				case "page-2":
 					// Later pages repeat the pinned version; only the first page's is used.
 					page.ResourceVersion = "150"
-					page.Items = []resource.Object{busObj("b")}
+					page.Items = []resource.Object{relistObj("b")}
 				default:
 					return fmt.Errorf("unexpected continue token %q", options.Continue)
 				}
 				return nil
 			},
 		}
-		lister, err := NewClientLister(client, busTestKind, ClientListerOptions{
-			ListWatchOptions: ListWatchOptions{Namespace: busTestNamespace, LabelFilters: []string{"app=test"}},
+		lister, err := NewClientLister(client, relistTestKind, ClientListerOptions{
+			ListWatchOptions: ListWatchOptions{Namespace: relistTestNamespace, LabelFilters: []string{"app=test"}},
 			PageSize:         1,
 		})
 		require.NoError(t, err)
@@ -52,7 +52,7 @@ func TestClientLister_List(t *testing.T) {
 		objs, listRV, err := lister.List(context.Background())
 		require.NoError(t, err)
 
-		assert.Equal(t, []string{"a", "b"}, busNames(objs))
+		assert.Equal(t, []string{"a", "b"}, relistNames(objs))
 		assert.Equal(t, "150", listRV, "the snapshot is dated by the first page")
 		require.Len(t, requested, 2)
 		assert.Equal(t, 1, requested[0].Limit)
@@ -70,11 +70,11 @@ func TestClientLister_List(t *testing.T) {
 				}
 				page := into.(*resource.UntypedList)
 				page.Continue = "page-2"
-				page.Items = []resource.Object{busObj("a")}
+				page.Items = []resource.Object{relistObj("a")}
 				return nil
 			},
 		}
-		lister, err := NewClientLister(client, busTestKind, ClientListerOptions{})
+		lister, err := NewClientLister(client, relistTestKind, ClientListerOptions{})
 		require.NoError(t, err)
 
 		objs, _, err := lister.List(context.Background())
@@ -83,8 +83,8 @@ func TestClientLister_List(t *testing.T) {
 	})
 
 	t.Run("records a request per page and the projection", func(t *testing.T) {
-		m := newTestBusMetrics()
-		kindLabel := busTestKind.GroupVersionKind().String()
+		m := newTestRelistMetrics()
+		kindLabel := relistTestKind.GroupVersionKind().String()
 		client := mockListWatchClient{
 			ListIntoFunc: func(_ context.Context, _ string, options resource.ListOptions, into resource.ListObject) error {
 				page := into.(*resource.UntypedList)
@@ -94,14 +94,14 @@ func TestClientLister_List(t *testing.T) {
 				return nil
 			},
 		}
-		lister, err := NewClientLister(client, busTestKind, ClientListerOptions{Recorder: m.RelistRecorder(busTestKind)})
+		lister, err := NewClientLister(client, relistTestKind, ClientListerOptions{Recorder: m.RelistRecorder(relistTestKind)})
 		require.NoError(t, err)
 
 		_, _, err = lister.List(context.Background())
 		require.NoError(t, err)
 
-		assert.Equal(t, float64(2), busMetricValue(t, m, "relist_requests", kindLabel))
-		assert.Equal(t, float64(1), busMetricValue(t, m, "relist_projection", kindLabel, string(ProjectionObjects)),
+		assert.Equal(t, float64(2), relistMetricValue(t, m, "relist_requests", kindLabel))
+		assert.Equal(t, float64(1), relistMetricValue(t, m, "relist_projection", kindLabel, string(ProjectionObjects)),
 			"the default lister serves full objects")
 	})
 
@@ -113,7 +113,7 @@ func TestClientLister_List(t *testing.T) {
 				return nil
 			},
 		}
-		lister, err := NewClientLister(client, busTestKind, ClientListerOptions{})
+		lister, err := NewClientLister(client, relistTestKind, ClientListerOptions{})
 		require.NoError(t, err)
 
 		_, _, err = lister.List(context.Background())
@@ -142,7 +142,7 @@ func staticKeys(listRV string, keys ...ResourceKey) ResourceKeyLister {
 }
 
 func TestNewIdentityLister_Validation(t *testing.T) {
-	_, err := NewIdentityLister(busTestKind, nil, IdentityListerOptions{})
+	_, err := NewIdentityLister(relistTestKind, nil, IdentityListerOptions{})
 	assert.Error(t, err, "a nil key lister is rejected")
 
 	_, err = NewIdentityLister(resource.Kind{}, staticKeys(""), IdentityListerOptions{})
@@ -151,23 +151,23 @@ func TestNewIdentityLister_Validation(t *testing.T) {
 
 func TestIdentityLister_List(t *testing.T) {
 	t.Run("builds identity objects from keys", func(t *testing.T) {
-		m := newTestBusMetrics()
-		kindLabel := busTestKind.GroupVersionKind().String()
-		lister, err := NewIdentityLister(busTestKind, staticKeys("150",
-			ResourceKey{Namespace: busTestNamespace, Name: "a", ResourceVersion: "11"},
-			ResourceKey{Namespace: busTestNamespace, Name: "b", ResourceVersion: "22"},
-		), IdentityListerOptions{Recorder: m.RelistRecorder(busTestKind)})
+		m := newTestRelistMetrics()
+		kindLabel := relistTestKind.GroupVersionKind().String()
+		lister, err := NewIdentityLister(relistTestKind, staticKeys("150",
+			ResourceKey{Namespace: relistTestNamespace, Name: "a", ResourceVersion: "11"},
+			ResourceKey{Namespace: relistTestNamespace, Name: "b", ResourceVersion: "22"},
+		), IdentityListerOptions{Recorder: m.RelistRecorder(relistTestKind)})
 		require.NoError(t, err)
 
 		objs, listRV, err := lister.List(context.Background())
 		require.NoError(t, err)
 
-		assert.Equal(t, []string{"a", "b"}, busNames(objs))
+		assert.Equal(t, []string{"a", "b"}, relistNames(objs))
 		assert.Equal(t, "150", listRV)
 		assert.Equal(t, "22", objs[1].GetResourceVersion(), "the version the snapshot arbitrates on is carried")
-		assert.Equal(t, busTestKind.GroupVersionKind(), objs[1].GroupVersionKind())
-		assert.Equal(t, float64(1), busMetricValue(t, m, "relist_requests", kindLabel))
-		assert.Equal(t, float64(1), busMetricValue(t, m, "relist_projection", kindLabel, string(ProjectionIdentities)))
+		assert.Equal(t, relistTestKind.GroupVersionKind(), objs[1].GroupVersionKind())
+		assert.Equal(t, float64(1), relistMetricValue(t, m, "relist_requests", kindLabel))
+		assert.Equal(t, float64(1), relistMetricValue(t, m, "relist_projection", kindLabel, string(ProjectionIdentities)))
 	})
 
 	// A stream which fails part-way fails the re-list: the informer diffs the snapshot whole, so a truncated one
@@ -175,13 +175,13 @@ func TestIdentityLister_List(t *testing.T) {
 	t.Run("a partial stream fails the re-list", func(t *testing.T) {
 		keys := keyListerFunc(func(context.Context) (string, iter.Seq2[ResourceKey, error]) {
 			return "150", func(yield func(ResourceKey, error) bool) {
-				if !yield(ResourceKey{Namespace: busTestNamespace, Name: "a"}, nil) {
+				if !yield(ResourceKey{Namespace: relistTestNamespace, Name: "a"}, nil) {
 					return
 				}
 				yield(ResourceKey{}, errors.New("stream broke"))
 			}
 		})
-		lister, err := NewIdentityLister(busTestKind, keys, IdentityListerOptions{})
+		lister, err := NewIdentityLister(relistTestKind, keys, IdentityListerOptions{})
 		require.NoError(t, err)
 
 		objs, _, err := lister.List(context.Background())
@@ -201,7 +201,7 @@ func TestIdentityLister_List(t *testing.T) {
 			{"field selected", ListWatchOptions{FieldSelectors: []string{"spec.x=1"}}},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
-				lister, err := NewIdentityLister(busTestKind, staticKeys("150"), IdentityListerOptions{
+				lister, err := NewIdentityLister(relistTestKind, staticKeys("150"), IdentityListerOptions{
 					ListWatchOptions: tt.opts,
 				})
 				require.NoError(t, err)
@@ -213,7 +213,7 @@ func TestIdentityLister_List(t *testing.T) {
 	})
 
 	t.Run("a lister which honors the scope serves it", func(t *testing.T) {
-		lister, err := NewIdentityLister(busTestKind, staticKeys("150",
+		lister, err := NewIdentityLister(relistTestKind, staticKeys("150",
 			ResourceKey{Namespace: "ns", Name: "a"},
 		), IdentityListerOptions{
 			ListWatchOptions:       ListWatchOptions{Namespace: "ns"},
@@ -223,7 +223,7 @@ func TestIdentityLister_List(t *testing.T) {
 
 		objs, _, err := lister.List(context.Background())
 		require.NoError(t, err)
-		assert.Equal(t, []string{"a"}, busNames(objs))
+		assert.Equal(t, []string{"a"}, relistNames(objs))
 	})
 }
 
@@ -245,22 +245,22 @@ func TestFallbackLister_List(t *testing.T) {
 			fellBack = true
 			return nil, "", nil
 		})
-		lister, err := NewFallbackLister(staticLister(busObj("a")), fallback)
+		lister, err := NewFallbackLister(staticLister(relistObj("a")), fallback)
 		require.NoError(t, err)
 
 		objs, _, err := lister.List(context.Background())
 		require.NoError(t, err)
-		assert.Equal(t, []string{"a"}, busNames(objs))
+		assert.Equal(t, []string{"a"}, relistNames(objs))
 		assert.False(t, fellBack)
 	})
 
 	t.Run("falls back when the projection is unsupported", func(t *testing.T) {
-		lister, err := NewFallbackLister(unsupported, staticLister(busObj("a")))
+		lister, err := NewFallbackLister(unsupported, staticLister(relistObj("a")))
 		require.NoError(t, err)
 
 		objs, _, err := lister.List(context.Background())
 		require.NoError(t, err)
-		assert.Equal(t, []string{"a"}, busNames(objs), "the full list is still a correct snapshot")
+		assert.Equal(t, []string{"a"}, relistNames(objs), "the full list is still a correct snapshot")
 	})
 
 	// Any other error fails the re-list, so a transient outage is retried on the next tick rather than quietly
@@ -285,11 +285,11 @@ func TestFallbackLister_List(t *testing.T) {
 }
 
 func TestNewIdentityObject(t *testing.T) {
-	obj := NewIdentityObject(busTestKind, "ns", "name", "11")
+	obj := NewIdentityObject(relistTestKind, "ns", "name", "11")
 	assert.Equal(t, "ns", obj.GetNamespace())
 	assert.Equal(t, "name", obj.GetName())
 	assert.Equal(t, "11", obj.GetResourceVersion())
-	assert.Equal(t, busTestKind.GroupVersionKind(), obj.GroupVersionKind())
+	assert.Equal(t, relistTestKind.GroupVersionKind(), obj.GroupVersionKind())
 }
 
 // The composition an adopter actually wires: a key lister whose server does not serve the projection reports it
@@ -300,12 +300,12 @@ func TestIdentityListerFallsBackWhenTheServerDoesNotServeTheProjection(t *testin
 			yield(ResourceKey{}, fmt.Errorf("404 from keys endpoint: %w", ErrProjectionUnsupported))
 		}
 	})
-	identities, err := NewIdentityLister(busTestKind, keys, IdentityListerOptions{})
+	identities, err := NewIdentityLister(relistTestKind, keys, IdentityListerOptions{})
 	require.NoError(t, err)
-	lister, err := NewFallbackLister(identities, staticLister(busObj("a")))
+	lister, err := NewFallbackLister(identities, staticLister(relistObj("a")))
 	require.NoError(t, err)
 
 	objs, _, err := lister.List(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, []string{"a"}, busNames(objs))
+	assert.Equal(t, []string{"a"}, relistNames(objs))
 }

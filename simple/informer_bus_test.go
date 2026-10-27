@@ -17,7 +17,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/resourcebus"
 )
 
-// identityInformer is a mockInformer which declares the identity payload, standing in for a bus informer in the
+// identityInformer is a mockInformer which declares the identity payload, standing in for a relist informer in the
 // wiring tests.
 type identityInformer struct {
 	mockInformer
@@ -45,12 +45,12 @@ func TestBusInformerSupplier_NilSubscriberFallsBackToTheWatch(t *testing.T) {
 	assert.Equal(t, defaultErr == nil, busErr == nil)
 }
 
-func TestBusInformerSupplier_CreatesBusInformers(t *testing.T) {
+func TestBusInformerSupplier_CreatesRelistInformers(t *testing.T) {
 	kind := testKind()
 	clients := stubClients{}
 	supplier := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{
-		ResyncInterval: time.Minute,
-		Group:          resourcebus.Group{Name: "group"},
+		RelistInformerConfig: RelistInformerConfig{ResyncInterval: time.Minute},
+		Group:                resourcebus.Group{Name: "group"},
 	})
 
 	inf, err := supplier(kind, clients, operator.InformerOptions{
@@ -58,8 +58,8 @@ func TestBusInformerSupplier_CreatesBusInformers(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	busInf, ok := inf.(*operator.BusInformer)
-	require.True(t, ok, "the supplier must return a BusInformer")
+	busInf, ok := inf.(*operator.RelistInformer)
+	require.True(t, ok, "the supplier must return a RelistInformer")
 	assert.True(t, busInf.IdentityPayload(), "the identity payload is the default")
 	assert.Equal(t, kind.Schema, busInf.Schema())
 }
@@ -68,19 +68,70 @@ func TestBusInformerSupplier_HydratedPayload(t *testing.T) {
 	inf, err := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{Payload: operator.PayloadHydrated})(
 		testKind(), stubClients{}, operator.InformerOptions{})
 	require.NoError(t, err)
-	assert.False(t, inf.(*operator.BusInformer).IdentityPayload())
+	assert.False(t, inf.(*operator.RelistInformer).IdentityPayload())
+}
+
+// The source factory decides what drives the informer between re-lists, and receives the kind's client and options.
+func TestRelistInformerSupplier_SourceFactory(t *testing.T) {
+	t.Run("none is re-list only", func(t *testing.T) {
+		inf, err := RelistInformerSupplier(RelistInformerConfig{})(testKind(), stubClients{}, operator.InformerOptions{})
+		require.NoError(t, err)
+		assert.IsType(t, &operator.RelistInformer{}, inf)
+	})
+
+	t.Run("the kubernetes watch is the kind's client", func(t *testing.T) {
+		source, err := KubernetesWatchSource(testKind(), stubClient{}, operator.InformerOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, stubClient{}, source)
+	})
+
+	t.Run("receives the kind's options", func(t *testing.T) {
+		var gotNamespace string
+		_, err := RelistInformerSupplier(RelistInformerConfig{
+			SourceFactory: func(_ resource.Kind, client resource.Client, options operator.InformerOptions) (operator.ChangeSource, error) {
+				gotNamespace = options.ListWatchOptions.Namespace
+				return client, nil
+			},
+		})(testKind(), stubClients{}, operator.InformerOptions{ListWatchOptions: operator.ListWatchOptions{Namespace: "ns"}})
+		require.NoError(t, err)
+		assert.Equal(t, "ns", gotNamespace)
+	})
+
+	t.Run("its error fails informer creation", func(t *testing.T) {
+		expected := errors.New("I AM ERROR")
+		_, err := RelistInformerSupplier(RelistInformerConfig{
+			SourceFactory: func(resource.Kind, resource.Client, operator.InformerOptions) (operator.ChangeSource, error) {
+				return nil, expected
+			},
+		})(testKind(), stubClients{}, operator.InformerOptions{})
+		assert.ErrorIs(t, err, expected)
+	})
+}
+
+// The bus supplier replaces any source factory with the bus: a config which reuses a relist config wholesale must not
+// silently watch the API server instead.
+func TestBusInformerSupplier_IgnoresSourceFactory(t *testing.T) {
+	var called bool
+	_, err := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{RelistInformerConfig: RelistInformerConfig{
+		SourceFactory: func(_ resource.Kind, client resource.Client, _ operator.InformerOptions) (operator.ChangeSource, error) {
+			called = true
+			return client, nil
+		},
+	}})(testKind(), stubClients{}, operator.InformerOptions{})
+	require.NoError(t, err)
+	assert.False(t, called)
 }
 
 func TestBusInformerSupplier_ListerFactory(t *testing.T) {
 	t.Run("is used for the kind's lister", func(t *testing.T) {
 		var gotOpts operator.ClientListerOptions
-		supplier := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{
+		supplier := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{RelistInformerConfig: RelistInformerConfig{
 			PageSize: 25,
 			ListerFactory: func(_ resource.Kind, _ resource.Client, opts operator.ClientListerOptions) (operator.ResourceLister, error) {
 				gotOpts = opts
 				return listerFunc(func(context.Context) ([]resource.Object, string, error) { return nil, "", nil }), nil
 			},
-		})
+		}})
 
 		_, err := supplier(testKind(), stubClients{}, operator.InformerOptions{
 			ListWatchOptions: operator.ListWatchOptions{Namespace: "ns", LabelFilters: []string{"app=test"}},
@@ -94,11 +145,11 @@ func TestBusInformerSupplier_ListerFactory(t *testing.T) {
 
 	t.Run("its error fails informer creation", func(t *testing.T) {
 		expected := errors.New("I AM ERROR")
-		supplier := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{
+		supplier := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{RelistInformerConfig: RelistInformerConfig{
 			ListerFactory: func(resource.Kind, resource.Client, operator.ClientListerOptions) (operator.ResourceLister, error) {
 				return nil, expected
 			},
-		})
+		}})
 
 		_, err := supplier(testKind(), stubClients{}, operator.InformerOptions{})
 		assert.ErrorIs(t, err, expected)
@@ -257,9 +308,9 @@ func keysReturning(listRV string, keys ...operator.ResourceKey) operator.Resourc
 
 // A key lister factory is all an adopter with an identity-serving endpoint supplies: the supplier composes the
 // identity lister and the full-object fallback around it.
-func TestBusInformerSupplier_KeyListerFactory(t *testing.T) {
+func TestRelistInformerSupplier_KeyListerFactory(t *testing.T) {
 	t.Run("identities serve the re-list", func(t *testing.T) {
-		cfg := BusInformerConfig{
+		cfg := RelistInformerConfig{
 			KeyListerFactory: func(resource.Kind) (operator.ResourceKeyLister, error) {
 				return keysReturning("150", operator.ResourceKey{Name: "a", ResourceVersion: "11"}), nil
 			},
@@ -278,7 +329,7 @@ func TestBusInformerSupplier_KeyListerFactory(t *testing.T) {
 	// A re-list the key lister cannot serve falls back to full objects rather than failing: a full list is still a
 	// correct snapshot, and failing the tick would stop the informer reconciling altogether.
 	t.Run("a scoped re-list falls back to the object lister", func(t *testing.T) {
-		cfg := BusInformerConfig{
+		cfg := RelistInformerConfig{
 			KeyListerFactory: func(resource.Kind) (operator.ResourceKeyLister, error) {
 				return keysReturning("150"), nil
 			},
@@ -297,7 +348,7 @@ func TestBusInformerSupplier_KeyListerFactory(t *testing.T) {
 
 	t.Run("its error fails informer creation", func(t *testing.T) {
 		expected := errors.New("I AM ERROR")
-		supplier := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{
+		supplier := RelistInformerSupplier(RelistInformerConfig{
 			KeyListerFactory: func(resource.Kind) (operator.ResourceKeyLister, error) { return nil, expected },
 		})
 
@@ -307,7 +358,7 @@ func TestBusInformerSupplier_KeyListerFactory(t *testing.T) {
 
 	t.Run("ListerFactory takes precedence", func(t *testing.T) {
 		var keysBuilt bool
-		supplier := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{
+		supplier := RelistInformerSupplier(RelistInformerConfig{
 			KeyListerFactory: func(resource.Kind) (operator.ResourceKeyLister, error) {
 				keysBuilt = true
 				return keysReturning("150"), nil

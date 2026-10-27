@@ -16,13 +16,13 @@ import (
 
 // PeriodicInformerOptions are the options for a PeriodicInformer.
 //
-// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+// Experimental: the relist informer is a work in progress and may change or be removed without notice.
 type PeriodicInformerOptions struct {
 	// ResyncInterval is how often the full set is re-listed.
-	// A non-positive value uses DefaultBusResyncInterval.
+	// A non-positive value uses DefaultRelistInterval.
 	ResyncInterval time.Duration
 	// RetryInterval is how often the initial list is retried while it fails.
-	// A non-positive value uses DefaultBusRetryInterval.
+	// A non-positive value uses DefaultRelistRetryInterval.
 	RetryInterval time.Duration
 	// ErrorHandler is called for errors which do not stop the informer, such as a watcher returning an error.
 	ErrorHandler func(context.Context, error)
@@ -33,9 +33,9 @@ type PeriodicInformerOptions struct {
 //
 // It suits idempotent, cadence-driven work which re-evaluates every object on each pass regardless of whether it
 // changed — age-based cleanup, for instance — where a live delta stream buys nothing. For anything which should
-// react to changes promptly, use a BusInformer or a watch-backed informer instead.
+// react to changes promptly, use a RelistInformer with a ChangeSource, or a watch-backed informer, instead.
 //
-// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+// Experimental: the relist informer is a work in progress and may change or be removed without notice.
 type PeriodicInformer struct {
 	kind   resource.Kind
 	lister ResourceLister
@@ -52,7 +52,7 @@ var _ Informer = (*PeriodicInformer)(nil)
 
 // NewPeriodicInformer creates a PeriodicInformer for one kind, reading the set to deliver from lister.
 //
-// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+// Experimental: the relist informer is a work in progress and may change or be removed without notice.
 func NewPeriodicInformer(kind resource.Kind, lister ResourceLister, opts PeriodicInformerOptions) (*PeriodicInformer, error) {
 	if kind.Schema == nil {
 		return nil, errors.New("kind cannot be empty")
@@ -61,10 +61,10 @@ func NewPeriodicInformer(kind resource.Kind, lister ResourceLister, opts Periodi
 		return nil, errors.New("lister cannot be nil")
 	}
 	if opts.ResyncInterval <= 0 {
-		opts.ResyncInterval = DefaultBusResyncInterval
+		opts.ResyncInterval = DefaultRelistInterval
 	}
 	if opts.RetryInterval <= 0 {
-		opts.RetryInterval = DefaultBusRetryInterval
+		opts.RetryInterval = DefaultRelistRetryInterval
 	}
 	return &PeriodicInformer{
 		kind:     kind,
@@ -138,14 +138,14 @@ func (p *PeriodicInformer) Run(ctx context.Context) error {
 	p.synced.Store(true)
 	close(p.syncedCh)
 
-	timer := time.NewTimer(wait.Jitter(p.opts.ResyncInterval, DefaultBusResyncJitterFactor))
+	timer := time.NewTimer(wait.Jitter(p.opts.ResyncInterval, DefaultRelistJitterFactor))
 	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-timer.C:
-			timer.Reset(wait.Jitter(p.opts.ResyncInterval, DefaultBusResyncJitterFactor))
+			timer.Reset(wait.Jitter(p.opts.ResyncInterval, DefaultRelistJitterFactor))
 			_ = p.relist(ctx)
 		}
 	}

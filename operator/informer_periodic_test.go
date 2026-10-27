@@ -18,13 +18,13 @@ func TestNewPeriodicInformer_Validation(t *testing.T) {
 	_, err := NewPeriodicInformer(resource.Kind{}, staticLister(), PeriodicInformerOptions{})
 	assert.Error(t, err, "an empty kind is rejected")
 
-	_, err = NewPeriodicInformer(busTestKind, nil, PeriodicInformerOptions{})
+	_, err = NewPeriodicInformer(relistTestKind, nil, PeriodicInformerOptions{})
 	assert.Error(t, err, "a nil lister is rejected")
 
-	inf, err := NewPeriodicInformer(busTestKind, staticLister(), PeriodicInformerOptions{})
+	inf, err := NewPeriodicInformer(relistTestKind, staticLister(), PeriodicInformerOptions{})
 	require.NoError(t, err)
 	assert.Error(t, inf.AddEventHandler(nil))
-	assert.Equal(t, busTestKind.Schema, inf.Schema())
+	assert.Equal(t, relistTestKind.Schema, inf.Schema())
 }
 
 // Every pass delivers every listed object as an add, unchanged objects included: re-delivery is what re-triggers
@@ -35,9 +35,9 @@ func TestPeriodicInformer_RelistsOnCadence(t *testing.T) {
 		var calls atomic.Int64
 		lister := listerFunc(func(context.Context) ([]resource.Object, string, error) {
 			calls.Add(1)
-			return []resource.Object{busObj("a")}, "", nil
+			return []resource.Object{relistObj("a")}, "", nil
 		})
-		inf, err := NewPeriodicInformer(busTestKind, lister, PeriodicInformerOptions{ResyncInterval: time.Minute})
+		inf, err := NewPeriodicInformer(relistTestKind, lister, PeriodicInformerOptions{ResyncInterval: time.Minute})
 		require.NoError(t, err)
 		require.NoError(t, inf.AddEventHandler(watcher))
 
@@ -69,9 +69,9 @@ func TestPeriodicInformer_RetriesInitialList(t *testing.T) {
 			if calls.Add(1) < 3 {
 				return nil, "", errors.New("api unavailable")
 			}
-			return []resource.Object{busObj("a")}, "", nil
+			return []resource.Object{relistObj("a")}, "", nil
 		})
-		inf, err := NewPeriodicInformer(busTestKind, lister, PeriodicInformerOptions{
+		inf, err := NewPeriodicInformer(relistTestKind, lister, PeriodicInformerOptions{
 			ResyncInterval: time.Hour,
 			ErrorHandler:   func(context.Context, error) {},
 		})
@@ -91,7 +91,7 @@ func TestPeriodicInformer_RetriesInitialList(t *testing.T) {
 			if inf.HasSynced() {
 				break
 			}
-			time.Sleep(DefaultBusRetryInterval)
+			time.Sleep(DefaultRelistRetryInterval)
 			synctest.Wait()
 		}
 		require.True(t, inf.HasSynced())
@@ -101,7 +101,7 @@ func TestPeriodicInformer_RetriesInitialList(t *testing.T) {
 
 func TestPeriodicInformer_WatcherErrorsReachTheErrorHandler(t *testing.T) {
 	var handled []error
-	inf, err := NewPeriodicInformer(busTestKind, staticLister(busObj("a")), PeriodicInformerOptions{
+	inf, err := NewPeriodicInformer(relistTestKind, staticLister(relistObj("a")), PeriodicInformerOptions{
 		ErrorHandler: func(_ context.Context, err error) { handled = append(handled, err) },
 	})
 	require.NoError(t, err)
@@ -114,7 +114,7 @@ func TestPeriodicInformer_WatcherErrorsReachTheErrorHandler(t *testing.T) {
 }
 
 func TestPeriodicInformer_WaitForSyncHonorsContext(t *testing.T) {
-	inf, err := NewPeriodicInformer(busTestKind, staticLister(), PeriodicInformerOptions{})
+	inf, err := NewPeriodicInformer(relistTestKind, staticLister(), PeriodicInformerOptions{})
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
