@@ -347,7 +347,8 @@ func TestBusInformerSupplier_KeyListerFactory(t *testing.T) {
 			},
 		}
 
-		lister, err := cfg.lister(testKind(), stubClient{}, operator.ClientListerOptions{})
+		_, lister, err := cfg.listing().resolve(testKind(), stubClients{client: stubClient{}},
+			operator.InformerOptions{}, operator.RelistRecorder{})
 		require.NoError(t, err)
 
 		objs, listRV, err := lister.List(context.Background())
@@ -368,9 +369,9 @@ func TestBusInformerSupplier_KeyListerFactory(t *testing.T) {
 			},
 		}
 
-		lister, err := cfg.lister(testKind(), stubClient{}, operator.ClientListerOptions{
-			ListWatchOptions: operator.ListWatchOptions{Namespace: "ns"},
-		})
+		_, lister, err := cfg.listing().resolve(testKind(), stubClients{client: stubClient{}},
+			operator.InformerOptions{ListWatchOptions: operator.ListWatchOptions{Namespace: "ns"}},
+			operator.RelistRecorder{})
 		require.NoError(t, err)
 		assert.Equal(t, "ns", gotOpts.Namespace, "the factory is told what scope it has to honor")
 
@@ -561,6 +562,15 @@ func TestAnnouncedMetadataFromManifest(t *testing.T) {
 		}}
 		assert.Equal(t, operator.AnnouncedMetadata{Finalizers: true},
 			AnnouncedMetadataFromManifest(manifest(kind(all), weaker)))
+	})
+
+	// Declaring an empty block is not the same as declaring nothing: such a kind is watched over the bus and
+	// announces nothing, so it is the weakest one.
+	t.Run("an empty declaration governs", func(t *testing.T) {
+		empty := app.ManifestVersionKind{Kind: "Bar", Watch: &app.ManifestVersionKindWatch{
+			Metadata: &app.ManifestVersionKindWatchMetadata{},
+		}}
+		assert.Equal(t, operator.AnnouncedMetadata{}, AnnouncedMetadataFromManifest(manifest(kind(all), empty)))
 	})
 
 	t.Run("a kind which declares nothing is ignored, not counted as a refusal", func(t *testing.T) {

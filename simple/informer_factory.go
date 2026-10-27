@@ -47,17 +47,18 @@ func WatchDeclarationsFromManifest(data app.ManifestData) map[string]KindWatchDe
 }
 
 // unionAnnouncedMetadata adds one version's declaration to what the kind's other versions declare. It is a union
-// rather than an intersection because the declaration is the kind's own: every version of a kind is announced by
-// the same publisher, unlike the app-wide AnnouncedMetadataFromManifest, which has to take the weakest kind.
+// rather than the intersection AnnouncedMetadataFromManifest takes across kinds: the declaration is the kind's own,
+// and every version of it is announced by the same publisher.
 func unionAnnouncedMetadata(announced operator.AnnouncedMetadata, md app.ManifestVersionKindWatchMetadata) operator.AnnouncedMetadata {
-	for _, label := range md.Labels {
+	declared := announcedMetadataFrom(md)
+	for _, label := range declared.Labels {
 		if !slices.Contains(announced.Labels, label) {
 			announced.Labels = append(announced.Labels, label)
 		}
 	}
-	announced.Finalizers = announced.Finalizers || len(md.Finalizers) > 0
-	announced.Generation = announced.Generation || md.Generation
-	announced.DeletionTimestamp = announced.DeletionTimestamp || md.DeletionTimestamp
+	announced.Finalizers = announced.Finalizers || declared.Finalizers
+	announced.Generation = announced.Generation || declared.Generation
+	announced.DeletionTimestamp = announced.DeletionTimestamp || declared.DeletionTimestamp
 	return announced
 }
 
@@ -135,22 +136,7 @@ func (f *InformerFactory) bus(decl KindWatchDeclaration) InformerSupplier {
 // so that a kind whose need resolves differently in another deployment — or after a bus is switched on — reports on
 // the same series rather than on a new family.
 func withSharedDeliveryMetrics(cfg ManifestInformerConfig) ManifestInformerConfig {
-	delivery := cfg.Bus.Metrics.Delivery()
-	if delivery == nil {
-		delivery = cfg.Periodic.Metrics
-	}
-	if delivery == nil {
-		delivery = operator.NewInformerDeliveryMetrics(operator.InformerDeliveryMetricsConfig{
-			MetricsConfig:       cfg.Bus.MetricsConfig,
-			ResourceVersionTime: cfg.Bus.ResourceVersionTime,
-		})
-	}
-	cfg.Periodic.Metrics = delivery
-	if cfg.Bus.Metrics == nil {
-		cfg.Bus.Metrics = operator.NewBusInformerMetrics(operator.BusInformerMetricsConfig{
-			MetricsConfig: cfg.Bus.MetricsConfig,
-			Delivery:      delivery,
-		})
-	}
+	cfg.Bus.Metrics = cfg.Bus.busMetrics(cfg.Periodic.Metrics)
+	cfg.Periodic.Metrics = cfg.Bus.Metrics.Delivery()
 	return cfg
 }

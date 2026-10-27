@@ -2,7 +2,9 @@ package simple
 
 import (
 	"errors"
+	"maps"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/grafana/grafana-app-sdk/app"
@@ -10,6 +12,8 @@ import (
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-app-sdk/resourcebus"
+
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // identityPayloadInformer is implemented by an informer which delivers identity-only objects. watchKind asserts it
@@ -85,25 +89,10 @@ func BusInformerSupplier(sub resourcebus.Subscriber, cfg BusInformerConfig) Info
 	if sub == nil {
 		return DefaultInformerSupplier
 	}
-	busMetrics := cfg.Metrics
-	if busMetrics == nil {
-		busMetrics = operator.NewBusInformerMetrics(operator.BusInformerMetricsConfig{
-			MetricsConfig:       cfg.MetricsConfig,
-			ResourceVersionTime: cfg.ResourceVersionTime,
-		})
-	}
+	busMetrics := cfg.busMetrics(nil)
+	reading := cfg.listing()
 	return func(kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions) (operator.Informer, error) {
-		client, err := cfg.client(kind, clients)
-		if err != nil {
-			return nil, err
-		}
-
-		listerOpts := operator.ClientListerOptions{
-			ListWatchOptions: options.ListWatchOptions,
-			PageSize:         cfg.PageSize,
-			Recorder:         busMetrics.RelistRecorder(kind),
-		}
-		lister, err := cfg.lister(kind, client, listerOpts)
+		client, lister, err := reading.resolve(kind, clients, options, busMetrics.RelistRecorder(kind))
 		if err != nil {
 			return nil, err
 		}
@@ -130,86 +119,147 @@ func BusInformerSupplier(sub resourcebus.Subscriber, cfg BusInformerConfig) Info
 	}
 }
 
-// client resolves the kind's SDK client, or nothing where the configuration needs none: with ListerFactory set and
-// an identity payload the supplier reads nothing through it, so wiring outside an App — which has no
-// resource.ClientGenerator to hand it, only its own client-go clients — can pass nil and still use the supplier.
-func (c BusInformerConfig) client(kind resource.Kind, clients resource.ClientGenerator) (resource.Client, error) {
-	if c.ListerFactory != nil && c.Payload != operator.PayloadHydrated {
-		return nil, nil
+// busMetrics returns the collectors the bus informers report on, building them from the config when none were
+// injected. It is the only place they are built, so the supplier and the factory cannot configure them differently.
+// delivery is the shared delivery collectors to report deliveries on, or nil to build a set.
+func (c BusInformerConfig) busMetrics(delivery *operator.InformerDeliveryMetrics) *operator.BusInformerMetrics {
+	if c.Metrics != nil {
+		return c.Metrics
 	}
-	if clients == nil {
-		return nil, errors.New("a client generator is required to list the kind and to hydrate its events")
-	}
-	return clients.ClientFor(kind)
+	return operator.NewBusInformerMetrics(operator.BusInformerMetricsConfig{
+		MetricsConfig:       c.MetricsConfig,
+		ResourceVersionTime: c.ResourceVersionTime,
+		Delivery:            delivery,
+	})
 }
 
-func (c BusInformerConfig) lister(kind resource.Kind, client resource.Client, opts operator.ClientListerOptions) (operator.ResourceLister, error) {
-	if c.ListerFactory != nil {
-		return c.ListerFactory(kind, client, opts)
+func (c BusInformerConfig) listing() listing {
+	return listing{
+		pageSize:         c.PageSize,
+		payload:          c.Payload,
+		keyListerFactory: c.KeyListerFactory,
+		listerFactory:    c.ListerFactory,
 	}
+}
+
+// listing is the part of a supplier's configuration which decides how a kind's set is read. Both suppliers resolve
+// it the same way; only what they build from the resulting lister differs.
+type listing struct {
+	pageSize         int
+	payload          operator.BusPayload
+	keyListerFactory func(kind resource.Kind, opts operator.ListWatchOptions) (operator.ResourceKeyLister, error)
+	listerFactory    func(kind resource.Kind, client resource.Client, opts operator.ClientListerOptions) (operator.ResourceLister, error)
+}
+
+// resolve returns the kind's lister along with the client it was built from, which a hydrated payload also reads
+// each event's object through.
+//
+// The client is nil where the configuration needs none: with listerFactory set and an identity payload nothing is
+// read through it, so wiring outside an App — which has its own client-go clients and no resource.ClientGenerator
+// to hand over — can pass a nil generator and still use the supplier.
+func (l listing) resolve(
+	kind resource.Kind, clients resource.ClientGenerator,
+	options operator.InformerOptions, recorder operator.RelistRecorder,
+) (resource.Client, operator.ResourceLister, error) {
+	opts := operator.ClientListerOptions{
+		ListWatchOptions: options.ListWatchOptions,
+		PageSize:         l.pageSize,
+		Recorder:         recorder,
+	}
+
+	var client resource.Client
+	if l.listerFactory == nil || l.payload == operator.PayloadHydrated {
+		if clients == nil {
+			return nil, nil, errors.New("a client generator is required to list the kind and to hydrate its events")
+		}
+		var err error
+		if client, err = clients.ClientFor(kind); err != nil {
+			return nil, nil, err
+		}
+	}
+	if l.listerFactory != nil {
+		lister, err := l.listerFactory(kind, client, opts)
+		return client, lister, err
+	}
+
 	objects, err := operator.NewClientLister(client, kind, opts)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if c.KeyListerFactory == nil {
-		return objects, nil
+	if l.keyListerFactory == nil {
+		return client, objects, nil
 	}
 	// A hydrated payload promises watchers whole objects. Listing identities would hand them full objects live and
 	// near-empty ones on every re-list and initial list, which no caller can detect from a resource.Object.
-	if c.Payload == operator.PayloadHydrated {
-		return nil, errors.New("KeyListerFactory cannot be used with PayloadHydrated: re-lists would deliver less than live events")
+	if l.payload == operator.PayloadHydrated {
+		return nil, nil, errors.New("KeyListerFactory cannot be used with PayloadHydrated: re-lists would deliver less than live events")
 	}
 
-	keys, err := c.KeyListerFactory(kind, opts.ListWatchOptions)
+	keys, err := l.keyListerFactory(kind, opts.ListWatchOptions)
 	if err != nil {
 		// A factory which reports the projection unsupported for this kind's scope leaves the full-object list,
 		// rather than failing the informer: that is the same decision the fallback lister makes per re-list.
 		if errors.Is(err, operator.ErrProjectionUnsupported) {
-			return objects, nil
+			return client, objects, nil
 		}
-		return nil, err
+		return nil, nil, err
 	}
-	identities, err := operator.NewIdentityLister(kind, keys, operator.IdentityListerOptions{Recorder: opts.Recorder})
+	identities, err := operator.NewIdentityLister(kind, keys, operator.IdentityListerOptions{Recorder: recorder})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return operator.NewFallbackLister(identities, objects)
+	lister, err := operator.NewFallbackLister(identities, objects)
+	return client, lister, err
 }
 
 // AnnouncedMetadataFromManifest derives what a bus announces from the kinds' own declaration in the app manifest,
-// so an app states it once rather than restating it here and risking the two disagreeing.
+// so an app states it once rather than restating it here and risking the two disagreeing. It is for a single
+// BusInformerConfig shared across kinds; InformerFactory applies each kind's own declaration instead.
 //
 // A field counts as announced only where every kind which declares any watch metadata declares that field: the
 // informer serves one kind at a time but the configuration is app-wide, so the weakest kind governs. A kind which
-// declares nothing is ignored rather than counted as a refusal, since it is not watched over the bus.
+// declares no watch metadata at all is ignored rather than counted as a refusal, since it is not watched over the
+// bus — one which declares an empty block is watched and announces nothing, and does govern.
 //
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 func AnnouncedMetadataFromManifest(data app.ManifestData) operator.AnnouncedMetadata {
-	specs := data.WatchMetadata()
-	if len(specs) == 0 {
-		return operator.AnnouncedMetadata{}
-	}
-	announced := operator.AnnouncedMetadata{DeletionTimestamp: true, Finalizers: true, Generation: true}
-	first := true
-	for _, spec := range specs {
-		announced.DeletionTimestamp = announced.DeletionTimestamp && spec.DeletionTimestamp
-		announced.Generation = announced.Generation && spec.Generation
-		announced.Finalizers = announced.Finalizers && len(spec.Finalizers) > 0
-		// Label keys intersect for the same reason the flags do: a filter is evaluated against whatever kind the
-		// informer serves, so only a key every declaring kind announces can be relied on.
-		if first {
-			announced.Labels = append([]string(nil), spec.Labels...)
-			first = false
+	declared := data.WatchMetadata()
+	// Sorted so that the label order the first kind sets is the same on every run.
+	resources := slices.SortedFunc(maps.Keys(declared), func(a, b schema.GroupResource) int {
+		return strings.Compare(a.String(), b.String())
+	})
+
+	var announced operator.AnnouncedMetadata
+	for i, gr := range resources {
+		kind := announcedMetadataFrom(declared[gr])
+		if i == 0 {
+			announced = kind
 			continue
 		}
-		announced.Labels = intersectStrings(announced.Labels, spec.Labels)
+		announced.DeletionTimestamp = announced.DeletionTimestamp && kind.DeletionTimestamp
+		announced.Generation = announced.Generation && kind.Generation
+		announced.Finalizers = announced.Finalizers && kind.Finalizers
+		// Label keys intersect for the same reason the flags do: a filter is evaluated against whatever kind the
+		// informer serves, so only a key every declaring kind announces can be relied on.
+		announced.Labels = intersectStrings(announced.Labels, kind.Labels)
 	}
 	return announced
 }
 
+// announcedMetadataFrom maps one kind's manifest declaration onto what the informer expects the bus to announce.
+// Announcing any finalizer means a watcher can read the finalizer list, which is what the informer's flag says.
+func announcedMetadataFrom(md app.ManifestVersionKindWatchMetadata) operator.AnnouncedMetadata {
+	return operator.AnnouncedMetadata{
+		Labels:            md.Labels,
+		Finalizers:        len(md.Finalizers) > 0,
+		Generation:        md.Generation,
+		DeletionTimestamp: md.DeletionTimestamp,
+	}
+}
+
 // intersectStrings keeps the values of kept which next also has, preserving order.
 func intersectStrings(kept, next []string) []string {
-	out := kept[:0]
+	var out []string
 	for _, value := range kept {
 		if slices.Contains(next, value) {
 			out = append(out, value)
@@ -253,29 +303,9 @@ func PeriodicInformerSupplier(cfg PeriodicInformerConfig) InformerSupplier {
 			MetricsConfig: cfg.MetricsConfig,
 		})
 	}
+	reading := listing{pageSize: cfg.PageSize, listerFactory: cfg.ListerFactory}
 	return func(kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions) (operator.Informer, error) {
-		listerOpts := operator.ClientListerOptions{
-			ListWatchOptions: options.ListWatchOptions,
-			PageSize:         cfg.PageSize,
-			Recorder:         listMetrics.RelistRecorder(kind),
-		}
-		// A ListerFactory lists through the caller's own client, so wiring outside an App can pass a nil generator.
-		var (
-			client resource.Client
-			lister operator.ResourceLister
-			err    error
-		)
-		if cfg.ListerFactory == nil {
-			if clients == nil {
-				return nil, errors.New("a client generator is required to list the kind")
-			}
-			if client, err = clients.ClientFor(kind); err != nil {
-				return nil, err
-			}
-			lister, err = operator.NewClientLister(client, kind, listerOpts)
-		} else {
-			lister, err = cfg.ListerFactory(kind, client, listerOpts)
-		}
+		_, lister, err := reading.resolve(kind, clients, options, listMetrics.RelistRecorder(kind))
 		if err != nil {
 			return nil, err
 		}
