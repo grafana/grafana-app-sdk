@@ -2,6 +2,7 @@ package simple
 
 import (
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/grafana/grafana-app-sdk/app"
@@ -176,12 +177,32 @@ func AnnouncedMetadataFromManifest(data app.ManifestData) operator.AnnouncedMeta
 		return operator.AnnouncedMetadata{}
 	}
 	announced := operator.AnnouncedMetadata{DeletionTimestamp: true, Finalizers: true, Generation: true}
+	first := true
 	for _, spec := range specs {
 		announced.DeletionTimestamp = announced.DeletionTimestamp && spec.DeletionTimestamp
 		announced.Generation = announced.Generation && spec.Generation
 		announced.Finalizers = announced.Finalizers && len(spec.Finalizers) > 0
+		// Label keys intersect for the same reason the flags do: a filter is evaluated against whatever kind the
+		// informer serves, so only a key every declaring kind announces can be relied on.
+		if first {
+			announced.Labels = append([]string(nil), spec.Labels...)
+			first = false
+			continue
+		}
+		announced.Labels = intersectStrings(announced.Labels, spec.Labels)
 	}
 	return announced
+}
+
+// intersectStrings keeps the values of kept which next also has, preserving order.
+func intersectStrings(kept, next []string) []string {
+	out := kept[:0]
+	for _, value := range kept {
+		if slices.Contains(next, value) {
+			out = append(out, value)
+		}
+	}
+	return out
 }
 
 // PeriodicInformerConfig configures the informers PeriodicInformerSupplier creates.
@@ -287,7 +308,7 @@ func InformerSupplierFromManifest(data app.ManifestData, cfg ManifestInformerCon
 	if watch == nil {
 		watch = DefaultInformerSupplier
 	}
-	if cfg.Bus.AnnouncedMetadata == (operator.AnnouncedMetadata{}) {
+	if cfg.Bus.AnnouncedMetadata.IsZero() {
 		cfg.Bus.AnnouncedMetadata = AnnouncedMetadataFromManifest(data)
 	}
 	bus := BusInformerSupplier(cfg.Subscriber, cfg.Bus)

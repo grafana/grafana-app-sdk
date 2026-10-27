@@ -96,24 +96,39 @@ func TestBusInformerSupplier_ListerFactory(t *testing.T) {
 		assert.Equal(t, "ns", gotOpts.ListWatchOptions.Namespace)
 	})
 
-	// The bus delivers by namespace only, so a selector could be applied to the list alone. The live stream would
-	// keep delivering excluded objects, which the next filtered re-list would then diff as deletes.
-	t.Run("selectors are rejected rather than applied to the list alone", func(t *testing.T) {
+	// A selector the live stream cannot be matched against is refused, naming which one and why — the list alone
+	// would be narrowed while live events kept delivering excluded objects.
+	t.Run("a selector the payload cannot be matched against is refused", func(t *testing.T) {
 		supplier := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{})
 
 		for _, tt := range []struct {
 			name string
 			opts operator.ListWatchOptions
+			want string
 		}{
-			{"label filters", operator.ListWatchOptions{LabelFilters: []string{"app=test"}}},
-			{"field selectors", operator.ListWatchOptions{FieldSelectors: []string{"spec.x=1"}}},
+			{"an unannounced label", operator.ListWatchOptions{LabelFilters: []string{"app=test"}},
+				`label filter on "app"`},
+			{"any field selector", operator.ListWatchOptions{FieldSelectors: []string{"spec.x=1"}},
+				"field selectors cannot be used with identity"},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				_, err := supplier(testKind(), stubClients{}, operator.InformerOptions{ListWatchOptions: tt.opts})
 				require.Error(t, err)
-				assert.Contains(t, err.Error(), "not supported by the bus informer")
+				assert.Contains(t, err.Error(), tt.want)
 			})
 		}
+	})
+
+	// A label the bus announces can be matched against, so the filter is honoured on both paths.
+	t.Run("a label filter is accepted when the bus announces the label", func(t *testing.T) {
+		supplier := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{
+			AnnouncedMetadata: operator.AnnouncedMetadata{Labels: []string{"app"}},
+		})
+
+		_, err := supplier(testKind(), stubClients{}, operator.InformerOptions{
+			ListWatchOptions: operator.ListWatchOptions{LabelFilters: []string{"app=test"}},
+		})
+		require.NoError(t, err)
 	})
 
 	// A hydrated payload promises whole objects; an identity projection would deliver less on every re-list.
@@ -519,10 +534,24 @@ func TestAnnouncedMetadataFromManifest(t *testing.T) {
 	})
 
 	t.Run("labels alone announce nothing the opinionated path reads", func(t *testing.T) {
-		assert.Equal(t, operator.AnnouncedMetadata{},
-			AnnouncedMetadataFromManifest(manifest(kind(&app.ManifestVersionKindWatchMetadata{
-				Labels: []string{"app"},
-			}))))
+		got := AnnouncedMetadataFromManifest(manifest(kind(&app.ManifestVersionKindWatchMetadata{
+			Labels: []string{"app"},
+		})))
+		assert.Equal(t, []string{"app"}, got.Labels, "but they are announced, so a label filter can use them")
+		assert.False(t, got.SupportsOpinionated())
+		assert.False(t, got.DeletionTimestamp)
+		assert.False(t, got.Finalizers)
+	})
+
+	// A filter is evaluated against whichever kind the informer serves, so only a key every declaring kind
+	// announces can be relied on.
+	t.Run("label keys intersect across declaring kinds", func(t *testing.T) {
+		shared := app.ManifestVersionKind{Kind: "Bar", Watch: &app.ManifestVersionKindWatch{
+			Metadata: &app.ManifestVersionKindWatchMetadata{Labels: []string{"app", "other"}},
+		}}
+		got := AnnouncedMetadataFromManifest(manifest(
+			kind(&app.ManifestVersionKindWatchMetadata{Labels: []string{"app", "tier"}}), shared))
+		assert.Equal(t, []string{"app"}, got.Labels)
 	})
 
 	// The configuration is app-wide while an informer serves one kind, so the weakest declaring kind governs.

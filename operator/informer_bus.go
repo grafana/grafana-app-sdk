@@ -79,12 +79,20 @@ const (
 //
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type AnnouncedMetadata struct {
+	// Labels are the label keys announced. A label filter on an identity payload needs every key it reads to be
+	// listed here, because an announced field which is absent means unknown rather than empty.
+	Labels []string
 	// DeletionTimestamp is announced, so a delete in progress is visible without reading the object.
 	DeletionTimestamp bool
 	// Finalizers are announced, and include the app's own, so a watcher can tell whether its finalizer is attached.
 	Finalizers bool
 	// Generation is announced, so a spec change can be told from a subresource one.
 	Generation bool
+}
+
+// IsZero reports whether nothing is declared announced.
+func (a AnnouncedMetadata) IsZero() bool {
+	return len(a.Labels) == 0 && !a.DeletionTimestamp && !a.Finalizers && !a.Generation
 }
 
 // SupportsOpinionated reports whether every field an opinionated reconciler or watcher reads is announced.
@@ -175,6 +183,9 @@ type BusInformer struct {
 
 	store *busStore
 
+	// matcher keeps the live stream inside the scope the list is narrowed to. Nil for an unfiltered informer.
+	matcher *objectMatcher
+
 	// events carries live events from the subscriber callback to the run loop, which applies and dispatches them.
 	// See onEvent.
 	events chan resourcebus.Event
@@ -223,11 +234,12 @@ func NewBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, liste
 	if opts.Payload == PayloadHydrated && opts.Getter == nil {
 		return nil, errors.New("getter is required for the hydrated payload")
 	}
-	// The subscription is scoped by namespace alone, so a selector could only ever be applied to the list. The live
-	// stream would keep delivering excluded objects, each written into the snapshot and then diffed as a delete by
-	// the next re-list — a stream of phantom adds and deletes for objects the app never asked to watch.
-	if len(opts.ListWatchOptions.LabelFilters) > 0 || len(opts.ListWatchOptions.FieldSelectors) > 0 {
-		return nil, errors.New("label and field selectors are not supported by the bus informer: the bus delivers events by namespace only")
+	// The subscription is scoped by namespace alone, so the live stream keeps delivering objects a selector
+	// excludes. They are filtered here instead, against the same selectors the list is narrowed by, so the two
+	// agree; the matcher refuses at construction anything it could not evaluate on a delivered object.
+	matcher, err := newObjectMatcher(kind, opts.ListWatchOptions, opts.Payload, opts.AnnouncedMetadata)
+	if err != nil {
+		return nil, err
 	}
 	if opts.ResyncInterval <= 0 {
 		opts.ResyncInterval = DefaultBusResyncInterval
@@ -248,6 +260,7 @@ func NewBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, liste
 		opts.OverflowRelistInterval = DefaultBusOverflowRelistInterval
 	}
 	return &BusInformer{
+		matcher:      matcher,
 		kind:         kind,
 		gvr:          kind.GroupVersionResource(),
 		subscriber:   subscriber,
@@ -612,6 +625,22 @@ func (b *BusInformer) handleWrite(ctx context.Context, evt resourcebus.Event, ob
 	// both called from it, so nothing can land between the two calls below.
 	previous, held := b.store.Get(evt.Namespace, evt.Name)
 
+	// An object the selectors exclude is not this informer's to deliver. One the snapshot holds has left the scope
+	// — its labels changed, say — which to a watcher is indistinguishable from a delete and is delivered as one,
+	// the same transition a filtered watch reports. One the snapshot does not hold was never in scope, so it is
+	// dropped without a word.
+	if !b.matcher.Matches(obj) {
+		if !held {
+			return
+		}
+		if _, applied := b.store.DeleteAt(evt.Namespace, evt.Name, evt.ResourceVersion); !applied {
+			return
+		}
+		b.metrics.observeLiveEvent(busVerbDelete, rv)
+		b.dispatch(ctx, func(ctx context.Context, w ResourceWatcher) error { return w.Delete(ctx, previous) })
+		return
+	}
+
 	// An identity object carries no deletion timestamp, so storing a modification of a known object would overwrite
 	// the stored object's real one and mislead the next re-list's diff. Its version still has to advance, or a later
 	// out-of-order delete at a version between the two would read as newer than the key and evict it. Everything
@@ -656,6 +685,20 @@ func (b *BusInformer) payloadObject(ctx context.Context, evt resourcebus.Event) 
 		return nil, fmt.Errorf("dropping event for %s/%s: %w", evt.Namespace, evt.Name, err)
 	}
 	return obj, nil
+}
+
+// matching drops listed objects the selectors exclude, in place.
+func (b *BusInformer) matching(objs []resource.Object) []resource.Object {
+	if b.matcher == nil {
+		return objs
+	}
+	kept := objs[:0]
+	for _, obj := range objs {
+		if b.matcher.Matches(obj) {
+			kept = append(kept, obj)
+		}
+	}
+	return kept
 }
 
 // toIdentities projects listed objects onto their identity and metadata, in place, so the snapshot retains no spec
@@ -732,6 +775,9 @@ func (b *BusInformer) relist(ctx context.Context, pass relistPass) error {
 	if b.opts.Payload == PayloadIdentity {
 		objs = b.toIdentities(objs)
 	}
+	// The server narrowed the list, but the snapshot is what the live path arbitrates against, so it must hold only
+	// objects in scope however the lister was implemented.
+	objs = b.matching(objs)
 	added, updated, removed := b.store.Replace(objs, listRV)
 	// Recorded after Replace, so a queued event is only judged against a snapshot already installed. An
 	// unparseable version leaves it at zero, which disables the check — the same fallback the store's arbitration

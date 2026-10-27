@@ -254,9 +254,13 @@ version. The tracker is for a work queue, where the read happens long after the 
 
 ### Limits
 
-* **No selectors.** The bus delivers by namespace, so `LabelFilters` and `FieldSelectors` are rejected when the
-  informer is built rather than applied to the re-list alone — otherwise live events would keep arriving for excluded
-  objects, land in the snapshot, and be diffed as deletes by the next filtered re-list.
+* **Selectors are honoured on both paths, or refused.** The server narrows the list; the informer checks every live
+  event and every listed object against the same selectors, so an excluded object never reaches the snapshot or a
+  watcher. An object whose labels change so it leaves the selector is delivered as a delete, as a filtered watch
+  reports it. A selector which cannot be evaluated against what a payload delivers is refused when the informer is
+  built, naming it: a field selector needs `PayloadHydrated` and a kind which declares the field selectable, and a
+  label filter on an identity payload needs every key it reads to be announced — matching on an unannounced label
+  would read "not set" for an object which has it.
 * **Events are queued, not handled inline.** The subscriber callback only enqueues; the informer applies and
   dispatches on its own goroutine, so a slow API read or handler cannot stall the bus. `EventQueueSize` bounds the
   queue, and a full queue drops the event and forces a re-list to recover it — counted by
@@ -304,8 +308,8 @@ re-evaluates every object on each pass regardless of whether it changed — age-
 anything which should react to a change promptly, use one of the informers above.
 
 It accepts `Namespace`, `LabelFilters` and `FieldSelectors` and passes them to the list request, where the server
-applies them. The bus informer rejects selectors because its live stream delivers by namespace alone and cannot
-honor them; here the list is the only source, so there is nothing for a filtered list to disagree with.
+applies them. Its list is the only source, so nothing else has to honour them — the bus informer, whose live stream
+delivers by namespace alone, has to match events against the selectors itself.
 
 ## Writing your own
 

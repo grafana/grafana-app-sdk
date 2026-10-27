@@ -1569,3 +1569,153 @@ func TestBusInformer_RelistIdentitiesKeepAnnouncedMetadata(t *testing.T) {
 	assert.Equal(t, int64(7), got.GetGeneration())
 	require.NotNil(t, got.GetDeletionTimestamp())
 }
+
+func labelled(name string, labels map[string]string) *resource.UntypedObject {
+	obj := busObj(name)
+	obj.Labels = labels
+	return obj
+}
+
+// A bus delivers by namespace alone, so a filtered informer checks every live event against the same selectors the
+// list is narrowed by. Otherwise excluded objects would land in the snapshot and be diffed as deletes.
+func TestBusInformer_FiltersLiveEventsBySelector(t *testing.T) {
+	newFiltered := func(t *testing.T, watcher ResourceWatcher, lister ResourceLister) *BusInformer {
+		t.Helper()
+		return newBusInformer(t, resourcebus.NewFake(), lister, watcher, BusInformerOptions{
+			ListWatchOptions:  ListWatchOptions{LabelFilters: []string{"app=mine"}},
+			AnnouncedMetadata: AnnouncedMetadata{Labels: []string{"app"}},
+		})
+	}
+	event := func(verb resourcebus.Verb, name, rv string, labels map[string]string) resourcebus.Event {
+		evt := busEvent(verb, name, rv)
+		evt.Metadata = &resourcebus.EventMetadata{Labels: labels}
+		return evt
+	}
+
+	t.Run("a matching object is delivered", func(t *testing.T) {
+		watcher := &recordingWatcher{}
+		inf := newFiltered(t, watcher, staticLister())
+
+		inf.handleEvent(context.Background(), event(resourcebus.VerbAdded, "mine", "100", map[string]string{"app": "mine"}))
+
+		assert.Equal(t, []string{"mine"}, watcher.addedNames())
+		assert.Equal(t, []string{"mine"}, busNames(inf.store.List()))
+	})
+
+	t.Run("an excluded object is dropped without a word", func(t *testing.T) {
+		watcher := &recordingWatcher{}
+		inf := newFiltered(t, watcher, staticLister())
+
+		inf.handleEvent(context.Background(), event(resourcebus.VerbAdded, "theirs", "100", map[string]string{"app": "theirs"}))
+
+		assert.Empty(t, watcher.addedNames(), "it was never in scope")
+		assert.Empty(t, watcher.deletedNames())
+		assert.Empty(t, inf.store.List(), "and it must not reach the snapshot, which the re-list diffs against")
+	})
+
+	// The membership transition: an object whose labels change so it leaves the selector is gone as far as a
+	// watcher is concerned, and is delivered as a delete — the same thing a filtered watch reports.
+	t.Run("an object which leaves the selector is delivered as a delete", func(t *testing.T) {
+		watcher := &recordingWatcher{}
+		inf := newFiltered(t, watcher, staticLister())
+		inf.handleEvent(context.Background(), event(resourcebus.VerbAdded, "x", "100", map[string]string{"app": "mine"}))
+		require.Equal(t, []string{"x"}, watcher.addedNames())
+
+		inf.handleEvent(context.Background(), event(resourcebus.VerbModified, "x", "200", map[string]string{"app": "theirs"}))
+
+		assert.Equal(t, []string{"x"}, watcher.deletedNames(), "it left the scope")
+		assert.Empty(t, watcher.updatedNames())
+		assert.Empty(t, inf.store.List())
+	})
+
+	t.Run("an object which enters the selector is delivered as an add", func(t *testing.T) {
+		watcher := &recordingWatcher{}
+		inf := newFiltered(t, watcher, staticLister())
+
+		inf.handleEvent(context.Background(), event(resourcebus.VerbModified, "x", "100", map[string]string{"app": "theirs"}))
+		require.Empty(t, watcher.addedNames())
+		inf.handleEvent(context.Background(), event(resourcebus.VerbModified, "x", "200", map[string]string{"app": "mine"}))
+
+		assert.Equal(t, []string{"x"}, watcher.addedNames(), "first seen in scope, so an add")
+	})
+
+	// The server narrows the list, but the snapshot is what the live path arbitrates against, so it holds only
+	// objects in scope however the lister was implemented.
+	t.Run("a re-list drops what the selector excludes", func(t *testing.T) {
+		watcher := &recordingWatcher{}
+		lister := staticLister(
+			labelled("mine", map[string]string{"app": "mine"}),
+			labelled("theirs", map[string]string{"app": "theirs"}),
+		)
+		inf := newFiltered(t, watcher, lister)
+
+		require.NoError(t, inf.relist(context.Background(), initialRelist))
+
+		assert.Equal(t, []string{"mine"}, watcher.addedNames())
+		assert.Equal(t, []string{"mine"}, busNames(inf.store.List()))
+	})
+}
+
+// A hydrated payload carries the whole object, so a field selector can be evaluated against it where the kind
+// declares the field selectable.
+func TestBusInformer_FiltersByFieldSelector(t *testing.T) {
+	kind := resource.Kind{Schema: resource.NewSimpleSchema("example.grafana.app", "v1",
+		&resource.UntypedObject{}, &resource.UntypedList{},
+		resource.WithKind("Widget"), resource.WithPlural("widgets"),
+		resource.WithSelectableFields([]resource.SelectableField{{
+			FieldSelector:  "spec.tier",
+			FieldValueFunc: func(o resource.Object) (string, error) { return o.GetLabels()["tier"], nil },
+		}}))}
+
+	inScope, outOfScope := busObjRV("in", 100), busObjRV("out", 100)
+	inScope.Labels = map[string]string{"tier": "gold"}
+	outOfScope.Labels = map[string]string{"tier": "bronze"}
+	getter := &fakeGetter{objects: map[string]resource.Object{
+		busStoreKey(busTestNamespace, "in"):  inScope,
+		busStoreKey(busTestNamespace, "out"): outOfScope,
+	}}
+
+	watcher := &recordingWatcher{}
+	inf, err := NewBusInformer(kind, resourcebus.NewFake(), staticLister(), BusInformerOptions{
+		Namespace:        busTestNamespace,
+		Payload:          PayloadHydrated,
+		Getter:           getter,
+		ListWatchOptions: ListWatchOptions{FieldSelectors: []string{"spec.tier=gold"}},
+	})
+	require.NoError(t, err)
+	require.NoError(t, inf.AddEventHandler(watcher))
+
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "in", "100"))
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "out", "100"))
+
+	assert.Equal(t, []string{"in"}, watcher.addedNames())
+}
+
+func TestNewBusInformer_SelectorValidation(t *testing.T) {
+	sub, lister := resourcebus.NewFake(), staticLister()
+
+	t.Run("a field selector the kind does not declare selectable is refused", func(t *testing.T) {
+		_, err := NewBusInformer(busTestKind, sub, lister, BusInformerOptions{
+			Payload:          PayloadHydrated,
+			Getter:           &fakeGetter{objects: map[string]resource.Object{}},
+			ListWatchOptions: ListWatchOptions{FieldSelectors: []string{"spec.nope=1"}},
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "does not declare it selectable")
+	})
+
+	t.Run("a malformed label filter is refused", func(t *testing.T) {
+		_, err := NewBusInformer(busTestKind, sub, lister, BusInformerOptions{
+			ListWatchOptions:  ListWatchOptions{LabelFilters: []string{"!!!"}},
+			AnnouncedMetadata: AnnouncedMetadata{Labels: []string{"app"}},
+		})
+		assert.Error(t, err)
+	})
+
+	t.Run("no selectors builds no matcher", func(t *testing.T) {
+		inf, err := NewBusInformer(busTestKind, sub, lister, BusInformerOptions{})
+		require.NoError(t, err)
+		assert.Nil(t, inf.matcher, "an unfiltered informer pays nothing")
+		assert.True(t, inf.matcher.Matches(busObj("anything")), "and a nil matcher accepts everything")
+	})
+}
