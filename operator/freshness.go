@@ -7,6 +7,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
@@ -57,6 +58,8 @@ type FreshnessMetricsConfig struct {
 	// into a lag in seconds. Resource versions are opaque in the kubernetes API contract, so there is no portable
 	// decoding: when this is nil the lag histogram stays empty and the counters are unaffected.
 	ResourceVersionTime func(int64) time.Time
+	// Registerer registers the collectors as they are built. See InformerDeliveryMetricsConfig.Registerer.
+	Registerer prometheus.Registerer
 }
 
 // FreshnessMetrics reports how reads taken because of a live event compare against the version that event announced:
@@ -83,19 +86,19 @@ type FreshnessMetrics struct {
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 func NewFreshnessMetrics(cfg FreshnessMetricsConfig) *FreshnessMetrics {
 	return &FreshnessMetrics{
-		reads: prometheus.NewCounterVec(prometheus.CounterOpts{
+		reads: metrics.Register(cfg.Registerer, prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: cfg.MetricsConfig.Namespace,
 			Name:      "informer_read_freshness_total",
 			Help:      "Reads taken while a live event for the same object was outstanding, by outcome: current (at or above the announced resource version), behind (below it — the read missed a write already announced to this replica), not_found (absent, which is also correct for an object deleted after the announcement).",
-		}, []string{"group", "version", "kind", "outcome"}),
-		lag: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		}, []string{"group", "version", "kind", "outcome"})),
+		lag: metrics.Register(cfg.Registerer, prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace:                      cfg.MetricsConfig.Namespace,
 			Name:                           "informer_read_version_lag_seconds",
 			Help:                           "How far behind a read came back: the time between the announced resource version and the older one the read observed.",
 			Buckets:                        prometheus.ExponentialBuckets(0.005, 4, 8),
 			NativeHistogramBucketFactor:    cfg.MetricsConfig.NativeHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber: cfg.MetricsConfig.NativeHistogramMaxBucketNumber,
-		}, []string{"group", "version", "kind"}),
+		}, []string{"group", "version", "kind"})),
 		resourceVersionTime: cfg.ResourceVersionTime,
 	}
 }
@@ -147,7 +150,11 @@ type FreshnessRecorder struct {
 //
 // Failures other than NotFound are not recorded either: a read which did not complete says nothing about what the
 // read path can serve.
-func (r FreshnessRecorder) Observe(ctx context.Context, id resource.Identifier, announced int64, obj resource.Object, err error) {
+//
+// The object is taken as a metav1.Object rather than a resource.Object because all that is read off it is the
+// resource version: a kind read through a generated clientset, or an unstructured one, is judged without being
+// wrapped in something the SDK recognizes.
+func (r FreshnessRecorder) Observe(ctx context.Context, id resource.Identifier, announced int64, obj metav1.Object, err error) {
 	if r.current == nil || announced <= 0 {
 		return
 	}
@@ -381,8 +388,11 @@ func identifierOf(obj resource.Object) resource.Identifier {
 //
 // A nil tracker skips the observation, so a deployment with read-freshness switched off needs no second code path.
 //
+// T is any object carrying kubernetes metadata — a generated clientset's type, an unstructured one, or a
+// resource.Object — since the version is all that is read off it.
+//
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
-func ObserveRead[T resource.Object](
+func ObserveRead[T metav1.Object](
 	ctx context.Context, tracker *AnnouncementTracker, recorder FreshnessRecorder,
 	id resource.Identifier, read func(context.Context) (T, error),
 ) (T, error) {

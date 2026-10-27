@@ -303,7 +303,9 @@ obj, err := operator.ObserveRead(ctx, tracker, freshness.Recorder(kind), id,
 ```
 
 `ObserveRead` passes the result through untouched, error and all, and a nil tracker skips the observation — so a
-deployment with read-freshness switched off needs no second code path.
+deployment with read-freshness switched off needs no second code path. Its object is any type carrying kubernetes
+metadata, since the version is all that is read off it: a kind read through a generated clientset needs no wrapping
+to be judged.
 
 Two outcomes are excluded by construction, so a non-zero `behind` cannot be dismissed as ordinary concurrency: the
 announcement is sampled **before** the read is issued, because a read already in flight when a newer write commits
@@ -336,6 +338,18 @@ tombstone are re-list deliveries, everything else came from the watch.
 series stable when its need resolves differently in another deployment, or after a bus is switched on. Wiring the
 informers yourself, pass the same instance to `BusInformerMetricsConfig.Delivery`,
 `PeriodicInformerOptions.Metrics` and `InformerOptions.DeliveryMetrics`.
+
+For an informer the SDK did not build — a generated clientset's `SharedIndexInformer` — register
+`operator.NewDeliveryMeter(gvk, delivery)` as one extra event handler and its deliveries land on the same series:
+
+```go
+_, _ = sharedInformer.AddEventHandler(operator.NewDeliveryMeter(gvk, delivery))
+```
+
+Each config also takes a `Registerer`, for wiring which holds a `prometheus.Registerer` rather than an SDK app to
+expose the collectors through `metrics.Provider`. A collector another component already registered there is reused
+rather than rejected, so building the metrics twice in one process is safe — `metrics.Register` is the same
+behaviour for a collector of your own.
 
 The bus informer adds what only it has — `informer_bus_reconnects_total`, `informer_bus_live_subscription`,
 `informer_bus_dropped_events_total` and `informer_bus_superseded_events_total`.
@@ -380,6 +394,53 @@ SDK parses them in two places only:
 * **The delivery latency histograms**, which date a change from the timestamp its version embeds. There is no
   portable way to decode that, so supply `BusInformerConfig.ResourceVersionTime`. Without it the histograms stay
   empty; the event counters are unaffected either way.
+
+## Controllers written against client-go
+
+A controller which already takes `cache.ResourceEventHandler` does not have to be rewritten against
+`operator.ResourceWatcher`. `operator.NewDeltaSource` presents any SDK informer as the subset of
+`cache.SharedIndexInformer` such a controller uses:
+
+```go
+source := operator.NewDeltaSource(informer)
+registration, err := source.AddEventHandler(handler)   // the handler you already have
+go source.Run(ctx.Done())
+cache.WaitForCacheSync(ctx.Done(), registration.HasSynced)
+```
+
+A `SharedIndexInformer` satisfies the same `operator.DeltaSource` interface, so the choice between the two stays in
+the wiring. Two points of the mapping are worth knowing:
+
+* `isInInitialList` is true for an object the informer's list delivered before it reported synced. Handlers run on
+  their own workers, so an object dispatched by the initial list but handled after sync was announced is reported as
+  a live delivery; a live event is never reported as initial-list.
+* A delete the informer's re-list detected arrives as `cache.DeletedFinalStateUnknown`, which is what a client-go
+  handler reads as "the delete was missed, and the object carried with it may be stale". A delete the live stream
+  delivered is passed through as the object.
+
+Both read the delivery off the dispatch context, so there is no reason to wrap a watch-backed informer: it reports
+`DeliveryUnknown`, and a `SharedIndexInformer` is already a `DeltaSource`.
+
+`Run` has nowhere to return an error, so one which stopped the informer is logged; `RunWithContext` returns it.
+
+Such a controller usually has a GVK and a GVR already, from a generated clientset's resource info, and no SDK kind.
+Build one with `resource.NewKind`, which derives nothing:
+
+```go
+kind, err := resource.NewKind(resource.KindConfig{
+    GroupVersionKind:     v0alpha1.RepositoryResourceInfo.GroupVersionKind(),
+    GroupVersionResource: v0alpha1.RepositoryResourceInfo.GroupVersionResource(),
+    Scope:                resource.NamespacedScope,
+    Zero:                 &v0alpha1.Repository{},
+    ZeroList:             &v0alpha1.RepositoryList{},
+})
+```
+
+Use it rather than `resource.NewSimpleSchema`, which takes the kind from the go type's name and the plural from that
+name plus `"s"`. That is wrong for most English nouns — a `Repository` is served at `repositories` — and the guess
+surfaces only later, as a subscription or a list against a resource the server does not have. `NewKind` also checks
+that the resource is in the same group and version as the kind, which the two being read from different fields makes
+worth checking.
 
 ## Generated per-kind informers
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/grafana/grafana-app-sdk/metrics"
@@ -72,6 +73,10 @@ type InformerDeliveryMetricsConfig struct {
 	// decoding: when this is nil, or the version is not numeric, no latency is observed and the counters are
 	// unaffected.
 	ResourceVersionTime func(int64) time.Time
+	// Registerer registers the collectors as they are built, for wiring which holds a prometheus.Registerer rather
+	// than an SDK app to expose them through metrics.Provider. A collector another component already registered
+	// there is reused rather than rejected, so building these twice in one process is safe.
+	Registerer prometheus.Registerer
 }
 
 // NewInformerDeliveryMetrics builds the delivery metrics for every informer in a process.
@@ -89,34 +94,34 @@ func NewInformerDeliveryMetrics(cfg InformerDeliveryMetricsConfig) *InformerDeli
 		}
 	}
 	return &InformerDeliveryMetrics{
-		liveEvents: prometheus.NewCounterVec(prometheus.CounterOpts{
+		liveEvents: metrics.Register(cfg.Registerer, prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: cfg.MetricsConfig.Namespace,
 			Name:      "informer_live_events_total",
 			Help:      "Events delivered to informer handlers from the live stream — a change bus subscription or a watch — by group, version, kind and verb.",
-		}, []string{"group", "version", "kind", "verb"}),
-		relistEvents: prometheus.NewCounterVec(prometheus.CounterOpts{
+		}, []string{"group", "version", "kind", "verb"})),
+		relistEvents: metrics.Register(cfg.Registerer, prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: cfg.MetricsConfig.Namespace,
 			Name:      "informer_relist_events_total",
 			Help:      "Events delivered to informer handlers by a list rather than the live stream, by group, version, kind and verb. Adds and deletes are changes the live stream did not deliver here; updates are re-deliveries of unchanged objects.",
-		}, []string{"group", "version", "kind", "verb"}),
-		liveLatency: prometheus.NewHistogramVec(histogram(
+		}, []string{"group", "version", "kind", "verb"})),
+		liveLatency: metrics.Register(cfg.Registerer, prometheus.NewHistogramVec(histogram(
 			"informer_live_event_latency_seconds",
 			"Time from a change's resource version being issued to its live event reaching the informer handlers.",
-		), []string{"group", "version", "kind"}),
-		relistLatency: prometheus.NewHistogramVec(histogram(
+		), []string{"group", "version", "kind"})),
+		relistLatency: metrics.Register(cfg.Registerer, prometheus.NewHistogramVec(histogram(
 			"informer_relist_event_latency_seconds",
 			"Time from a change's resource version being issued to its recovery by a re-list, for adds the live stream did not deliver. The initial list and re-deliveries of unchanged objects carry no latency.",
-		), []string{"group", "version", "kind"}),
-		relistRequests: prometheus.NewCounterVec(prometheus.CounterOpts{
+		), []string{"group", "version", "kind"})),
+		relistRequests: metrics.Register(cfg.Registerer, prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: cfg.MetricsConfig.Namespace,
 			Name:      "informer_relist_requests_total",
 			Help:      "List requests a re-list issued, one per page followed. Divided by the number of re-lists it is the average page count per snapshot; a rising ratio means the kind is outgrowing a single page.",
-		}, []string{"group", "version", "kind"}),
-		relistProjection: prometheus.NewCounterVec(prometheus.CounterOpts{
+		}, []string{"group", "version", "kind"})),
+		relistProjection: metrics.Register(cfg.Registerer, prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: cfg.MetricsConfig.Namespace,
 			Name:      "informer_relist_projection_total",
 			Help:      "Re-lists by what the server returned: identities is a projection carrying namespace, name and resource version only, objects is a full list. Shows whether an identity projection took effect, and the fallback when a server does not serve one.",
-		}, []string{"group", "version", "kind", "projection"}),
+		}, []string{"group", "version", "kind", "projection"})),
 		resourceVersionTime: cfg.ResourceVersionTime,
 	}
 }
@@ -191,7 +196,10 @@ func newKindMetrics(bus *BusInformerMetrics, kind resource.Kind) kindMetrics {
 
 // newDeliveryKindMetrics binds the delivery collectors alone, for an informer with no bus-specific metrics.
 func newDeliveryKindMetrics(delivery *InformerDeliveryMetrics, kind resource.Kind) kindMetrics {
-	gvk := kind.GroupVersionKind()
+	return newDeliveryGVKMetrics(delivery, kind.GroupVersionKind())
+}
+
+func newDeliveryGVKMetrics(delivery *InformerDeliveryMetrics, gvk schema.GroupVersionKind) kindMetrics {
 	return kindMetrics{delivery: delivery, group: gvk.Group, version: gvk.Version, kind: gvk.Kind}
 }
 
@@ -253,12 +261,24 @@ func (k kindMetrics) setLiveSubscription(value float64) {
 	k.bus.liveSubscription.WithLabelValues(k.group, k.version, k.kind).Set(value)
 }
 
-// deliveryMeter reports a client-go SharedIndexInformer's deliveries on the shared delivery metrics. The informer
-// draws no live/re-list distinction of its own, so the meter derives it: initial-list adds, resync re-deliveries
-// (the same version on both sides of an update) and re-list-detected deletes (a DeletedFinalStateUnknown tombstone)
-// are re-list deliveries, and everything else came from the watch.
+// NewDeliveryMeter returns a cache.ResourceEventHandler which reports a client-go informer's deliveries on the
+// shared delivery metrics, so a kind watched through a generated clientset's informer lands on the same series as
+// one watched through the SDK's.
 //
-// Register it as one extra event handler, so each event is counted once however many handlers the informer has.
+// The informer draws no live/re-list distinction of its own, so the meter derives it: initial-list adds, resync
+// re-deliveries (the same version on both sides of an update) and re-list-detected deletes (a
+// DeletedFinalStateUnknown tombstone) are re-list deliveries, and everything else came from the watch.
+//
+// Register it as one extra event handler, so that each event is counted once however many handlers the informer
+// has. A nil InformerDeliveryMetrics returns a handler which discards, so there is no second wiring for a process
+// which exports nothing.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+func NewDeliveryMeter(gvk schema.GroupVersionKind, delivery *InformerDeliveryMetrics) cache.ResourceEventHandler {
+	return deliveryMeter{metrics: newDeliveryGVKMetrics(delivery, gvk)}
+}
+
+// deliveryMeter is what NewDeliveryMeter returns.
 type deliveryMeter struct {
 	metrics kindMetrics
 }

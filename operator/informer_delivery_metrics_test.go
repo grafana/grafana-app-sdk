@@ -103,3 +103,51 @@ func TestInformerDeliveryMetrics_NilDiscards(t *testing.T) {
 	k.observeReconnect()
 	k.observeSubscriptionOpen()
 }
+
+// The exported meter takes a GVK rather than a resource.Kind, because the informer it meters is a generated
+// clientset's and its caller has no resource.Kind to hand over.
+func TestNewDeliveryMeter(t *testing.T) {
+	m := newTestDeliveryMetrics()
+	meter := NewDeliveryMeter(busTestKind.GroupVersionKind(), m)
+
+	meter.OnAdd(busObjRV("a", 1), true)
+	meter.OnAdd(busObjRV("b", 1), false)
+
+	assert.Equal(t, float64(1), deliveryMetricValue(m, "relist_events", deliveryVerbAdd))
+	assert.Equal(t, float64(1), deliveryMetricValue(m, "live_events", deliveryVerbAdd))
+
+	t.Run("nil metrics discard", func(t *testing.T) {
+		NewDeliveryMeter(busTestKind.GroupVersionKind(), nil).OnAdd(busObjRV("a", 1), false)
+	})
+}
+
+// Wiring which holds a registerer rather than an SDK app registers as it builds, and building twice in one process
+// must leave both instances updating the series the registry exports.
+func TestInformerDeliveryMetrics_Registerer(t *testing.T) {
+	reg := prometheus.NewRegistry()
+	cfg := InformerDeliveryMetricsConfig{MetricsConfig: metrics.DefaultConfig("test"), Registerer: reg}
+
+	first := NewInformerDeliveryMetrics(cfg)
+	second := NewInformerDeliveryMetrics(cfg)
+
+	newDeliveryKindMetrics(second, busTestKind).observeLiveEvent(deliveryVerbAdd, 0)
+	assert.Equal(t, float64(1), deliveryMetricValue(first, "live_events", deliveryVerbAdd),
+		"the second build reuses the registered collectors")
+	assert.Equal(t, 1, testutil.CollectAndCount(reg, "test_informer_live_events_total"))
+}
+
+func TestBusInformerMetrics_Registerer(t *testing.T) {
+	reg := prometheus.NewRegistry()
+	cfg := BusInformerMetricsConfig{MetricsConfig: metrics.DefaultConfig("test"), Registerer: reg}
+
+	first := NewBusInformerMetrics(cfg)
+	second := newKindMetrics(NewBusInformerMetrics(cfg), busTestKind)
+	second.observeReconnect()
+	second.observeLiveEvent(deliveryVerbAdd, 0)
+
+	assert.Equal(t, float64(1), busMetricValue(t, first, "reconnects"))
+	assert.Equal(t, float64(1), busMetricValue(t, first, "live_events", deliveryVerbAdd),
+		"the delivery collectors it builds are registered and reused too")
+	assert.Equal(t, 1, testutil.CollectAndCount(reg, "test_informer_bus_reconnects_total"))
+	assert.Equal(t, 1, testutil.CollectAndCount(reg, "test_informer_live_events_total"))
+}

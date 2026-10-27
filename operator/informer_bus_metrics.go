@@ -35,6 +35,9 @@ type BusInformerMetricsConfig struct {
 	// ResourceVersionTime decodes the timestamp a resource version embeds, for the delivery latency histograms.
 	// It is ignored when Delivery is set, which carries its own. See InformerDeliveryMetricsConfig.
 	ResourceVersionTime func(int64) time.Time
+	// Registerer registers the collectors as they are built. See InformerDeliveryMetricsConfig.Registerer; it is
+	// also passed to the delivery collectors this builds when Delivery is nil.
+	Registerer prometheus.Registerer
 	// Delivery are the shared delivery collectors the informers report their events on. Set it to the same instance
 	// the process's watch-backed and periodic informers use, so that a kind which moves between informers keeps its
 	// series. When nil, one set is built from MetricsConfig and ResourceVersionTime.
@@ -50,30 +53,31 @@ func NewBusInformerMetrics(cfg BusInformerMetricsConfig) *BusInformerMetrics {
 		delivery = NewInformerDeliveryMetrics(InformerDeliveryMetricsConfig{
 			MetricsConfig:       cfg.MetricsConfig,
 			ResourceVersionTime: cfg.ResourceVersionTime,
+			Registerer:          cfg.Registerer,
 		})
 	}
 	return &BusInformerMetrics{
 		delivery: delivery,
-		reconnects: prometheus.NewCounterVec(prometheus.CounterOpts{
+		reconnects: metrics.Register(cfg.Registerer, prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: cfg.MetricsConfig.Namespace,
 			Name:      "informer_bus_reconnects_total",
 			Help:      "Times an informer's live subscription was (re)established after a gap. Events published during the gap never reach this replica; the informer forces a re-list to recover them.",
-		}, []string{"group", "version", "kind"}),
-		liveSubscription: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		}, []string{"group", "version", "kind"})),
+		liveSubscription: metrics.Register(cfg.Registerer, prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: cfg.MetricsConfig.Namespace,
 			Name:      "informer_bus_live_subscription",
 			Help:      "Whether an informer currently holds an open live subscription (1) or is running re-list-only (0), before its subscription first opens or in degraded-start mode.",
-		}, []string{"group", "version", "kind"}),
-		droppedEvents: prometheus.NewCounterVec(prometheus.CounterOpts{
+		}, []string{"group", "version", "kind"})),
+		droppedEvents: metrics.Register(cfg.Registerer, prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: cfg.MetricsConfig.Namespace,
 			Name:      "informer_bus_dropped_events_total",
 			Help:      "Live events dropped because the informer's queue was full, meaning it is not applying events as fast as the bus delivers them. Each one forces a re-list, so the change is recovered rather than lost, at the cost of a full list.",
-		}, []string{"group", "version", "kind"}),
-		supersededEvents: prometheus.NewCounterVec(prometheus.CounterOpts{
+		}, []string{"group", "version", "kind"})),
+		supersededEvents: metrics.Register(cfg.Registerer, prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: cfg.MetricsConfig.Namespace,
 			Name:      "informer_bus_superseded_events_total",
 			Help:      "Live events dropped because a re-list completed while they waited in the queue and read a newer version of the resource, so the snapshot already accounts for them. Expected in small numbers under load; sustained growth means events are queued for longer than the re-list cadence.",
-		}, []string{"group", "version", "kind"}),
+		}, []string{"group", "version", "kind"})),
 	}
 }
 

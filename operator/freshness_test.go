@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/grafana/grafana-app-sdk/metrics"
@@ -293,4 +294,24 @@ func TestObserveRead(t *testing.T) {
 		assert.Same(t, obj, read)
 		assert.Equal(t, 1, calls)
 	})
+}
+
+// A kind read through a generated clientset is not a resource.Object; all that is read off it is the version, so it
+// does not have to be wrapped in one to be judged.
+func TestObserveRead_AcceptsAnyKubernetesObject(t *testing.T) {
+	m := newFreshnessMetrics()
+	tracker := NewAnnouncementTracker(AnnouncementTrackerOptions{})
+	id := freshID("a")
+	tracker.Announce(id, "20")
+
+	read, err := ObserveRead(context.Background(), tracker, m.Recorder(busTestKind), id,
+		func(context.Context) (*metav1.PartialObjectMetadata, error) {
+			return &metav1.PartialObjectMetadata{ObjectMeta: metav1.ObjectMeta{
+				Namespace: id.Namespace, Name: id.Name, ResourceVersion: "20",
+			}}, nil
+		})
+
+	require.NoError(t, err)
+	assert.Equal(t, "20", read.GetResourceVersion())
+	assert.Equal(t, float64(1), freshnessCount(m, freshnessCurrent))
 }

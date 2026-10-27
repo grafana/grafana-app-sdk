@@ -2,6 +2,7 @@ package resource
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -204,4 +205,65 @@ func (t *TypedList[T]) SetItems(items []Object) {
 		}
 		t.Items[i] = cast
 	}
+}
+
+// KindConfig describes a Kind explicitly: nothing in it is derived from a go type name or a pluralization rule.
+type KindConfig struct {
+	// GroupVersionKind is the kind's group, version and kind, all required.
+	GroupVersionKind schema.GroupVersionKind
+	// GroupVersionResource is the resource the API serves the kind as. Its group and version must match
+	// GroupVersionKind's, which is checked rather than assumed: the two come from different places in a generated
+	// clientset, and a mismatch is a request against a resource which does not exist.
+	GroupVersionResource schema.GroupVersionResource
+	// Scope is whether the kind is namespaced or cluster-scoped, required. It is not defaulted, because a kind
+	// given the wrong scope reads and writes at paths the server does not serve.
+	Scope SchemaScope
+	// Zero is an empty instance of the kind's object type, and ZeroList of its list type. Both are required.
+	Zero     Object
+	ZeroList ListObject
+	// Codec reads and writes the kind's objects as JSON. It may be nil for a kind nothing serializes — one watched
+	// for identities alone, say — and anything which reads or writes the kind over the wire will then fail,
+	// reporting that there is no codec for the encoding. Use NewPassthroughJSONCodec for a WrappedObject, whose own
+	// marshaling must not be re-wrapped, and NewJSONCodec for a type shaped like the SDK's generated ones.
+	Codec Codec
+	// SelectableFields are the field selectors the kind supports, which a filtered watch or list is checked against.
+	SelectableFields []SelectableField
+}
+
+// NewKind returns a Kind described entirely by cfg.
+//
+// It exists because NewSimpleSchema derives: the kind from the zero value's go type name, and the plural from that
+// name with "s" appended — which is wrong for most English nouns. A Repository is served at "repositories", and the
+// guess surfaces only later, as a subscription or a list against a resource the server does not have. A caller
+// which already holds the kind and the resource, from a generated clientset's resource info or from discovery,
+// states both here instead.
+func NewKind(cfg KindConfig) (Kind, error) {
+	switch {
+	case cfg.GroupVersionKind.Kind == "":
+		return Kind{}, errors.New("kind is required")
+	case cfg.GroupVersionKind.Version == "":
+		return Kind{}, errors.New("version is required")
+	case cfg.GroupVersionResource.Resource == "":
+		return Kind{}, fmt.Errorf("resource is required: it is the plural the API serves '%s' as, which cannot be derived from the kind name", cfg.GroupVersionKind.Kind)
+	case cfg.GroupVersionResource.Group != cfg.GroupVersionKind.Group,
+		cfg.GroupVersionResource.Version != cfg.GroupVersionKind.Version:
+		return Kind{}, fmt.Errorf("resource '%s' is not in the same group and version as kind '%s'",
+			cfg.GroupVersionResource.String(), cfg.GroupVersionKind.String())
+	case cfg.Scope != NamespacedScope && cfg.Scope != ClusterScope:
+		return Kind{}, fmt.Errorf("scope must be '%s' or '%s', got '%s'", NamespacedScope, ClusterScope, cfg.Scope)
+	case cfg.Zero == nil || cfg.ZeroList == nil:
+		return Kind{}, errors.New("zero value and zero list value are required")
+	}
+
+	kind := Kind{
+		Schema: NewSimpleSchema(cfg.GroupVersionKind.Group, cfg.GroupVersionKind.Version, cfg.Zero, cfg.ZeroList,
+			WithKind(cfg.GroupVersionKind.Kind),
+			WithPlural(cfg.GroupVersionResource.Resource),
+			WithScope(cfg.Scope),
+			WithSelectableFields(cfg.SelectableFields)),
+	}
+	if cfg.Codec != nil {
+		kind.Codecs = map[KindEncoding]Codec{KindEncodingJSON: cfg.Codec}
+	}
+	return kind, nil
 }
