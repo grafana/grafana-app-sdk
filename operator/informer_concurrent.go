@@ -173,8 +173,7 @@ func (ci *ConcurrentInformer) DeliversOpinionatedMetadata() bool {
 // PrometheusCollectors implements metrics.Provider.
 func (ci *ConcurrentInformer) PrometheusCollectors() []prometheus.Collector {
 	collectors := []prometheus.Collector{ci.queueDepth}
-	// Forwarded for the same reason HealthChecks forwards: wrapping an informer must not silently drop the metrics
-	// it exposes.
+	// Wrapping must not drop the collectors the wrapped informer exposes.
 	if provider, ok := ci.informer.(metrics.Provider); ok {
 		collectors = append(collectors, provider.PrometheusCollectors()...)
 	}
