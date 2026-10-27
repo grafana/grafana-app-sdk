@@ -157,7 +157,12 @@ func (ci *ConcurrentInformer) WaitForSync(ctx context.Context) error {
 
 // PrometheusCollectors implements metrics.Provider.
 func (ci *ConcurrentInformer) PrometheusCollectors() []prometheus.Collector {
-	return []prometheus.Collector{ci.queueDepth}
+	collectors := []prometheus.Collector{ci.queueDepth}
+	// Wrapping must not drop the collectors the wrapped informer exposes.
+	if provider, ok := ci.informer.(metrics.Provider); ok {
+		collectors = append(collectors, provider.PrometheusCollectors()...)
+	}
+	return collectors
 }
 
 // QueueDepth returns the number of events waiting in the worker queues.
