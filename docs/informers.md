@@ -15,13 +15,14 @@ An informer answers two questions, and the implementations differ in how they an
 ## Choosing an informer
 
 Informers are created by an `InformerSupplier`, selected per app with `AppInformerConfig.InformerSupplier` or per
-kind with `ReconcileOptions.InformerSupplier` (the per-kind one wins). The SDK ships three:
+kind with `ReconcileOptions.InformerSupplier` (the per-kind one wins). The SDK ships four:
 
 | Supplier | Change source | Memory |
 | --- | --- | --- |
 | `simple.DefaultInformerSupplier` | kubernetes watch | every object of the kind |
 | `simple.OptimizedInformerSupplier` | kubernetes watch | every object, in a cache tuned for large counts |
 | `simple.BusInformerSupplier` | a `resourcebus.Subscriber` | identity per object, in identity mode |
+| `simple.PeriodicInformerSupplier` | a re-list on a cadence, nothing live | nothing retained between passes |
 
 `DefaultInformerSupplier` is the one to use unless you have a reason not to. Reach for
 `OptimizedInformerSupplier` when a kind has more than ~10k objects, you watch cluster-scoped resources, or you are
@@ -216,10 +217,14 @@ SDK parses them in two places only:
 
 ## The periodic informer
 
-`operator.PeriodicInformer` has no watch and no subscription, and keeps no snapshot: each pass lists the kind and
-delivers every object as an add. It suits idempotent, cadence-driven work which re-evaluates every object on each
-pass regardless of whether it changed — age-based cleanup, for instance. For anything which should react to a change
-promptly, use one of the informers above.
+`simple.PeriodicInformerSupplier` creates an `operator.PeriodicInformer`: no watch, no subscription and no snapshot,
+just a re-list on a cadence delivering every listed object as an add. It suits idempotent, cadence-driven work which
+re-evaluates every object on each pass regardless of whether it changed — age-based cleanup, for instance. For
+anything which should react to a change promptly, use one of the informers above.
+
+It accepts `Namespace`, `LabelFilters` and `FieldSelectors` and passes them to the list request, where the server
+applies them. The bus informer rejects selectors because its live stream delivers by namespace alone and cannot
+honor them; here the list is the only source, so there is nothing for a filtered list to disagree with.
 
 ## Writing your own
 

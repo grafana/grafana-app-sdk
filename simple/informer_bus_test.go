@@ -144,9 +144,14 @@ func TestBusInformerSupplier_ListerFactory(t *testing.T) {
 
 // stubClients hands out a client the wiring tests never call: they only check which informer and lister the
 // supplier builds.
-type stubClients struct{}
+type stubClients struct{ client resource.Client }
 
-func (stubClients) ClientFor(resource.Kind) (resource.Client, error) { return stubClient{}, nil }
+func (s stubClients) ClientFor(resource.Kind) (resource.Client, error) {
+	if s.client != nil {
+		return s.client, nil
+	}
+	return stubClient{}, nil
+}
 
 func (stubClients) GetCustomRouteClient(schema.GroupVersion, string) (resource.CustomRouteClient, error) {
 	return nil, nil
@@ -406,4 +411,80 @@ func TestBusInformerSupplier_SharesInjectedMetrics(t *testing.T) {
 	assert.Subset(t, first.(*operator.ConcurrentInformer).PrometheusCollectors(), shared.PrometheusCollectors())
 	assert.Subset(t, second.(*operator.ConcurrentInformer).PrometheusCollectors(), shared.PrometheusCollectors(),
 		"both suppliers report the collectors that were actually registered")
+}
+
+// The periodic informer's only source is the list, so selectors reach the server and nothing else has to honor
+// them — unlike the bus supplier, which rejects them because its live stream cannot.
+func TestPeriodicInformerSupplier(t *testing.T) {
+	t.Run("passes the namespace and selectors to the lister", func(t *testing.T) {
+		var gotOpts operator.ClientListerOptions
+		supplier := PeriodicInformerSupplier(PeriodicInformerConfig{
+			ResyncInterval: time.Minute,
+			PageSize:       25,
+			ListerFactory: func(_ resource.Kind, _ resource.Client, opts operator.ClientListerOptions) (operator.ResourceLister, error) {
+				gotOpts = opts
+				return listerFunc(func(context.Context) ([]resource.Object, string, error) { return nil, "", nil }), nil
+			},
+		})
+
+		inf, err := supplier(testKind(), stubClients{}, operator.InformerOptions{
+			ListWatchOptions: operator.ListWatchOptions{
+				Namespace:      "ns",
+				LabelFilters:   []string{"app=test"},
+				FieldSelectors: []string{"spec.x=1"},
+			},
+		})
+		require.NoError(t, err)
+		assert.IsType(t, &operator.ConcurrentInformer{}, inf, "handlers run on per-key workers, as under the other suppliers")
+
+		assert.Equal(t, "ns", gotOpts.ListWatchOptions.Namespace)
+		assert.Equal(t, []string{"app=test"}, gotOpts.ListWatchOptions.LabelFilters)
+		assert.Equal(t, []string{"spec.x=1"}, gotOpts.ListWatchOptions.FieldSelectors)
+		assert.Equal(t, 25, gotOpts.PageSize)
+	})
+
+	t.Run("the default lister applies them to the list request", func(t *testing.T) {
+		var requested resource.ListOptions
+		var namespace string
+		client := filteringClient{listInto: func(_ context.Context, ns string, opts resource.ListOptions, _ resource.ListObject) error {
+			namespace, requested = ns, opts
+			return nil
+		}}
+		supplier := PeriodicInformerSupplier(PeriodicInformerConfig{})
+
+		inf, err := supplier(testKind(), stubClients{client: client}, operator.InformerOptions{
+			ListWatchOptions: operator.ListWatchOptions{Namespace: "ns", LabelFilters: []string{"app=test"}},
+		})
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go func() { _ = inf.Run(ctx) }()
+		require.NoError(t, inf.WaitForSync(ctx))
+
+		assert.Equal(t, "ns", namespace)
+		assert.Equal(t, []string{"app=test"}, requested.LabelFilters)
+	})
+
+	t.Run("a lister factory error fails informer creation", func(t *testing.T) {
+		expected := errors.New("I AM ERROR")
+		supplier := PeriodicInformerSupplier(PeriodicInformerConfig{
+			ListerFactory: func(resource.Kind, resource.Client, operator.ClientListerOptions) (operator.ResourceLister, error) {
+				return nil, expected
+			},
+		})
+
+		_, err := supplier(testKind(), stubClients{}, operator.InformerOptions{})
+		assert.ErrorIs(t, err, expected)
+	})
+}
+
+// filteringClient records what the lister asked the API for.
+type filteringClient struct {
+	resource.Client
+	listInto func(ctx context.Context, namespace string, opts resource.ListOptions, into resource.ListObject) error
+}
+
+func (c filteringClient) ListInto(ctx context.Context, namespace string, opts resource.ListOptions, into resource.ListObject) error {
+	return c.listInto(ctx, namespace, opts, into)
 }

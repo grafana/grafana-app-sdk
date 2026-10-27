@@ -157,3 +157,67 @@ func (c BusInformerConfig) lister(kind resource.Kind, client resource.Client, op
 	}
 	return operator.NewFallbackLister(identities, objects)
 }
+
+// PeriodicInformerConfig configures the informers PeriodicInformerSupplier creates.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+type PeriodicInformerConfig struct {
+	// ResyncInterval is how often the kind is re-listed, which for this informer is how often its handlers run at
+	// all. A non-positive value uses operator.DefaultBusResyncInterval.
+	ResyncInterval time.Duration
+	// PageSize is the page size the default lister requests. An empty value uses operator.DefaultListerPageSize.
+	PageSize int
+	// ListerFactory replaces the ResourceLister for a kind. When nil, a paginated list over the kind's client is
+	// used, which applies the namespace and selectors the informer was configured with.
+	ListerFactory func(kind resource.Kind, client resource.Client, opts operator.ClientListerOptions) (operator.ResourceLister, error)
+	// Metrics are the collectors the suppliers' informers share, for the re-list request and projection counters.
+	// When nil, one set is built from MetricsConfig. See BusInformerConfig.Metrics.
+	Metrics *operator.BusInformerMetrics
+	// MetricsConfig controls the namespace of the collectors built when Metrics is nil.
+	MetricsConfig metrics.Config
+}
+
+// PeriodicInformerSupplier returns an InformerSupplier which creates operator.PeriodicInformer instances: no watch,
+// no subscription and no snapshot, just a re-list on a cadence delivering every listed object as an add.
+//
+// Unlike BusInformerSupplier it accepts label and field selectors, because the list is its only source: there is no
+// live stream for a filtered list to disagree with, so the selectors reach the server and nothing else has to honor
+// them.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+func PeriodicInformerSupplier(cfg PeriodicInformerConfig) InformerSupplier {
+	listMetrics := cfg.Metrics
+	if listMetrics == nil {
+		listMetrics = operator.NewBusInformerMetrics(operator.BusInformerMetricsConfig{
+			MetricsConfig: cfg.MetricsConfig,
+		})
+	}
+	return func(kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions) (operator.Informer, error) {
+		client, err := clients.ClientFor(kind)
+		if err != nil {
+			return nil, err
+		}
+
+		listerOpts := operator.ClientListerOptions{
+			ListWatchOptions: options.ListWatchOptions,
+			PageSize:         cfg.PageSize,
+			Recorder:         listMetrics.RelistRecorder(kind),
+		}
+		lister, err := operator.NewClientLister(client, kind, listerOpts)
+		if cfg.ListerFactory != nil {
+			lister, err = cfg.ListerFactory(kind, client, listerOpts)
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		inf, err := operator.NewPeriodicInformer(kind, lister, operator.PeriodicInformerOptions{
+			ResyncInterval: cfg.ResyncInterval,
+			ErrorHandler:   options.ErrorHandler,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return operator.NewConcurrentInformerFromOptions(inf, options)
+	}
+}
