@@ -64,6 +64,7 @@ var (
 	templateGoResourceClient, _       = template.ParseFS(templates, "resourceclient.tmpl")
 	templateGoVersionedRouteClient, _ = template.ParseFS(templates, "client.tmpl")
 	templateRuntimeObject, _          = template.ParseFS(templates, "runtimeobject.tmpl")
+	templateGoInformer, _             = template.ParseFS(templates, "informer.tmpl")
 
 	templateWatcher, _ = template.ParseFS(templates, "app/watcher.tmpl")
 	templateApp, _     = template.ParseFS(templates, "app/app.tmpl")
@@ -595,6 +596,30 @@ func WriteGoResourceClient(metadata GoResourceClientMetadata, out io.Writer) err
 		})
 	}
 	return templateGoResourceClient.Execute(out, metadata)
+}
+
+// GoInformerMetadata is the data the per-kind informer file is generated from.
+type GoInformerMetadata struct {
+	PackageName       string
+	KindName          string
+	KindPrefix        string
+	VersionPackage    string
+	VersionImportPath string
+	// Needs is the exported suffix of the app.WatchNeeds constant the kind declared, empty where it declared none.
+	Needs                      string
+	AnnouncedLabels            []string
+	AnnouncedFinalizers        bool
+	AnnouncedGeneration        bool
+	AnnouncedDeletionTimestamp bool
+}
+
+// Announces reports whether the kind declares any announced metadata, so the generated literal omits an empty one.
+func (m GoInformerMetadata) Announces() bool {
+	return len(m.AnnouncedLabels) > 0 || m.AnnouncedFinalizers || m.AnnouncedGeneration || m.AnnouncedDeletionTimestamp
+}
+
+func WriteGoInformer(metadata GoInformerMetadata, out io.Writer) error {
+	return templateGoInformer.Execute(out, metadata)
 }
 
 type GoCustomRouteClientMetadata struct {

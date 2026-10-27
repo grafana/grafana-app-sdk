@@ -221,6 +221,19 @@
                         "storage": {
                             "listKeys": false
                         },
+                        "watch": {
+                            "needs": "signal",
+                            "metadata": {
+                                "labels": [
+                                    "app"
+                                ],
+                                "finalizers": [
+                                    "testapp.ext.grafana.app/finalizer"
+                                ],
+                                "generation": true,
+                                "deletionTimestamp": true
+                            }
+                        },
                         "search": {
                             "trash": false
                         },

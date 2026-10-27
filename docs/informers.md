@@ -75,7 +75,11 @@ more memory. That is why the declaration names a requirement and not an informer
 deployment without one has said something that cannot be honoured, whereas an app asking for a signal can always be
 served somehow.
 
-`AnnouncedMetadata` defaults to what the same `watch.metadata` declares, so an app states that once too.
+`AnnouncedMetadata` defaults to what the same `watch.metadata` declares, so an app states that once too — per kind,
+since a label filter is evaluated against whichever kind the informer serves.
+
+Wiring informers yourself rather than through `simple.App`? `simple.NewInformerFactory` applies the same rule to a
+declaration you hold, which the [generated per-kind informers](#generated-per-kind-informers) carry.
 
 ## The bus informer
 
@@ -376,6 +380,29 @@ SDK parses them in two places only:
 * **The delivery latency histograms**, which date a change from the timestamp its version embeds. There is no
   portable way to decode that, so supply `BusInformerConfig.ResourceVersionTime`. Without it the histograms stay
   empty; the event counters are unaffected either way.
+
+## Generated per-kind informers
+
+Codegen writes one informer file per kind, in an `informer` package beside the kind's own: the kind's watch
+declaration as go, and a constructor which resolves it. Wiring an operator yourself is then one line per kind, with
+the declaration already bound:
+
+```go
+factory := simple.NewInformerFactory(simple.ManifestInformerConfig{
+    Subscriber: subscriber, // nil where the deployment has no bus
+    Bus:        simple.BusInformerConfig{ResyncInterval: 5 * time.Minute, Group: group},
+})
+
+repositories, err := informer.NewRepositoryInformer(factory, clients, opts)
+connections, err := informer.NewConnectionInformer(factory, clients, opts)
+```
+
+Build the factory once per process. Every informer it returns shares one set of metric collectors and resolves each
+kind's declaration the same way `simple.App` does, so an operator which wires its own informers and an app which
+lets the SDK do it behave identically.
+
+The informers are in their own package because they pull in the operator machinery; the kind packages stay as light
+as a consumer of the types alone needs them to be.
 
 ## The periodic informer
 

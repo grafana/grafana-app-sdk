@@ -329,55 +329,9 @@ type ManifestInformerConfig struct {
 //
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 func InformerSupplierFromManifest(data app.ManifestData, cfg ManifestInformerConfig) InformerSupplier {
-	needs := data.WatchNeeds()
-
-	watch := cfg.Watch
-	if watch == nil {
-		watch = DefaultInformerSupplier
-	}
-	if cfg.Bus.AnnouncedMetadata.IsZero() {
-		cfg.Bus.AnnouncedMetadata = AnnouncedMetadataFromManifest(data)
-	}
-
-	// One set of delivery collectors across all three, so that a kind whose need resolves differently in another
-	// deployment — or after a bus is switched on — reports on the same series rather than on a new family.
-	delivery := cfg.Bus.Metrics.Delivery()
-	if delivery == nil {
-		delivery = cfg.Periodic.Metrics
-	}
-	if delivery == nil {
-		delivery = operator.NewInformerDeliveryMetrics(operator.InformerDeliveryMetricsConfig{
-			MetricsConfig:       cfg.Bus.MetricsConfig,
-			ResourceVersionTime: cfg.Bus.ResourceVersionTime,
-		})
-	}
-	cfg.Periodic.Metrics = delivery
-	if cfg.Bus.Metrics == nil {
-		cfg.Bus.Metrics = operator.NewBusInformerMetrics(operator.BusInformerMetricsConfig{
-			MetricsConfig: cfg.Bus.MetricsConfig,
-			Delivery:      delivery,
-		})
-	}
-
-	bus := BusInformerSupplier(cfg.Subscriber, cfg.Bus)
-	periodic := PeriodicInformerSupplier(cfg.Periodic)
-
-	// The watch and the periodic informer need only the API; the bus needs a subscriber.
-	available := []app.WatchInformer{app.WatchInformerWatch, app.WatchInformerPeriodic}
-	if cfg.Subscriber != nil {
-		available = append(available, app.WatchInformerBus)
-	}
-
+	declarations := WatchDeclarationsFromManifest(data)
+	factory := NewInformerFactory(cfg)
 	return func(kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions) (operator.Informer, error) {
-		options.DeliveryMetrics = delivery
-		// The rule lives on the need itself, so wiring which builds informers directly resolves identically.
-		switch needs[kind.Kind()].Resolve(available...) {
-		case app.WatchInformerPeriodic:
-			return periodic(kind, clients, options)
-		case app.WatchInformerBus:
-			return bus(kind, clients, options)
-		default: // app.WatchInformerWatch
-			return watch(kind, clients, options)
-		}
+		return factory.Informer(kind, declarations[kind.Kind()], clients, options)
 	}
 }

@@ -1,0 +1,28 @@
+package informer
+
+import (
+	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/operator"
+	"github.com/grafana/grafana-app-sdk/resource"
+	"github.com/grafana/grafana-app-sdk/simple"
+
+	v1 "codegen-tests/pkg/generated/testapp/v1"
+)
+
+// TestKind2Watch is what the kind's manifest declares about watching it: what its handlers need from the change
+// stream, and what metadata a change bus announces with each event.
+var TestKind2Watch = simple.KindWatchDeclaration{
+	Needs: app.WatchNeedsSignal,
+	AnnouncedMetadata: operator.AnnouncedMetadata{
+		Labels:            []string{"app"},
+		Finalizers:        true,
+		Generation:        true,
+		DeletionTimestamp: true,
+	},
+}
+
+// NewTestKind2Informer builds the informer the kind declared it needs, resolved by the factory against what this
+// deployment can provide. Build the factory once per process, so that every kind's informer shares its collectors.
+func NewTestKind2Informer(factory *simple.InformerFactory, clients resource.ClientGenerator, opts operator.InformerOptions) (operator.Informer, error) {
+	return factory.Informer(v1.TestKind2Kind(), TestKind2Watch, clients, opts)
+}
