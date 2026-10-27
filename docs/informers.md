@@ -136,7 +136,10 @@ reconcile's correctness depends on must be read from the API.
 * **Events are queued, not handled inline.** The subscriber callback only enqueues; the informer applies and
   dispatches on its own goroutine, so a slow API read or handler cannot stall the bus. `EventQueueSize` bounds the
   queue, and a full queue drops the event and forces a re-list to recover it — counted by
-  `informer_bus_dropped_events_total`, which climbing means the informer is not keeping up.
+  `informer_bus_dropped_events_total`, which climbing means the informer is not keeping up. Those recovery re-lists
+  are rate-limited to `OverflowRelistInterval`, since one list recovers every drop before it, and the informer
+  applies up to `EventDrainBatch` queued events per pass so a backlog cannot keep scheduling lists instead of being
+  worked off.
 * **One order for live and re-list deliveries.** Both are applied on that same goroutine, so a live delete cannot
   land between a re-list computing its diff and delivering it.
 * **A completed re-list supersedes older queued events.** A list read after an event was published already accounts

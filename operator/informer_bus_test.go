@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1220,4 +1221,72 @@ func TestBusInformer_IdentityModificationAdvancesTheOrderingVersion(t *testing.T
 	assert.Equal(t, []string{"x"}, busNames(inf.store.List()))
 	require.Len(t, handled, 1)
 	assert.Contains(t, handled[0].Error(), "superseded by a newer write")
+}
+
+// A dropped event forces a re-list, but a sustained backlog drops many and one list recovers all of them, so
+// scheduling a list per drop only spends requests on work already in hand.
+func TestBusInformer_OverflowRelistIsRateLimited(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		m := newTestBusMetrics()
+		inf := newBusInformer(t, resourcebus.NewFake(), staticLister(), &recordingWatcher{}, BusInformerOptions{
+			EventQueueSize:         1,
+			OverflowRelistInterval: time.Minute,
+			Metrics:                m,
+		})
+
+		// Nothing drains the queue, so every event after the first overflows.
+		for i := range 50 {
+			inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", strconv.Itoa(i)))
+		}
+
+		assert.Equal(t, float64(49), busMetricValue(t, m, "dropped_events"), "every drop is still counted")
+		assert.Len(t, inf.relistSignal, 1, "but they coalesce into one re-list request")
+
+		// Past the interval, a further drop may schedule another.
+		<-inf.relistSignal
+		time.Sleep(time.Minute + time.Second)
+		inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "99"))
+		assert.Len(t, inf.relistSignal, 1)
+	})
+}
+
+// The drain is bounded, which is what stops a backlog from starving the re-list: the run loop falls through to the
+// select after at most this many events, so the resync timer is read even while the queue has more waiting.
+func TestBusInformer_DrainEventsIsBounded(t *testing.T) {
+	watcher := &recordingWatcher{}
+	inf := newBusInformer(t, resourcebus.NewFake(), staticLister(), watcher, BusInformerOptions{
+		EventQueueSize:  100,
+		EventDrainBatch: 4,
+	})
+	for i := range 10 {
+		inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, strconv.Itoa(i), "1"))
+	}
+
+	inf.drainEvents(context.Background())
+
+	assert.Len(t, watcher.addedNames(), 4, "one pass applies at most the batch")
+	assert.Len(t, inf.events, 6, "the rest stay queued for the next pass")
+
+	// An empty queue returns immediately rather than waiting for one.
+	inf.drainEvents(context.Background())
+	inf.drainEvents(context.Background())
+	assert.Len(t, inf.events, 0)
+	inf.drainEvents(context.Background())
+	assert.Len(t, watcher.addedNames(), 10)
+}
+
+// A canceled context stops the drain rather than applying the rest of the batch.
+func TestBusInformer_DrainEventsStopsOnContextCancellation(t *testing.T) {
+	watcher := &recordingWatcher{}
+	inf := newBusInformer(t, resourcebus.NewFake(), staticLister(), watcher, BusInformerOptions{EventQueueSize: 10})
+	for i := range 5 {
+		inf.onEvent(context.Background(), busEvent(resourcebus.VerbAdded, strconv.Itoa(i), "1"))
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	inf.drainEvents(ctx)
+
+	assert.Empty(t, watcher.addedNames())
+	assert.Len(t, inf.events, 5, "the queue is left for a later pass")
 }

@@ -47,6 +47,10 @@ const (
 	DefaultBusRetryInterval = 5 * time.Second
 	// DefaultBusEventQueueSize is how many live events a BusInformer buffers when none is configured.
 	DefaultBusEventQueueSize = 1000
+	// DefaultBusEventDrainBatch is how many queued events a BusInformer applies per pass when none is configured.
+	DefaultBusEventDrainBatch = 64
+	// DefaultBusOverflowRelistInterval is the shortest gap between dropped-event re-lists when none is configured.
+	DefaultBusOverflowRelistInterval = 30 * time.Second
 )
 
 // relistPass distinguishes the initial list from a later one. They differ in one way: an add on a later pass is a
@@ -103,6 +107,14 @@ type BusInformerOptions struct {
 	// so events are queued rather than handled on the delivery path; a full queue drops the event and forces a
 	// re-list to recover it. A non-positive value uses DefaultBusEventQueueSize.
 	EventQueueSize int
+	// EventDrainBatch is how many queued events are applied before the informer offers the re-list cases again.
+	// It is what stops a recovery re-list from competing one-for-one with the queue it is meant to relieve, while
+	// keeping the re-list from being starved by a steady stream. A non-positive value uses
+	// DefaultBusEventDrainBatch.
+	EventDrainBatch int
+	// OverflowRelistInterval is the shortest gap between re-lists triggered by a dropped event. A non-positive
+	// value uses DefaultBusOverflowRelistInterval. See EventQueueSize.
+	OverflowRelistInterval time.Duration
 	// Metrics are the shared delivery metrics. A nil value disables observation.
 	Metrics *BusInformerMetrics
 }
@@ -145,6 +157,10 @@ type BusInformer struct {
 	// lastListRV is the resource version of the most recently installed snapshot, so a queued event older than it
 	// can be recognized as superseded. Zero means no list has been dated, which disables the check.
 	lastListRV atomic.Int64
+
+	// lastOverflowRelist is when a dropped event last scheduled a re-list, in unix nanoseconds, so a backlog does
+	// not schedule one per drop. See signalOverflowRelist.
+	lastOverflowRelist atomic.Int64
 }
 
 var _ Informer = (*BusInformer)(nil)
@@ -186,6 +202,12 @@ func NewBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, liste
 	}
 	if opts.EventQueueSize <= 0 {
 		opts.EventQueueSize = DefaultBusEventQueueSize
+	}
+	if opts.EventDrainBatch <= 0 {
+		opts.EventDrainBatch = DefaultBusEventDrainBatch
+	}
+	if opts.OverflowRelistInterval <= 0 {
+		opts.OverflowRelistInterval = DefaultBusOverflowRelistInterval
 	}
 	return &BusInformer{
 		kind:         kind,
@@ -322,6 +344,12 @@ func (b *BusInformer) Run(ctx context.Context) error {
 	resync := time.NewTimer(wait.Jitter(b.opts.ResyncInterval, DefaultBusResyncJitterFactor))
 	defer resync.Stop()
 	for {
+		// Drain a bounded run of queued events before offering the re-list cases. A re-list drains nothing and
+		// costs a full list, so letting it compete one-for-one with the queue lets a backlog sustain itself:
+		// select picks at random among ready cases, so roughly every other turn would be a list. Falling through
+		// to the select rather than looping is what keeps the re-list from being starved the other way — it is
+		// the correctness mechanism, so a steady stream must not stop it running.
+		b.drainEvents(ctx)
 		select {
 		case <-ctx.Done():
 			return nil
@@ -333,6 +361,24 @@ func (b *BusInformer) Run(ctx context.Context) error {
 			_ = b.relist(ctx, periodicRelist)
 		case evt := <-b.events:
 			b.handleEvent(ctx, evt)
+		}
+	}
+}
+
+// drainEvents applies up to EventDrainBatch queued events, stopping early when the queue empties or the context
+// ends, so an idle informer falls straight through to the select.
+func (b *BusInformer) drainEvents(ctx context.Context) {
+	for range b.opts.EventDrainBatch {
+		// Checked before the select rather than as a case in it: with both a done context and a queued event
+		// ready, a select would pick between them at random and could keep applying events while shutting down.
+		if ctx.Err() != nil {
+			return
+		}
+		select {
+		case evt := <-b.events:
+			b.handleEvent(ctx, evt)
+		default:
+			return
 		}
 	}
 }
@@ -423,8 +469,25 @@ func (b *BusInformer) onEvent(_ context.Context, evt resourcebus.Event) {
 	case b.events <- evt:
 	default:
 		b.metrics.observeDroppedEvent()
-		b.signalRelist()
+		b.signalOverflowRelist()
 	}
+}
+
+// signalOverflowRelist asks for a recovery re-list after a dropped event, but no more often than
+// OverflowRelistInterval. A sustained backlog drops many events, and one list recovers all of them, so scheduling
+// one per drop only spends list requests on work already in hand. A drop whose signal is suppressed is still
+// recovered — by the next re-list, whichever triggers it — within the resync interval.
+func (b *BusInformer) signalOverflowRelist() {
+	now := time.Now().UnixNano()
+	last := b.lastOverflowRelist.Load()
+	if now-last < int64(b.opts.OverflowRelistInterval) {
+		return
+	}
+	// A lost race means another drop just scheduled the re-list this one wanted.
+	if !b.lastOverflowRelist.CompareAndSwap(last, now) {
+		return
+	}
+	b.signalRelist()
 }
 
 // handleEvent applies one live event and dispatches it. It runs on the run loop, so a live event and a re-list diff

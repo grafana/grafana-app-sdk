@@ -310,7 +310,11 @@ func TestBusStore_DeleteDoesNotRegressANewerTombstone(t *testing.T) {
 func TestBusStore_OpaqueWriteIsNotRefusedByATombstone(t *testing.T) {
 	s := newBusStore()
 	s.Update(busObjRV("x", 100))
-	s.DeleteAt(busTestNamespace, "x", "20")
+	// The delete has to outrank the stored object, or the stale-delete check refuses it and no tombstone is left
+	// for this to exercise at all.
+	_, applied := s.DeleteAt(busTestNamespace, "x", "200")
+	require.True(t, applied, "the delete must land for there to be a tombstone")
+	require.Empty(t, s.List())
 
 	opaque := busObj("x")
 	opaque.ResourceVersion = "opaque"

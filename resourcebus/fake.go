@@ -55,17 +55,20 @@ func (f *Fake) Subscribe(ctx context.Context, gvr schema.GroupVersionResource, n
 	}
 	key := fakeKey(gvr, namespace)
 	sub := &fakeSubscription{fake: f, key: key, handler: handler, cfg: NewSubscribeConfig(opts...)}
+	// A context which is already done must never be registered, synchronously: an immediate Publish would otherwise
+	// reach its handler, and in a group it would take that event away from a member which is still live.
+	if ctx.Err() != nil {
+		sub.closed = true
+		f.mu.Unlock()
+		return sub, nil
+	}
 	f.subs[key] = append(f.subs[key], sub)
 	f.mu.Unlock()
 
-	// Delivery stops when ctx is done as well as on Close, per Subscription. An already-canceled context releases
-	// the subscription before this returns, so a caller which cancels and then publishes sees no delivery.
-	if ctx.Done() != nil {
-		go func() {
-			<-ctx.Done()
-			_ = sub.Close()
-		}()
-	}
+	// Delivery stops when ctx is done as well as on Close, per Subscription. AfterFunc's stop is what releases the
+	// watcher when Close comes first, so repeated subscribe/close cycles under one long-lived context retain
+	// nothing.
+	sub.watch(context.AfterFunc(ctx, func() { _ = sub.Close() }))
 	return sub, nil
 }
 
@@ -172,13 +175,41 @@ type fakeSubscription struct {
 	key     string
 	handler func(context.Context, Event)
 	cfg     SubscribeConfig
+
+	mu        sync.Mutex
+	stopWatch func() bool
+	closed    bool
+}
+
+// watch takes ownership of the context watcher's stop function, so Close can release it. A subscription already
+// closed stops the watcher here instead, since nothing else will.
+func (s *fakeSubscription) watch(stop func() bool) {
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		stop()
+		return
+	}
+	s.stopWatch = stop
+	s.mu.Unlock()
 }
 
 var _ Subscription = (*fakeSubscription)(nil)
 
 func (*fakeSubscription) WaitReady(context.Context) error { return nil }
 
+// Close stops delivery and releases the context watcher. It is idempotent, so the watcher firing after an explicit
+// Close is harmless.
 func (s *fakeSubscription) Close() error {
+	s.mu.Lock()
+	stop := s.stopWatch
+	s.stopWatch = nil
+	s.closed = true
+	s.mu.Unlock()
+	if stop != nil {
+		stop()
+	}
+
 	s.fake.mu.Lock()
 	defer s.fake.mu.Unlock()
 	remaining := make([]*fakeSubscription, 0, len(s.fake.subs[s.key]))

@@ -2,6 +2,7 @@ package resourcebus
 
 import (
 	"context"
+	"runtime"
 	"testing"
 	"time"
 
@@ -149,7 +150,7 @@ func TestFake_GroupTurnsArePerScope(t *testing.T) {
 }
 
 // Delivery stops when the subscribe context is done, as well as on Close.
-func TestFake_CancellingTheContextStopsDelivery(t *testing.T) {
+func TestFake_CancelingTheContextStopsDelivery(t *testing.T) {
 	f := NewFake()
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -167,8 +168,9 @@ func TestFake_CancellingTheContextStopsDelivery(t *testing.T) {
 	assert.Equal(t, 1, received, "nothing is delivered after cancellation")
 }
 
-// A context which is already done releases the subscription without a publish ever reaching it.
-func TestFake_AlreadyCancelledContextDeliversNothing(t *testing.T) {
+// A context which is already done must never be registered, and synchronously: a Publish immediately after Subscribe
+// returns has to find nothing, with no window in which a watcher goroutine has yet to run.
+func TestFake_AlreadyCanceledContextIsNeverRegistered(t *testing.T) {
 	f := NewFake()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -177,6 +179,63 @@ func TestFake_AlreadyCancelledContextDeliversNothing(t *testing.T) {
 	_, err := f.Subscribe(ctx, testGVR, testNamespace, func(context.Context, Event) { received++ })
 	require.NoError(t, err)
 
-	assert.Eventually(t, func() bool { return !f.Subscribed(testGVR, testNamespace) }, time.Second, time.Millisecond)
+	assert.False(t, f.Subscribed(testGVR, testNamespace), "not registered, with no goroutine to wait for")
+	assert.ErrorIs(t, f.Publish(context.Background(), testGVR, testNamespace, Event{Verb: VerbAdded, Name: "a"}),
+		ErrNoSubscription)
 	assert.Zero(t, received)
+}
+
+// A canceled context must not take an event away from a live member of the same group.
+func TestFake_AlreadyCanceledContextDoesNotTakeAGroupTurn(t *testing.T) {
+	f := NewFake()
+	group := Group{Name: "replicas"}
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	var dead, live int
+	_, err := f.Subscribe(canceled, testGVR, testNamespace, func(context.Context, Event) { dead++ }, WithGroup(group))
+	require.NoError(t, err)
+	_, err = f.Subscribe(context.Background(), testGVR, testNamespace,
+		func(context.Context, Event) { live++ }, WithGroup(group))
+	require.NoError(t, err)
+
+	for range 4 {
+		require.NoError(t, f.Publish(context.Background(), testGVR, testNamespace, Event{Verb: VerbAdded, Name: "a"}))
+	}
+
+	assert.Zero(t, dead)
+	assert.Equal(t, 4, live, "the live member takes every turn, not every other one")
+}
+
+// Close releases the context watcher, so repeated subscribe/close cycles under one long-lived context retain
+// nothing — the watcher used to wait on a cancellation that never came.
+func TestFake_CloseReleasesTheContextWatcher(t *testing.T) {
+	f := NewFake()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	before := runtime.NumGoroutine()
+	for range 200 {
+		sub, err := f.Subscribe(ctx, testGVR, testNamespace, func(context.Context, Event) {})
+		require.NoError(t, err)
+		require.NoError(t, sub.Close())
+	}
+
+	assert.Eventually(t, func() bool { return runtime.NumGoroutine() <= before+2 }, time.Second, time.Millisecond,
+		"closed subscriptions must not retain a watcher each")
+	assert.False(t, f.Subscribed(testGVR, testNamespace))
+}
+
+// Closing twice, or closing after the context is canceled, must not panic or double-release.
+func TestFake_CloseIsIdempotent(t *testing.T) {
+	f := NewFake()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	sub, err := f.Subscribe(ctx, testGVR, testNamespace, func(context.Context, Event) {})
+	require.NoError(t, err)
+	require.NoError(t, sub.Close())
+	require.NoError(t, sub.Close())
+
+	cancel()
+	assert.False(t, f.Subscribed(testGVR, testNamespace))
 }
