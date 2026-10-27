@@ -442,6 +442,8 @@ func TestParseManifestWatchMetadata(t *testing.T) {
 				labels: ["app", "tier"]
 				annotations: ["watch-app.grafana.app/paused"]
 				finalizers: ["watch-app.grafana.app/finalizer"]
+				generation: true
+				deletionTimestamp: true
 			}
 		}]
 	}`)
@@ -457,6 +459,9 @@ func TestParseManifestWatchMetadata(t *testing.T) {
 	assert.Equal(t, []string{"app", "tier"}, kinds[0].WatchMetadata.Labels)
 	assert.Equal(t, []string{"watch-app.grafana.app/paused"}, kinds[0].WatchMetadata.Annotations)
 	assert.Equal(t, []string{"watch-app.grafana.app/finalizer"}, kinds[0].WatchMetadata.Finalizers)
+	assert.True(t, kinds[0].WatchMetadata.Generation)
+	assert.True(t, kinds[0].WatchMetadata.DeletionTimestamp)
+	assert.False(t, kinds[0].WatchMetadata.CreationTimestamp, "not declared, so not announced")
 }
 
 // A kind which declares nothing leaves it unset, so the platform registers nothing for it.

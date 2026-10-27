@@ -133,6 +133,12 @@ appManifestv1alpha2: appManifestKind & {
 			annotations?: [...string]
 			// finalizers are the metadata.finalizers values to announce.
 			finalizers?: [...string]
+			// generation announces metadata.generation.
+			generation?: bool
+			// creationTimestamp announces metadata.creationTimestamp.
+			creationTimestamp?: bool
+			// deletionTimestamp announces metadata.deletionTimestamp.
+			deletionTimestamp?: bool
 		}
 		#ManifestVersionKindStorage: {
 			// listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.

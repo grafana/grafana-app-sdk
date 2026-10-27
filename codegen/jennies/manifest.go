@@ -633,9 +633,12 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 	}
 	if vk.WatchMetadata != nil {
 		mver.WatchMetadata = &app.ManifestVersionKindWatchMetadata{
-			Labels:      vk.WatchMetadata.Labels,
-			Annotations: vk.WatchMetadata.Annotations,
-			Finalizers:  vk.WatchMetadata.Finalizers,
+			Labels:            vk.WatchMetadata.Labels,
+			Annotations:       vk.WatchMetadata.Annotations,
+			Finalizers:        vk.WatchMetadata.Finalizers,
+			Generation:        vk.WatchMetadata.Generation,
+			CreationTimestamp: vk.WatchMetadata.CreationTimestamp,
+			DeletionTimestamp: vk.WatchMetadata.DeletionTimestamp,
 		}
 	}
 	if vk.ListKeys != nil && !*vk.ListKeys {

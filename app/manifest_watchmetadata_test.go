@@ -21,6 +21,7 @@ func TestManifestData_WatchMetadata(t *testing.T) {
 						WatchMetadata: &ManifestVersionKindWatchMetadata{
 							Labels:     []string{"app"},
 							Finalizers: []string{"watchapp.grafana.app/finalizer"},
+							Generation: true,
 						},
 					},
 					{Kind: "Undeclared"},
@@ -34,9 +35,10 @@ func TestManifestData_WatchMetadata(t *testing.T) {
 						Plural: "Foos",
 						WatchMetadata: &ManifestVersionKindWatchMetadata{
 							// "app" repeats across versions and must not be duplicated.
-							Labels:      []string{"app", "tier"},
-							Annotations: []string{"watchapp.grafana.app/paused"},
-							Finalizers:  []string{"watchapp.grafana.app/finalizer"},
+							Labels:            []string{"app", "tier"},
+							Annotations:       []string{"watchapp.grafana.app/paused"},
+							Finalizers:        []string{"watchapp.grafana.app/finalizer"},
+							DeletionTimestamp: true,
 						},
 					},
 				},
@@ -48,9 +50,11 @@ func TestManifestData_WatchMetadata(t *testing.T) {
 
 	assert.Len(t, got, 1, "a kind which declares nothing is absent")
 	assert.Equal(t, ManifestVersionKindWatchMetadata{
-		Labels:      []string{"app", "tier"},
-		Annotations: []string{"watchapp.grafana.app/paused"},
-		Finalizers:  []string{"watchapp.grafana.app/finalizer"},
+		Labels:            []string{"app", "tier"},
+		Annotations:       []string{"watchapp.grafana.app/paused"},
+		Finalizers:        []string{"watchapp.grafana.app/finalizer"},
+		Generation:        true,
+		DeletionTimestamp: true,
 	}, got[schema.GroupResource{Group: "watchapp.ext.grafana.app", Resource: "foos"}])
 }
 

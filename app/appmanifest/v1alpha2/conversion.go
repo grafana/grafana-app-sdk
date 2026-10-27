@@ -53,9 +53,12 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 			k.FolderScoped = kind.FolderScoped
 			if kind.WatchMetadata != nil {
 				k.WatchMetadata = &app.ManifestVersionKindWatchMetadata{
-					Labels:      kind.WatchMetadata.Labels,
-					Annotations: kind.WatchMetadata.Annotations,
-					Finalizers:  kind.WatchMetadata.Finalizers,
+					Labels:            kind.WatchMetadata.Labels,
+					Annotations:       kind.WatchMetadata.Annotations,
+					Finalizers:        kind.WatchMetadata.Finalizers,
+					Generation:        kind.WatchMetadata.Generation != nil && *kind.WatchMetadata.Generation,
+					CreationTimestamp: kind.WatchMetadata.CreationTimestamp != nil && *kind.WatchMetadata.CreationTimestamp,
+					DeletionTimestamp: kind.WatchMetadata.DeletionTimestamp != nil && *kind.WatchMetadata.DeletionTimestamp,
 				}
 			}
 			if kind.Storage != nil {
@@ -404,6 +407,16 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 					Labels:      kind.WatchMetadata.Labels,
 					Annotations: kind.WatchMetadata.Annotations,
 					Finalizers:  kind.WatchMetadata.Finalizers,
+				}
+				// Written only when set, so a manifest which asked for nothing does not read as having opted out.
+				if kind.WatchMetadata.Generation {
+					k.WatchMetadata.Generation = &kind.WatchMetadata.Generation
+				}
+				if kind.WatchMetadata.CreationTimestamp {
+					k.WatchMetadata.CreationTimestamp = &kind.WatchMetadata.CreationTimestamp
+				}
+				if kind.WatchMetadata.DeletionTimestamp {
+					k.WatchMetadata.DeletionTimestamp = &kind.WatchMetadata.DeletionTimestamp
 				}
 			}
 			if kind.Storage != nil {

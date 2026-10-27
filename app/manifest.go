@@ -603,6 +603,12 @@ type ManifestVersionKindWatchMetadata struct {
 	// Finalizers are the metadata.finalizers values to announce. An app whose reconciler is opinionated announces
 	// its own finalizer here, so that a delete in progress can be told from a fresh object without a read.
 	Finalizers []string `json:"finalizers,omitempty" yaml:"finalizers,omitempty"`
+	// Generation announces metadata.generation, which tells a spec change from a subresource one.
+	Generation bool `json:"generation,omitempty" yaml:"generation,omitempty"`
+	// CreationTimestamp announces metadata.creationTimestamp.
+	CreationTimestamp bool `json:"creationTimestamp,omitempty" yaml:"creationTimestamp,omitempty"`
+	// DeletionTimestamp announces metadata.deletionTimestamp, which makes a delete in progress visible.
+	DeletionTimestamp bool `json:"deletionTimestamp,omitempty" yaml:"deletionTimestamp,omitempty"`
 }
 
 // WatchMetadata returns the metadata each of the app's resources declares its change notifications should carry,
@@ -623,6 +629,9 @@ func (m ManifestData) WatchMetadata() map[schema.GroupResource]ManifestVersionKi
 			merged.Labels = appendUnique(merged.Labels, kind.WatchMetadata.Labels)
 			merged.Annotations = appendUnique(merged.Annotations, kind.WatchMetadata.Annotations)
 			merged.Finalizers = appendUnique(merged.Finalizers, kind.WatchMetadata.Finalizers)
+			merged.Generation = merged.Generation || kind.WatchMetadata.Generation
+			merged.CreationTimestamp = merged.CreationTimestamp || kind.WatchMetadata.CreationTimestamp
+			merged.DeletionTimestamp = merged.DeletionTimestamp || kind.WatchMetadata.DeletionTimestamp
 			out[gr] = merged
 		}
 	}

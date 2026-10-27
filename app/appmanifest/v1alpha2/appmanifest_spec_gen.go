@@ -284,6 +284,12 @@ type AppManifestManifestVersionKindWatchMetadata struct {
 	Annotations []string `json:"annotations,omitempty"`
 	// finalizers are the metadata.finalizers values to announce.
 	Finalizers []string `json:"finalizers,omitempty"`
+	// generation announces metadata.generation.
+	Generation *bool `json:"generation,omitempty"`
+	// creationTimestamp announces metadata.creationTimestamp.
+	CreationTimestamp *bool `json:"creationTimestamp,omitempty"`
+	// deletionTimestamp announces metadata.deletionTimestamp.
+	DeletionTimestamp *bool `json:"deletionTimestamp,omitempty"`
 }
 
 // NewAppManifestManifestVersionKindWatchMetadata creates a new AppManifestManifestVersionKindWatchMetadata object.

@@ -266,6 +266,12 @@ SchemaWithOperatorState: Schema & {
 	// finalizers are the metadata.finalizers values to announce. A kind whose reconciler is opinionated announces
 	// its app's finalizer here, so a delete in progress is visible without a read.
 	finalizers?: [...string]
+	// generation announces metadata.generation, which tells a spec change from a subresource one.
+	generation?: bool
+	// creationTimestamp announces metadata.creationTimestamp.
+	creationTimestamp?: bool
+	// deletionTimestamp announces metadata.deletionTimestamp, which makes a delete in progress visible.
+	deletionTimestamp?: bool
 }
 
 #KindEmbed: {

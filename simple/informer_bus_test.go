@@ -493,29 +493,55 @@ func (c filteringClient) ListInto(ctx context.Context, namespace string, opts re
 // An app states what its bus announces once, in its kinds' manifest, rather than restating it on the informer
 // config where the two could disagree.
 func TestAnnouncedMetadataFromManifest(t *testing.T) {
-	withFinalizer := app.ManifestData{
-		Group: "g",
-		Versions: []app.ManifestVersion{{Name: "v1", Kinds: []app.ManifestVersionKind{{
-			Kind: "Foo",
-			WatchMetadata: &app.ManifestVersionKindWatchMetadata{
-				Finalizers: []string{"watchapp.grafana.app/finalizer"},
-			},
-		}}}},
+	kind := func(wm *app.ManifestVersionKindWatchMetadata) app.ManifestVersionKind {
+		return app.ManifestVersionKind{Kind: "Foo", WatchMetadata: wm}
 	}
-	labelsOnly := app.ManifestData{
-		Group: "g",
-		Versions: []app.ManifestVersion{{Name: "v1", Kinds: []app.ManifestVersionKind{{
-			Kind:          "Foo",
-			WatchMetadata: &app.ManifestVersionKindWatchMetadata{Labels: []string{"app"}},
-		}}}},
+	manifest := func(kinds ...app.ManifestVersionKind) app.ManifestData {
+		return app.ManifestData{Group: "g", Versions: []app.ManifestVersion{{Name: "v1", Kinds: kinds}}}
+	}
+	all := &app.ManifestVersionKindWatchMetadata{
+		Finalizers:        []string{"g/finalizer"},
+		Generation:        true,
+		DeletionTimestamp: true,
 	}
 
-	assert.Equal(t, operator.AnnouncedMetadata{DeletionTimestamp: true, Finalizers: true, Generation: true},
-		AnnouncedMetadataFromManifest(withFinalizer),
-		"a declared finalizer asks for the opinionated path, which the other two accompany")
-	assert.Equal(t, operator.AnnouncedMetadata{}, AnnouncedMetadataFromManifest(labelsOnly),
-		"labels alone do not make the identity enough for an opinionated watcher")
-	assert.Equal(t, operator.AnnouncedMetadata{}, AnnouncedMetadataFromManifest(app.ManifestData{}))
+	t.Run("every field declared", func(t *testing.T) {
+		assert.Equal(t, operator.AnnouncedMetadata{DeletionTimestamp: true, Finalizers: true, Generation: true},
+			AnnouncedMetadataFromManifest(manifest(kind(all))))
+	})
+
+	t.Run("a missing field is not announced", func(t *testing.T) {
+		assert.Equal(t, operator.AnnouncedMetadata{Finalizers: true, Generation: true},
+			AnnouncedMetadataFromManifest(manifest(kind(&app.ManifestVersionKindWatchMetadata{
+				Finalizers: []string{"g/finalizer"},
+				Generation: true,
+			}))), "the deletion timestamp was not opted into")
+	})
+
+	t.Run("labels alone announce nothing the opinionated path reads", func(t *testing.T) {
+		assert.Equal(t, operator.AnnouncedMetadata{},
+			AnnouncedMetadataFromManifest(manifest(kind(&app.ManifestVersionKindWatchMetadata{
+				Labels: []string{"app"},
+			}))))
+	})
+
+	// The configuration is app-wide while an informer serves one kind, so the weakest declaring kind governs.
+	t.Run("the weakest declaring kind governs", func(t *testing.T) {
+		weaker := app.ManifestVersionKind{Kind: "Bar", WatchMetadata: &app.ManifestVersionKindWatchMetadata{
+			Finalizers: []string{"g/finalizer"},
+		}}
+		assert.Equal(t, operator.AnnouncedMetadata{Finalizers: true},
+			AnnouncedMetadataFromManifest(manifest(kind(all), weaker)))
+	})
+
+	t.Run("a kind which declares nothing is ignored, not counted as a refusal", func(t *testing.T) {
+		assert.Equal(t, operator.AnnouncedMetadata{DeletionTimestamp: true, Finalizers: true, Generation: true},
+			AnnouncedMetadataFromManifest(manifest(kind(all), app.ManifestVersionKind{Kind: "Undeclared"})))
+	})
+
+	t.Run("no declarations at all", func(t *testing.T) {
+		assert.Equal(t, operator.AnnouncedMetadata{}, AnnouncedMetadataFromManifest(app.ManifestData{}))
+	})
 }
 
 // Derived or declared, it is what decides the guard.
@@ -523,8 +549,12 @@ func TestAnnouncedMetadataFromManifestAllowsOpinionatedPairing(t *testing.T) {
 	data := app.ManifestData{
 		Group: "g",
 		Versions: []app.ManifestVersion{{Name: "v1", Kinds: []app.ManifestVersionKind{{
-			Kind:          "Foo",
-			WatchMetadata: &app.ManifestVersionKindWatchMetadata{Finalizers: []string{"g/finalizer"}},
+			Kind: "Foo",
+			WatchMetadata: &app.ManifestVersionKindWatchMetadata{
+				Finalizers:        []string{"g/finalizer"},
+				Generation:        true,
+				DeletionTimestamp: true,
+			},
 		}}}},
 	}
 

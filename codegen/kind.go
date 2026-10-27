@@ -135,6 +135,12 @@ type WatchMetadata struct {
 	Annotations []string `json:"annotations,omitempty"`
 	// Finalizers are the metadata.finalizers values to announce.
 	Finalizers []string `json:"finalizers,omitempty"`
+	// Generation announces metadata.generation.
+	Generation bool `json:"generation,omitempty"`
+	// CreationTimestamp announces metadata.creationTimestamp.
+	CreationTimestamp bool `json:"creationTimestamp,omitempty"`
+	// DeletionTimestamp announces metadata.deletionTimestamp.
+	DeletionTimestamp bool `json:"deletionTimestamp,omitempty"`
 }
 
 // EmbedField supplies text for the embedding document without exposing a search field.

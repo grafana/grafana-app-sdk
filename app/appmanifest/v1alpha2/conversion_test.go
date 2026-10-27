@@ -529,9 +529,11 @@ func TestWatchMetadataRoundTrips(t *testing.T) {
 			Kind:  "Foo",
 			Scope: "Namespaced",
 			WatchMetadata: &app.ManifestVersionKindWatchMetadata{
-				Labels:      []string{"app"},
-				Annotations: []string{"watchapp.grafana.app/paused"},
-				Finalizers:  []string{"watchapp.grafana.app/finalizer"},
+				Labels:            []string{"app"},
+				Annotations:       []string{"watchapp.grafana.app/paused"},
+				Finalizers:        []string{"watchapp.grafana.app/finalizer"},
+				Generation:        true,
+				DeletionTimestamp: true,
 			},
 		}}}},
 	}
@@ -544,4 +546,7 @@ func TestWatchMetadataRoundTrips(t *testing.T) {
 	back, err := spec.ToManifestData()
 	require.NoError(t, err)
 	assert.Equal(t, data.Versions[0].Kinds[0].WatchMetadata, back.Versions[0].Kinds[0].WatchMetadata)
+
+	// A flag left unset must not come back as an explicit opt-out.
+	assert.Nil(t, spec.Versions[0].Kinds[0].WatchMetadata.CreationTimestamp)
 }

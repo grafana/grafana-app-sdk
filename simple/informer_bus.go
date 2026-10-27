@@ -163,22 +163,25 @@ func (c BusInformerConfig) lister(kind resource.Kind, client resource.Client, op
 }
 
 // AnnouncedMetadataFromManifest derives what a bus announces from the kinds' own declaration in the app manifest,
-// so an app states it once rather than restating it here.
+// so an app states it once rather than restating it here and risking the two disagreeing.
 //
-// A kind which declares a finalizer is taken to want the opinionated path, which also reads the deletion timestamp
-// and the generation; both accompany finalizers in a notification, so declaring one declares all three. It reports
-// nothing announced when no kind declares a finalizer, which leaves the identity/opinionated pairing refused —
-// the safe reading, since the platform registers from the same manifest and a kind which asked for nothing gets
-// nothing.
+// A field counts as announced only where every kind which declares any watch metadata declares that field: the
+// informer serves one kind at a time but the configuration is app-wide, so the weakest kind governs. A kind which
+// declares nothing is ignored rather than counted as a refusal, since it is not watched over the bus.
 //
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 func AnnouncedMetadataFromManifest(data app.ManifestData) operator.AnnouncedMetadata {
-	for _, spec := range data.WatchMetadata() {
-		if len(spec.Finalizers) > 0 {
-			return operator.AnnouncedMetadata{DeletionTimestamp: true, Finalizers: true, Generation: true}
-		}
+	specs := data.WatchMetadata()
+	if len(specs) == 0 {
+		return operator.AnnouncedMetadata{}
 	}
-	return operator.AnnouncedMetadata{}
+	announced := operator.AnnouncedMetadata{DeletionTimestamp: true, Finalizers: true, Generation: true}
+	for _, spec := range specs {
+		announced.DeletionTimestamp = announced.DeletionTimestamp && spec.DeletionTimestamp
+		announced.Generation = announced.Generation && spec.Generation
+		announced.Finalizers = announced.Finalizers && len(spec.Finalizers) > 0
+	}
+	return announced
 }
 
 // PeriodicInformerConfig configures the informers PeriodicInformerSupplier creates.

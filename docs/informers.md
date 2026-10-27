@@ -90,27 +90,32 @@ all of them.
 
 ### Announced metadata
 
-A bus may announce part of an object's metadata with the change — labels, annotations, finalizers, generation, and
-the creation and deletion timestamps. Whatever arrives is copied onto the delivered object, on live events and
-re-list deliveries alike.
-
-Which keys arrive is an allowlist, and a resource which registered none announces none, so **an absent field means
-unknown, not empty**: an empty finalizer list does not say the object has no finalizers.
-
-A kind declares what it needs in its own CUE, and the platform registers from the manifest:
+A bus may announce part of an object's metadata with the change, so a consumer can decide what to do without reading
+the object. Everything announced is opt-in, and a kind asks for it in its own CUE:
 
 ```cue
 watchMetadata: {
-    labels:      ["app"]
-    annotations: ["myapp.grafana.app/paused"]
-    finalizers:  ["myapp.grafana.app/finalizer"]
+    labels:            ["app"]
+    annotations:       ["myapp.grafana.app/paused"]
+    finalizers:        ["myapp.grafana.app/finalizer"]
+    generation:        true
+    deletionTimestamp: true
+    creationTimestamp: false
 }
 ```
 
-Pass `simple.AnnouncedMetadataFromManifest(manifest)` to `BusInformerConfig.AnnouncedMetadata` and the informer knows
-what to expect from the same declaration, so the two cannot disagree. Declaring a finalizer is what lets an identity
-payload be paired with an opinionated reconciler or watcher: those read the deletion timestamp, the finalizer list
-and the generation off the delivered object, and all three accompany finalizers in a notification.
+Labels, annotations and finalizers are named individually, because announcing all of them would put most of the
+object in every notification. The platform registers from the manifest, so this is the only place it is stated.
+
+Whatever arrives is copied onto the delivered object, on live events and re-list deliveries alike. **An absent field
+means unknown, not empty**: an empty finalizer list does not say the object has no finalizers, only that none were
+announced — a handler which must tell those apart reads the object.
+
+Pass `simple.AnnouncedMetadataFromManifest(manifest)` to `BusInformerConfig.AnnouncedMetadata` so the informer
+expects exactly what the kinds asked for. Declaring `finalizers`, `generation` and `deletionTimestamp` is what lets
+an identity payload be paired with an opinionated reconciler or watcher, which read those three off the delivered
+object. The informer's configuration is app-wide while it serves one kind at a time, so the weakest declaring kind
+governs; a kind which declares nothing is ignored rather than treated as a refusal.
 
 `BusInformerConfig.AnnouncedMetadata` can also be set directly, for a bus registered outside the manifest.
 
