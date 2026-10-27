@@ -109,6 +109,8 @@ appManifestv1alpha2: appManifestKind & {
 			search?: #ManifestVersionKindSearch
 			// embed defines the embedding document independently of search fields.
 			embed?: #ManifestVersionKindEmbed
+			// watchMetadata declares the object metadata this kind's change notifications should carry.
+			watchMetadata?: #ManifestVersionKindWatchMetadata
 			// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 			// It may not prevent automatic conversion behavior between versions of the kind when set to false
 			// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
@@ -121,6 +123,16 @@ appManifestv1alpha2: appManifestKind & {
 			routes?: {
 				[string]: _
 			}
+		}
+		// #ManifestVersionKindWatchMetadata declares which parts of an object's metadata a kind's change
+		// notifications should carry, for a platform which can announce changes out of band of the watch.
+		#ManifestVersionKindWatchMetadata: {
+			// labels are the metadata.labels keys to announce.
+			labels?: [...string]
+			// annotations are the metadata.annotations keys to announce.
+			annotations?: [...string]
+			// finalizers are the metadata.finalizers values to announce.
+			finalizers?: [...string]
 		}
 		#ManifestVersionKindStorage: {
 			// listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.

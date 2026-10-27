@@ -257,6 +257,17 @@ SchemaWithOperatorState: Schema & {
 
 // #KindEmbed defines the embedding document independently of search fields.
 // Kinds with a custom embedding builder omit this section.
+// #WatchMetadata declares which parts of an object's metadata a kind's change notifications carry.
+#WatchMetadata: {
+	// labels are the metadata.labels keys to announce.
+	labels?: [...string]
+	// annotations are the metadata.annotations keys to announce.
+	annotations?: [...string]
+	// finalizers are the metadata.finalizers values to announce. A kind whose reconciler is opinionated announces
+	// its app's finalizer here, so a delete in progress is visible without a read.
+	finalizers?: [...string]
+}
+
 #KindEmbed: {
 	// fields supplies inputs, in declaration order, used only to generate the text to be embedded.
 	// Declaring an embedding field does not enable filtering embeddings by that field.
@@ -372,6 +383,10 @@ Kind: S={
 	search: #KindSearch
 	// embed defines the embedding document independently of search fields.
 	embed?: #KindEmbed
+	// watchMetadata declares the object metadata this kind's change notifications should carry, where the platform
+	// can announce changes out of band of the watch. Announcing a key lets a consumer decide what to do without
+	// reading the object.
+	watchMetadata?: #WatchMetadata
 	// routes is a map of path patterns to custom routes that will be exposed as subresources for this kind.
 	// entries here should not conflict with subresources (like spec and status) in the schema for the kind.
 	routes?: #CustomRouteCapability

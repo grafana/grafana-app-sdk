@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -40,6 +41,9 @@ type BusInformerConfig struct {
 	// AnnouncedMetadata declares what this app's bus announces with each event. Declaring the deletion timestamp,
 	// finalizers and generation is what lets an identity payload be used with an opinionated reconciler or watcher,
 	// which read those off the delivered object. See operator.AnnouncedMetadata.
+	//
+	// Prefer AnnouncedMetadataFromManifest, which derives this from the kinds' own declaration so the two cannot
+	// disagree.
 	AnnouncedMetadata operator.AnnouncedMetadata
 	// PageSize is the page size the default lister requests. An empty value uses operator.DefaultListerPageSize.
 	PageSize int
@@ -156,6 +160,25 @@ func (c BusInformerConfig) lister(kind resource.Kind, client resource.Client, op
 		return nil, err
 	}
 	return operator.NewFallbackLister(identities, objects)
+}
+
+// AnnouncedMetadataFromManifest derives what a bus announces from the kinds' own declaration in the app manifest,
+// so an app states it once rather than restating it here.
+//
+// A kind which declares a finalizer is taken to want the opinionated path, which also reads the deletion timestamp
+// and the generation; both accompany finalizers in a notification, so declaring one declares all three. It reports
+// nothing announced when no kind declares a finalizer, which leaves the identity/opinionated pairing refused —
+// the safe reading, since the platform registers from the same manifest and a kind which asked for nothing gets
+// nothing.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+func AnnouncedMetadataFromManifest(data app.ManifestData) operator.AnnouncedMetadata {
+	for _, spec := range data.WatchMetadata() {
+		if len(spec.Finalizers) > 0 {
+			return operator.AnnouncedMetadata{DeletionTimestamp: true, Finalizers: true, Generation: true}
+		}
+	}
+	return operator.AnnouncedMetadata{}
 }
 
 // PeriodicInformerConfig configures the informers PeriodicInformerSupplier creates.

@@ -94,21 +94,28 @@ A bus may announce part of an object's metadata with the change — labels, anno
 the creation and deletion timestamps. Whatever arrives is copied onto the delivered object, on live events and
 re-list deliveries alike.
 
-Which keys arrive is an allowlist the resource's owner registers, and an unregistered resource announces none, so
-**an absent field means unknown, not empty**: an empty finalizer list does not say the object has no finalizers. The
-SDK cannot read that registration, so an app declares what it has arranged.
+Which keys arrive is an allowlist, and a resource which registered none announces none, so **an absent field means
+unknown, not empty**: an empty finalizer list does not say the object has no finalizers.
 
-```go
-AnnouncedMetadata: operator.AnnouncedMetadata{
-    DeletionTimestamp: true,
-    Finalizers:        true,
-    Generation:        true,
-},
+A kind declares what it needs in its own CUE, and the platform registers from the manifest:
+
+```cue
+watchMetadata: {
+    labels:      ["app"]
+    annotations: ["myapp.grafana.app/paused"]
+    finalizers:  ["myapp.grafana.app/finalizer"]
+}
 ```
 
-Those three are what an opinionated reconciler or watcher reads off the object, so declaring them is what lets one be
-paired with an identity payload. Labels and annotations have no equivalent flag because nothing in the SDK branches
-on them — your handler reads them off the delivered object, and skips the API read when they answer the question:
+Pass `simple.AnnouncedMetadataFromManifest(manifest)` to `BusInformerConfig.AnnouncedMetadata` and the informer knows
+what to expect from the same declaration, so the two cannot disagree. Declaring a finalizer is what lets an identity
+payload be paired with an opinionated reconciler or watcher: those read the deletion timestamp, the finalizer list
+and the generation off the delivered object, and all three accompany finalizers in a notification.
+
+`BusInformerConfig.AnnouncedMetadata` can also be set directly, for a bus registered outside the manifest.
+
+Labels and annotations need no such flag, because nothing in the SDK branches on them — your handler reads them off
+the delivered object, and skips the API read when they answer the question:
 
 ```go
 func (w *watcher) Add(ctx context.Context, obj resource.Object) error {

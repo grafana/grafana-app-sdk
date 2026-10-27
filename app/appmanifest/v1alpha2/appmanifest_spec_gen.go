@@ -81,6 +81,8 @@ type AppManifestManifestVersionKind struct {
 	SearchFields             []AppManifestSearchField              `json:"searchFields,omitempty"`
 	// storage declares storage-related behavior for this kind.
 	Storage *AppManifestManifestVersionKindStorage `json:"storage,omitempty"`
+	// watchMetadata declares the object metadata this kind's change notifications should carry.
+	WatchMetadata *AppManifestManifestVersionKindWatchMetadata `json:"watchMetadata,omitempty"`
 	// search declares which search endpoints are served for this kind.
 	// /search and /trash default to enabled; /search/hybrid and global index inclusion default to disabled.
 	Search *AppManifestManifestVersionKindSearch `json:"search,omitempty"`
@@ -272,6 +274,26 @@ func NewAppManifestSearchField() *AppManifestSearchField {
 // OpenAPIModelName returns the OpenAPI model name for AppManifestSearchField.
 func (AppManifestSearchField) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestSearchField"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindWatchMetadata struct {
+	// labels are the metadata.labels keys to announce.
+	Labels []string `json:"labels,omitempty"`
+	// annotations are the metadata.annotations keys to announce.
+	Annotations []string `json:"annotations,omitempty"`
+	// finalizers are the metadata.finalizers values to announce.
+	Finalizers []string `json:"finalizers,omitempty"`
+}
+
+// NewAppManifestManifestVersionKindWatchMetadata creates a new AppManifestManifestVersionKindWatchMetadata object.
+func NewAppManifestManifestVersionKindWatchMetadata() *AppManifestManifestVersionKindWatchMetadata {
+	return &AppManifestManifestVersionKindWatchMetadata{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindWatchMetadata.
+func (AppManifestManifestVersionKindWatchMetadata) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindWatchMetadata"
 }
 
 // +k8s:openapi-gen=true

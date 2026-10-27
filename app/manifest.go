@@ -585,6 +585,58 @@ type ManifestVersionKind struct {
 	Search *ManifestVersionKindSearch `json:"search,omitempty" yaml:"search,omitempty"`
 	// Embed defines the embedding document independently of search fields.
 	Embed *ManifestVersionKindEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
+	// WatchMetadata declares the object metadata this kind's change notifications should carry.
+	WatchMetadata *ManifestVersionKindWatchMetadata `json:"watchMetadata,omitempty" yaml:"watchMetadata,omitempty"`
+}
+
+// ManifestVersionKindWatchMetadata declares which parts of an object's metadata a kind's change notifications should
+// carry, for a platform which can announce changes out of band of the watch. Announcing a key lets a consumer decide
+// what to do without reading the object; announcing everything would make every notification carry the object, so
+// each one is named.
+//
+// It is a declaration, not a guarantee: a platform which does not announce metadata ignores it.
+type ManifestVersionKindWatchMetadata struct {
+	// Labels are the metadata.labels keys to announce.
+	Labels []string `json:"labels,omitempty" yaml:"labels,omitempty"`
+	// Annotations are the metadata.annotations keys to announce.
+	Annotations []string `json:"annotations,omitempty" yaml:"annotations,omitempty"`
+	// Finalizers are the metadata.finalizers values to announce. An app whose reconciler is opinionated announces
+	// its own finalizer here, so that a delete in progress can be told from a fresh object without a read.
+	Finalizers []string `json:"finalizers,omitempty" yaml:"finalizers,omitempty"`
+}
+
+// WatchMetadata returns the metadata each of the app's resources declares its change notifications should carry,
+// keyed by resource so that a platform can register it without walking versions itself.
+//
+// A kind's versions are unioned rather than required to match: announcing a key no version reads costs only payload
+// size, while missing one a version does read is a correctness problem. Resources which declare nothing are absent
+// from the map.
+func (m ManifestData) WatchMetadata() map[schema.GroupResource]ManifestVersionKindWatchMetadata {
+	out := map[schema.GroupResource]ManifestVersionKindWatchMetadata{}
+	for _, version := range m.Versions {
+		for _, kind := range version.Kinds {
+			if kind.WatchMetadata == nil {
+				continue
+			}
+			gr := schema.GroupResource{Group: m.Group, Resource: kind.Resource()}
+			merged := out[gr]
+			merged.Labels = appendUnique(merged.Labels, kind.WatchMetadata.Labels)
+			merged.Annotations = appendUnique(merged.Annotations, kind.WatchMetadata.Annotations)
+			merged.Finalizers = appendUnique(merged.Finalizers, kind.WatchMetadata.Finalizers)
+			out[gr] = merged
+		}
+	}
+	return out
+}
+
+// appendUnique adds the values of next which dst does not already have, preserving order.
+func appendUnique(dst, next []string) []string {
+	for _, value := range next {
+		if !slices.Contains(dst, value) {
+			dst = append(dst, value)
+		}
+	}
+	return dst
 }
 
 // ManifestVersionKindSecureValue describes a secure value used by a kind.

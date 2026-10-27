@@ -44,10 +44,10 @@ off the delivered object, to decide whether an event is a create, a sync, or a d
 absent an object which is tombstoning reads as a fresh add and an attached finalizer reads as absent, so
 `simple.App` refuses the pairing when the app is constructed rather than letting it fail at the first tombstone.
 
-A bus which announces those three fields removes the problem: declare them with
-`BusInformerConfig.AnnouncedMetadata` and the pairing is allowed, because the identity then carries what the
-opinionated path reads. The declaration is necessary because what a bus announces is an allowlist registered per
-resource, which the SDK cannot inspect.
+A bus which announces those three fields removes the problem. Declare the app's finalizer in the kind's
+`watchMetadata` and pass `simple.AnnouncedMetadataFromManifest(manifest)` to `BusInformerConfig.AnnouncedMetadata`;
+the pairing is then allowed, because the identity carries what the opinionated path reads. The declaration is
+needed because what a bus announces is an allowlist registered per resource, which the SDK cannot inspect.
 
 Otherwise: use `operator.PayloadHydrated`, which carries the whole object, or set `ReconcileOptions.UsePlain` and
 handle the deletion timestamp in your own reconcile after reading the object.

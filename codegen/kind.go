@@ -126,6 +126,17 @@ type KindEmbed struct {
 	Fields []EmbedField `json:"fields"`
 }
 
+// WatchMetadata declares which parts of an object's metadata a kind's change notifications carry, where the platform
+// can announce changes out of band of the watch.
+type WatchMetadata struct {
+	// Labels are the metadata.labels keys to announce.
+	Labels []string `json:"labels,omitempty"`
+	// Annotations are the metadata.annotations keys to announce.
+	Annotations []string `json:"annotations,omitempty"`
+	// Finalizers are the metadata.finalizers values to announce.
+	Finalizers []string `json:"finalizers,omitempty"`
+}
+
 // EmbedField supplies text for the embedding document without exposing a search field.
 type EmbedField struct {
 	Name string `json:"name"`

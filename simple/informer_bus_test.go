@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
+	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -487,4 +488,52 @@ type filteringClient struct {
 
 func (c filteringClient) ListInto(ctx context.Context, namespace string, opts resource.ListOptions, into resource.ListObject) error {
 	return c.listInto(ctx, namespace, opts, into)
+}
+
+// An app states what its bus announces once, in its kinds' manifest, rather than restating it on the informer
+// config where the two could disagree.
+func TestAnnouncedMetadataFromManifest(t *testing.T) {
+	withFinalizer := app.ManifestData{
+		Group: "g",
+		Versions: []app.ManifestVersion{{Name: "v1", Kinds: []app.ManifestVersionKind{{
+			Kind: "Foo",
+			WatchMetadata: &app.ManifestVersionKindWatchMetadata{
+				Finalizers: []string{"watchapp.grafana.app/finalizer"},
+			},
+		}}}},
+	}
+	labelsOnly := app.ManifestData{
+		Group: "g",
+		Versions: []app.ManifestVersion{{Name: "v1", Kinds: []app.ManifestVersionKind{{
+			Kind:          "Foo",
+			WatchMetadata: &app.ManifestVersionKindWatchMetadata{Labels: []string{"app"}},
+		}}}},
+	}
+
+	assert.Equal(t, operator.AnnouncedMetadata{DeletionTimestamp: true, Finalizers: true, Generation: true},
+		AnnouncedMetadataFromManifest(withFinalizer),
+		"a declared finalizer asks for the opinionated path, which the other two accompany")
+	assert.Equal(t, operator.AnnouncedMetadata{}, AnnouncedMetadataFromManifest(labelsOnly),
+		"labels alone do not make the identity enough for an opinionated watcher")
+	assert.Equal(t, operator.AnnouncedMetadata{}, AnnouncedMetadataFromManifest(app.ManifestData{}))
+}
+
+// Derived or declared, it is what decides the guard.
+func TestAnnouncedMetadataFromManifestAllowsOpinionatedPairing(t *testing.T) {
+	data := app.ManifestData{
+		Group: "g",
+		Versions: []app.ManifestVersion{{Name: "v1", Kinds: []app.ManifestVersionKind{{
+			Kind:          "Foo",
+			WatchMetadata: &app.ManifestVersionKindWatchMetadata{Finalizers: []string{"g/finalizer"}},
+		}}}},
+	}
+
+	inf, err := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{
+		AnnouncedMetadata: AnnouncedMetadataFromManifest(data),
+	})(testKind(), stubClients{}, operator.InformerOptions{})
+	require.NoError(t, err)
+
+	wrapped := inf.(*operator.ConcurrentInformer)
+	assert.True(t, wrapped.IdentityPayload())
+	assert.True(t, wrapped.DeliversOpinionatedMetadata(), "so simple.App allows the opinionated pairing")
 }

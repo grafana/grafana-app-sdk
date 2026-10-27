@@ -51,6 +51,13 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				k.UserReadable = *kind.UserReadable
 			}
 			k.FolderScoped = kind.FolderScoped
+			if kind.WatchMetadata != nil {
+				k.WatchMetadata = &app.ManifestVersionKindWatchMetadata{
+					Labels:      kind.WatchMetadata.Labels,
+					Annotations: kind.WatchMetadata.Annotations,
+					Finalizers:  kind.WatchMetadata.Finalizers,
+				}
+			}
 			if kind.Storage != nil {
 				k.Storage = &app.ManifestVersionKindStorage{ListKeys: kind.Storage.ListKeys}
 			}
@@ -391,6 +398,13 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				Conversion:       &kind.Conversion,
 				UserReadable:     &kind.UserReadable,
 				FolderScoped:     kind.FolderScoped,
+			}
+			if kind.WatchMetadata != nil {
+				k.WatchMetadata = &AppManifestManifestVersionKindWatchMetadata{
+					Labels:      kind.WatchMetadata.Labels,
+					Annotations: kind.WatchMetadata.Annotations,
+					Finalizers:  kind.WatchMetadata.Finalizers,
+				}
 			}
 			if kind.Storage != nil {
 				k.Storage = &AppManifestManifestVersionKindStorage{ListKeys: kind.Storage.ListKeys}
