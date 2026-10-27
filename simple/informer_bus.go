@@ -247,3 +247,67 @@ func PeriodicInformerSupplier(cfg PeriodicInformerConfig) InformerSupplier {
 		return operator.NewConcurrentInformerFromOptions(inf, options)
 	}
 }
+
+// ManifestInformerConfig configures InformerSupplierFromManifest: the informers it may resolve a kind's declared
+// need to, and what each of them is configured with.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+type ManifestInformerConfig struct {
+	// Subscriber is the change bus, or nil where the deployment has none. A kind which needs only a signal is
+	// served by the bus when one is configured and by Watch when it is not.
+	Subscriber resourcebus.Subscriber
+	// Bus configures the bus informers. Its Payload defaults to operator.PayloadIdentity, which is what a kind
+	// asking for a signal has said it can work with, and its AnnouncedMetadata defaults to what the manifest
+	// declares.
+	Bus BusInformerConfig
+	// Periodic configures the periodic informers a kind asking for a cadence resolves to.
+	Periodic PeriodicInformerConfig
+	// Watch supplies the watch-backed informer. A nil value uses DefaultInformerSupplier; set
+	// OptimizedInformerSupplier for kinds with large object counts.
+	Watch InformerSupplier
+}
+
+// InformerSupplierFromManifest returns an InformerSupplier which resolves each kind's declared need to the cheapest
+// informer that satisfies it and the deployment can provide.
+//
+//	objects (the default) → the watch-backed informer
+//	signal                → the bus where one is configured, the watch-backed informer otherwise
+//	cadence               → the periodic informer
+//
+// Every fallback is upward in capability, so it is always safe: a kind which needs a signal, served by a watch
+// because no bus is configured, is given strictly more than it asked for at the cost of more memory. That is why
+// the manifest states a requirement rather than naming an informer — whether a deployment runs a change bus is not
+// something an app can ship knowing.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+func InformerSupplierFromManifest(data app.ManifestData, cfg ManifestInformerConfig) InformerSupplier {
+	needs := data.WatchNeeds()
+
+	watch := cfg.Watch
+	if watch == nil {
+		watch = DefaultInformerSupplier
+	}
+	if cfg.Bus.AnnouncedMetadata == (operator.AnnouncedMetadata{}) {
+		cfg.Bus.AnnouncedMetadata = AnnouncedMetadataFromManifest(data)
+	}
+	bus := BusInformerSupplier(cfg.Subscriber, cfg.Bus)
+	periodic := PeriodicInformerSupplier(cfg.Periodic)
+
+	// The watch and the periodic informer need only the API; the bus needs a subscriber.
+	available := []app.WatchInformer{app.WatchInformerWatch, app.WatchInformerPeriodic}
+	if cfg.Subscriber != nil {
+		available = append(available, app.WatchInformerBus)
+	}
+
+	return func(kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions) (operator.Informer, error) {
+		// The rule lives on the need itself, so wiring which builds informers directly resolves identically.
+		switch needs[kind.Kind()].Resolve(available...) {
+		case app.WatchInformerPeriodic:
+			return periodic(kind, clients, options)
+		case app.WatchInformerBus:
+			return bus(kind, clients, options)
+		default: // app.WatchInformerWatch
+			return watch(kind, clients, options)
+		}
+	}
+}

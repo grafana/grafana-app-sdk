@@ -631,14 +631,17 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 		folderScoped := vk.FolderScoped
 		mver.FolderScoped = &folderScoped
 	}
-	if vk.WatchMetadata != nil {
-		mver.WatchMetadata = &app.ManifestVersionKindWatchMetadata{
-			Labels:            vk.WatchMetadata.Labels,
-			Annotations:       vk.WatchMetadata.Annotations,
-			Finalizers:        vk.WatchMetadata.Finalizers,
-			Generation:        vk.WatchMetadata.Generation,
-			CreationTimestamp: vk.WatchMetadata.CreationTimestamp,
-			DeletionTimestamp: vk.WatchMetadata.DeletionTimestamp,
+	if vk.Watch != nil {
+		mver.Watch = &app.ManifestVersionKindWatch{Needs: app.ManifestVersionKindWatchNeeds(vk.Watch.Needs)}
+		if md := vk.Watch.Metadata; md != nil {
+			mver.Watch.Metadata = &app.ManifestVersionKindWatchMetadata{
+				Labels:            md.Labels,
+				Annotations:       md.Annotations,
+				Finalizers:        md.Finalizers,
+				Generation:        md.Generation,
+				CreationTimestamp: md.CreationTimestamp,
+				DeletionTimestamp: md.DeletionTimestamp,
+			}
 		}
 	}
 	if vk.ListKeys != nil && !*vk.ListKeys {

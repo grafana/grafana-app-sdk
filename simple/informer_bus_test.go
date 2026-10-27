@@ -494,7 +494,7 @@ func (c filteringClient) ListInto(ctx context.Context, namespace string, opts re
 // config where the two could disagree.
 func TestAnnouncedMetadataFromManifest(t *testing.T) {
 	kind := func(wm *app.ManifestVersionKindWatchMetadata) app.ManifestVersionKind {
-		return app.ManifestVersionKind{Kind: "Foo", WatchMetadata: wm}
+		return app.ManifestVersionKind{Kind: "Foo", Watch: &app.ManifestVersionKindWatch{Metadata: wm}}
 	}
 	manifest := func(kinds ...app.ManifestVersionKind) app.ManifestData {
 		return app.ManifestData{Group: "g", Versions: []app.ManifestVersion{{Name: "v1", Kinds: kinds}}}
@@ -527,8 +527,8 @@ func TestAnnouncedMetadataFromManifest(t *testing.T) {
 
 	// The configuration is app-wide while an informer serves one kind, so the weakest declaring kind governs.
 	t.Run("the weakest declaring kind governs", func(t *testing.T) {
-		weaker := app.ManifestVersionKind{Kind: "Bar", WatchMetadata: &app.ManifestVersionKindWatchMetadata{
-			Finalizers: []string{"g/finalizer"},
+		weaker := app.ManifestVersionKind{Kind: "Bar", Watch: &app.ManifestVersionKindWatch{
+			Metadata: &app.ManifestVersionKindWatchMetadata{Finalizers: []string{"g/finalizer"}},
 		}}
 		assert.Equal(t, operator.AnnouncedMetadata{Finalizers: true},
 			AnnouncedMetadataFromManifest(manifest(kind(all), weaker)))
@@ -550,11 +550,11 @@ func TestAnnouncedMetadataFromManifestAllowsOpinionatedPairing(t *testing.T) {
 		Group: "g",
 		Versions: []app.ManifestVersion{{Name: "v1", Kinds: []app.ManifestVersionKind{{
 			Kind: "Foo",
-			WatchMetadata: &app.ManifestVersionKindWatchMetadata{
+			Watch: &app.ManifestVersionKindWatch{Metadata: &app.ManifestVersionKindWatchMetadata{
 				Finalizers:        []string{"g/finalizer"},
 				Generation:        true,
 				DeletionTimestamp: true,
-			},
+			}},
 		}}}},
 	}
 
@@ -566,4 +566,74 @@ func TestAnnouncedMetadataFromManifestAllowsOpinionatedPairing(t *testing.T) {
 	wrapped := inf.(*operator.ConcurrentInformer)
 	assert.True(t, wrapped.IdentityPayload())
 	assert.True(t, wrapped.DeliversOpinionatedMetadata(), "so simple.App allows the opinionated pairing")
+}
+
+// A kind declares what its handlers need and the runtime resolves it to the cheapest informer which satisfies it,
+// so the manifest never has to know whether the deployment runs a change bus.
+func TestInformerSupplierFromManifest(t *testing.T) {
+	manifest := func(needs app.ManifestVersionKindWatchNeeds) app.ManifestData {
+		kind := app.ManifestVersionKind{Kind: testKind().Kind()}
+		if needs != "" {
+			kind.Watch = &app.ManifestVersionKindWatch{Needs: needs}
+		}
+		return app.ManifestData{Group: "g", Versions: []app.ManifestVersion{{Name: "v1",
+			Kinds: []app.ManifestVersionKind{kind}}}}
+	}
+	resolve := func(t *testing.T, data app.ManifestData, cfg ManifestInformerConfig) operator.Informer {
+		t.Helper()
+		inf, err := InformerSupplierFromManifest(data, cfg)(testKind(), stubClients{}, operator.InformerOptions{})
+		require.NoError(t, err)
+		return inf
+	}
+
+	t.Run("needing objects resolves to the watch", func(t *testing.T) {
+		inf := resolve(t, manifest(app.WatchNeedsObjects), ManifestInformerConfig{Subscriber: resourcebus.NewFake()})
+		assert.IsType(t, &operator.ConcurrentInformer{}, inf)
+		assert.False(t, inf.(*operator.ConcurrentInformer).IdentityPayload(), "a watch delivers whole objects")
+	})
+
+	t.Run("declaring nothing is read as needing objects", func(t *testing.T) {
+		inf := resolve(t, manifest(""), ManifestInformerConfig{Subscriber: resourcebus.NewFake()})
+		assert.False(t, inf.(*operator.ConcurrentInformer).IdentityPayload())
+	})
+
+	t.Run("needing a signal resolves to the bus when one is configured", func(t *testing.T) {
+		inf := resolve(t, manifest(app.WatchNeedsSignal), ManifestInformerConfig{Subscriber: resourcebus.NewFake()})
+		assert.True(t, inf.(*operator.ConcurrentInformer).IdentityPayload(), "the bus serves it the cheap way")
+	})
+
+	// The fallback this whole shape exists for: no bus, so the watch serves it — strictly more than asked for.
+	t.Run("needing a signal falls back to the watch without a bus", func(t *testing.T) {
+		inf := resolve(t, manifest(app.WatchNeedsSignal), ManifestInformerConfig{})
+		assert.False(t, inf.(*operator.ConcurrentInformer).IdentityPayload())
+	})
+
+	t.Run("needing a cadence resolves to the periodic informer, bus or no bus", func(t *testing.T) {
+		for _, sub := range []resourcebus.Subscriber{resourcebus.NewFake(), nil} {
+			inf := resolve(t, manifest(app.WatchNeedsCadence), ManifestInformerConfig{Subscriber: sub})
+			assert.False(t, inf.(*operator.ConcurrentInformer).IdentityPayload(),
+				"a periodic informer declares no identity payload")
+		}
+	})
+
+	t.Run("the announced metadata defaults to what the manifest declares", func(t *testing.T) {
+		data := manifest(app.WatchNeedsSignal)
+		data.Versions[0].Kinds[0].Watch.Metadata = &app.ManifestVersionKindWatchMetadata{
+			Finalizers:        []string{"g/finalizer"},
+			Generation:        true,
+			DeletionTimestamp: true,
+		}
+
+		inf := resolve(t, data, ManifestInformerConfig{Subscriber: resourcebus.NewFake()})
+
+		assert.True(t, inf.(*operator.ConcurrentInformer).DeliversOpinionatedMetadata(),
+			"so an opinionated reconciler is allowed without restating it")
+	})
+
+	t.Run("an explicit watch supplier is used", func(t *testing.T) {
+		inf := resolve(t, manifest(app.WatchNeedsObjects), ManifestInformerConfig{
+			Watch: supplierFor(identityInformer{}),
+		})
+		assert.IsType(t, identityInformer{}, inf)
+	})
 }

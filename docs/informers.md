@@ -15,7 +15,8 @@ An informer answers two questions, and the implementations differ in how they an
 ## Choosing an informer
 
 Informers are created by an `InformerSupplier`, selected per app with `AppInformerConfig.InformerSupplier` or per
-kind with `ReconcileOptions.InformerSupplier` (the per-kind one wins). The SDK ships four:
+kind with `ReconcileOptions.InformerSupplier` (the per-kind one wins). Or let the kinds choose — see
+[Declaring what a kind needs](#declaring-what-a-kind-needs). The SDK ships four:
 
 | Supplier | Change source | Memory |
 | --- | --- | --- |
@@ -36,6 +37,45 @@ definition, since that is what it delivers.
 > [!CAUTION]
 > The bus informer, the periodic informer and the `resourcebus` contract are **experimental**. Their Go APIs may
 > change or be removed in any release. The watch-backed suppliers are not affected.
+
+## Declaring what a kind needs
+
+Which informers a deployment can offer is not something an app ships knowing: a change bus may or may not be running.
+So a kind declares in its CUE what its handlers need from the change stream, and the runtime resolves that to the
+cheapest informer which satisfies it:
+
+```cue
+watch: {
+    needs: "signal"
+    metadata: {
+        finalizers:        ["myapp.grafana.app/finalizer"]
+        generation:        true
+        deletionTimestamp: true
+    }
+}
+```
+
+| `needs` | Meaning | Resolves to |
+| --- | --- | --- |
+| `objects` (the default) | handlers read objects from the informer's cache | the watch |
+| `signal` | handlers re-read the object they act on, so knowing which one changed is enough | the bus where one is configured, the watch otherwise |
+| `cadence` | handlers re-evaluate everything on a schedule; individual changes need not arrive | the periodic informer |
+
+Pass the manifest to `simple.InformerSupplierFromManifest` and it does the resolving:
+
+```go
+InformerSupplier: simple.InformerSupplierFromManifest(manifest, simple.ManifestInformerConfig{
+    Subscriber: subscriber, // nil where the deployment runs no bus
+})
+```
+
+**Every fallback is upward in capability, so it is always safe.** A kind which needs a signal, served by a watch
+because no bus is configured, is given strictly more than it asked for — whole objects and a cache — at the cost of
+more memory. That is why the declaration names a requirement and not an informer: an app asking for "the bus" on a
+deployment without one has said something that cannot be honoured, whereas an app asking for a signal can always be
+served somehow.
+
+`AnnouncedMetadata` defaults to what the same `watch.metadata` declares, so an app states that once too.
 
 ## The bus informer
 
@@ -91,16 +131,15 @@ all of them.
 ### Announced metadata
 
 A bus may announce part of an object's metadata with the change, so a consumer can decide what to do without reading
-the object. Everything announced is opt-in, and a kind asks for it in its own CUE:
+the object. Everything announced is opt-in, and a kind asks for it in the `metadata` half of its `watch` section:
 
 ```cue
-watchMetadata: {
+watch: metadata: {
     labels:            ["app"]
     annotations:       ["myapp.grafana.app/paused"]
     finalizers:        ["myapp.grafana.app/finalizer"]
     generation:        true
     deletionTimestamp: true
-    creationTimestamp: false
 }
 ```
 

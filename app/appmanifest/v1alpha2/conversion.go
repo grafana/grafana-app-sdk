@@ -51,14 +51,20 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				k.UserReadable = *kind.UserReadable
 			}
 			k.FolderScoped = kind.FolderScoped
-			if kind.WatchMetadata != nil {
-				k.WatchMetadata = &app.ManifestVersionKindWatchMetadata{
-					Labels:            kind.WatchMetadata.Labels,
-					Annotations:       kind.WatchMetadata.Annotations,
-					Finalizers:        kind.WatchMetadata.Finalizers,
-					Generation:        kind.WatchMetadata.Generation != nil && *kind.WatchMetadata.Generation,
-					CreationTimestamp: kind.WatchMetadata.CreationTimestamp != nil && *kind.WatchMetadata.CreationTimestamp,
-					DeletionTimestamp: kind.WatchMetadata.DeletionTimestamp != nil && *kind.WatchMetadata.DeletionTimestamp,
+			if kind.Watch != nil {
+				k.Watch = &app.ManifestVersionKindWatch{}
+				if kind.Watch.Needs != nil {
+					k.Watch.Needs = app.ManifestVersionKindWatchNeeds(*kind.Watch.Needs)
+				}
+				if md := kind.Watch.Metadata; md != nil {
+					k.Watch.Metadata = &app.ManifestVersionKindWatchMetadata{
+						Labels:            md.Labels,
+						Annotations:       md.Annotations,
+						Finalizers:        md.Finalizers,
+						Generation:        md.Generation != nil && *md.Generation,
+						CreationTimestamp: md.CreationTimestamp != nil && *md.CreationTimestamp,
+						DeletionTimestamp: md.DeletionTimestamp != nil && *md.DeletionTimestamp,
+					}
 				}
 			}
 			if kind.Storage != nil {
@@ -402,21 +408,28 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				UserReadable:     &kind.UserReadable,
 				FolderScoped:     kind.FolderScoped,
 			}
-			if kind.WatchMetadata != nil {
-				k.WatchMetadata = &AppManifestManifestVersionKindWatchMetadata{
-					Labels:      kind.WatchMetadata.Labels,
-					Annotations: kind.WatchMetadata.Annotations,
-					Finalizers:  kind.WatchMetadata.Finalizers,
+			if kind.Watch != nil {
+				k.Watch = &AppManifestManifestVersionKindWatch{}
+				if kind.Watch.Needs != "" {
+					needs := string(kind.Watch.Needs)
+					k.Watch.Needs = &needs
 				}
-				// Written only when set, so a manifest which asked for nothing does not read as having opted out.
-				if kind.WatchMetadata.Generation {
-					k.WatchMetadata.Generation = &kind.WatchMetadata.Generation
-				}
-				if kind.WatchMetadata.CreationTimestamp {
-					k.WatchMetadata.CreationTimestamp = &kind.WatchMetadata.CreationTimestamp
-				}
-				if kind.WatchMetadata.DeletionTimestamp {
-					k.WatchMetadata.DeletionTimestamp = &kind.WatchMetadata.DeletionTimestamp
+				if md := kind.Watch.Metadata; md != nil {
+					k.Watch.Metadata = &AppManifestManifestVersionKindWatchMetadata{
+						Labels:      md.Labels,
+						Annotations: md.Annotations,
+						Finalizers:  md.Finalizers,
+					}
+					// Written only when set, so a manifest which asked for nothing does not read as opting out.
+					if md.Generation {
+						k.Watch.Metadata.Generation = &md.Generation
+					}
+					if md.CreationTimestamp {
+						k.Watch.Metadata.CreationTimestamp = &md.CreationTimestamp
+					}
+					if md.DeletionTimestamp {
+						k.Watch.Metadata.DeletionTimestamp = &md.DeletionTimestamp
+					}
 				}
 			}
 			if kind.Storage != nil {

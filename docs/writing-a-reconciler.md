@@ -44,7 +44,7 @@ off the delivered object, to decide whether an event is a create, a sync, or a d
 absent an object which is tombstoning reads as a fresh add and an attached finalizer reads as absent, so
 `simple.App` refuses the pairing when the app is constructed rather than letting it fail at the first tombstone.
 
-A bus which announces those three fields removes the problem. Declare them in the kind's `watchMetadata` —
+A bus which announces those three fields removes the problem. Declare them in the kind's `watch.metadata` —
 `finalizers` (including the app's own), `generation` and `deletionTimestamp` — and pass
 `simple.AnnouncedMetadataFromManifest(manifest)` to `BusInformerConfig.AnnouncedMetadata`. The pairing is then
 allowed, because the identity carries what the opinionated path reads. The declaration is needed because what a bus

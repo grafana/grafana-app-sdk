@@ -126,6 +126,14 @@ type KindEmbed struct {
 	Fields []EmbedField `json:"fields"`
 }
 
+// Watch declares how a kind's changes reach the app's handlers.
+type Watch struct {
+	// Needs is what this kind's handlers require from the change stream: "objects", "signal" or "cadence".
+	Needs string `json:"needs,omitempty"`
+	// Metadata declares the object metadata this kind's change notifications should carry.
+	Metadata *WatchMetadata `json:"metadata,omitempty"`
+}
+
 // WatchMetadata declares which parts of an object's metadata a kind's change notifications carry, where the platform
 // can announce changes out of band of the watch.
 type WatchMetadata struct {
