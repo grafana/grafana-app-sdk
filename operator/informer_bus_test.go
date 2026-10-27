@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/grafana/grafana-app-sdk/metrics"
@@ -364,9 +365,10 @@ func TestBusInformer_IdentityModeRetainsNoObjectBodies(t *testing.T) {
 	stored, ok := inf.store.Get(busTestNamespace, "x")
 	require.True(t, ok)
 	assert.Empty(t, stored.GetSpec(), "no spec is retained")
-	assert.Empty(t, stored.GetLabels(), "nor any other body")
 	assert.Equal(t, "100", stored.GetResourceVersion(), "but the version the arbitration needs is kept")
 	assert.Equal(t, busTestNamespace, stored.GetNamespace())
+	assert.Equal(t, map[string]string{"app": "test"}, stored.GetLabels(),
+		"metadata is kept, because live events carry it too")
 
 	// An identity modification keeps that identity rather than reintroducing a body.
 	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbModified, "x", "200"))
@@ -1465,4 +1467,105 @@ func TestBusInformer_DegradedStartWaitsForReadiness(t *testing.T) {
 		assert.Equal(t, float64(1), busMetricValue(t, m, "live_subscription"))
 		assert.Greater(t, lists.Load(), before, "leaving degraded mode re-lists to cover the gap")
 	})
+}
+
+// A live event carries whatever metadata the bus announced with it, so a consumer can decide without reading the
+// object — which is the point of announcing it at all.
+func TestBusInformer_LiveEventsCarryAnnouncedMetadata(t *testing.T) {
+	watcher := &recordingWatcher{}
+	inf := newBusInformer(t, resourcebus.NewFake(), staticLister(), watcher, BusInformerOptions{})
+
+	deletionTime := time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC)
+	createdTime := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	evt := busEvent(resourcebus.VerbAdded, "x", "100")
+	evt.Metadata = &resourcebus.EventMetadata{
+		Labels:            map[string]string{"app": "test"},
+		Annotations:       map[string]string{"note": "hi"},
+		Finalizers:        []string{"myapp.grafana.app/finalizer"},
+		Generation:        7,
+		CreationTimestamp: createdTime,
+		DeletionTimestamp: &deletionTime,
+	}
+
+	inf.handleEvent(context.Background(), evt)
+
+	require.Len(t, watcher.added(), 1)
+	got := watcher.added()[0]
+	assert.Equal(t, map[string]string{"app": "test"}, got.GetLabels())
+	assert.Equal(t, map[string]string{"note": "hi"}, got.GetAnnotations())
+	assert.Equal(t, []string{"myapp.grafana.app/finalizer"}, got.GetFinalizers())
+	assert.Equal(t, int64(7), got.GetGeneration())
+	assert.Equal(t, createdTime, got.GetCreationTimestamp().Time)
+	require.NotNil(t, got.GetDeletionTimestamp())
+	assert.Equal(t, deletionTime, got.GetDeletionTimestamp().Time)
+}
+
+// An event with no announced metadata leaves the identity bare: an absent field means unknown, so nothing is
+// invented for it.
+func TestBusInformer_LiveEventsWithoutMetadataDeliverBareIdentities(t *testing.T) {
+	watcher := &recordingWatcher{}
+	inf := newBusInformer(t, resourcebus.NewFake(), staticLister(), watcher, BusInformerOptions{})
+
+	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "100"))
+
+	require.Len(t, watcher.added(), 1)
+	got := watcher.added()[0]
+	assert.Empty(t, got.GetLabels())
+	assert.Empty(t, got.GetFinalizers())
+	assert.Zero(t, got.GetGeneration())
+	assert.Nil(t, got.GetDeletionTimestamp())
+}
+
+// What the bus announces decides whether an identity payload is enough for an opinionated reconciler or watcher,
+// since the SDK cannot see the allowlist the resource owner registered.
+func TestBusInformer_DeliversOpinionatedMetadata(t *testing.T) {
+	complete := AnnouncedMetadata{DeletionTimestamp: true, Finalizers: true, Generation: true}
+
+	for _, tt := range []struct {
+		name string
+		opts BusInformerOptions
+		want bool
+	}{
+		{"identity with nothing announced", BusInformerOptions{}, false},
+		{"identity missing finalizers", BusInformerOptions{
+			AnnouncedMetadata: AnnouncedMetadata{DeletionTimestamp: true, Generation: true},
+		}, false},
+		{"identity missing the deletion timestamp", BusInformerOptions{
+			AnnouncedMetadata: AnnouncedMetadata{Finalizers: true, Generation: true},
+		}, false},
+		{"identity with all three announced", BusInformerOptions{AnnouncedMetadata: complete}, true},
+		{"hydrated carries the whole object", BusInformerOptions{
+			Payload: PayloadHydrated,
+			Getter:  &fakeGetter{objects: map[string]resource.Object{}},
+		}, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			inf := newBusInformer(t, resourcebus.NewFake(), staticLister(), nil, tt.opts)
+			assert.Equal(t, tt.want, inf.DeliversOpinionatedMetadata())
+		})
+	}
+}
+
+// A re-list must not deliver less than the live stream: the identity projection keeps the metadata events carry.
+func TestBusInformer_RelistIdentitiesKeepAnnouncedMetadata(t *testing.T) {
+	deletionTime := metav1.NewTime(time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC))
+	listed := busObjRV("x", 100)
+	listed.Spec = map[string]any{"field": "value"}
+	listed.Labels = map[string]string{"app": "test"}
+	listed.Finalizers = []string{"myapp.grafana.app/finalizer"}
+	listed.Generation = 7
+	listed.DeletionTimestamp = &deletionTime
+
+	watcher := &recordingWatcher{}
+	inf := newBusInformer(t, resourcebus.NewFake(), staticLister(listed), watcher, BusInformerOptions{})
+
+	require.NoError(t, inf.relist(context.Background(), initialRelist))
+
+	require.Len(t, watcher.added(), 1)
+	got := watcher.added()[0]
+	assert.Empty(t, got.GetSpec(), "the body is still dropped")
+	assert.Equal(t, map[string]string{"app": "test"}, got.GetLabels())
+	assert.Equal(t, []string{"myapp.grafana.app/finalizer"}, got.GetFinalizers())
+	assert.Equal(t, int64(7), got.GetGeneration())
+	require.NotNil(t, got.GetDeletionTimestamp())
 }

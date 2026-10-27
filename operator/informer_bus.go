@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -66,6 +69,29 @@ const (
 	periodicRelist
 )
 
+// AnnouncedMetadata declares which parts of an object's metadata an app's bus announces with each event. A bus
+// announces an allowlisted selection chosen per resource by its owner, and the SDK cannot see that registration —
+// so an adopter states here what it has arranged, and the SDK takes it at its word.
+//
+// It exists because an opinionated reconciler or watcher reads three fields off the delivered object and silently
+// misbehaves when they are absent: a tombstoning object reads as a fresh add and an attached finalizer as absent.
+// Declaring them is what lets that pairing be allowed on an identity payload at all.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+type AnnouncedMetadata struct {
+	// DeletionTimestamp is announced, so a delete in progress is visible without reading the object.
+	DeletionTimestamp bool
+	// Finalizers are announced, and include the app's own, so a watcher can tell whether its finalizer is attached.
+	Finalizers bool
+	// Generation is announced, so a spec change can be told from a subresource one.
+	Generation bool
+}
+
+// SupportsOpinionated reports whether every field an opinionated reconciler or watcher reads is announced.
+func (a AnnouncedMetadata) SupportsOpinionated() bool {
+	return a.DeletionTimestamp && a.Finalizers && a.Generation
+}
+
 // BusObjectGetter reads a single object, for the hydrated payload mode. resource.Client satisfies it.
 //
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
@@ -121,6 +147,9 @@ type BusInformerOptions struct {
 	// OverflowRelistInterval is the shortest gap between re-lists triggered by a dropped event. A non-positive
 	// value uses DefaultBusOverflowRelistInterval. See EventQueueSize.
 	OverflowRelistInterval time.Duration
+	// AnnouncedMetadata declares what the bus announces with each event, which decides whether an identity payload
+	// is enough for an opinionated reconciler or watcher. See AnnouncedMetadata.
+	AnnouncedMetadata AnnouncedMetadata
 	// Metrics are the shared delivery metrics. A nil value disables observation.
 	Metrics *BusInformerMetrics
 }
@@ -239,6 +268,13 @@ func (b *BusInformer) logger(ctx context.Context) logging.Logger {
 
 // IdentityPayload reports whether the informer delivers identity-only objects.
 func (b *BusInformer) IdentityPayload() bool { return b.opts.Payload == PayloadIdentity }
+
+// DeliversOpinionatedMetadata reports whether the objects it delivers carry what an opinionated reconciler or
+// watcher reads: the deletion timestamp, the finalizer list and the generation. A hydrated payload carries the whole
+// object and so always does; an identity payload does only where the bus announces those fields.
+func (b *BusInformer) DeliversOpinionatedMetadata() bool {
+	return b.opts.Payload == PayloadHydrated || b.opts.AnnouncedMetadata.SupportsOpinionated()
+}
 
 // AddEventHandler adds a ResourceWatcher as an event handler. There is no cache to replay, so a watcher added after
 // Run only sees events from the next live event or re-list; add every watcher before Run.
@@ -622,21 +658,61 @@ func (b *BusInformer) payloadObject(ctx context.Context, evt resourcebus.Event) 
 	return obj, nil
 }
 
-// toIdentities projects listed objects onto their identities, in place, so the snapshot retains no object bodies.
+// toIdentities projects listed objects onto their identity and metadata, in place, so the snapshot retains no spec
+// or subresources. The metadata is kept because live events carry it: dropping it here would make a re-list deliver
+// less than the live stream, which is the inconsistency the hydrated payload is warned about.
 func (b *BusInformer) toIdentities(objs []resource.Object) []resource.Object {
 	for i, obj := range objs {
 		if obj == nil {
 			continue
 		}
-		objs[i] = NewIdentityObject(b.kind, obj.GetNamespace(), obj.GetName(), obj.GetResourceVersion())
+		identity := NewIdentityObject(b.kind, obj.GetNamespace(), obj.GetName(), obj.GetResourceVersion())
+		identity.SetLabels(obj.GetLabels())
+		identity.SetAnnotations(obj.GetAnnotations())
+		identity.SetFinalizers(obj.GetFinalizers())
+		identity.SetGeneration(obj.GetGeneration())
+		identity.SetCreationTimestamp(obj.GetCreationTimestamp())
+		identity.SetDeletionTimestamp(obj.GetDeletionTimestamp())
+		identity.SetUID(obj.GetUID())
+		objs[i] = identity
 	}
 	return objs
 }
 
-// identityObject is the kind's zero value carrying the event's identity, which is all a consumer needs to read the
-// object for itself.
+// identityObject is the kind's zero value carrying the event's identity, plus whatever metadata the bus announced
+// with it — which is all a consumer needs to decide, or to read the object for itself.
 func (b *BusInformer) identityObject(evt resourcebus.Event) resource.Object {
-	return NewIdentityObject(b.kind, evt.Namespace, evt.Name, evt.ResourceVersion)
+	obj := NewIdentityObject(b.kind, evt.Namespace, evt.Name, evt.ResourceVersion)
+	applyEventMetadata(obj, evt.Metadata)
+	return obj
+}
+
+// applyEventMetadata copies an event's announced metadata onto the object delivered for it. An absent field is left
+// at the object's zero value, which reads the same as unset — the ambiguity is the contract's, since a bus
+// announces a selection and the SDK cannot see which.
+func applyEventMetadata(obj resource.Object, md *resourcebus.EventMetadata) {
+	if md == nil {
+		return
+	}
+	if len(md.Labels) > 0 {
+		obj.SetLabels(maps.Clone(md.Labels))
+	}
+	if len(md.Annotations) > 0 {
+		obj.SetAnnotations(maps.Clone(md.Annotations))
+	}
+	if len(md.Finalizers) > 0 {
+		obj.SetFinalizers(slices.Clone(md.Finalizers))
+	}
+	if md.Generation != 0 {
+		obj.SetGeneration(md.Generation)
+	}
+	if !md.CreationTimestamp.IsZero() {
+		obj.SetCreationTimestamp(metav1.NewTime(md.CreationTimestamp))
+	}
+	if md.DeletionTimestamp != nil {
+		deletionTime := metav1.NewTime(*md.DeletionTimestamp)
+		obj.SetDeletionTimestamp(&deletionTime)
+	}
 }
 
 // relist reads the full set and dispatches the diff against the previous snapshot. On the initial list the snapshot

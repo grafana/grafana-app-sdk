@@ -15,6 +15,7 @@ import (
 // finalizer list off the delivered object and would see both as absent.
 type identityPayloadInformer interface {
 	IdentityPayload() bool
+	DeliversOpinionatedMetadata() bool
 }
 
 var _ identityPayloadInformer = (*operator.BusInformer)(nil)
@@ -36,6 +37,10 @@ type BusInformerConfig struct {
 	// AllowDegradedStart lets an informer start re-list-only when the bus is unavailable, instead of holding its
 	// initial list until a subscription opens. See operator.BusInformerOptions.AllowDegradedStart.
 	AllowDegradedStart bool
+	// AnnouncedMetadata declares what this app's bus announces with each event. Declaring the deletion timestamp,
+	// finalizers and generation is what lets an identity payload be used with an opinionated reconciler or watcher,
+	// which read those off the delivered object. See operator.AnnouncedMetadata.
+	AnnouncedMetadata operator.AnnouncedMetadata
 	// PageSize is the page size the default lister requests. An empty value uses operator.DefaultListerPageSize.
 	PageSize int
 	// KeyListerFactory builds a ResourceKeyLister for a kind, for a server which can list identities without object
@@ -106,6 +111,7 @@ func BusInformerSupplier(sub resourcebus.Subscriber, cfg BusInformerConfig) Info
 			ResyncInterval:     cfg.ResyncInterval,
 			Group:              cfg.Group,
 			AllowDegradedStart: cfg.AllowDegradedStart,
+			AnnouncedMetadata:  cfg.AnnouncedMetadata,
 			ErrorHandler:       options.ErrorHandler,
 			Metrics:            busMetrics,
 		})

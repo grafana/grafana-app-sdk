@@ -39,14 +39,18 @@ premise that a reconcile reads the object it acts on for itself (see [Informers]
 > The bus informer and the `resourcebus` contract are **experimental**. Their Go APIs may change or be removed in any
 > release.
 
-The `Opinionated` variants cannot be used with such a source. `OpinionatedWatcher` and `OpinionatedReconciler` read
-the deletion timestamp and the finalizer list off the delivered object to decide whether an event is a create, a
-sync, or a delete in progress. On an identity object both are empty, so an object which is tombstoning reads as a
-fresh add and an attached finalizer reads as absent.
+`OpinionatedWatcher` and `OpinionatedReconciler` read the deletion timestamp, the finalizer list and the generation
+off the delivered object, to decide whether an event is a create, a sync, or a delete in progress. Where those are
+absent an object which is tombstoning reads as a fresh add and an attached finalizer reads as absent, so
+`simple.App` refuses the pairing when the app is constructed rather than letting it fail at the first tombstone.
 
-`simple.App` refuses the pairing when the app is constructed, rather than letting it fail at the first tombstone. If
-you need the opinionated behaviour, use `operator.PayloadHydrated`; if you need the identity payload, set
-`ReconcileOptions.UsePlain` and handle the deletion timestamp in your own reconcile, after reading the object.
+A bus which announces those three fields removes the problem: declare them with
+`BusInformerConfig.AnnouncedMetadata` and the pairing is allowed, because the identity then carries what the
+opinionated path reads. The declaration is necessary because what a bus announces is an allowlist registered per
+resource, which the SDK cannot inspect.
+
+Otherwise: use `operator.PayloadHydrated`, which carries the whole object, or set `ReconcileOptions.UsePlain` and
+handle the deletion timestamp in your own reconcile after reading the object.
 
 ## An Example Reconciler
 

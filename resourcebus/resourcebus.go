@@ -11,6 +11,7 @@ package resourcebus
 
 import (
 	"context"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -43,6 +44,36 @@ type Event struct {
 	// consumers which need to order changes must document their own assumption about its format,
 	// and degrade when it does not hold.
 	ResourceVersion string
+	// Metadata is the subset of the object's metadata the bus announced, or nil when it announced none.
+	// See EventMetadata.
+	Metadata *EventMetadata
+}
+
+// EventMetadata is the part of an object's metadata an Event carries, so that a subscriber can decide what to do
+// without reading the object.
+//
+// A bus announces a selection, not the whole of it: which keys are carried is the resource owner's choice, and a
+// resource nothing was registered for carries none at all. Every field is therefore optional, and an absent one
+// means unknown rather than empty — an empty Finalizers does not say the object has no finalizers, only that none
+// were announced. A consumer whose correctness depends on a field must know it is announced for that resource, or
+// read the object instead.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+type EventMetadata struct {
+	// Labels announced for the object, a selection of metadata.labels.
+	Labels map[string]string
+	// Annotations announced for the object, a selection of metadata.annotations.
+	Annotations map[string]string
+	// Finalizers announced for the object, a selection of metadata.finalizers. With DeletionTimestamp it says
+	// whether a pending delete is still waiting on one.
+	Finalizers []string
+	// Generation is metadata.generation, or 0 when not announced.
+	Generation int64
+	// CreationTimestamp is metadata.creationTimestamp; its zero value means not announced.
+	CreationTimestamp time.Time
+	// DeletionTimestamp is metadata.deletionTimestamp. Nil means the object is not being deleted, or that the
+	// timestamp was not announced — a consumer which has to tell those apart reads the object.
+	DeletionTimestamp *time.Time
 }
 
 // Subscriber opens subscriptions to a bus which announces resource changes.

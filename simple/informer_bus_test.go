@@ -23,10 +23,13 @@ import (
 // wiring tests.
 type identityInformer struct {
 	mockInformer
-	identity bool
+	identity                bool
+	announcedForOpinionated bool
 }
 
 func (i identityInformer) IdentityPayload() bool { return i.identity }
+
+func (i identityInformer) DeliversOpinionatedMetadata() bool { return i.announcedForOpinionated }
 
 func supplierFor(inf operator.Informer) InformerSupplier {
 	return func(resource.Kind, resource.ClientGenerator, operator.InformerOptions) (operator.Informer, error) {
@@ -221,6 +224,16 @@ func TestApp_RejectsIdentityPayloadWithOpinionated(t *testing.T) {
 				}},
 			},
 			wantErr: true,
+		},
+		{
+			name: "an identity payload whose bus announces what the opinionated path reads",
+			kind: AppManagedKind{
+				Kind:       testKind(),
+				Reconciler: &Reconciler{},
+				ReconcileOptions: BasicReconcileOptions{InformerSupplier: supplierFor(
+					identityInformer{identity: true, announcedForOpinionated: true},
+				)},
+			},
 		},
 		{
 			name: "an informer which declares no payload",

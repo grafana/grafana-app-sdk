@@ -78,13 +78,26 @@ all of them.
 
 `BusInformerConfig.Payload` decides what a live event delivers:
 
-* `operator.PayloadIdentity` (the default) delivers the kind's zero value with namespace, name and resource version
-  set, and nothing else. It costs no API request per event and suits a reconciler which treats the event as a signal
-  and reads the object itself. It **cannot** be combined with an opinionated reconciler or watcher — see
+* `operator.PayloadIdentity` (the default) delivers the kind's zero value carrying namespace, name, resource version
+  and whatever metadata the bus announced with the event. It costs no API request per event and suits a reconciler
+  which treats the event as a signal and reads the object itself. Pairing it with an opinionated reconciler or
+  watcher needs `AnnouncedMetadata` — see
   [Writing a Reconciler](writing-a-reconciler.md#identity-payloads-and-opinionated-reconcilers).
 * `operator.PayloadHydrated` reads the object from the API before dispatching, so handlers receive a full object as
   they would from a watch, at one request per event. An event whose object cannot be read is dropped and reported to
   the error handler; the delete arrives as its own event or on the next re-list.
+
+### Announced metadata
+
+A bus may announce part of an object's metadata alongside the change: labels, annotations, finalizers, the
+generation, and the creation and deletion timestamps. The informer copies whatever arrives onto the delivered
+object, and the identity projection keeps the same fields, so a re-list never delivers less than the live stream.
+
+What is announced is an allowlist the resource's owner registers, so **an absent field means unknown, not empty** —
+an empty finalizer list does not say the object has no finalizers. The SDK cannot see that registration, so an app
+which relies on a field declares it with `BusInformerConfig.AnnouncedMetadata`. Declaring the deletion timestamp,
+finalizers and generation is what lets an identity payload be used with an opinionated reconciler or watcher, which
+read exactly those three.
 
 ### Listing
 
