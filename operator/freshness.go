@@ -368,3 +368,30 @@ func (w announcementWatcher) record(ctx context.Context, obj resource.Object) {
 func identifierOf(obj resource.Object) resource.Identifier {
 	return resource.Identifier{Namespace: obj.GetNamespace(), Name: obj.GetName()}
 }
+
+// ObserveRead runs a read and records how its result compared to the version a live event announced for the object,
+// which is the whole of what a consumer has to do to wire read-freshness around its own reads: sample the
+// announcement before issuing the read, then observe the pair.
+//
+// The result passes through untouched, error and all, so it reads as the read it wraps:
+//
+//	repo, err := operator.ObserveRead(ctx, tracker, recorder, id, func(ctx context.Context) (*v1.Repository, error) {
+//	    return client.Repositories(id.Namespace).Get(ctx, id.Name, metav1.GetOptions{})
+//	})
+//
+// A nil tracker skips the observation, so a deployment with read-freshness switched off needs no second code path.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+func ObserveRead[T resource.Object](
+	ctx context.Context, tracker *AnnouncementTracker, recorder FreshnessRecorder,
+	id resource.Identifier, read func(context.Context) (T, error),
+) (T, error) {
+	if tracker == nil {
+		return read(ctx)
+	}
+	// Sampled before the read is issued; see the top of the file.
+	announced := tracker.Announced(id)
+	obj, err := read(ctx)
+	recorder.Observe(ctx, id, announced, obj, err)
+	return obj, err
+}

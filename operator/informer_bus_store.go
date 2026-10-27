@@ -62,6 +62,24 @@ func (s *busStore) Identifiers() []resource.Identifier {
 	return out
 }
 
+// Count returns how many objects the store holds in a namespace, or in every namespace when it is empty. It walks
+// the map rather than indexing by namespace: the store holds one entry per object and the walk serves a count taken
+// per reconcile at most, so an index would cost more to maintain than it saves.
+func (s *busStore) Count(namespace string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if namespace == "" {
+		return len(s.items)
+	}
+	count := 0
+	for _, e := range s.items {
+		if e.obj.GetNamespace() == namespace {
+			count++
+		}
+	}
+	return count
+}
+
 // Get returns the stored object for a namespace and name, if there is one.
 func (s *busStore) Get(namespace, name string) (resource.Object, bool) {
 	s.mu.Lock()

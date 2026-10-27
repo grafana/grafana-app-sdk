@@ -959,21 +959,21 @@ func busMetricValue(t *testing.T, m *BusInformerMetrics, name string, extra ...s
 	labels := append(append([]string(nil), busKindLabels...), extra...)
 	switch name {
 	case "live_events":
-		return testutil.ToFloat64(m.liveEvents.WithLabelValues(labels...))
+		return testutil.ToFloat64(m.delivery.liveEvents.WithLabelValues(labels...))
 	case "relist_events":
-		return testutil.ToFloat64(m.relistEvents.WithLabelValues(labels...))
+		return testutil.ToFloat64(m.delivery.relistEvents.WithLabelValues(labels...))
 	case "reconnects":
 		return testutil.ToFloat64(m.reconnects.WithLabelValues(labels...))
 	case "live_subscription":
 		return testutil.ToFloat64(m.liveSubscription.WithLabelValues(labels...))
 	case "relist_requests":
-		return testutil.ToFloat64(m.relistRequests.WithLabelValues(labels...))
+		return testutil.ToFloat64(m.delivery.relistRequests.WithLabelValues(labels...))
 	case "superseded_events":
 		return testutil.ToFloat64(m.supersededEvents.WithLabelValues(labels...))
 	case "dropped_events":
 		return testutil.ToFloat64(m.droppedEvents.WithLabelValues(labels...))
 	case "relist_projection":
-		return testutil.ToFloat64(m.relistProjection.WithLabelValues(labels...))
+		return testutil.ToFloat64(m.delivery.relistProjection.WithLabelValues(labels...))
 	}
 	t.Fatalf("unknown metric %q", name)
 	return 0
@@ -1001,17 +1001,17 @@ func TestBusInformer_MetricsSeparateLiveFromRelist(t *testing.T) {
 	require.NoError(t, inf.relist(context.Background(), periodicRelist))
 	require.NoError(t, inf.relist(context.Background(), periodicRelist))
 
-	assert.Equal(t, float64(2), busMetricValue(t, m, "relist_events", busVerbAdd), "a on the initial list, b recovered")
-	assert.Equal(t, float64(2), busMetricValue(t, m, "relist_events", busVerbUpdate), "a retained twice")
-	assert.Equal(t, float64(1), busMetricValue(t, m, "relist_events", busVerbDelete), "b vanished")
-	assert.Zero(t, busMetricValue(t, m, "live_events", busVerbAdd), "re-list deliveries are not live events")
+	assert.Equal(t, float64(2), busMetricValue(t, m, "relist_events", deliveryVerbAdd), "a on the initial list, b recovered")
+	assert.Equal(t, float64(2), busMetricValue(t, m, "relist_events", deliveryVerbUpdate), "a retained twice")
+	assert.Equal(t, float64(1), busMetricValue(t, m, "relist_events", deliveryVerbDelete), "b vanished")
+	assert.Zero(t, busMetricValue(t, m, "live_events", deliveryVerbAdd), "re-list deliveries are not live events")
 
 	for _, verb := range []resourcebus.Verb{resourcebus.VerbAdded, resourcebus.VerbModified, resourcebus.VerbDeleted} {
 		inf.handleEvent(context.Background(), busEvent(verb, "x", "101"))
 	}
-	assert.Equal(t, float64(1), busMetricValue(t, m, "live_events", busVerbAdd))
-	assert.Equal(t, float64(1), busMetricValue(t, m, "live_events", busVerbUpdate))
-	assert.Equal(t, float64(1), busMetricValue(t, m, "live_events", busVerbDelete))
+	assert.Equal(t, float64(1), busMetricValue(t, m, "live_events", deliveryVerbAdd))
+	assert.Equal(t, float64(1), busMetricValue(t, m, "live_events", deliveryVerbUpdate))
+	assert.Equal(t, float64(1), busMetricValue(t, m, "live_events", deliveryVerbDelete))
 }
 
 // Latency is only observed where the version dates the change: not for the initial list, not for a re-delivery of an
@@ -1030,17 +1030,17 @@ func TestBusInformer_MetricsLatencyOnlyWhereVersionDatesTheChange(t *testing.T) 
 	inf := newBusInformer(t, resourcebus.NewFake(), lister, &recordingWatcher{}, BusInformerOptions{Metrics: m})
 
 	require.NoError(t, inf.relist(context.Background(), initialRelist))
-	assert.Zero(t, testutil.CollectAndCount(m.relistLatency), "the initial list carries no latency")
+	assert.Zero(t, testutil.CollectAndCount(m.delivery.relistLatency), "the initial list carries no latency")
 
 	require.NoError(t, inf.relist(context.Background(), periodicRelist))
-	assert.Equal(t, 1, testutil.CollectAndCount(m.relistLatency), "only the recovered add is timed")
+	assert.Equal(t, 1, testutil.CollectAndCount(m.delivery.relistLatency), "only the recovered add is timed")
 
 	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "opaque"))
-	assert.Zero(t, testutil.CollectAndCount(m.liveLatency), "an opaque version cannot date the change")
-	assert.Equal(t, float64(1), busMetricValue(t, m, "live_events", busVerbAdd), "but the event is still counted")
+	assert.Zero(t, testutil.CollectAndCount(m.delivery.liveLatency), "an opaque version cannot date the change")
+	assert.Equal(t, float64(1), busMetricValue(t, m, "live_events", deliveryVerbAdd), "but the event is still counted")
 
 	inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "y", fmt.Sprint(recent)))
-	assert.Equal(t, 1, testutil.CollectAndCount(m.liveLatency))
+	assert.Equal(t, 1, testutil.CollectAndCount(m.delivery.liveLatency))
 }
 
 // The subscription gauge tracks what the informer can see: closed until the subscription opens, open once it does,
@@ -1718,4 +1718,88 @@ func TestNewBusInformer_SelectorValidation(t *testing.T) {
 		assert.Nil(t, inf.matcher, "an unfiltered informer pays nothing")
 		assert.True(t, inf.matcher.Matches(busObj("anything")), "and a nil matcher accepts everything")
 	})
+}
+
+// A count served from the snapshot is what a quota check reads instead of an API list per reconcile.
+func TestBusInformer_CountObserveAndForget(t *testing.T) {
+	inf := newBusInformer(t, resourcebus.NewFake(), staticLister(busObjRV("a", 10)), nil, BusInformerOptions{})
+	require.NoError(t, inf.relist(context.Background(), initialRelist))
+	require.Equal(t, 1, inf.Count(busTestNamespace))
+
+	t.Run("an object the consumer read for itself is counted before the next re-list", func(t *testing.T) {
+		inf.Observe(busObjRV("b", 20))
+		assert.Equal(t, 2, inf.Count(busTestNamespace))
+		assert.Equal(t, 2, inf.Count(""), "every namespace")
+		assert.ElementsMatch(t, []string{"a", "b"}, identifierNames(inf.Snapshot()))
+	})
+
+	t.Run("observing dispatches nothing", func(t *testing.T) {
+		watcher := &recordingWatcher{}
+		require.NoError(t, inf.AddEventHandler(watcher))
+		inf.Observe(busObjRV("c", 30))
+		assert.Empty(t, watcher.addedNames(), "the consumer is already handling the object")
+		inf.Forget(resource.Identifier{Namespace: busTestNamespace, Name: "c"})
+	})
+
+	t.Run("an absent object stops being counted", func(t *testing.T) {
+		inf.Forget(resource.Identifier{Namespace: busTestNamespace, Name: "b"})
+		assert.Equal(t, 1, inf.Count(busTestNamespace))
+	})
+
+	// Without this a repository created and then deleted while its delete went to another replica would be counted
+	// for as long as the process ran.
+	t.Run("a re-list absorbs an observed object which is gone", func(t *testing.T) {
+		inf.Observe(busObjRV("d", 40))
+		require.Equal(t, 2, inf.Count(busTestNamespace))
+		require.NoError(t, inf.relist(context.Background(), periodicRelist))
+		assert.Equal(t, 1, inf.Count(busTestNamespace), "the list is authoritative about what is gone")
+	})
+}
+
+// A stale read must not roll the snapshot back, and a read of an object the app does not watch must not enter it.
+func TestBusInformer_ObserveIsArbitratedLikeALiveEvent(t *testing.T) {
+	t.Run("a read older than what is held is refused", func(t *testing.T) {
+		inf := newBusInformer(t, resourcebus.NewFake(), staticLister(busObjRV("a", 20)), nil, BusInformerOptions{})
+		require.NoError(t, inf.relist(context.Background(), initialRelist))
+		inf.Observe(busObjRV("a", 10))
+		held, ok := inf.store.Get(busTestNamespace, "a")
+		require.True(t, ok)
+		assert.Equal(t, "20", held.GetResourceVersion())
+	})
+
+	t.Run("a read the selectors exclude is refused", func(t *testing.T) {
+		inf := newBusInformer(t, resourcebus.NewFake(), staticLister(), nil, BusInformerOptions{
+			ListWatchOptions:  ListWatchOptions{LabelFilters: []string{"app=test"}},
+			AnnouncedMetadata: AnnouncedMetadata{Labels: []string{"app"}},
+		})
+		inf.Observe(busObjRV("a", 10))
+		assert.Zero(t, inf.Count(""))
+
+		labeled := busObjRV("b", 10)
+		labeled.SetLabels(map[string]string{"app": "test"})
+		inf.Observe(labeled)
+		assert.Equal(t, 1, inf.Count(""))
+	})
+
+	// In identity mode the snapshot holds identities whatever it was handed, so a read of a full object does not
+	// make steady-state memory scale with payload size.
+	t.Run("an identity payload stores the identity, not the object read", func(t *testing.T) {
+		inf := newBusInformer(t, resourcebus.NewFake(), staticLister(), nil, BusInformerOptions{})
+		obj := busObjRV("a", 10)
+		obj.SetAnnotations(map[string]string{"kept": "yes"})
+		inf.Observe(obj)
+
+		held, ok := inf.store.Get(busTestNamespace, "a")
+		require.True(t, ok)
+		assert.NotSame(t, obj, held)
+		assert.Equal(t, map[string]string{"kept": "yes"}, held.GetAnnotations())
+	})
+}
+
+func identifierNames(ids []resource.Identifier) []string {
+	out := make([]string, len(ids))
+	for i, id := range ids {
+		out[i] = id.Name
+	}
+	return out
 }

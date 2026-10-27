@@ -247,3 +247,50 @@ func TestAnnouncementTracker_Watcher(t *testing.T) {
 		assert.Zero(t, tracker.Announced(freshID("listed")))
 	})
 }
+
+// ObserveRead is the sample-before-read wrapper, so a consumer writes one line rather than its own getter type.
+func TestObserveRead(t *testing.T) {
+	id := resource.Identifier{Namespace: busTestNamespace, Name: "a"}
+	obj := busObjRV("a", 10)
+
+	t.Run("records the read against the version announced before it was issued", func(t *testing.T) {
+		m := newFreshnessMetrics()
+		tracker := NewAnnouncementTracker(AnnouncementTrackerOptions{})
+		tracker.Announce(id, "20")
+
+		read, err := ObserveRead(context.Background(), tracker, m.Recorder(busTestKind), id,
+			func(context.Context) (*resource.UntypedObject, error) { return obj, nil })
+
+		require.NoError(t, err)
+		assert.Same(t, obj, read, "the result passes through untouched")
+		assert.Equal(t, float64(1), freshnessCount(m, freshnessBehind))
+	})
+
+	t.Run("passes a failure through and records nothing for it", func(t *testing.T) {
+		m := newFreshnessMetrics()
+		tracker := NewAnnouncementTracker(AnnouncementTrackerOptions{})
+		tracker.Announce(id, "20")
+		wanted := errors.New("api is down")
+
+		_, err := ObserveRead(context.Background(), tracker, m.Recorder(busTestKind), id,
+			func(context.Context) (*resource.UntypedObject, error) { return nil, wanted })
+
+		assert.ErrorIs(t, err, wanted)
+		assert.Zero(t, freshnessCount(m, freshnessBehind))
+		assert.Zero(t, freshnessCount(m, freshnessNotFound))
+	})
+
+	// A deployment with read-freshness switched off reads through the same call site.
+	t.Run("a nil tracker reads without observing", func(t *testing.T) {
+		var calls int
+		read, err := ObserveRead(context.Background(), nil, FreshnessRecorder{}, id,
+			func(context.Context) (*resource.UntypedObject, error) {
+				calls++
+				return obj, nil
+			})
+
+		require.NoError(t, err)
+		assert.Same(t, obj, read)
+		assert.Equal(t, 1, calls)
+	})
+}

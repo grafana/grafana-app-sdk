@@ -93,7 +93,7 @@ func BusInformerSupplier(sub resourcebus.Subscriber, cfg BusInformerConfig) Info
 		})
 	}
 	return func(kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions) (operator.Informer, error) {
-		client, err := clients.ClientFor(kind)
+		client, err := cfg.client(kind, clients)
 		if err != nil {
 			return nil, err
 		}
@@ -128,6 +128,19 @@ func BusInformerSupplier(sub resourcebus.Subscriber, cfg BusInformerConfig) Info
 		// the recovery it depends on. Ordering per object is preserved, since a key always lands on one worker.
 		return operator.NewConcurrentInformerFromOptions(inf, options)
 	}
+}
+
+// client resolves the kind's SDK client, or nothing where the configuration needs none: with ListerFactory set and
+// an identity payload the supplier reads nothing through it, so wiring outside an App — which has no
+// resource.ClientGenerator to hand it, only its own client-go clients — can pass nil and still use the supplier.
+func (c BusInformerConfig) client(kind resource.Kind, clients resource.ClientGenerator) (resource.Client, error) {
+	if c.ListerFactory != nil && c.Payload != operator.PayloadHydrated {
+		return nil, nil
+	}
+	if clients == nil {
+		return nil, errors.New("a client generator is required to list the kind and to hydrate its events")
+	}
+	return clients.ClientFor(kind)
 }
 
 func (c BusInformerConfig) lister(kind resource.Kind, client resource.Client, opts operator.ClientListerOptions) (operator.ResourceLister, error) {
@@ -217,9 +230,10 @@ type PeriodicInformerConfig struct {
 	// ListerFactory replaces the ResourceLister for a kind. When nil, a paginated list over the kind's client is
 	// used, which applies the namespace and selectors the informer was configured with.
 	ListerFactory func(kind resource.Kind, client resource.Client, opts operator.ClientListerOptions) (operator.ResourceLister, error)
-	// Metrics are the collectors the suppliers' informers share, for the re-list request and projection counters.
-	// When nil, one set is built from MetricsConfig. See BusInformerConfig.Metrics.
-	Metrics *operator.BusInformerMetrics
+	// Metrics are the collectors the suppliers' informers share. Set it to the instance the process's other
+	// informers use, so that a kind which moves between informers keeps its series. When nil, one set is built
+	// from MetricsConfig.
+	Metrics *operator.InformerDeliveryMetrics
 	// MetricsConfig controls the namespace of the collectors built when Metrics is nil.
 	MetricsConfig metrics.Config
 }
@@ -235,23 +249,31 @@ type PeriodicInformerConfig struct {
 func PeriodicInformerSupplier(cfg PeriodicInformerConfig) InformerSupplier {
 	listMetrics := cfg.Metrics
 	if listMetrics == nil {
-		listMetrics = operator.NewBusInformerMetrics(operator.BusInformerMetricsConfig{
+		listMetrics = operator.NewInformerDeliveryMetrics(operator.InformerDeliveryMetricsConfig{
 			MetricsConfig: cfg.MetricsConfig,
 		})
 	}
 	return func(kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions) (operator.Informer, error) {
-		client, err := clients.ClientFor(kind)
-		if err != nil {
-			return nil, err
-		}
-
 		listerOpts := operator.ClientListerOptions{
 			ListWatchOptions: options.ListWatchOptions,
 			PageSize:         cfg.PageSize,
 			Recorder:         listMetrics.RelistRecorder(kind),
 		}
-		lister, err := operator.NewClientLister(client, kind, listerOpts)
-		if cfg.ListerFactory != nil {
+		// A ListerFactory lists through the caller's own client, so wiring outside an App can pass a nil generator.
+		var (
+			client resource.Client
+			lister operator.ResourceLister
+			err    error
+		)
+		if cfg.ListerFactory == nil {
+			if clients == nil {
+				return nil, errors.New("a client generator is required to list the kind")
+			}
+			if client, err = clients.ClientFor(kind); err != nil {
+				return nil, err
+			}
+			lister, err = operator.NewClientLister(client, kind, listerOpts)
+		} else {
 			lister, err = cfg.ListerFactory(kind, client, listerOpts)
 		}
 		if err != nil {
@@ -261,6 +283,7 @@ func PeriodicInformerSupplier(cfg PeriodicInformerConfig) InformerSupplier {
 		inf, err := operator.NewPeriodicInformer(kind, lister, operator.PeriodicInformerOptions{
 			ResyncInterval: cfg.ResyncInterval,
 			ErrorHandler:   options.ErrorHandler,
+			Metrics:        listMetrics,
 		})
 		if err != nil {
 			return nil, err
@@ -285,6 +308,10 @@ type ManifestInformerConfig struct {
 	Periodic PeriodicInformerConfig
 	// Watch supplies the watch-backed informer. A nil value uses DefaultInformerSupplier; set
 	// OptimizedInformerSupplier for kinds with large object counts.
+	//
+	// A supplier set here is handed the shared delivery metrics on operator.InformerOptions, which the SDK's own
+	// suppliers pass to the informer they build. One which builds an informer another way reports nothing, and the
+	// kinds it serves go missing from the delivery families.
 	Watch InformerSupplier
 }
 
@@ -311,6 +338,27 @@ func InformerSupplierFromManifest(data app.ManifestData, cfg ManifestInformerCon
 	if cfg.Bus.AnnouncedMetadata.IsZero() {
 		cfg.Bus.AnnouncedMetadata = AnnouncedMetadataFromManifest(data)
 	}
+
+	// One set of delivery collectors across all three, so that a kind whose need resolves differently in another
+	// deployment — or after a bus is switched on — reports on the same series rather than on a new family.
+	delivery := cfg.Bus.Metrics.Delivery()
+	if delivery == nil {
+		delivery = cfg.Periodic.Metrics
+	}
+	if delivery == nil {
+		delivery = operator.NewInformerDeliveryMetrics(operator.InformerDeliveryMetricsConfig{
+			MetricsConfig:       cfg.Bus.MetricsConfig,
+			ResourceVersionTime: cfg.Bus.ResourceVersionTime,
+		})
+	}
+	cfg.Periodic.Metrics = delivery
+	if cfg.Bus.Metrics == nil {
+		cfg.Bus.Metrics = operator.NewBusInformerMetrics(operator.BusInformerMetricsConfig{
+			MetricsConfig: cfg.Bus.MetricsConfig,
+			Delivery:      delivery,
+		})
+	}
+
 	bus := BusInformerSupplier(cfg.Subscriber, cfg.Bus)
 	periodic := PeriodicInformerSupplier(cfg.Periodic)
 
@@ -321,6 +369,7 @@ func InformerSupplierFromManifest(data app.ManifestData, cfg ManifestInformerCon
 	}
 
 	return func(kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions) (operator.Informer, error) {
+		options.DeliveryMetrics = delivery
 		// The rule lives on the need itself, so wiring which builds informers directly resolves identically.
 		switch needs[kind.Kind()].Resolve(available...) {
 		case app.WatchInformerPeriodic:

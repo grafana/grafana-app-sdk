@@ -348,6 +348,45 @@ func (b *BusInformer) Schema() resource.Schema { return b.kind.Schema }
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 func (b *BusInformer) Snapshot() []resource.Identifier { return b.store.Identifiers() }
 
+// Count reports how many objects the snapshot holds in a namespace, or in every namespace when it is empty. It is
+// Snapshot's caveats with none of its allocation, for the count a quota check would otherwise pay an API list for.
+//
+// Under a shared delivery group the snapshot can undercount: an add which went to another replica is not here until
+// the next re-list. A consumer which must count an object it has just read for itself records it with Observe.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+func (b *BusInformer) Count(namespace string) int { return b.store.Count(namespace) }
+
+// Observe records an object the consumer read for itself, so that a count taken immediately after includes it. It
+// is the read-through a shared delivery group makes necessary: the live add may have gone to another replica, and
+// this replica would otherwise not count the object until its next re-list.
+//
+// Nothing is dispatched — the consumer is already handling the object, and waking its own watchers for a read would
+// be a loop. The snapshot arbitrates the write as it would a live one, so an object older than what is held, or one
+// a newer delete already evicted, is refused; an object the selectors exclude is refused too. A re-list absorbs the
+// entry: one which lists the object replaces it, and one which does not removes it, which is how an object deleted
+// while this replica was not told stops being counted.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+func (b *BusInformer) Observe(obj resource.Object) {
+	if obj == nil || (b.matcher != nil && !b.matcher.Matches(obj)) {
+		return
+	}
+	if b.opts.Payload == PayloadIdentity {
+		obj = newIdentityObjectFrom(b.kind, obj)
+	}
+	b.store.Update(obj)
+}
+
+// Forget drops an object the consumer found absent — a read which returned NotFound — so that a count taken
+// immediately after stops including it. It records no tombstone, since a NotFound carries no version to date the
+// removal at, so a re-list or a live event may reinstate the object.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+func (b *BusInformer) Forget(id resource.Identifier) {
+	b.store.DeleteAt(id.Namespace, id.Name, "")
+}
+
 // PrometheusCollectors implements metrics.Provider. The collectors are shared by every informer given the same
 // BusInformerMetrics, so registering an already-registered collector is expected and must be tolerated.
 func (b *BusInformer) PrometheusCollectors() []prometheus.Collector {
@@ -603,7 +642,7 @@ func (b *BusInformer) handleEvent(ctx context.Context, evt resourcebus.Event) {
 		if obj == nil {
 			obj = b.identityObject(evt)
 		}
-		b.metrics.observeLiveEvent(busVerbDelete, rv)
+		b.metrics.observeLiveEvent(deliveryVerbDelete, rv)
 		b.dispatch(ctx, func(ctx context.Context, w ResourceWatcher) error { return w.Delete(ctx, obj) })
 	case resourcebus.VerbAdded, resourcebus.VerbModified:
 		obj, err := b.payloadObject(ctx, evt)
@@ -636,7 +675,7 @@ func (b *BusInformer) handleWrite(ctx context.Context, evt resourcebus.Event, ob
 		if _, applied := b.store.DeleteAt(evt.Namespace, evt.Name, evt.ResourceVersion); !applied {
 			return
 		}
-		b.metrics.observeLiveEvent(busVerbDelete, rv)
+		b.metrics.observeLiveEvent(deliveryVerbDelete, rv)
 		b.dispatch(ctx, func(ctx context.Context, w ResourceWatcher) error { return w.Delete(ctx, previous) })
 		return
 	}
@@ -664,11 +703,11 @@ func (b *BusInformer) handleWrite(ctx context.Context, evt resourcebus.Event, ob
 	}
 
 	if evt.Verb == resourcebus.VerbAdded || previous == nil {
-		b.metrics.observeLiveEvent(busVerbAdd, rv)
+		b.metrics.observeLiveEvent(deliveryVerbAdd, rv)
 		b.dispatch(ctx, func(ctx context.Context, w ResourceWatcher) error { return w.Add(ctx, obj) })
 		return
 	}
-	b.metrics.observeLiveEvent(busVerbUpdate, rv)
+	b.metrics.observeLiveEvent(deliveryVerbUpdate, rv)
 	b.dispatch(ctx, func(ctx context.Context, w ResourceWatcher) error { return w.Update(ctx, previous, obj) })
 }
 
@@ -702,22 +741,13 @@ func (b *BusInformer) matching(objs []resource.Object) []resource.Object {
 }
 
 // toIdentities projects listed objects onto their identity and metadata, in place, so the snapshot retains no spec
-// or subresources. The metadata is kept because live events carry it: dropping it here would make a re-list deliver
-// less than the live stream, which is the inconsistency the hydrated payload is warned about.
+// or subresources.
 func (b *BusInformer) toIdentities(objs []resource.Object) []resource.Object {
 	for i, obj := range objs {
 		if obj == nil {
 			continue
 		}
-		identity := NewIdentityObject(b.kind, obj.GetNamespace(), obj.GetName(), obj.GetResourceVersion())
-		identity.SetLabels(obj.GetLabels())
-		identity.SetAnnotations(obj.GetAnnotations())
-		identity.SetFinalizers(obj.GetFinalizers())
-		identity.SetGeneration(obj.GetGeneration())
-		identity.SetCreationTimestamp(obj.GetCreationTimestamp())
-		identity.SetDeletionTimestamp(obj.GetDeletionTimestamp())
-		identity.SetUID(obj.GetUID())
-		objs[i] = identity
+		objs[i] = newIdentityObjectFrom(b.kind, obj)
 	}
 	return objs
 }
@@ -793,18 +823,18 @@ func (b *BusInformer) relist(ctx context.Context, pass relistPass) error {
 		if pass == periodicRelist {
 			rv = parseResourceVersion(obj.GetResourceVersion())
 		}
-		b.metrics.observeRelistEvent(busVerbAdd, rv)
+		b.metrics.observeRelistEvent(deliveryVerbAdd, rv)
 		b.dispatch(ctx, func(ctx context.Context, w ResourceWatcher) error { return w.Add(ctx, obj) })
 	}
 	for _, upd := range updated {
-		b.metrics.observeRelistEvent(busVerbUpdate, 0)
+		b.metrics.observeRelistEvent(deliveryVerbUpdate, 0)
 		b.dispatch(ctx, func(ctx context.Context, w ResourceWatcher) error {
 			return w.Update(ctx, upd.previous, upd.current)
 		})
 	}
 	for _, obj := range removed {
 		// The last-known version predates the delete, so it cannot date it.
-		b.metrics.observeRelistEvent(busVerbDelete, 0)
+		b.metrics.observeRelistEvent(deliveryVerbDelete, 0)
 		b.dispatch(ctx, func(ctx context.Context, w ResourceWatcher) error { return w.Delete(ctx, obj) })
 	}
 	return nil

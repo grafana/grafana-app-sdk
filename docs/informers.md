@@ -218,8 +218,21 @@ projection cannot serve. Three things follow:
 * `PayloadHydrated` needs full objects, so configuring `KeyListerFactory` with it is rejected: re-lists would carry
   less than live events.
 
-`informer_bus_relist_projection_total{group,version,kind,projection}` reports which projection served each re-list,
+`informer_relist_projection_total{group,version,kind,projection}` reports which projection served each re-list,
 and `BusInformerConfig.ListerFactory` replaces the lister outright for a list which fits neither shape.
+
+For a client the SDK does not own — a client-go generated clientset or a dynamic client, which cannot satisfy
+`ListWatchClient` — `operator.NewPagedLister` is the same continue-token loop over a bare list function:
+
+```go
+lister, err := operator.NewPagedLister(kind, func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
+    return client.Repositories(namespace).List(ctx, opts)
+}, operator.PagedListerOptions{Payload: operator.PayloadIdentity})
+```
+
+`PayloadIdentity` reads each item through the meta accessor and builds the kind's identity object, which works for
+any list — including a dynamic client's unstructured items, which nothing can convert. The default,
+`PayloadHydrated`, converts each item into a `resource.Object` of the kind and fails where it cannot.
 
 ### What a watcher can observe
 
@@ -245,6 +258,25 @@ up to one re-list, holds only what this informer was delivered, and is the infor
 a staleness-tolerant count, such as a quota check that would otherwise cost an API list per reconcile. Anything a
 reconcile's correctness depends on must be read from the API.
 
+`BusInformer.Count(namespace)` is that count without the allocation. Under a shared delivery group it can
+undercount: the add may have gone to another replica, and this one will not hold the object until its next re-list.
+A consumer which must count an object it has just read for itself records the read:
+
+```go
+repo, err := client.Repositories(ns).Get(ctx, name, metav1.GetOptions{})
+switch {
+case apierrors.IsNotFound(err):
+    informer.Forget(resource.Identifier{Namespace: ns, Name: name})
+case err == nil:
+    informer.Observe(repo)
+}
+```
+
+`Observe` dispatches nothing — the consumer is already handling the object — and the snapshot arbitrates the write
+as it would a live one, so a stale read or one the selectors exclude is refused. The entry is not kept forever
+either: a re-list which lists the object replaces it, and one which does not removes it, which is how an object
+deleted while this replica was never told stops being counted.
+
 ### Read freshness
 
 A change source can announce a write to this replica before the read path can serve it, and a reconcile which reads
@@ -262,10 +294,12 @@ tracker := operator.NewAnnouncementTracker(operator.AnnouncementTrackerOptions{}
 _ = informer.AddEventHandler(tracker.Watcher())
 
 // Around your own read, with the announcement sampled first:
-announced := tracker.Announced(id)
-obj, err := client.Get(ctx, id)
-freshness.Recorder(kind).Observe(ctx, id, announced, obj, err)
+obj, err := operator.ObserveRead(ctx, tracker, freshness.Recorder(kind), id,
+    func(ctx context.Context) (*v1.Repository, error) { return client.Get(ctx, id) })
 ```
+
+`ObserveRead` passes the result through untouched, error and all, and a nil tracker skips the observation — so a
+deployment with read-freshness switched off needs no second code path.
 
 Two outcomes are excluded by construction, so a non-zero `behind` cannot be dismissed as ordinary concurrency: the
 announcement is sampled **before** the read is issued, because a read already in flight when a newer write commits
@@ -274,6 +308,33 @@ deleted after its announcement is correctly absent.
 
 A handler which reads inside the dispatch needs no tracker — `operator.AnnouncedVersionFromContext(ctx)` has the
 version. The tracker is for a work queue, where the read happens long after the event that enqueued the key.
+
+### Delivery metrics
+
+Every informer reports its deliveries on one shared set of collectors, `operator.InformerDeliveryMetrics`:
+
+```
+informer_live_events_total{group,version,kind,verb}
+informer_relist_events_total{group,version,kind,verb}
+informer_live_event_latency_seconds{group,version,kind}
+informer_relist_event_latency_seconds{group,version,kind}
+informer_relist_requests_total{group,version,kind}
+informer_relist_projection_total{group,version,kind,projection}
+```
+
+Live and re-list are separate families on purpose: a live event is a delivery, while a re-list add or delete is a
+change the live stream did not deliver to this replica, so counting them together would hide exactly what the pair
+is there to measure. A watch-backed informer draws no such distinction of its own, so the SDK derives it — the
+initial list, a resync replay (the same version on both sides of an update) and a `DeletedFinalStateUnknown`
+tombstone are re-list deliveries, everything else came from the watch.
+
+`InformerSupplierFromManifest` builds one set and hands it to all three informers, which is what keeps a kind's
+series stable when its need resolves differently in another deployment, or after a bus is switched on. Wiring the
+informers yourself, pass the same instance to `BusInformerMetricsConfig.Delivery`,
+`PeriodicInformerOptions.Metrics` and `InformerOptions.DeliveryMetrics`.
+
+The bus informer adds what only it has — `informer_bus_reconnects_total`, `informer_bus_live_subscription`,
+`informer_bus_dropped_events_total` and `informer_bus_superseded_events_total`.
 
 ### Limits
 

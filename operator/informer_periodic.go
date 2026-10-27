@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/grafana/grafana-app-sdk/logging"
@@ -26,6 +27,9 @@ type PeriodicInformerOptions struct {
 	RetryInterval time.Duration
 	// ErrorHandler is called for errors which do not stop the informer, such as a watcher returning an error.
 	ErrorHandler func(context.Context, error)
+	// Metrics are the shared collectors the informer reports its deliveries on. Every pass is a list, so they all
+	// land on the re-list family. See InformerDeliveryMetrics.
+	Metrics *InformerDeliveryMetrics
 }
 
 // PeriodicInformer is a re-list-only informer: it has no watch and no subscription, and keeps no cache. On each
@@ -37,9 +41,10 @@ type PeriodicInformerOptions struct {
 //
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type PeriodicInformer struct {
-	kind   resource.Kind
-	lister ResourceLister
-	opts   PeriodicInformerOptions
+	kind    resource.Kind
+	lister  ResourceLister
+	opts    PeriodicInformerOptions
+	metrics kindMetrics
 
 	mu       sync.Mutex
 	handlers []ResourceWatcher
@@ -70,8 +75,16 @@ func NewPeriodicInformer(kind resource.Kind, lister ResourceLister, opts Periodi
 		kind:     kind,
 		lister:   lister,
 		opts:     opts,
+		metrics:  newDeliveryKindMetrics(opts.Metrics, kind),
 		syncedCh: make(chan struct{}),
 	}, nil
+}
+
+// PrometheusCollectors implements metrics.Provider, exposing the delivery collectors the informer was given.
+// They are shared with every other informer built on the same InformerDeliveryMetrics, so registering an
+// already-registered collector is expected here and must be tolerated.
+func (p *PeriodicInformer) PrometheusCollectors() []prometheus.Collector {
+	return p.opts.Metrics.PrometheusCollectors()
 }
 
 // AddEventHandler adds a ResourceWatcher as an event handler. Only Add is ever called: the informer keeps no
@@ -166,6 +179,8 @@ func (p *PeriodicInformer) relist(ctx context.Context) error {
 	handlers := p.handlers
 	p.mu.Unlock()
 	for _, obj := range objs {
+		// No latency: a re-delivery is not dated by the version it last changed at.
+		p.metrics.observeRelistEvent(deliveryVerbAdd, 0)
 		for _, handler := range handlers {
 			if err := handler.Add(ctx, obj); err != nil {
 				p.handleError(ctx, err)

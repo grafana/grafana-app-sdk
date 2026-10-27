@@ -666,3 +666,67 @@ func TestInformerSupplierFromManifest(t *testing.T) {
 		assert.IsType(t, identityInformer{}, inf)
 	})
 }
+
+// Wiring outside an App has client-go clients and no resource.ClientGenerator, so a supplier which reads nothing
+// through one must not insist on it.
+func TestInformerSuppliers_WithoutAClientGenerator(t *testing.T) {
+	lister := func(resource.Kind, resource.Client, operator.ClientListerOptions) (operator.ResourceLister, error) {
+		return listerFunc(func(context.Context) ([]resource.Object, string, error) { return nil, "", nil }), nil
+	}
+
+	t.Run("the bus supplier lists through the given factory", func(t *testing.T) {
+		inf, err := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{ListerFactory: lister})(
+			testKind(), nil, operator.InformerOptions{})
+		require.NoError(t, err)
+		assert.True(t, inf.(*operator.ConcurrentInformer).IdentityPayload())
+	})
+
+	t.Run("the periodic supplier lists through the given factory", func(t *testing.T) {
+		_, err := PeriodicInformerSupplier(PeriodicInformerConfig{ListerFactory: lister})(
+			testKind(), nil, operator.InformerOptions{})
+		require.NoError(t, err)
+	})
+
+	// A hydrated payload reads each event's object through the client, so there the generator is required.
+	t.Run("a hydrated payload still requires one", func(t *testing.T) {
+		_, err := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{
+			Payload:       operator.PayloadHydrated,
+			ListerFactory: lister,
+		})(testKind(), nil, operator.InformerOptions{})
+		assert.Error(t, err)
+	})
+
+	t.Run("the default lister still requires one", func(t *testing.T) {
+		_, err := BusInformerSupplier(resourcebus.NewFake(), BusInformerConfig{})(
+			testKind(), nil, operator.InformerOptions{})
+		assert.Error(t, err)
+	})
+}
+
+// A kind whose need resolves differently in another deployment has to report on the same series, so all three
+// informers are given one set of delivery collectors.
+func TestInformerSupplierFromManifest_SharesDeliveryMetrics(t *testing.T) {
+	watched, signalled := testKind(), testUnmanagedKind()
+	data := app.ManifestData{Group: "g", Versions: []app.ManifestVersion{{Name: "v1", Kinds: []app.ManifestVersionKind{
+		{Kind: watched.Kind()},
+		{Kind: signalled.Kind(), Watch: &app.ManifestVersionKindWatch{Needs: app.WatchNeedsSignal}},
+	}}}}
+
+	var watchOptions operator.InformerOptions
+	supplier := InformerSupplierFromManifest(data, ManifestInformerConfig{
+		Subscriber: resourcebus.NewFake(),
+		Watch: func(_ resource.Kind, _ resource.ClientGenerator, opts operator.InformerOptions) (operator.Informer, error) {
+			watchOptions = opts
+			return identityInformer{}, nil
+		},
+	})
+	_, err := supplier(watched, stubClients{}, operator.InformerOptions{})
+	require.NoError(t, err)
+	bus, err := supplier(signalled, stubClients{}, operator.InformerOptions{})
+	require.NoError(t, err)
+
+	require.NotNil(t, watchOptions.DeliveryMetrics, "the watch supplier is handed the collectors to report on")
+	assert.Subset(t, bus.(*operator.ConcurrentInformer).PrometheusCollectors(),
+		watchOptions.DeliveryMetrics.PrometheusCollectors(),
+		"the bus informer reports its deliveries on the same collectors the watch does")
+}

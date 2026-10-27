@@ -354,3 +354,18 @@ func TestBusStore_Touch(t *testing.T) {
 		assert.False(t, s.Touch(busTestNamespace, "x", "200"))
 	})
 }
+
+func TestBusStore_Count(t *testing.T) {
+	s := newBusStore()
+	other := busObjRV("c", 1)
+	other.Namespace = "other"
+	for _, obj := range []resource.Object{busObjRV("a", 1), busObjRV("b", 1), other} {
+		_, ok := s.Update(obj)
+		require.True(t, ok)
+	}
+
+	assert.Equal(t, 3, s.Count(""), "an empty namespace counts every object")
+	assert.Equal(t, 2, s.Count(busTestNamespace))
+	assert.Equal(t, 1, s.Count("other"))
+	assert.Zero(t, s.Count("missing"))
+}
