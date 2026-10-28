@@ -126,6 +126,31 @@ type KindEmbed struct {
 	Fields []EmbedField `json:"fields"`
 }
 
+// Watch declares how a kind's changes reach the app's handlers.
+type Watch struct {
+	// Needs is what this kind's handlers require from the change stream: "objects", "signal" or "cadence".
+	Needs string `json:"needs,omitempty"`
+	// Metadata declares the object metadata this kind's change notifications should carry.
+	Metadata *WatchMetadata `json:"metadata,omitempty"`
+}
+
+// WatchMetadata declares which parts of an object's metadata a kind's change notifications carry, where the platform
+// can announce changes out of band of the watch.
+type WatchMetadata struct {
+	// Labels are the metadata.labels keys to announce.
+	Labels []string `json:"labels,omitempty"`
+	// Annotations are the metadata.annotations keys to announce.
+	Annotations []string `json:"annotations,omitempty"`
+	// Finalizers are the metadata.finalizers values to announce.
+	Finalizers []string `json:"finalizers,omitempty"`
+	// Generation announces metadata.generation.
+	Generation bool `json:"generation,omitempty"`
+	// CreationTimestamp announces metadata.creationTimestamp.
+	CreationTimestamp bool `json:"creationTimestamp,omitempty"`
+	// DeletionTimestamp announces metadata.deletionTimestamp.
+	DeletionTimestamp bool `json:"deletionTimestamp,omitempty"`
+}
+
 // EmbedField supplies text for the embedding document without exposing a search field.
 type EmbedField struct {
 	Name string `json:"name"`

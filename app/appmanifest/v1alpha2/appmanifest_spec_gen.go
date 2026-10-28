@@ -81,6 +81,8 @@ type AppManifestManifestVersionKind struct {
 	SearchFields             []AppManifestSearchField              `json:"searchFields,omitempty"`
 	// storage declares storage-related behavior for this kind.
 	Storage *AppManifestManifestVersionKindStorage `json:"storage,omitempty"`
+	// watch declares how this kind's changes reach the app's handlers.
+	Watch *AppManifestManifestVersionKindWatch `json:"watch,omitempty"`
 	// search declares which search endpoints are served for this kind.
 	// /search and /trash default to enabled; /search/hybrid and global index inclusion default to disabled.
 	Search *AppManifestManifestVersionKindSearch `json:"search,omitempty"`
@@ -272,6 +274,50 @@ func NewAppManifestSearchField() *AppManifestSearchField {
 // OpenAPIModelName returns the OpenAPI model name for AppManifestSearchField.
 func (AppManifestSearchField) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestSearchField"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindWatch struct {
+	// needs is what this kind's handlers require from the change stream.
+	Needs *string `json:"needs,omitempty"`
+	// metadata declares the object metadata this kind's change notifications should carry.
+	Metadata *AppManifestManifestVersionKindWatchMetadata `json:"metadata,omitempty"`
+}
+
+// NewAppManifestManifestVersionKindWatch creates a new AppManifestManifestVersionKindWatch object.
+func NewAppManifestManifestVersionKindWatch() *AppManifestManifestVersionKindWatch {
+	return &AppManifestManifestVersionKindWatch{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindWatch.
+func (AppManifestManifestVersionKindWatch) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindWatch"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindWatchMetadata struct {
+	// labels are the metadata.labels keys to announce.
+	Labels []string `json:"labels,omitempty"`
+	// annotations are the metadata.annotations keys to announce.
+	Annotations []string `json:"annotations,omitempty"`
+	// finalizers are the metadata.finalizers values to announce.
+	Finalizers []string `json:"finalizers,omitempty"`
+	// generation announces metadata.generation.
+	Generation *bool `json:"generation,omitempty"`
+	// creationTimestamp announces metadata.creationTimestamp.
+	CreationTimestamp *bool `json:"creationTimestamp,omitempty"`
+	// deletionTimestamp announces metadata.deletionTimestamp.
+	DeletionTimestamp *bool `json:"deletionTimestamp,omitempty"`
+}
+
+// NewAppManifestManifestVersionKindWatchMetadata creates a new AppManifestManifestVersionKindWatchMetadata object.
+func NewAppManifestManifestVersionKindWatchMetadata() *AppManifestManifestVersionKindWatchMetadata {
+	return &AppManifestManifestVersionKindWatchMetadata{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindWatchMetadata.
+func (AppManifestManifestVersionKindWatchMetadata) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindWatchMetadata"
 }
 
 // +k8s:openapi-gen=true

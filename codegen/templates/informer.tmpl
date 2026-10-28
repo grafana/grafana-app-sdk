@@ -1,0 +1,28 @@
+package {{.PackageName}}
+
+import (
+	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/operator"
+	"github.com/grafana/grafana-app-sdk/resource"
+	"github.com/grafana/grafana-app-sdk/simple"
+
+	{{.VersionPackage}} "{{.VersionImportPath}}"
+)
+
+// {{.KindName}}Watch is what the kind's manifest declares about watching it: what its handlers need from the change
+// stream, and what metadata a change bus announces with each event.
+var {{.KindName}}Watch = simple.KindWatchDeclaration{ {{ if .Needs }}
+	Needs: app.WatchNeeds{{.Needs}},{{ end }}{{ if .Announces }}
+	AnnouncedMetadata: operator.AnnouncedMetadata{ {{ if .AnnouncedLabels }}
+		Labels: []string{ {{ range .AnnouncedLabels }}"{{.}}", {{ end }}},{{ end }}{{ if .AnnouncedFinalizers }}
+		Finalizers: true,{{ end }}{{ if .AnnouncedGeneration }}
+		Generation: true,{{ end }}{{ if .AnnouncedDeletionTimestamp }}
+		DeletionTimestamp: true,{{ end }}
+	},{{ end }}
+}
+
+// New{{.KindName}}Informer builds the informer the kind declared it needs, resolved by the factory against what this
+// deployment can provide. Build the factory once per process, so that every kind's informer shares its collectors.
+func New{{.KindName}}Informer(factory *simple.InformerFactory, clients resource.ClientGenerator, opts operator.InformerOptions) (operator.Informer, error) {
+	return factory.Informer({{.VersionPackage}}.{{.KindPrefix}}Kind(), {{.KindName}}Watch, clients, opts)
+}

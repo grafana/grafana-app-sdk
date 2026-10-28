@@ -2,13 +2,17 @@ package benchmark_test
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	clientfeatures "k8s.io/client-go/features"
 
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
+	"github.com/grafana/grafana-app-sdk/resourcebus"
 	"github.com/grafana/grafana-app-sdk/simple"
 )
 
@@ -191,3 +195,134 @@ func BenchmarkOptimizedInformerSupplier(b *testing.B) {
 		})
 	}
 }
+
+// BenchmarkBusInformerSupplier benchmarks the bus-driven informer's initial list, which is what its snapshot costs:
+// one entry per object, each holding the listed object.
+func BenchmarkBusInformerSupplier(b *testing.B) {
+	if err := suppressLogger(); err != nil {
+		b.Fatalf("failed to suppress logger: %v", err)
+	}
+
+	scenarios := []struct {
+		name        string
+		objectCount int
+		pageSize    int
+	}{
+		{"10_objects", 10, 0},
+		{"100_objects", 100, 0},
+		{"1000_objects", 1000, 0},
+		{"10000_objects", 10000, 0},
+		{"10000_objects_page_5000", 10000, 5000},
+		{"50000_objects_page_5000", 50000, 5000},
+	}
+
+	for _, scenario := range scenarios {
+		kind := benchmarkKind()
+		objects := generateTestObjects(scenario.objectCount)
+
+		b.ReportAllocs()
+
+		b.Run(scenario.name, func(b *testing.B) {
+			clientGen := &mockClientGeneratorWithK8sClient{
+				kind:    kind,
+				objects: objects,
+			}
+			supplier := simple.BusInformerSupplier(resourcebus.NewFake(), simple.BusInformerConfig{
+				PageSize: scenario.pageSize,
+			})
+
+			for b.Loop() {
+				inf, err := supplier(kind, clientGen, operator.InformerOptions{})
+				if err != nil {
+					b.Fatalf("failed to create informer: %v", err)
+				}
+
+				runInformerWithValidation(b, inf, scenario.objectCount)
+			}
+		})
+	}
+}
+
+// BenchmarkBusInformerLiveEvents benchmarks the per-event cost of the identity payload, which allocates the kind's
+// zero value per event and retains one per added object in the snapshot. This is what a metadata-only object type
+// would reduce, so it is the measurement to compare such a type against.
+func BenchmarkBusInformerLiveEvents(b *testing.B) {
+	if err := suppressLogger(); err != nil {
+		b.Fatalf("failed to suppress logger: %v", err)
+	}
+
+	for _, eventCount := range []int{10000, 50000} {
+		kind := benchmarkKind()
+		gvr := kind.GroupVersionResource()
+
+		b.ReportAllocs()
+
+		b.Run(fmt.Sprintf("%d_events", eventCount), func(b *testing.B) {
+			for b.Loop() {
+				sub := resourcebus.NewFake()
+				inf, err := operator.NewBusInformer(kind, sub, emptyLister{}, operator.BusInformerOptions{
+					Payload:        operator.PayloadIdentity,
+					ResyncInterval: time.Hour,
+					// The subscriber callback only enqueues, so the whole burst has to fit: a full queue drops
+					// events and forces a re-list, and emptyLister has nothing to recover them from.
+					EventQueueSize: eventCount,
+				})
+				if err != nil {
+					b.Fatalf("failed to create informer: %v", err)
+				}
+
+				var received atomic.Int32
+				done := make(chan struct{})
+				if err := inf.AddEventHandler(&operator.SimpleWatcher{
+					AddFunc: func(context.Context, resource.Object) error {
+						if int(received.Add(1)) == eventCount {
+							close(done)
+						}
+						return nil
+					},
+				}); err != nil {
+					b.Fatalf("failed to add event handler: %v", err)
+				}
+
+				ctx, cancel := context.WithCancel(b.Context())
+				runDone := make(chan struct{})
+				go func() {
+					defer close(runDone)
+					_ = inf.Run(ctx)
+				}()
+				if err := inf.WaitForSync(ctx); err != nil {
+					cancel()
+					b.Fatalf("failed to wait for informer to sync: %v", err)
+				}
+
+				for i := range eventCount {
+					if err := sub.Publish(ctx, gvr, "", resourcebus.Event{
+						Verb:            resourcebus.VerbAdded,
+						Name:            fmt.Sprintf("object-%d", i),
+						ResourceVersion: strconv.Itoa(i + 1),
+					}); err != nil {
+						cancel()
+						b.Fatalf("failed to publish: %v", err)
+					}
+				}
+
+				// Publish returns once the event is queued, so wait for the handler to have seen all of them
+				// before stopping: the measurement is of delivery through to the watcher, not of enqueueing.
+				select {
+				case <-done:
+				case <-ctx.Done():
+					cancel()
+					b.Fatalf("timeout waiting for events, got %d of %d", received.Load(), eventCount)
+				}
+
+				cancel()
+				<-runDone
+			}
+		})
+	}
+}
+
+// emptyLister stands in for the periodic re-list, so that the live-event benchmark measures only delivery.
+type emptyLister struct{}
+
+func (emptyLister) List(context.Context) ([]resource.Object, string, error) { return nil, "", nil }

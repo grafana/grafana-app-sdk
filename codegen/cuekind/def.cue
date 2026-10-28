@@ -257,6 +257,37 @@ SchemaWithOperatorState: Schema & {
 
 // #KindEmbed defines the embedding document independently of search fields.
 // Kinds with a custom embedding builder omit this section.
+// #Watch declares how a kind's changes reach the app's handlers.
+#Watch: {
+	// needs is what this kind's handlers require from the change stream. It states a requirement rather than an
+	// informer, because which informers a deployment can offer is not something an app ships knowing: a runtime
+	// resolves it to the cheapest one which satisfies it, falling back to a more capable one otherwise.
+	//   objects — handlers read objects from the informer's cache
+	//   signal  — handlers re-read the object they act on, so knowing which one changed is enough
+	//   cadence — handlers re-evaluate everything on a schedule; individual changes need not be delivered
+	needs?: "objects" | "signal" | "cadence"
+	// metadata declares the object metadata this kind's change notifications should carry. Announcing a key lets a
+	// consumer decide what to do without reading the object.
+	metadata?: #WatchMetadata
+}
+
+// #WatchMetadata declares which parts of an object's metadata a kind's change notifications carry.
+#WatchMetadata: {
+	// labels are the metadata.labels keys to announce.
+	labels?: [...string]
+	// annotations are the metadata.annotations keys to announce.
+	annotations?: [...string]
+	// finalizers are the metadata.finalizers values to announce. A kind whose reconciler is opinionated announces
+	// its app's finalizer here, so a delete in progress is visible without a read.
+	finalizers?: [...string]
+	// generation announces metadata.generation, which tells a spec change from a subresource one.
+	generation?: bool
+	// creationTimestamp announces metadata.creationTimestamp.
+	creationTimestamp?: bool
+	// deletionTimestamp announces metadata.deletionTimestamp, which makes a delete in progress visible.
+	deletionTimestamp?: bool
+}
+
 #KindEmbed: {
 	// fields supplies inputs, in declaration order, used only to generate the text to be embedded.
 	// Declaring an embedding field does not enable filtering embeddings by that field.
@@ -372,6 +403,9 @@ Kind: S={
 	search: #KindSearch
 	// embed defines the embedding document independently of search fields.
 	embed?: #KindEmbed
+	// watch declares how this kind's changes reach the app's handlers: what the handlers need from the change
+	// stream, and what the platform should announce alongside each change.
+	watch?: #Watch
 	// routes is a map of path patterns to custom routes that will be exposed as subresources for this kind.
 	// entries here should not conflict with subresources (like spec and status) in the schema for the kind.
 	routes?: #CustomRouteCapability

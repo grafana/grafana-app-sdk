@@ -585,6 +585,172 @@ type ManifestVersionKind struct {
 	Search *ManifestVersionKindSearch `json:"search,omitempty" yaml:"search,omitempty"`
 	// Embed defines the embedding document independently of search fields.
 	Embed *ManifestVersionKindEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
+	// Watch declares how this kind's changes reach the app's handlers.
+	Watch *ManifestVersionKindWatch `json:"watch,omitempty" yaml:"watch,omitempty"`
+}
+
+// ManifestVersionKindWatch declares how a kind's changes reach the app's handlers: what the handlers need from the
+// change stream, and what the platform should announce alongside each change.
+type ManifestVersionKindWatch struct {
+	// Needs is what this kind's handlers require from the change stream. It states a requirement rather than an
+	// implementation, because which informers a deployment can offer is not something an app ships knowing.
+	// An empty value is WatchNeedsObjects.
+	Needs ManifestVersionKindWatchNeeds `json:"needs,omitempty" yaml:"needs,omitempty"`
+	// Metadata declares which parts of an object's metadata the change notifications should carry.
+	Metadata *ManifestVersionKindWatchMetadata `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+}
+
+// ManifestVersionKindWatchNeeds is what a kind's handlers require from the change stream.
+//
+// A runtime resolves it to the cheapest informer which satisfies it, so every value a deployment cannot serve the
+// cheapest way falls back to a more capable one rather than failing: a kind which needs a signal is served by a
+// watch where no change bus is configured, which costs more memory and delivers strictly more.
+type ManifestVersionKindWatchNeeds string
+
+const (
+	// WatchNeedsObjects means the handlers read objects from the informer's cache, so a cache has to exist.
+	// This is the default, and the only value a watch-backed informer is required for.
+	WatchNeedsObjects ManifestVersionKindWatchNeeds = "objects"
+	// WatchNeedsSignal means the handlers re-read the object they act on, so knowing which object changed is
+	// enough. A change bus can serve this without caching any object; a watch serves it too, at more memory.
+	WatchNeedsSignal ManifestVersionKindWatchNeeds = "signal"
+	// WatchNeedsCadence means the handlers re-evaluate every object on a schedule and individual changes need not
+	// be delivered at all — age-based cleanup, for instance. A periodic re-list serves this and needs no watch.
+	WatchNeedsCadence ManifestVersionKindWatchNeeds = "cadence"
+)
+
+// ManifestVersionKindWatchMetadata declares which parts of an object's metadata a kind's change notifications should
+// carry, for a platform which can announce changes out of band of the watch. Announcing a key lets a consumer decide
+// what to do without reading the object; announcing everything would make every notification carry the object, so
+// each one is named.
+//
+// It is a declaration, not a guarantee: a platform which does not announce metadata ignores it.
+type ManifestVersionKindWatchMetadata struct {
+	// Labels are the metadata.labels keys to announce.
+	Labels []string `json:"labels,omitempty" yaml:"labels,omitempty"`
+	// Annotations are the metadata.annotations keys to announce.
+	Annotations []string `json:"annotations,omitempty" yaml:"annotations,omitempty"`
+	// Finalizers are the metadata.finalizers values to announce. An app whose reconciler is opinionated announces
+	// its own finalizer here, so that a delete in progress can be told from a fresh object without a read.
+	Finalizers []string `json:"finalizers,omitempty" yaml:"finalizers,omitempty"`
+	// Generation announces metadata.generation, which tells a spec change from a subresource one.
+	Generation bool `json:"generation,omitempty" yaml:"generation,omitempty"`
+	// CreationTimestamp announces metadata.creationTimestamp.
+	CreationTimestamp bool `json:"creationTimestamp,omitempty" yaml:"creationTimestamp,omitempty"`
+	// DeletionTimestamp announces metadata.deletionTimestamp, which makes a delete in progress visible.
+	DeletionTimestamp bool `json:"deletionTimestamp,omitempty" yaml:"deletionTimestamp,omitempty"`
+}
+
+// WatchMetadata returns the metadata each of the app's resources declares its change notifications should carry,
+// keyed by resource so that a platform can register it without walking versions itself.
+//
+// A kind's versions are unioned rather than required to match: announcing a key no version reads costs only payload
+// size, while missing one a version does read is a correctness problem. Resources which declare nothing are absent
+// from the map.
+func (m ManifestData) WatchMetadata() map[schema.GroupResource]ManifestVersionKindWatchMetadata {
+	out := map[schema.GroupResource]ManifestVersionKindWatchMetadata{}
+	for _, version := range m.Versions {
+		for _, kind := range version.Kinds {
+			if kind.Watch == nil || kind.Watch.Metadata == nil {
+				continue
+			}
+			gr := schema.GroupResource{Group: m.Group, Resource: kind.Resource()}
+			merged := out[gr]
+			merged.Labels = appendUnique(merged.Labels, kind.Watch.Metadata.Labels)
+			merged.Annotations = appendUnique(merged.Annotations, kind.Watch.Metadata.Annotations)
+			merged.Finalizers = appendUnique(merged.Finalizers, kind.Watch.Metadata.Finalizers)
+			merged.Generation = merged.Generation || kind.Watch.Metadata.Generation
+			merged.CreationTimestamp = merged.CreationTimestamp || kind.Watch.Metadata.CreationTimestamp
+			merged.DeletionTimestamp = merged.DeletionTimestamp || kind.Watch.Metadata.DeletionTimestamp
+			out[gr] = merged
+		}
+	}
+	return out
+}
+
+// appendUnique adds the values of next which dst does not already have, preserving order.
+func appendUnique(dst, next []string) []string {
+	for _, value := range next {
+		if !slices.Contains(dst, value) {
+			dst = append(dst, value)
+		}
+	}
+	return dst
+}
+
+// WatchNeeds returns what each of the app's kinds requires from the change stream, keyed by kind name, so wiring can
+// resolve an informer per kind without walking versions itself. A kind which declares nothing is absent, which the
+// caller reads as WatchNeedsObjects.
+//
+// The strongest requirement across a kind's versions wins — objects over signal, signal over cadence — because one
+// informer serves every version of a kind and must satisfy all of their handlers.
+func (m ManifestData) WatchNeeds() map[string]ManifestVersionKindWatchNeeds {
+	out := map[string]ManifestVersionKindWatchNeeds{}
+	for _, version := range m.Versions {
+		for _, kind := range version.Kinds {
+			if kind.Watch == nil || kind.Watch.Needs == "" {
+				continue
+			}
+			if existing, ok := out[kind.Kind]; !ok || kind.Watch.Needs.strongerThan(existing) {
+				out[kind.Kind] = kind.Watch.Needs
+			}
+		}
+	}
+	return out
+}
+
+// WatchInformer names the kind of informer which serves a declared need.
+type WatchInformer string
+
+const (
+	// WatchInformerWatch is a watch-backed informer, which caches every object of the kind.
+	WatchInformerWatch WatchInformer = "watch"
+	// WatchInformerBus is a change-bus informer, which caches no object body.
+	WatchInformerBus WatchInformer = "bus"
+	// WatchInformerPeriodic is a re-list-only informer, which keeps nothing between passes.
+	WatchInformerPeriodic WatchInformer = "periodic"
+)
+
+// Resolve reports the cheapest of the available informers which satisfies the need. It is the one place the rule
+// lives, so wiring which builds informers directly — a standalone operator, rather than an app with an
+// InformerSupplier — reaches the same answer as simple.InformerSupplierFromManifest.
+//
+// Availability is passed rather than assumed because a deployment may run no change bus, and an app ships without
+// knowing. Every fallback is upward in capability, so it is always safe: a need for a signal with no bus available
+// resolves to a watch, which delivers strictly more at the cost of more memory. A need nothing available satisfies
+// resolves to a watch, which satisfies every need.
+func (n ManifestVersionKindWatchNeeds) Resolve(available ...WatchInformer) WatchInformer {
+	var preference []WatchInformer
+	switch n {
+	case WatchNeedsCadence:
+		preference = []WatchInformer{WatchInformerPeriodic, WatchInformerBus, WatchInformerWatch}
+	case WatchNeedsSignal:
+		preference = []WatchInformer{WatchInformerBus, WatchInformerWatch}
+	default: // WatchNeedsObjects, and an unset value which defaults to it
+		preference = []WatchInformer{WatchInformerWatch}
+	}
+	for _, candidate := range preference {
+		if slices.Contains(available, candidate) {
+			return candidate
+		}
+	}
+	return WatchInformerWatch
+}
+
+// strongerThan reports whether n demands more of the change stream than other.
+func (n ManifestVersionKindWatchNeeds) strongerThan(other ManifestVersionKindWatchNeeds) bool {
+	return n.rank() > other.rank()
+}
+
+func (n ManifestVersionKindWatchNeeds) rank() int {
+	switch n {
+	case WatchNeedsCadence:
+		return 1
+	case WatchNeedsSignal:
+		return 2
+	default: // WatchNeedsObjects, and an unset value which defaults to it
+		return 3
+	}
 }
 
 // ManifestVersionKindSecureValue describes a secure value used by a kind.

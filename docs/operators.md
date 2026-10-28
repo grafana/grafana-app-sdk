@@ -32,6 +32,15 @@ As for the reconciler, the SDK also offers an _Opinionated_ reconciler, called `
 
 Please note that it's enough to specify a Watcher or a Reconciler for a resource. The choice between the two depends on operator needs. 
 
+## Informers
+
+The `Informer` is where the controller's events come from, and the SDK ships more than one: a kubernetes watch
+backed by a cache of every object, a memory-tuned variant of the same for large object counts, and an experimental
+one driven by a bus the storage layer publishes change notifications to. Which one an app uses is set per app with
+`AppInformerConfig.InformerSupplier`, or per kind with `ReconcileOptions.InformerSupplier`.
+
+See [Informers](informers.md) for how to choose between them and configure the one you pick.
+
 ## Event-Based Design
 
 What this all means is that development using the SDK is geared toward an event-based design. 

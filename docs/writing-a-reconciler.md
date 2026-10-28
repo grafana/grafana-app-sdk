@@ -22,12 +22,36 @@ The major difference between a `Reconciler` and a `Watcher` is that a `Reconcile
 When writing a reconciler, it's important to take a few things into consideration:
 * If you make an update to the object you're doing the reconcile (or watch) event for, this will trigger _another_ reconcile (or watch) event. Generally, favor only updating subresources (specifically `status`) and some metadata in your reconcile (or watch) events, as a `status` update should not trigger the `metadata.generation` value to increase (only `metadata.resourceVersion`), which will allow you to filter events out. Using the `operator.OpinionatedWatcher` will filter these events for you, but you will need to track this yourself in a Reconciler; if you prefer not to use OpinionatedWatcher or want to do your own event filtering, keep in mind how updates within your reconcile loop will be received.
 * The reconciler is taking action on _every_ consumed event. Finding ways to escape from a reconcile or watcher event early will help your overall program logic.
-* All objects for the kind(s) you are watching are cached to memory by default. This can be customized by using a different informer implementation, such as `operator.CustomCacheInformer`. Custom informers can be used in `simple.App` with `AppConfig.InformerConfig.InformerSupplier`, or by using your own custom `app.App` implementation.
+* All objects for the kind(s) you are watching are cached to memory by default. This can be customized by using a different informer implementation, such as `operator.CustomCacheInformer`. Custom informers can be used in `simple.App` with `AppConfig.InformerConfig.InformerSupplier`, per kind with `ReconcileOptions.InformerSupplier`, or by using your own custom `app.App` implementation. See [Informers](informers.md).
 * Don't rely on retries to track operator state; use the `status` subresource to track operator success/failure, so that your operator can work out state from a fresh start (a restart will remove all pending retries, which are stored purely in-memory). This also allows a user to track operator status by viewing the `status` subresource.
 * If your reconcile process makes requests for other resources, consider caching, as high-traffic objects may cause your application to have to make these requests extremely frequently.
 * If your operator has a watcher or reconciler that updates the resource in a deterministic way (such as adding a label based on the spec), consider adding mutation for the kind on your App instead, as it makes that process synchronous and will never leave the object in an intermediate state (and reduces API calls from your operator). Mutation can be added for a kind in `simple.App` with `AppConfig.ManagedKinds[].Mutator`, or by implementing the behavior in `Mutate` if you're using a custom `app.App` implementation (don't forget to add mutation in your manifest as well).
 * When you have multiple versions of a kind, your reconciliation should only deal with one of them (typically the latest), as events are always issued for any version as the version requested by the operator's watch (so a user creating a `v1` version of a resource will still produce a `v2` version of that resource in a watch request for the `v2` of the kind).
 * The default conversion between versions is roughly equivalent to running `json.Marshal` on the stored version and then `json.Unmarshal` into the requested version. If this is not good enough for your purposes, add conversion to your app (for `simple.App`, use `AppConfig.Converters`, or implement `Convert` if you're implementing `app.App` yourself. Don't forget to add conversion in your manifest as well).
+
+## Identity Payloads and Opinionated Reconcilers
+
+An informer does not have to deliver the whole object. `operator.BusInformer` with
+`operator.PayloadIdentity` delivers the kind's zero value carrying namespace, name and resource version, on the
+premise that a reconcile reads the object it acts on for itself (see [Informers](informers.md#the-bus-informer)).
+
+> [!CAUTION]
+> The bus informer and the `resourcebus` contract are **experimental**. Their Go APIs may change or be removed in any
+> release.
+
+`OpinionatedWatcher` and `OpinionatedReconciler` read the deletion timestamp, the finalizer list and the generation
+off the delivered object, to decide whether an event is a create, a sync, or a delete in progress. Where those are
+absent an object which is tombstoning reads as a fresh add and an attached finalizer reads as absent, so
+`simple.App` refuses the pairing when the app is constructed rather than letting it fail at the first tombstone.
+
+A bus which announces those three fields removes the problem. Declare them in the kind's `watch.metadata` —
+`finalizers` (including the app's own), `generation` and `deletionTimestamp` — and pass
+`simple.AnnouncedMetadataFromManifest(manifest)` to `BusInformerConfig.AnnouncedMetadata`. The pairing is then
+allowed, because the identity carries what the opinionated path reads. The declaration is needed because what a bus
+announces is registered per resource, which the SDK cannot inspect.
+
+Otherwise: use `operator.PayloadHydrated`, which carries the whole object, or set `ReconcileOptions.UsePlain` and
+handle the deletion timestamp in your own reconcile after reading the object.
 
 ## An Example Reconciler
 

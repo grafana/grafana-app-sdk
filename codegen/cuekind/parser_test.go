@@ -429,3 +429,57 @@ func TestParseManifestListKeys(t *testing.T) {
 		})
 	}
 }
+
+// A kind declares which metadata its change notifications should carry, and it reaches the manifest.
+func TestParseManifestWatchMetadata(t *testing.T) {
+	c := testingCue(t)
+	c.Root = c.Root.Context().CompileString(`manifest: {
+		appName: "watch-app"
+		versions: v1: kinds: [{
+			kind: "Foo"
+			schema: spec: title: string
+			watch: {
+				needs: "signal"
+				metadata: {
+					labels: ["app", "tier"]
+					annotations: ["watch-app.grafana.app/paused"]
+					finalizers: ["watch-app.grafana.app/finalizer"]
+					generation: true
+					deletionTimestamp: true
+				}
+			}
+		}]
+	}`)
+	parser, err := NewParser(c, false)
+	require.NoError(t, err)
+
+	manifest, err := parser.ParseManifest("manifest")
+	require.NoError(t, err)
+
+	kinds := manifest.Versions()[0].Kinds()
+	require.Len(t, kinds, 1)
+	require.NotNil(t, kinds[0].Watch)
+	assert.Equal(t, "signal", kinds[0].Watch.Needs)
+	require.NotNil(t, kinds[0].Watch.Metadata)
+	assert.Equal(t, []string{"app", "tier"}, kinds[0].Watch.Metadata.Labels)
+	assert.Equal(t, []string{"watch-app.grafana.app/paused"}, kinds[0].Watch.Metadata.Annotations)
+	assert.Equal(t, []string{"watch-app.grafana.app/finalizer"}, kinds[0].Watch.Metadata.Finalizers)
+	assert.True(t, kinds[0].Watch.Metadata.Generation)
+	assert.True(t, kinds[0].Watch.Metadata.DeletionTimestamp)
+	assert.False(t, kinds[0].Watch.Metadata.CreationTimestamp, "not declared, so not announced")
+}
+
+// A kind which declares nothing leaves it unset, so the platform registers nothing for it.
+func TestParseManifestWithoutWatchMetadata(t *testing.T) {
+	c := testingCue(t)
+	c.Root = c.Root.Context().CompileString(`manifest: {
+		appName: "watch-app"
+		versions: v1: kinds: [{kind: "Foo", schema: spec: title: string}]
+	}`)
+	parser, err := NewParser(c, false)
+	require.NoError(t, err)
+
+	manifest, err := parser.ParseManifest("manifest")
+	require.NoError(t, err)
+	assert.Nil(t, manifest.Versions()[0].Kinds()[0].Watch)
+}

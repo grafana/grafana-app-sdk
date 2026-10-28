@@ -174,3 +174,65 @@ func TestJSONCodec_Read(t *testing.T) {
 		})
 	}
 }
+
+func TestNewKind(t *testing.T) {
+	gvk := schema.GroupVersionKind{Group: "example.grafana.app", Version: "v1", Kind: "Repository"}
+	gvr := schema.GroupVersionResource{Group: "example.grafana.app", Version: "v1", Resource: "repositories"}
+	valid := KindConfig{
+		GroupVersionKind:     gvk,
+		GroupVersionResource: gvr,
+		Scope:                NamespacedScope,
+		Zero:                 &UntypedObject{},
+		ZeroList:             &UntypedList{},
+		Codec:                NewJSONCodec(),
+	}
+
+	t.Run("the resource is taken as given, not pluralized from the kind", func(t *testing.T) {
+		kind, err := NewKind(valid)
+		require.NoError(t, err)
+		assert.Equal(t, "repositories", kind.Plural())
+		assert.Equal(t, gvr, kind.GroupVersionResource())
+		assert.Equal(t, gvk, schema.GroupVersionKind{Group: kind.Group(), Version: kind.Version(), Kind: kind.Kind()})
+		assert.Equal(t, NamespacedScope, kind.Scope())
+		assert.NotNil(t, kind.Codec(KindEncodingJSON))
+	})
+
+	t.Run("a kind nothing serializes may have no codec", func(t *testing.T) {
+		cfg := valid
+		cfg.Codec = nil
+		kind, err := NewKind(cfg)
+		require.NoError(t, err)
+		assert.Nil(t, kind.Codec(KindEncodingJSON))
+	})
+
+	// The check which earns the explicitness: the two come from different places in a generated clientset.
+	t.Run("a resource from another group or version is rejected", func(t *testing.T) {
+		cfg := valid
+		cfg.GroupVersionResource.Group = "other.grafana.app"
+		_, err := NewKind(cfg)
+		assert.ErrorContains(t, err, "not in the same group and version")
+
+		cfg = valid
+		cfg.GroupVersionResource.Version = "v2"
+		_, err = NewKind(cfg)
+		assert.ErrorContains(t, err, "not in the same group and version")
+	})
+
+	t.Run("required fields", func(t *testing.T) {
+		for name, mutate := range map[string]func(*KindConfig){
+			"kind":      func(c *KindConfig) { c.GroupVersionKind.Kind = "" },
+			"version":   func(c *KindConfig) { c.GroupVersionKind.Version = ""; c.GroupVersionResource.Version = "" },
+			"resource":  func(c *KindConfig) { c.GroupVersionResource.Resource = "" },
+			"scope":     func(c *KindConfig) { c.Scope = "" },
+			"zero":      func(c *KindConfig) { c.Zero = nil },
+			"zero list": func(c *KindConfig) { c.ZeroList = nil },
+		} {
+			t.Run(name, func(t *testing.T) {
+				cfg := valid
+				mutate(&cfg)
+				_, err := NewKind(cfg)
+				assert.Error(t, err)
+			})
+		}
+	})
+}

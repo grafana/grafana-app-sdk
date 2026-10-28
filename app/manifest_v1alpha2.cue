@@ -109,6 +109,8 @@ appManifestv1alpha2: appManifestKind & {
 			search?: #ManifestVersionKindSearch
 			// embed defines the embedding document independently of search fields.
 			embed?: #ManifestVersionKindEmbed
+			// watch declares how this kind's changes reach the app's handlers.
+			watch?: #ManifestVersionKindWatch
 			// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 			// It may not prevent automatic conversion behavior between versions of the kind when set to false
 			// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
@@ -121,6 +123,33 @@ appManifestv1alpha2: appManifestKind & {
 			routes?: {
 				[string]: _
 			}
+		}
+		// #ManifestVersionKindWatch declares how a kind's changes reach the app's handlers.
+		#ManifestVersionKindWatch: {
+			// needs is what this kind's handlers require from the change stream. A runtime resolves it to the
+			// cheapest informer which satisfies it.
+			//   objects — handlers read objects from the informer's cache
+			//   signal  — handlers re-read the object, so knowing which one changed is enough
+			//   cadence — handlers re-evaluate everything on a schedule; changes need not be delivered
+			needs?: "objects" | "signal" | "cadence"
+			// metadata declares the object metadata this kind's change notifications should carry.
+			metadata?: #ManifestVersionKindWatchMetadata
+		}
+		// #ManifestVersionKindWatchMetadata declares which parts of an object's metadata a kind's change
+		// notifications should carry, for a platform which can announce changes out of band of the watch.
+		#ManifestVersionKindWatchMetadata: {
+			// labels are the metadata.labels keys to announce.
+			labels?: [...string]
+			// annotations are the metadata.annotations keys to announce.
+			annotations?: [...string]
+			// finalizers are the metadata.finalizers values to announce.
+			finalizers?: [...string]
+			// generation announces metadata.generation.
+			generation?: bool
+			// creationTimestamp announces metadata.creationTimestamp.
+			creationTimestamp?: bool
+			// deletionTimestamp announces metadata.deletionTimestamp.
+			deletionTimestamp?: bool
 		}
 		#ManifestVersionKindStorage: {
 			// listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.
