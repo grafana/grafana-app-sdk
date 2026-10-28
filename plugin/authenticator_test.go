@@ -94,7 +94,7 @@ func TestBuildAuthenticatorConfiguration(t *testing.T) {
 		{name: "http on IPv6 loopback", url: "http://[::1]:3000/jwks", manifest: manifest},
 		{name: "explicit JWKS", jwks: validJWKS, manifest: manifest},
 		{name: "explicit JWKS with several keys", jwks: testJWKS(t, public, withKID(public, "b")), manifest: manifest},
-		{name: "missing", manifest: manifest, wantErr: "set GRAFANA_JWKS_URL or GRAFANA_JWKS"},
+		{name: "missing", manifest: manifest, wantErr: "set GF_JWKS_URL or GF_JWKS"},
 		{name: "both sources", url: "https://auth.example.com/v1/jwks", jwks: validJWKS, manifest: manifest, wantErr: "set only one of"},
 		{name: "http on remote host", url: "http://api-lb.auth.svc.cluster.local./v1/keys", manifest: manifest},
 		{name: "relative", url: "/jwks", manifest: manifest, wantErr: "absolute URL"},
@@ -129,6 +129,12 @@ func TestBuildAuthenticatorConfiguration(t *testing.T) {
 	t.Setenv(EnvVarGrafanaJWKS, "")
 	_, err = buildAuthenticator("example-app", manifest)
 	require.ErrorIs(t, err, ErrNoSigningKeys)
+
+	// The legacy names are still read.
+	t.Setenv("GRAFANA_JWKS", validJWKS)
+	authenticator, err := buildAuthenticator("example-app", manifest)
+	require.NoError(t, err)
+	require.NotNil(t, authenticator)
 }
 
 func testJWKS(t *testing.T, keys ...jose.JSONWebKey) string {
