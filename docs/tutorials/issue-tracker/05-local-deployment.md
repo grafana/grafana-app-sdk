@@ -150,11 +150,7 @@ If we click on the `grafana` tile to see what the error is, it shows us the logs
 logger=provisioning t=2025-01-30T16:53:00.36954668Z level=error msg="Failed to provision plugins" error="app provisioning error: plugin not installed: \"issuetrackerproject-app\""
 ```
 
-So this is just something we didn't do before starting our environment. When we build the plugin, we also need to deploy it to the local cluster. Because the cluster can only read from `local/mounted-files`, the plugin must be copied there. The fix is simple: run `make local/deploy_plugin` (in a separate terminal window).
-
-```shell
-make local/deploy_plugin 
-```
+So this is just something we didn't do before starting our environment. When we build the plugin, we also need to deploy it to the local cluster. Because the cluster can only read from `local/mounted-files`, the plugin must be copied there. In another terminal window, run:
 ```shell
 $ make local/deploy_plugin 
 tilt disable grafana
