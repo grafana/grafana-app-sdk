@@ -72,10 +72,11 @@ func TestTokenExchangeAudiences(t *testing.T) {
 
 func setKubeConfigEnv(t *testing.T) {
 	t.Helper()
-	for _, key := range []string{"API_ACCESS_ROUTER_URL", "API_ACCESS_CAP_TOKEN", "API_ACCESS_TOKEN_EXCHANGE_URL", "API_ACCESS_BEARER_TOKEN", "API_ACCESS_CA_FILE", "API_ACCESS_INSECURE_TLS"} {
+	for _, key := range []string{EnvVarAPIAccessRouterURL, EnvVarAPIAccessCAPToken, EnvVarAPIAccessTokenExchangeURL, EnvVarAPIAccessBearerToken, EnvVarAPIAccessCAFile, EnvVarAPIAccessInsecureTLS} {
 		t.Setenv(key, "")
+		t.Setenv(legacyEnvVars[key], "")
 	}
-	t.Setenv("API_ACCESS_ROUTER_URL", "https://router.test")
+	t.Setenv(EnvVarAPIAccessRouterURL, "https://router.test")
 }
 
 func TestBuildKubeConfigWithOptions(t *testing.T) {
@@ -87,32 +88,42 @@ func TestBuildKubeConfigWithOptions(t *testing.T) {
 	}{
 		{
 			name: "bearer authentication",
-			env:  map[string]string{"API_ACCESS_BEARER_TOKEN": "test-token"},
+			env:  map[string]string{EnvVarAPIAccessBearerToken: "test-token"},
 			want: &rest.Config{Host: "https://router.test", APIPath: "/apis", BearerToken: "test-token"},
 		},
 		{
 			name: "CA file is preserved",
-			env:  map[string]string{"API_ACCESS_BEARER_TOKEN": "test-token", "API_ACCESS_CA_FILE": "/example/ca.pem"},
+			env:  map[string]string{EnvVarAPIAccessBearerToken: "test-token", EnvVarAPIAccessCAFile: "/example/ca.pem"},
 			want: &rest.Config{Host: "https://router.test", APIPath: "/apis", BearerToken: "test-token", TLSClientConfig: rest.TLSClientConfig{CAFile: "/example/ca.pem"}},
 		},
 		{
 			name: "insecure TLS is preserved",
-			env:  map[string]string{"API_ACCESS_BEARER_TOKEN": "test-token", "API_ACCESS_INSECURE_TLS": "true"},
+			env:  map[string]string{EnvVarAPIAccessBearerToken: "test-token", EnvVarAPIAccessInsecureTLS: "true"},
 			want: &rest.Config{Host: "https://router.test", APIPath: "/apis", BearerToken: "test-token", TLSClientConfig: rest.TLSClientConfig{Insecure: true}},
 		},
 		{
 			name:    "missing credentials",
-			wantErr: "no credentials provided: set API_ACCESS_TOKEN_EXCHANGE_URL+API_ACCESS_CAP_TOKEN or API_ACCESS_BEARER_TOKEN",
+			wantErr: "no credentials provided: set GF_API_ACCESS_TOKEN_EXCHANGE_URL+GF_API_ACCESS_CAP_TOKEN or GF_API_ACCESS_BEARER_TOKEN",
 		},
 		{
 			name:    "partial exchange credentials do not fall back to bearer",
-			env:     map[string]string{"API_ACCESS_CAP_TOKEN": "test-cap", "API_ACCESS_BEARER_TOKEN": "test-token"},
+			env:     map[string]string{EnvVarAPIAccessCAPToken: "test-cap", EnvVarAPIAccessBearerToken: "test-token"},
 			wantErr: "TokenExchangeURL and Token are required when ExchangerFunc is not set",
 		},
 		{
+			name: "legacy names are still read",
+			env:  map[string]string{EnvVarAPIAccessRouterURL: "", "API_ACCESS_ROUTER_URL": "https://legacy.test", "API_ACCESS_BEARER_TOKEN": "test-token", "API_ACCESS_CA_FILE": "/example/ca.pem"},
+			want: &rest.Config{Host: "https://legacy.test", APIPath: "/apis", BearerToken: "test-token", TLSClientConfig: rest.TLSClientConfig{CAFile: "/example/ca.pem"}},
+		},
+		{
+			name: "new names take precedence over legacy names",
+			env:  map[string]string{"API_ACCESS_ROUTER_URL": "https://legacy.test", EnvVarAPIAccessBearerToken: "test-token", "API_ACCESS_BEARER_TOKEN": "legacy-token"},
+			want: &rest.Config{Host: "https://router.test", APIPath: "/apis", BearerToken: "test-token"},
+		},
+		{
 			name:    "missing URL",
-			env:     map[string]string{"API_ACCESS_ROUTER_URL": ""},
-			wantErr: "no url provided: set API_ACCESS_ROUTER_URL",
+			env:     map[string]string{EnvVarAPIAccessRouterURL: ""},
+			wantErr: "no url provided: set GF_API_ACCESS_ROUTER_URL",
 		},
 	}
 	for _, tt := range tests {
@@ -187,9 +198,9 @@ func TestBuildKubeConfigWithOptions_TokenExchange(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			}))
 			defer backend.Close()
-			t.Setenv("API_ACCESS_ROUTER_URL", backend.URL)
-			t.Setenv("API_ACCESS_TOKEN_EXCHANGE_URL", signer.URL)
-			t.Setenv("API_ACCESS_CAP_TOKEN", "test-cap")
+			t.Setenv(EnvVarAPIAccessRouterURL, backend.URL)
+			t.Setenv(EnvVarAPIAccessTokenExchangeURL, signer.URL)
+			t.Setenv(EnvVarAPIAccessCAPToken, "test-cap")
 
 			cfg, err := BuildKubeConfigWithOptions(app.ManifestData{Group: "example.test"}, KubeConfigOptions{AdditionalTokenAudiences: tt.additions})
 			require.NoError(t, err)
@@ -237,9 +248,9 @@ func TestBuildKubeConfigWithOptions_ExchangesOnBehalfOfCaller(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			}))
 			defer backend.Close()
-			t.Setenv("API_ACCESS_ROUTER_URL", backend.URL)
-			t.Setenv("API_ACCESS_TOKEN_EXCHANGE_URL", signer.URL)
-			t.Setenv("API_ACCESS_CAP_TOKEN", "test-cap")
+			t.Setenv(EnvVarAPIAccessRouterURL, backend.URL)
+			t.Setenv(EnvVarAPIAccessTokenExchangeURL, signer.URL)
+			t.Setenv(EnvVarAPIAccessCAPToken, "test-cap")
 
 			cfg, err := BuildKubeConfigWithOptions(app.ManifestData{Group: "example.test"}, KubeConfigOptions{})
 			require.NoError(t, err)

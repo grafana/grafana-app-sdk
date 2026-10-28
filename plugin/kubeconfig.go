@@ -2,12 +2,12 @@ package plugin
 
 import (
 	"errors"
-	"os"
 
 	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/k8s"
+	"github.com/grafana/grafana-app-sdk/logging"
 )
 
 const (
@@ -26,13 +26,13 @@ type KubeConfigOptions struct {
 // BuildKubeConfig builds the rest.Config from environment variables.
 //
 // Picks up configuration for API access from:
-// - API_ACCESS_ROUTER_URL
-// - API_ACCESS_CA_FILE (optional)
-// - API_ACCESS_INSECURE_TLS (optional)
+// - GF_API_ACCESS_ROUTER_URL
+// - GF_API_ACCESS_CA_FILE (optional)
+// - GF_API_ACCESS_INSECURE_TLS (optional)
 //
 // Configures token exchange if the following are set:
-// - API_ACCESS_CAP_TOKEN
-// - API_ACCESS_TOKEN_EXCHANGE_URL
+// - GF_API_ACCESS_CAP_TOKEN
+// - GF_API_ACCESS_TOKEN_EXCHANGE_URL
 //
 // With token exchange, a request whose context carries verified AuthInfo or a
 // legacy ID token (see k8s.ContextWithIDToken) is made as that caller, limited to
@@ -42,7 +42,9 @@ type KubeConfigOptions struct {
 // grpcplugin.ServeOpts.Authenticator). Other requests act as the plugin.
 //
 // Otherwise falls back to standard auth, using:
-// - API_ACCESS_BEARER_TOKEN
+// - GF_API_ACCESS_BEARER_TOKEN (deprecated, logs a warning when set)
+//
+// The legacy names without the GF_ prefix are read when the new names are unset.
 func BuildKubeConfig(manifestData app.ManifestData) (*rest.Config, error) {
 	return BuildKubeConfigWithOptions(manifestData, KubeConfigOptions{})
 }
@@ -50,14 +52,19 @@ func BuildKubeConfig(manifestData app.ManifestData) (*rest.Config, error) {
 // BuildKubeConfigWithOptions builds the same environment-based configuration as
 // BuildKubeConfig, with optional additional token-exchange audiences.
 func BuildKubeConfigWithOptions(manifestData app.ManifestData, options KubeConfigOptions) (*rest.Config, error) {
-	routerURL := os.Getenv("API_ACCESS_ROUTER_URL")
+	routerURL := getEnv(EnvVarAPIAccessRouterURL)
 	if routerURL == "" {
-		return nil, errors.New("no url provided: set API_ACCESS_ROUTER_URL")
+		return nil, errors.New("no url provided: set " + EnvVarAPIAccessRouterURL)
+	}
+
+	bearerToken := getEnv(EnvVarAPIAccessBearerToken)
+	if bearerToken != "" {
+		logging.DefaultLogger.Warn(EnvVarAPIAccessBearerToken + " is deprecated: set " + EnvVarAPIAccessTokenExchangeURL + " and " + EnvVarAPIAccessCAPToken + " instead")
 	}
 
 	// Check if token exchange is configured.
-	tokenExchangeURL := os.Getenv("API_ACCESS_TOKEN_EXCHANGE_URL")
-	capToken := os.Getenv("API_ACCESS_CAP_TOKEN")
+	tokenExchangeURL := getEnv(EnvVarAPIAccessTokenExchangeURL)
+	capToken := getEnv(EnvVarAPIAccessCAPToken)
 	if tokenExchangeURL != "" || capToken != "" {
 		return k8s.NewTokenExchangeRestConfig(
 			k8s.TokenExchangeCredentials{
@@ -67,26 +74,26 @@ func BuildKubeConfigWithOptions(manifestData app.ManifestData, options KubeConfi
 			k8s.RemoteServiceTarget{
 				Host:        routerURL,
 				Audiences:   TokenExchangeAudiences(manifestData, options.AdditionalTokenAudiences...),
-				InsecureTLS: os.Getenv("API_ACCESS_INSECURE_TLS") == "true",
-				CAFile:      os.Getenv("API_ACCESS_CA_FILE"),
+				InsecureTLS: getEnv(EnvVarAPIAccessInsecureTLS) == "true",
+				CAFile:      getEnv(EnvVarAPIAccessCAFile),
 			},
 		)
 	}
 
 	// Fall back to auth without token exchange: a bearer token.
-	if bearerToken := os.Getenv("API_ACCESS_BEARER_TOKEN"); bearerToken != "" {
+	if bearerToken != "" {
 		return &rest.Config{
 			Host:        routerURL,
 			APIPath:     "/apis",
 			BearerToken: bearerToken,
 			TLSClientConfig: rest.TLSClientConfig{
-				Insecure: os.Getenv("API_ACCESS_INSECURE_TLS") == "true",
-				CAFile:   os.Getenv("API_ACCESS_CA_FILE"),
+				Insecure: getEnv(EnvVarAPIAccessInsecureTLS) == "true",
+				CAFile:   getEnv(EnvVarAPIAccessCAFile),
 			},
 		}, nil
 	}
 
-	return nil, errors.New("no credentials provided: set API_ACCESS_TOKEN_EXCHANGE_URL+API_ACCESS_CAP_TOKEN or API_ACCESS_BEARER_TOKEN")
+	return nil, errors.New("no credentials provided: set " + EnvVarAPIAccessTokenExchangeURL + "+" + EnvVarAPIAccessCAPToken + " or " + EnvVarAPIAccessBearerToken)
 }
 
 // TokenExchangeAudiences returns the manifest's API-group audiences followed by
