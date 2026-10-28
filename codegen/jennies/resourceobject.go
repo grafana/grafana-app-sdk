@@ -132,6 +132,10 @@ func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.VersionedKind,
 	if r.SubresourceTypesArePrefixed {
 		typePrefix = exportField(kind.Kind)
 	}
+	specGoType := false
+	if specVal := kind.Schema.LookupPath(cue.MakePath(cue.Str("spec"))); specVal.Exists() {
+		_, _, specGoType = goTypeOverride(specVal)
+	}
 	md := templates.ResourceObjectTemplateMetadata{
 		Package:              pkg,
 		HasSecureValues:      len(kind.SecureValues) > 0,
@@ -142,6 +146,7 @@ func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.VersionedKind,
 		Subresources:         make([]templates.SubresourceMetadata, 0),
 		CustomMetadataFields: customMetadataFields,
 		OpenAPIModelName:     openAPIName,
+		SpecIsExternalGoType: specGoType,
 	}
 	it, err := kind.Schema.Fields()
 	if err != nil {
@@ -152,10 +157,12 @@ func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.VersionedKind,
 			continue
 		}
 		fieldName := exportField(it.Selector().String())
+		_, _, isExternalGoType := goTypeOverride(it.Value())
 		md.Subresources = append(md.Subresources, templates.SubresourceMetadata{
-			Name:     fieldName,
-			TypeName: typePrefix + fieldName,
-			JSONName: it.Selector().String(),
+			Name:             fieldName,
+			TypeName:         typePrefix + fieldName,
+			JSONName:         it.Selector().String(),
+			IsExternalGoType: isExternalGoType,
 		})
 	}
 	b := bytes.Buffer{}

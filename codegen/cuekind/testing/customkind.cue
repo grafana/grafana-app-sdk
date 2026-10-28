@@ -87,7 +87,7 @@ customKind: {
 				status: {
 					statusField1: string
 					[string]:     _
-				} @cog(open=true)
+				} @cog(open=true) @grafana_app_sdk(goType="codegen-tests/pkg/generated/shared.Status")
 				metadata: {
 					customMetadataField: string
 					otherMetadataField:  string
