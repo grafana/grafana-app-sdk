@@ -10,7 +10,7 @@ require (
 	github.com/getkin/kin-openapi v0.152.0
 	github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815
 	github.com/grafana/grafana-app-sdk v0.61.0
-	github.com/grafana/grafana-plugin-sdk-go v0.297.0
+	github.com/grafana/grafana-plugin-sdk-go v0.298.0
 	github.com/stretchr/testify v1.12.1
 )
 
