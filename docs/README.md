@@ -13,13 +13,11 @@ Godocs on exported library package code (such as `resource`, `operator`, `plugin
 
 | Document                                              | Description |
 |-------------------------------------------------------|-------------|
-| [Application Design](./application-design/README.md)  | The typical design patterns of an app built with the SDK |
 | [Custom Kinds](./custom-kinds/README.md)              | What are kinds, how to write them, and how to use them |
 | [Resource Objects](./resource-objects.md)             | Describes the function and usage of the `resource.Object` interface |
 | [Resource Stores](./resource-stores.md)               | Describes the various "Store" types in the `resource` package, and why you may want to use one or another |
-| [Operators & Event-Based Design](./operators.md)      | A brief primer on what operators/controllers are and working with event-based code |
+| [Writing a Reconciler](./writing-a-reconciler.md)     | Reconcilers and watchers for event-based code |
 | [Code Generation](./code-generation.md)               | How to use CUE and the CLI for code generation. |
-| [Local Dev Environment Setup](./local-development.md) | How to use the CLI to set up a local development & testing environment |
 | [Admission Control](./admission-control.md)           | How to add validation and mutation logic to your kinds |
 
 ## Base Concepts of the SDK
@@ -31,10 +29,10 @@ it declares its kinds in its [manifest](./app-manifest.md), and the platform exp
 
 To work directly with resources, you can use an instance of a `resource.Client`, or one of the [Store](./resource-stores.md)-type objects which simplifies interactions by allowing you to treat the system as a key-value store.
 
-An important component of the SDK is the use of the operator pattern. Using the `operator` package, you can set up an operator to watch for changes to one or more kinds, and take actions based on the nature of those changes. This allows behavior to be decoupled from the actual input API, which is especially useful because users can create, modify, or delete resources through many paths (your UI, `kubectl`, gitops tooling, other apps). For more details on this, see [Design Patterns](./application-design/README.md).
+An important component of the SDK is the use of the operator pattern. Using the `operator` package, you can set up an operator to watch for changes to one or more kinds, and take actions based on the nature of those changes. This allows behavior to be decoupled from the actual input API, which is especially useful because users can create, modify, or delete resources through many paths (your UI, `kubectl`, gitops tooling, other apps).
 
-Finally, the experimental `plugin` package runs an `app.App` inside a grafana app plugin's backend (see [the plugin protocol v3 example](../examples/plugin/README.md)).
-Frontends should call the platform API directly, and use custom routes if they need non-standard endpoints (see [Applications with Custom APIs](./application-design/README.md#applications-with-custom-apis)).
+Finally, the experimental `plugin` package runs an `app.App` inside a grafana app plugin's backend.
+Frontends should call the platform API directly, and use custom routes if they need non-standard endpoints.
 
 ## Documentation Improvements
 
