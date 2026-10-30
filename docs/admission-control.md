@@ -53,7 +53,7 @@ func NewApp(cfg app.Config) (app.App, error) {
 
 You also need to declare validation and/or mutation for the kind in your [manifest](./app-manifest.md), so the platform knows to call your app.
 `simple.App.ValidateManifest` will return an error if the capabilities in your code and your manifest don't match.
-For a step-by-step walkthrough, see [part 8 of the tutorial](./tutorials/issue-tracker/08-adding-admission-control.md).
+For a step-by-step walkthrough, see [part 7 of the tutorial](./tutorials/issue-tracker/07-adding-admission-control.md).
 
 If you implement `app.App` yourself, put your logic in its `Validate` and `Mutate` methods instead.
 
@@ -74,4 +74,4 @@ webhooks:
   mutating: true # or false if you're only doing validating hooks
   port: 8443 # or whatever port you're using
 ```
-in `local/config.yaml` to have your local environment call your operator for admission. See [Local Development](./local-development.md) for more details.
+in `local/config.yaml` to have your local environment call your operator for admission.

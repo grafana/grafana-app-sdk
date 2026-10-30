@@ -145,5 +145,5 @@ The neat part about this validation and mutation is that it occurs irrespective 
 
 For more details on admission control, see [Admission Control](../../admission-control.md).
 
-### Prev: [Writing Operator Code](07-operator-watcher.md)
-### Next: [Wrap-Up and Further Reading](09-wrap-up.md)
+### Prev: [Writing Operator Code](06-operator-watcher.md)
+### Next: [Wrap-Up and Further Reading](08-wrap-up.md)

@@ -213,4 +213,4 @@ manifest: extraPermissions: accessKinds: [{
 ### Local Deployment
 
 By default, the local environment set up by the CLI won't include the other app's kind(s). 
-You'll have to add their definitions to `local/additional` as YAML file(s) (see [Local Development](./local-development.md)).
+You'll have to add their definitions to `local/additional` as YAML file(s).

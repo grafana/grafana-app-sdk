@@ -59,7 +59,7 @@ func (s *IssueWatcher) Add(ctx context.Context, rObj resource.Object) error {
 	return nil
 }
 ```
-Each method does a check to see if the provided `resource.Object` is of type `*issuev1.Issue` (it always should be, provided we attached this watcher to the correct `resource.Kind`). We then just log a line declaring what resource was added, which we saw when [testing our local deployment](05-local-deployment.md).
+Each method does a check to see if the provided `resource.Object` is of type `*issuev1.Issue` (it always should be, provided we attached this watcher to the correct `resource.Kind`). We then just log a line declaring what resource was added, when it is run.
 
 So what else can we do in our watcher?
 
@@ -321,7 +321,7 @@ Now whenever the watcher processes an Add, Update, or Sync, it'll update the `pr
 
 Tracking data in the `status` subresource is an operator best practice. For other considerations when writing an operator, check out [Considerations When Writing a Reconciler](../../writing-a-reconciler.md#considerations-when-writing-a-reconciler).
 
-Now that we have a watcher that does something, let's look at adding some other capabilities to our app: [API admission control](08-adding-admission-control.md).
+Now that we have a watcher that does something, let's look at adding some other capabilities to our app: [API admission control](07-adding-admission-control.md).
 
-### Prev: [Writing Our Front-End](06-frontend.md)
-### Next: [Adding Admission Control](08-adding-admission-control.md)
+### Prev: [Writing Our Front-End](05-frontend.md)
+### Next: [Adding Admission Control](07-adding-admission-control.md)

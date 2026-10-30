@@ -59,7 +59,7 @@ Please see [Writing Kinds](./custom-kinds/writing-kinds.md) for a more detailed 
 
 Project component generation is used to add boilerplate code for a "component" of your app. Components understood by the SDK are:
 * `frontend` - a frontend plugin for your app, written in TypeScript. This is deployed in grafana as a standard app plugin.
-* `operator` - a standalone operator, written in go (see [Operator-based applications](./application-design/README.md#operator-based-applications) in [Application design patterns](./application-design/README.md)).
+* `operator` - a standalone operator, written in go.
 
 Multiple components can be specified in the same command. The full syntax is:
 ```
@@ -97,7 +97,7 @@ Project initialization is a special case of code generation used to initialize a
 ```
 grafana-app-sdk project init <project go module name>
 ```
-This sets up your project with a go module, a `kinds` directory with a CUE module, a `Makefile` with some sample targets, and a `local` directory that can be used with `grafana-app-sdk project local` commands (see [Local Development & Testing](./local-development.md)).
+This sets up your project with a go module, a `kinds` directory with a CUE module, a `Makefile` with some sample targets, and a `local` directory that can be used with `grafana-app-sdk project local` commands.
 
 ## Adding routes from a saved OpenAPI document
 

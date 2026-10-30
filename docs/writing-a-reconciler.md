@@ -3,11 +3,10 @@
 A Reconciler is a logical pattern which takes the state of a set of objects in the platform API, and propagates changes to other components based on that state. 
 This logic is asynchronous, and works by having a function which is called when a change occurs in the set of resources the reconciler is watching, 
 which provides the current state of the object, and the type of change that occurred (Create, Update, Delete). 
-For more information, see the [Asynchronous Business Logic section in Platform Concepts](application-design/platform-concepts.md#asynchronous-business-logic).
 
 ## Reconciler vs Watcher
 
-Both reconcilers and watchers are used for the [reconciliation process](./application-design/platform-concepts.md#asynchronous-business-logic). 
+Both reconcilers and watchers are used for the reconciliation process. 
 Whether you use one or the other is down to preference, and use-case. 
 Both reconcilers and watchers are powered by the same informer design within an `InformerController`, with just slightly different handling logic. 
 They both have an `Opinionated` variant that can wrap the interface as well. Note: if using the `Opinionated` variant, it will add a [finalizer](https://kubernetes.io/docs/concepts/overview/working-with-objects/finalizers/) to the resource you are watching. If you are watching a resource not created by your app, please reach out to the owners prior to proceeding with this approach.
