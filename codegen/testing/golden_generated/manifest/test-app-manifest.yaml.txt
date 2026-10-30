@@ -127,6 +127,8 @@ spec:
     - conversion: false
       kind: TestKind2
       plural: TestKind2s
+      provisioning:
+        enabled: true
       schemas:
         OperatorState:
           additionalProperties: false
@@ -191,6 +193,10 @@ spec:
         trash: false
       storage:
         listKeys: false
+      ui:
+        icon: apps
+        label: Test kind
+        pluralLabel: Test kinds
       userReadable: false
     name: v1
     served: true
