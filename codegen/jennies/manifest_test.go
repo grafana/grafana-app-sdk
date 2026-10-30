@@ -230,6 +230,43 @@ func TestProcessKindVersion_Search(t *testing.T) {
 	}
 }
 
+func TestProcessKindVersion_ProvisioningAndUI(t *testing.T) {
+	for _, tc := range []struct {
+		name                 string
+		provisioning         *codegen.KindProvisioning
+		ui                   *codegen.KindUI
+		expectedProvisioning *app.ManifestVersionKindProvisioning
+		expectedUI           *app.ManifestVersionKindUI
+	}{
+		{name: "unset"},
+		{name: "empty", provisioning: &codegen.KindProvisioning{}, ui: &codegen.KindUI{}},
+		{
+			name:                 "provisioning enabled",
+			provisioning:         &codegen.KindProvisioning{Enabled: true},
+			expectedProvisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
+		},
+		{
+			name:       "ui",
+			ui:         &codegen.KindUI{Label: "Widget", PluralLabel: "Widgets", Icon: "apps"},
+			expectedUI: &app.ManifestVersionKindUI{Label: "Widget", PluralLabel: "Widgets", Icon: "apps"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mver, err := processKindVersion(codegen.VersionedKind{
+				Kind:         "Foo",
+				PluralName:   "Foos",
+				Scope:        "Namespaced",
+				FolderScoped: true,
+				Provisioning: tc.provisioning,
+				UI:           tc.ui,
+			}, "v1", false)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedProvisioning, mver.Provisioning)
+			assert.Equal(t, tc.expectedUI, mver.UI)
+		})
+	}
+}
+
 func TestProcessKindVersion_Embed(t *testing.T) {
 	for _, tc := range []struct {
 		name     string

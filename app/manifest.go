@@ -616,6 +616,10 @@ type ManifestVersionKind struct {
 	Search *ManifestVersionKindSearch `json:"search,omitempty" yaml:"search,omitempty"`
 	// Embed defines the embedding document independently of search fields.
 	Embed *ManifestVersionKindEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
+	// Provisioning declares whether provisioning (Git Sync) manages this kind.
+	Provisioning *ManifestVersionKindProvisioning `json:"provisioning,omitempty" yaml:"provisioning,omitempty"`
+	// UI declares how user interfaces display this kind.
+	UI *ManifestVersionKindUI `json:"ui,omitempty" yaml:"ui,omitempty"`
 }
 
 // ManifestVersionKindSecureValue describes a secure value used by a kind.
@@ -659,6 +663,22 @@ type ManifestVersionKindEmbed struct {
 	Fields []ManifestVersionKindEmbedField `json:"fields" yaml:"fields"`
 }
 
+// ManifestVersionKindProvisioning declares whether provisioning (Git Sync) manages a kind.
+type ManifestVersionKindProvisioning struct {
+	// Enabled declares whether provisioning manages resources of this kind. A nil value defaults to false.
+	Enabled *bool `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+}
+
+// ManifestVersionKindUI declares how user interfaces display a kind.
+type ManifestVersionKindUI struct {
+	// Label is the singular display name of the kind.
+	Label string `json:"label,omitempty" yaml:"label,omitempty"`
+	// PluralLabel is the plural display name of the kind.
+	PluralLabel string `json:"pluralLabel,omitempty" yaml:"pluralLabel,omitempty"`
+	// Icon is the name of a Grafana UI icon for the kind.
+	Icon string `json:"icon,omitempty" yaml:"icon,omitempty"`
+}
+
 // ManifestVersionKindEmbedField supplies text for the embedding document without exposing a search field.
 type ManifestVersionKindEmbedField struct {
 	// Name labels this input in the embedding document.
@@ -696,6 +716,12 @@ func (m *ManifestVersionKind) HasHybridEndpoint() bool {
 // Kinds are not included unless they explicitly opt in.
 func (m *ManifestVersionKind) InGlobalSearchIndex() bool {
 	return m.Search != nil && m.Search.Global != nil && *m.Search.Global
+}
+
+// IsProvisionable reports whether provisioning (Git Sync) manages the kind.
+// Kinds are not provisionable unless they explicitly opt in.
+func (m *ManifestVersionKind) IsProvisionable() bool {
+	return m.Provisioning != nil && m.Provisioning.Enabled != nil && *m.Provisioning.Enabled
 }
 
 // isFolderScoped returns the effective folderScoped value for a kind, treating a nil pointer
