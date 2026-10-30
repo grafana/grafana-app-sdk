@@ -21,7 +21,7 @@ require (
 	github.com/grafana/codejen v0.0.4
 	github.com/grafana/cog v0.2.2
 	github.com/grafana/grafana-app-sdk/logging v0.61.0
-	github.com/grafana/grafana-plugin-sdk-go v0.297.0
+	github.com/grafana/grafana-plugin-sdk-go v0.298.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-plugin v1.8.0
 	github.com/prometheus/client_golang v1.25.0
