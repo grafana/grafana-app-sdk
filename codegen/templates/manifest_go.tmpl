@@ -189,6 +189,14 @@ var appManifestData = app.ManifestData{
                             Path: {{ goString .Path }},
                         },{{ end }}
                     },
+                }, {{ end }}{{ if .Provisioning }}
+                Provisioning: &app.ManifestVersionKindProvisioning{
+                    Enabled: {{ goBoolPtr .Provisioning.Enabled }},
+                }, {{ end }}{{ if .UI }}
+                UI: &app.ManifestVersionKindUI{ {{ if .UI.Label }}
+                    Label: {{ goString .UI.Label }},{{ end }}{{ if .UI.PluralLabel }}
+                    PluralLabel: {{ goString .UI.PluralLabel }},{{ end }}{{ if .UI.Icon }}
+                    Icon: {{ goString .UI.Icon }},{{ end }}
                 }, {{ end }}{{ if .Admission }}
                 Admission: &app.AdmissionCapabilities{
                     {{ if .Admission.Validation }} Validation: &app.ValidationCapability{

@@ -109,6 +109,10 @@ appManifestv1alpha2: appManifestKind & {
 			search?: #ManifestVersionKindSearch
 			// embed defines the embedding document independently of search fields.
 			embed?: #ManifestVersionKindEmbed
+			// provisioning declares whether provisioning (Git Sync) manages this kind.
+			provisioning?: #ManifestVersionKindProvisioning
+			// ui declares how user interfaces display this kind.
+			ui?: #ManifestVersionKindUI
 			// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 			// It may not prevent automatic conversion behavior between versions of the kind when set to false
 			// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
@@ -143,6 +147,18 @@ appManifestv1alpha2: appManifestKind & {
 			// fields supplies inputs, in declaration order, used only to generate the text to be embedded.
 			// Declaring an embedding field does not enable filtering embeddings by that field.
 			fields: [...#ManifestVersionKindEmbedField]
+		}
+		#ManifestVersionKindProvisioning: {
+			// enabled declares whether provisioning manages resources of this kind.
+			enabled?: bool | *false
+		}
+		#ManifestVersionKindUI: {
+			// label is the singular display name of the kind.
+			label?: string
+			// pluralLabel is the plural display name of the kind.
+			pluralLabel?: string
+			// icon is the name of a Grafana UI icon for the kind.
+			icon?: string
 		}
 		#ResourceEmbed: {
 			// reembedVersion is a manual revision for requesting re-embedding of existing resources, shared by all API versions.

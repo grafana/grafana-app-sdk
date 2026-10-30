@@ -156,6 +156,21 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 					}
 				}
 			}
+			if kind.Provisioning != nil {
+				k.Provisioning = &app.ManifestVersionKindProvisioning{Enabled: kind.Provisioning.Enabled}
+			}
+			if kind.Ui != nil {
+				k.UI = &app.ManifestVersionKindUI{}
+				if kind.Ui.Label != nil {
+					k.UI.Label = *kind.Ui.Label
+				}
+				if kind.Ui.PluralLabel != nil {
+					k.UI.PluralLabel = *kind.Ui.PluralLabel
+				}
+				if kind.Ui.Icon != nil {
+					k.UI.Icon = *kind.Ui.Icon
+				}
+			}
 			// Schema
 			if kind.Schemas != nil {
 				toParse := make(map[string]any)
@@ -483,6 +498,21 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 						k.Embed.Fields[i].Name = field.Name
 						k.Embed.Fields[i].Path = field.Path
 					}
+				}
+			}
+			if kind.Provisioning != nil {
+				k.Provisioning = &AppManifestManifestVersionKindProvisioning{Enabled: kind.Provisioning.Enabled}
+			}
+			if kind.UI != nil {
+				k.Ui = &AppManifestManifestVersionKindUI{}
+				if kind.UI.Label != "" {
+					k.Ui.Label = &kind.UI.Label
+				}
+				if kind.UI.PluralLabel != "" {
+					k.Ui.PluralLabel = &kind.UI.PluralLabel
+				}
+				if kind.UI.Icon != "" {
+					k.Ui.Icon = &kind.UI.Icon
 				}
 			}
 			// Routes
