@@ -203,6 +203,15 @@ func TestParseManifestRoutes(t *testing.T) {
 		require.Contains(t, v3Kind.Routes, "/search")
 		assert.Equal(t, "getTestKindSearchResult", v3Kind.Routes["/search"]["GET"].Name)
 
+		// Path parameter documentation and an operation ID that differs from the name
+		file := v3Kind.Routes["/files/{file}"]["GET"]
+		assert.Equal(t, "getTestKindFile", file.Name)
+		assert.Equal(t, "fetchTestKindFile", file.OperationID)
+		assert.Equal(t, map[string]codegen.CustomRoutePathParam{
+			"file": {Description: "Name of the file", Example: "report.csv"},
+		}, file.Request.PathParams)
+		assert.Empty(t, v3Kind.Routes["/search"]["GET"].OperationID, "the operation ID is optional")
+
 		// Route authz, fully and partially specified
 		require.NotNil(t, v3Kind.Routes["/reconcile"]["POST"].Authz)
 		assert.Equal(t, codegen.CustomRouteAuthz{
@@ -426,6 +435,47 @@ func TestParseManifestListKeys(t *testing.T) {
 				require.NotNil(t, kinds[0].ListKeys)
 				assert.Equal(t, tc.want, *kinds[0].ListKeys)
 			}
+		})
+	}
+}
+
+func TestParseManifestRouteOperationID(t *testing.T) {
+	for _, tc := range []struct {
+		name, declaration string
+		invalid           bool
+	}{
+		{name: "omitted"},
+		{name: "a verb-less identifier", declaration: `operationId: "addStar"`},
+		{name: "with underscores and digits", declaration: `operationId: "add_star2"`},
+		{name: "with a space", declaration: `operationId: "add star"`, invalid: true},
+		{name: "starting with a digit", declaration: `operationId: "2star"`, invalid: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testingCue(t)
+			c.Root = c.Root.Context().CompileString(fmt.Sprintf(`
+				manifest: {
+					appName: "ids-app"
+					versions: v1: {
+						kinds: []
+						routes: namespaced: "/star/{id}": PUT: {
+							name: "createStar"
+							%s
+							request: pathParams: id: description: "The object to star"
+							response: {}
+						}
+					}
+				}`, tc.declaration))
+			parser, err := NewParser(c, false)
+			require.NoError(t, err)
+			manifest, err := parser.ParseManifest("manifest")
+			if tc.invalid {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			route := manifest.Versions()[0].Routes().Namespaced["/star/{id}"]["PUT"]
+			assert.Equal(t, "createStar", route.Name)
+			assert.Equal(t, "The object to star", route.Request.PathParams["id"].Description)
 		})
 	}
 }

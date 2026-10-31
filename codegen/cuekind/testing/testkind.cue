@@ -266,6 +266,20 @@ testKind: {
 						}
 					}
 				}
+				"/files/{file}": {
+					GET: {
+						name: "getTestKindFile"
+						// The operation ID clients are generated for, where name has to start with a verb.
+						operationId: "fetchTestKindFile"
+						request: pathParams: file: {
+							description: "Name of the file"
+							example:     "report.csv"
+						}
+						response: {
+							content: string
+						}
+					}
+				}
 			}
 		}
 		// v4: selectable field crosses a union nested under spec (spec.union is the disjunction; path .spec.union.spec.name).

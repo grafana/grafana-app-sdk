@@ -135,8 +135,17 @@ type EmbedField struct {
 
 // CustomRouteRequest represents the request part of a custom route definition.
 type CustomRouteRequest struct {
-	Query cue.Value `json:"query,omitempty"`
-	Body  cue.Value `json:"body,omitempty"`
+	// PathParams documents the parameters in the route's path, by name.
+	PathParams map[string]CustomRoutePathParam `json:"pathParams,omitempty"`
+	Query      cue.Value                       `json:"query,omitempty"`
+	Body       cue.Value                       `json:"body,omitempty"`
+}
+
+// CustomRoutePathParam documents one parameter in a custom route's path. A path parameter is
+// always a string and always required, so only its documentation is declared.
+type CustomRoutePathParam struct {
+	Description string `json:"description,omitempty"`
+	Example     string `json:"example,omitempty"`
 }
 
 type CustomRouteResponseMetadata struct {
@@ -158,7 +167,10 @@ type CustomRouteAuthz struct {
 
 // CustomRoute represents a single custom route definition for a specific HTTP method.
 type CustomRoute struct {
-	Name             string                      `json:"name"`
+	Name string `json:"name"`
+	// OperationID overrides the operationId of the generated OpenAPI operation, which is
+	// otherwise Name. Name still names the generated Go types and schemas.
+	OperationID      string                      `json:"operationId,omitempty"`
 	Summary          string                      `json:"summary,omitempty"`
 	Description      string                      `json:"description,omitempty"`
 	Request          CustomRouteRequest          `json:"request"`

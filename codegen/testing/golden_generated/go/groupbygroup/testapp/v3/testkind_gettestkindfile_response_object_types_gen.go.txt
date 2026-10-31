@@ -1,0 +1,41 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package v3
+
+import (
+	"github.com/grafana/grafana-app-sdk/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+)
+
+// +k8s:openapi-gen=true
+type GetTestKindFileResponse struct {
+	metav1.TypeMeta     `json:",inline"`
+	GetTestKindFileBody `json:",inline"`
+}
+
+func NewGetTestKindFileResponse() *GetTestKindFileResponse {
+	return &GetTestKindFileResponse{}
+}
+
+func (t *GetTestKindFileBody) DeepCopyInto(dst *GetTestKindFileBody) {
+	_ = resource.CopyObjectInto(dst, t)
+}
+
+func (o *GetTestKindFileResponse) DeepCopyObject() runtime.Object {
+	dst := NewGetTestKindFileResponse()
+	o.DeepCopyInto(dst)
+	return dst
+}
+
+func (o *GetTestKindFileResponse) DeepCopyInto(dst *GetTestKindFileResponse) {
+	dst.TypeMeta.APIVersion = o.TypeMeta.APIVersion
+	dst.TypeMeta.Kind = o.TypeMeta.Kind
+	o.GetTestKindFileBody.DeepCopyInto(&dst.GetTestKindFileBody)
+}
+
+func (GetTestKindFileResponse) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.GetTestKindFileResponse"
+}
+
+var _ runtime.Object = NewGetTestKindFileResponse()

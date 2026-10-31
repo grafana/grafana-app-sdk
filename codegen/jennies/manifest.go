@@ -3,12 +3,14 @@ package jennies
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"go/format"
 	"maps"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -854,10 +856,15 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 			operationID = sourceRoute.Name
 		}
 
-		targetParameters, err := cueSchemaToParameters(sourceRoute.Request.Query)
+		pathParameters, err := customRoutePathParameters(sourcePath, sourceRoute.Request.PathParams)
+		if err != nil {
+			return spec3.PathProps{}, nil, fmt.Errorf("error converting path parameters for %s %s: %w", sourceMethod, sourcePath, err)
+		}
+		queryParameters, err := cueSchemaToParameters(sourceRoute.Request.Query)
 		if err != nil {
 			return spec3.PathProps{}, nil, fmt.Errorf("error converting query schema for %s %s: %w", sourceMethod, sourcePath, err)
 		}
+		targetParameters := slices.Concat(pathParameters, queryParameters)
 		targetRequestBody, additional, err := cueSchemaToRequestBody(sourceRoute.Request.Body, operationID)
 		if err != nil {
 			return spec3.PathProps{}, nil, fmt.Errorf("error converting body schema for %s %s: %w", sourceMethod, sourcePath, err)
@@ -876,7 +883,9 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 				Parameters:  targetParameters,
 				RequestBody: targetRequestBody,
 				Responses:   targetResponses,
-				OperationId: operationID,
+				// The operation ID is what clients generated from the OpenAPI are named for. It can
+				// differ from the route's name, which names the generated Go types and schemas.
+				OperationId: cmp.Or(sourceRoute.OperationID, operationID),
 			},
 		}
 		targetOperation.Extensions = customRouteExtensions(sourceRoute)
@@ -897,6 +906,42 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 		}
 	}
 	return targetPathProps, additionalSchemas, nil
+}
+
+// pathParameterPattern matches a parameter in a route path, such as {name}.
+var pathParameterPattern = regexp.MustCompile(`\{([^{}/]+)\}`)
+
+// customRoutePathParameters builds the documented path parameters of a route, in name order. A path
+// parameter is always a string, and always required. Every declared name must be a parameter in the
+// path: documenting one that is not there is a mistake in the route, not a parameter to emit.
+func customRoutePathParameters(sourcePath string, declared map[string]codegen.CustomRoutePathParam) ([]*spec3.Parameter, error) {
+	if len(declared) == 0 {
+		return nil, nil
+	}
+	inPath := map[string]bool{}
+	for _, match := range pathParameterPattern.FindAllStringSubmatch(sourcePath, -1) {
+		// A parameter matching the rest of the path may be written {name:*} or {name...}.
+		name := strings.TrimSuffix(strings.TrimSuffix(match[1], ":*"), "...")
+		inPath[name] = true
+	}
+	names := slices.Sorted(maps.Keys(declared))
+	parameters := make([]*spec3.Parameter, 0, len(names))
+	for _, name := range names {
+		if !inPath[name] {
+			return nil, fmt.Errorf("path parameter %q is not a parameter in the path %q", name, sourcePath)
+		}
+		param := &spec3.Parameter{}
+		param.Name = name
+		param.In = "path"
+		param.Required = true
+		param.Description = declared[name].Description
+		if example := declared[name].Example; example != "" {
+			param.Example = example
+		}
+		param.Schema = spec.StringProperty()
+		parameters = append(parameters, param)
+	}
+	return parameters, nil
 }
 
 func cueSchemaToParameters(v cue.Value) ([]*spec3.Parameter, error) {

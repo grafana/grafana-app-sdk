@@ -141,7 +141,16 @@ SchemaWithOperatorState: Schema & {
 #AdmissionCapability: {
 	operations: [...string]
 }
+#CustomRoutePathParam: {
+	// description documents the parameter in the generated OpenAPI.
+	description?: string
+	// example is an example value for the parameter in the generated OpenAPI.
+	example?: string
+}
 #CustomRouteRequest: {
+	// pathParams documents the parameters in the route's path, by name. Each name must be a
+	// parameter in the path. A path parameter is always a string, and always required.
+	pathParams?: [string]: #CustomRoutePathParam
 	query?: _
 	body?:  _
 }
@@ -153,6 +162,10 @@ SchemaWithOperatorState: Schema & {
 }
 #CustomRoute: {
 	name:     =~"^(get|log|read|replace|patch|delete|deletecollection|watch|connect|proxy|list|create|patch)([A-Za-z0-9]+)$"
+	// operationId overrides the operationId of the generated OpenAPI operation, which is otherwise name.
+	// name still names the generated Go types and schemas, so it keeps its restricted form;
+	// operationId is for clients generated from the OpenAPI, and may be any identifier.
+	operationId?: =~"^[A-Za-z][A-Za-z0-9_]*$"
 	summary?: string
 	description?: string
 	request:  #CustomRouteRequest
