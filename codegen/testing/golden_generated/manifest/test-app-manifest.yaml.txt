@@ -126,6 +126,8 @@ spec:
       - .spec.stringField
       userReadable: false
     - conversion: false
+      fixedNames:
+      - current
       kind: TestKind2
       plural: TestKind2s
       resource: testkind2s

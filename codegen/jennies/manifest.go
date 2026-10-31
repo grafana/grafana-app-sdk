@@ -715,6 +715,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 		}
 	}
 	mver.SelectableFields = vk.SelectableFields
+	mver.FixedNames = vk.FixedNames
 	mver.SearchFields = searchFieldsToManifest(vk.SearchFields)
 	return mver, nil
 }
