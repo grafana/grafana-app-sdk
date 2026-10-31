@@ -101,6 +101,9 @@ var appManifestData = app.ManifestData{
 						Trash: func(b bool) *bool { return &b }(false),
 					},
 					Schema: &versionSchemaTestKind2v1,
+					FixedNames: []string{
+						"current",
+					},
 				},
 			},
 		},

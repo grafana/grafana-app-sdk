@@ -519,3 +519,31 @@ func TestListKeysConversion(t *testing.T) {
 		})
 	}
 }
+
+func TestFixedNamesConversion(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		fixed []string
+	}{
+		{name: "omitted"},
+		{name: "one", fixed: []string{"current"}},
+		{name: "several", fixed: []string{"a", "b"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := app.ManifestData{AppName: "foo", Versions: []app.ManifestVersion{{
+				Name: "v1", Served: true, Kinds: []app.ManifestVersionKind{{
+					Kind: "Foo", Scope: "Namespaced", FixedNames: tc.fixed,
+				}},
+			}}}
+			spec, err := SpecFromManifestData(data)
+			require.NoError(t, err)
+			encoded, err := json.Marshal(spec)
+			require.NoError(t, err)
+			var decoded AppManifestSpec
+			require.NoError(t, json.Unmarshal(encoded, &decoded))
+			roundTrip, err := decoded.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, tc.fixed, roundTrip.Versions[0].Kinds[0].FixedNames)
+		})
+	}
+}

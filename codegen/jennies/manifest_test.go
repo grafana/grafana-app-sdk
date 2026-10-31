@@ -559,3 +559,13 @@ func TestCustomRouteResponseToSpec3Responses_EmptyResponse(t *testing.T) {
 		})
 	}
 }
+
+func TestProcessKindVersion_FixedNames(t *testing.T) {
+	for _, fixed := range [][]string{nil, {"current"}, {"a", "b"}} {
+		kind, err := processKindVersion(codegen.VersionedKind{
+			Kind: "Foo", Scope: "Namespaced", FixedNames: fixed,
+		}, "v1", false)
+		require.NoError(t, err)
+		assert.Equal(t, fixed, kind.FixedNames)
+	}
+}

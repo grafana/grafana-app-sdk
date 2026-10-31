@@ -580,6 +580,11 @@ type ManifestVersionKind struct {
 	SearchFields []ManifestVersionKindSearchField `json:"searchFields,omitempty" yaml:"searchFields,omitempty"`
 	// Storage declares storage-related behavior for this kind.
 	Storage *ManifestVersionKindStorage `json:"storage,omitempty" yaml:"storage,omitempty"`
+	// FixedNames are names of objects of this kind that are never stored: the app
+	// answers requests for them itself. A route at exactly <plural>/<name> is
+	// allowed for each, which would otherwise be rejected for shadowing the
+	// kind's own resource.
+	FixedNames []string `json:"fixedNames,omitempty" yaml:"fixedNames,omitempty"`
 	// Search declares which search endpoints are served for this kind.
 	// A nil value, or a nil field within it, means the endpoint takes its default.
 	Search *ManifestVersionKindSearch `json:"search,omitempty" yaml:"search,omitempty"`
@@ -642,6 +647,11 @@ func (m *ManifestVersionKind) Resource() string {
 		return strings.ToLower(m.Plural)
 	}
 	return strings.ToLower(m.Kind) + "s"
+}
+
+// HasFixedName reports whether name is one of the kind's fixed names.
+func (m *ManifestVersionKind) HasFixedName(name string) bool {
+	return slices.Contains(m.FixedNames, name)
 }
 
 // HasListKeysEndpoint reports whether the kind serves generic list-keys endpoints.
