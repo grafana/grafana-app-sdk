@@ -171,12 +171,12 @@ func (r *ClientJenny) generateCustomRouteClients(appManifest codegen.AppManifest
 func getCustomRouteInfo(customRoute codegen.CustomRoute) (templates.GoClientCustomRoute, error) {
 	md := templates.GoClientCustomRoute{
 		TypeName:  toExportedFieldName(customRoute.Name),
-		HasParams: customRoute.Request.Query.Exists(),
+		HasParams: customRoute.Request.QuerySchema().Exists(),
 		HasBody:   customRoute.Request.Body.Exists(),
 	}
 	if md.HasParams {
 		md.ParamValues = make([]templates.GoCustomRouteParamValues, 0)
-		it, err := customRoute.Request.Query.Fields()
+		it, err := customRoute.Request.QuerySchema().Fields()
 		if err != nil {
 			return md, err
 		}

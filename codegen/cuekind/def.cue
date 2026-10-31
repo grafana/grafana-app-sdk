@@ -141,20 +141,32 @@ SchemaWithOperatorState: Schema & {
 #AdmissionCapability: {
 	operations: [...string]
 }
+// #CustomRouteParam is a parameter of a route, described as OpenAPI's parameter object describes it:
+// https://swagger.io/docs/specification/v3_0/describing-parameters/
 #CustomRouteParam: {
+	// name is the name of the parameter. A path parameter's name is a parameter in the route's path.
+	name: =~"^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+	// in is where the parameter is.
+	in: "path" | "query" | "header" | "cookie"
 	// description documents the parameter in the generated OpenAPI.
 	description?: string
-	// example is an example value for the parameter in the generated OpenAPI.
-	example?: string
+	// required is whether the request has to carry the parameter. A path parameter always does, so it
+	// cannot be false there; the others default to not required.
+	required?: bool
+	// deprecated marks the parameter as one that should no longer be used.
+	deprecated?: bool
+	// example is an example value for the parameter, which has to satisfy schema.
+	example?: _
+	// schema is the type of the parameter, such as int, or int | *10 for a default. It is a string
+	// when it is not declared.
+	schema?: _
 }
 #CustomRouteRequest: {
-	// pathParams documents the parameters in the route's path, by name. Each name must be a
-	// parameter in the path. A path parameter is always a string, and always required.
-	pathParams?: [string]: #CustomRouteParam
-	// queryParams documents the fields of query, by name. Each name must be a field of query, which
-	// declares the parameter's type, and whether it is required. A description declared here wins
-	// over the field's doc comment.
-	queryParams?: [string]: #CustomRouteParam
+	// parameters are the parameters of the route. A parameter with in: "query" defines a query
+	// parameter, so a route declares those here, or in query, and not both.
+	parameters?: [...#CustomRouteParam]
+	// query is the schema of the query parameters, whose fields are the parameters.
+	// Deprecated: declare them in parameters, with in: "query".
 	query?: _
 	body?:  _
 }

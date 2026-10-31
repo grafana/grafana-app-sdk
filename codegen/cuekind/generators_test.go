@@ -442,7 +442,8 @@ func TestManifestGoGenerator(t *testing.T) {
 		// 18 -> prior 15 (manifest, reconcile/search/foobar routes + v1–v3 clients + v3 route client) + v4 resource client (1)
 		// + empty response route body and object (2)
 		// + path parameter route body and object (2)
-		require.Len(t, files, 20, "should be 20 files generated, got %d", len(files))
+		// + query parameter route params types and object (2)
+		require.Len(t, files, 22, "should be 22 files generated, got %d", len(files))
 		// Check content against the golden files
 		for _, file := range files {
 			compareToGolden(t, codejen.Files{file}, "go/groupbygroup")

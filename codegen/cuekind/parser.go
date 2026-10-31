@@ -78,6 +78,9 @@ func (p *Parser) ParseManifest(manifestSelector string) (codegen.AppManifest, er
 	if err := manifest.ResolveRouteIDs(); err != nil {
 		return nil, err
 	}
+	if err := manifest.ValidateRouteParams(); err != nil {
+		return nil, err
+	}
 	if err := p.loadManifestOpenAPI(manifest); err != nil {
 		return nil, err
 	}
