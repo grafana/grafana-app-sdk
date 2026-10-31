@@ -268,8 +268,8 @@ testKind: {
 				}
 				"/files/{file}": {
 					GET: {
-						name: "getTestKindFile"
-						// The operation ID clients are generated for, where name has to start with a verb.
+						// The identifier of the route: the operationId of the OpenAPI operation, and the name of
+						// the generated Go types and client method. It has no name, which is the deprecated spelling.
 						operationId: "fetchTestKindFile"
 						request: pathParams: file: {
 							description: "Name of the file"

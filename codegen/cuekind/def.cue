@@ -161,11 +161,14 @@ SchemaWithOperatorState: Schema & {
 	objectMeta: bool | *false
 }
 #CustomRoute: {
-	name:     =~"^(get|log|read|replace|patch|delete|deletecollection|watch|connect|proxy|list|create|patch)([A-Za-z0-9]+)$"
-	// operationId overrides the operationId of the generated OpenAPI operation, which is otherwise name.
-	// name still names the generated Go types and schemas, so it keeps its restricted form;
-	// operationId is for clients generated from the OpenAPI, and may be any identifier.
+	// operationId identifies the route. It is the operationId of the generated OpenAPI operation,
+	// so it must be unique among the routes of a version, and it names the generated Go types and
+	// client method, so it should say what the route does (for example, addStar). A route must
+	// declare it, or the deprecated name.
 	operationId?: =~"^[A-Za-z][A-Za-z0-9_]*$"
+	// name is the deprecated spelling of operationId, which wins when both are declared. It has to
+	// start with a Kubernetes verb, which operationId does not.
+	name?: =~"^(get|log|read|replace|patch|delete|deletecollection|watch|connect|proxy|list|create|patch)([A-Za-z0-9]+)$"
 	summary?: string
 	description?: string
 	request:  #CustomRouteRequest

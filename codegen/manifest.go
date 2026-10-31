@@ -1,7 +1,9 @@
 package codegen
 
 import (
+	"fmt"
 	"iter"
+	"maps"
 	"slices"
 	"strings"
 
@@ -299,4 +301,48 @@ func PreferredVersionKinds(manifest AppManifest) iter.Seq2[Version, VersionedKin
 			}
 		}
 	}
+}
+
+// ResolveRouteIDs gives every custom route its identifier, in Name, and checks them. A route
+// declares an operationId, or else the deprecated name, and one must be there. An identifier is the
+// operationId of a generated OpenAPI operation, and OpenAPI does not allow two in a document, so
+// the routes of a version, on its kinds and on the version itself, must each have their own.
+func (m *SimpleManifest) ResolveRouteIDs() error {
+	for _, name := range slices.Sorted(maps.Keys(m.AllVersions)) {
+		version := m.AllVersions[name]
+		seen := map[string]string{}
+		resolve := func(scope string, routes map[string]map[string]CustomRoute) error {
+			for _, path := range slices.Sorted(maps.Keys(routes)) {
+				for _, method := range slices.Sorted(maps.Keys(routes[path])) {
+					route := routes[path][method]
+					at := fmt.Sprintf("%s %s of %s in version %s", strings.ToUpper(method), path, scope, name)
+					id := route.ID()
+					if id == "" {
+						return fmt.Errorf("custom route %s must declare an operationId", at)
+					}
+					if other, ok := seen[id]; ok {
+						return fmt.Errorf("operationId %q is declared by both %s and %s, and must be unique in a version", id, other, at)
+					}
+					seen[id] = at
+					route.Name = id
+					routes[path][method] = route
+				}
+			}
+			return nil
+		}
+		for i := range version.AllKinds {
+			if err := resolve("kind "+version.AllKinds[i].Kind, version.AllKinds[i].Routes); err != nil {
+				return err
+			}
+		}
+		if version.CustomRoutes != nil {
+			if err := resolve("the version (namespaced)", version.CustomRoutes.Namespaced); err != nil {
+				return err
+			}
+			if err := resolve("the version (cluster)", version.CustomRoutes.Cluster); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

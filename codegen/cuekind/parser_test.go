@@ -2,6 +2,7 @@ package cuekind
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -205,12 +206,12 @@ func TestParseManifestRoutes(t *testing.T) {
 
 		// Path parameter documentation and an operation ID that differs from the name
 		file := v3Kind.Routes["/files/{file}"]["GET"]
-		assert.Equal(t, "getTestKindFile", file.Name)
 		assert.Equal(t, "fetchTestKindFile", file.OperationID)
+		assert.Equal(t, "fetchTestKindFile", file.Name, "the identifier the route resolves to")
 		assert.Equal(t, map[string]codegen.CustomRoutePathParam{
 			"file": {Description: "Name of the file", Example: "report.csv"},
 		}, file.Request.PathParams)
-		assert.Empty(t, v3Kind.Routes["/search"]["GET"].OperationID, "the operation ID is optional")
+		assert.Empty(t, v3Kind.Routes["/search"]["GET"].OperationID, "a route may still declare the deprecated name instead")
 
 		// Route authz, fully and partially specified
 		require.NotNil(t, v3Kind.Routes["/reconcile"]["POST"].Authz)
@@ -334,9 +335,9 @@ func TestParseManifestInvalidCases(t *testing.T) {
 		},
 		// Kind-level route validation
 		{
-			name:        "kind route missing name",
+			name:        "kind route missing operationId",
 			selector:    "invalidRouteNameMissing",
-			errContains: `routes."/noname".GET.name: cannot convert non-concrete value`,
+			errContains: `custom route GET /noname of kind`,
 		},
 		{
 			name:        "kind route name bad prefix",
@@ -386,9 +387,9 @@ func TestParseManifestInvalidCases(t *testing.T) {
 			errContains: `routes.namespaced."/bad".POST.name: invalid value "notAValidPrefix"`,
 		},
 		{
-			name:        "version namespaced route missing name",
+			name:        "version namespaced route missing operationId",
 			selector:    "invalidNamespacedRouteMissingName",
-			errContains: `routes.namespaced."/noname".GET.name: cannot convert non-concrete value`,
+			errContains: `custom route GET /noname of the version (namespaced) in version v1 must declare an operationId`,
 		},
 		{
 			name:        "version cluster route bad name",
@@ -440,15 +441,42 @@ func TestParseManifestListKeys(t *testing.T) {
 }
 
 func TestParseManifestRouteOperationID(t *testing.T) {
+	route := func(path, fields string) string {
+		return fmt.Sprintf(`%q: PUT: {
+			%s
+			request: pathParams: id: description: "The object to star"
+			response: {}
+		}`, path, fields)
+	}
 	for _, tc := range []struct {
-		name, declaration string
-		invalid           bool
+		name   string
+		routes []string
+		want   string // the resolved identifier of the first route
+		err    string
 	}{
-		{name: "omitted"},
-		{name: "a verb-less identifier", declaration: `operationId: "addStar"`},
-		{name: "with underscores and digits", declaration: `operationId: "add_star2"`},
-		{name: "with a space", declaration: `operationId: "add star"`, invalid: true},
-		{name: "starting with a digit", declaration: `operationId: "2star"`, invalid: true},
+		{name: "an operationId", routes: []string{route("/star/{id}", `operationId: "addStar"`)}, want: "addStar"},
+		{name: "with underscores and digits", routes: []string{route("/star/{id}", `operationId: "add_star2"`)}, want: "add_star2"},
+		{name: "the deprecated name", routes: []string{route("/star/{id}", `name: "createStar"`)}, want: "createStar"},
+		{name: "both, where the operationId wins", routes: []string{route("/star/{id}", `name: "createStar", operationId: "addStar"`)}, want: "addStar"},
+		{name: "neither", routes: []string{route("/star/{id}", ``)}, err: "must declare an operationId"},
+		{name: "with a space", routes: []string{route("/star/{id}", `operationId: "add star"`)}, err: "operationId"},
+		{name: "starting with a digit", routes: []string{route("/star/{id}", `operationId: "2star"`)}, err: "operationId"},
+		{
+			name: "the same operationId twice",
+			routes: []string{
+				route("/star/{id}", `operationId: "addStar"`),
+				route("/like/{id}", `operationId: "addStar"`),
+			},
+			err: `operationId "addStar" is declared by both`,
+		},
+		{
+			name: "an operationId that is another route's name",
+			routes: []string{
+				route("/star/{id}", `name: "createStar"`),
+				route("/like/{id}", `operationId: "createStar"`),
+			},
+			err: `operationId "createStar" is declared by both`,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testingCue(t)
@@ -457,25 +485,44 @@ func TestParseManifestRouteOperationID(t *testing.T) {
 					appName: "ids-app"
 					versions: v1: {
 						kinds: []
-						routes: namespaced: "/star/{id}": PUT: {
-							name: "createStar"
+						routes: namespaced: {
 							%s
-							request: pathParams: id: description: "The object to star"
-							response: {}
 						}
 					}
-				}`, tc.declaration))
+				}`, strings.Join(tc.routes, "\n")))
 			parser, err := NewParser(c, false)
 			require.NoError(t, err)
 			manifest, err := parser.ParseManifest("manifest")
-			if tc.invalid {
-				require.Error(t, err)
+			if tc.err != "" {
+				require.ErrorContains(t, err, tc.err)
 				return
 			}
 			require.NoError(t, err)
-			route := manifest.Versions()[0].Routes().Namespaced["/star/{id}"]["PUT"]
-			assert.Equal(t, "createStar", route.Name)
-			assert.Equal(t, "The object to star", route.Request.PathParams["id"].Description)
+			routes := manifest.Versions()[0].Routes().Namespaced
+			for _, methods := range routes {
+				for _, r := range methods {
+					if tc.want != "" && r.Name == tc.want {
+						return
+					}
+				}
+			}
+			require.Failf(t, "no route resolved to the identifier", "want %q in %v", tc.want, routes)
 		})
 	}
+}
+
+func TestParseManifestRouteIDsAreUniquePerVersion(t *testing.T) {
+	c := testingCue(t)
+	c.Root = c.Root.Context().CompileString(`
+		manifest: {
+			appName: "ids-app"
+			versions: {
+				v1: {kinds: [], routes: namespaced: "/star/{id}": PUT: {operationId: "addStar", request: {}, response: {}}}
+				v2: {kinds: [], routes: namespaced: "/star/{id}": PUT: {operationId: "addStar", request: {}, response: {}}}
+			}
+		}`)
+	parser, err := NewParser(c, false)
+	require.NoError(t, err)
+	_, err = parser.ParseManifest("manifest")
+	require.NoError(t, err, "each version is its own OpenAPI document")
 }
