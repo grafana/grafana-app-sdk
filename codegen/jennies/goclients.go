@@ -5,13 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"go/format"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
 
-	"golang.org/x/tools/imports"
-
 	"github.com/grafana/codejen"
+	"golang.org/x/tools/imports"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
@@ -24,6 +24,10 @@ type ClientJenny struct {
 	// i.e. generating FooSpec instead of Spec for kind.Name() = "Foo" and Depth=1
 	GroupByKind        bool
 	SkipImportsProcess bool
+	// ProjectRepo is the Go module of the project and GoGenPath the path in it that code is generated
+	// in, which are where the client imports the types of kinds from when generating by kind.
+	ProjectRepo string
+	GoGenPath   string
 }
 
 func (*ClientJenny) JennyName() string {
@@ -84,13 +88,14 @@ func (r *ClientJenny) generateResourceClients(appManifest codegen.AppManifest) (
 			Subresources: subresources,
 		}
 
-		md.CustomRoutes, err = getCustomRoutes(kind.Routes, r.responseType(version, kind.Kind))
+		md.CustomRoutes, err = getCustomRoutes(kind.Routes, r.responseType(appManifest, version, kind.Kind))
 		if err != nil {
 			return nil, fmt.Errorf("getting custom routes for kind %s: %w", kind.Kind, err)
 		}
 		slices.SortFunc(md.CustomRoutes, func(a, b templates.GoClientCustomRoute) int {
 			return strings.Compare(a.TypeName, b.TypeName)
 		})
+		md.Imports = responseImports(md.CustomRoutes)
 
 		b := bytes.Buffer{}
 		err = templates.WriteGoResourceClient(md, &b)
@@ -128,12 +133,12 @@ func (r *ClientJenny) generateCustomRouteClients(appManifest codegen.AppManifest
 		}
 
 		var err error
-		md.NamespacedRoutes, err = getCustomRoutes(version.Routes().Namespaced, r.responseType(version, ""))
+		md.NamespacedRoutes, err = getCustomRoutes(version.Routes().Namespaced, r.responseType(appManifest, version, ""))
 		if err != nil {
 			return nil, err
 		}
 
-		md.ClusterRoutes, err = getCustomRoutes(version.Routes().Cluster, r.responseType(version, ""))
+		md.ClusterRoutes, err = getCustomRoutes(version.Routes().Cluster, r.responseType(appManifest, version, ""))
 		if err != nil {
 			return nil, err
 		}
@@ -141,6 +146,7 @@ func (r *ClientJenny) generateCustomRouteClients(appManifest codegen.AppManifest
 		if len(md.NamespacedRoutes) == 0 && len(md.ClusterRoutes) == 0 {
 			continue
 		}
+		md.Imports = responseImports(md.NamespacedRoutes, md.ClusterRoutes)
 
 		b := bytes.Buffer{}
 		err = templates.WriteGoCustomRouteClient(md, &b)
@@ -168,42 +174,66 @@ func (r *ClientJenny) generateCustomRouteClients(appManifest codegen.AppManifest
 	return files, nil
 }
 
-// responseTypeOf is the Go type that the client method of a custom route returns.
-type responseTypeOf func(codegen.CustomRoute) (string, error)
+// responseTypeOf is the Go type that the client method of a custom route returns, and the package
+// it is imported from if that is not the package of the client.
+type responseTypeOf func(codegen.CustomRoute) (string, *templates.GoImport, error)
 
 // responseType is the Go type that the client method of a custom route returns, which is the
 // response type generated for the route, or else the type generated for the kind it returns. The
-// client has the type of a kind only when it is generated in the package of the client: the kinds
-// are in the package of their group and version, and not their own when they are not grouped by kind.
-func (r *ClientJenny) responseType(version codegen.Version, owner string) responseTypeOf {
-	return func(route codegen.CustomRoute) (string, error) {
+// type of a kind is in the package of its group and version, unless generating by kind, when it is
+// in the package of the kind and version, which is imported unless the client is in it too.
+func (r *ClientJenny) responseType(appManifest codegen.AppManifest, version codegen.Version, owner string) responseTypeOf {
+	return func(route codegen.CustomRoute) (string, *templates.GoImport, error) {
 		if route.ResponseKind == "" {
-			return toExportedFieldName(route.Name) + "Response", nil
-		}
-		if r.GroupByKind && route.ResponseKind != owner {
-			return "", fmt.Errorf("custom route %s returns kind %s, whose type is not in its package when generating by kind", route.Name, route.ResponseKind)
+			return toExportedFieldName(route.Name) + "Response", nil, nil
 		}
 		i := slices.IndexFunc(version.Kinds(), func(k codegen.VersionedKind) bool { return k.Kind == route.ResponseKind })
 		if i < 0 {
-			return "", fmt.Errorf("custom route %s returns kind %s, which is not a kind of version %s", route.Name, route.ResponseKind, version.Name())
+			return "", nil, fmt.Errorf("custom route %s returns kind %s, which is not a kind of version %s", route.Name, route.ResponseKind, version.Name())
 		}
-		if !version.Kinds()[i].Codegen.Go.Enabled {
-			return "", fmt.Errorf("custom route %s returns kind %s, which does not generate Go code", route.Name, route.ResponseKind)
+		kind := version.Kinds()[i]
+		if !kind.Codegen.Go.Enabled {
+			return "", nil, fmt.Errorf("custom route %s returns kind %s, which does not generate Go code", route.Name, route.ResponseKind)
 		}
-		return exportField(route.ResponseKind), nil
+		if !r.GroupByKind || route.ResponseKind == owner {
+			return exportField(route.ResponseKind), nil, nil
+		}
+		if r.ProjectRepo == "" {
+			return "", nil, fmt.Errorf("custom route %s returns kind %s, whose package is imported from the project's Go module, which is not set", route.Name, route.ResponseKind)
+		}
+		imp := &templates.GoImport{
+			Alias: strings.ToLower(ToPackageName(kind.MachineName) + ToPackageName(version.Name())),
+			Path:  path.Join(r.ProjectRepo, r.GoGenPath, filepath.ToSlash(GetGeneratedGoTypePath(true, appManifest.Properties().Group, version.Name(), kind.MachineName))),
+		}
+		return imp.Alias + "." + exportField(route.ResponseKind), imp, nil
 	}
 }
 
+// responseImports are the packages the response types of routes are imported from, without repeats.
+func responseImports(routes ...[]templates.GoClientCustomRoute) []templates.GoImport {
+	var found []templates.GoImport
+	for _, rs := range routes {
+		for _, route := range rs {
+			if route.ResponseImport != nil && !slices.Contains(found, *route.ResponseImport) {
+				found = append(found, *route.ResponseImport)
+			}
+		}
+	}
+	slices.SortFunc(found, func(a, b templates.GoImport) int { return strings.Compare(a.Path, b.Path) })
+	return found
+}
+
 func getCustomRouteInfo(customRoute codegen.CustomRoute, responseType responseTypeOf) (templates.GoClientCustomRoute, error) {
-	respType, err := responseType(customRoute)
+	respType, respImport, err := responseType(customRoute)
 	if err != nil {
 		return templates.GoClientCustomRoute{}, err
 	}
 	md := templates.GoClientCustomRoute{
-		TypeName:     toExportedFieldName(customRoute.Name),
-		ResponseType: respType,
-		HasParams:    customRoute.Request.QuerySchema().Exists(),
-		HasBody:      customRoute.Request.Body.Exists(),
+		TypeName:       toExportedFieldName(customRoute.Name),
+		ResponseType:   respType,
+		ResponseImport: respImport,
+		HasParams:      customRoute.Request.QuerySchema().Exists(),
+		HasBody:        customRoute.Request.Body.Exists(),
 	}
 	if md.HasParams {
 		md.ParamValues = make([]templates.GoCustomRouteParamValues, 0)

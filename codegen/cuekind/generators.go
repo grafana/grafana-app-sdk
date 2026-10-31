@@ -181,6 +181,8 @@ func ManifestGoGenerator(cfg ManifestGoGeneratorConfig) *codejen.JennyList[codeg
 		&jennies.ClientJenny{
 			GroupByKind:        !cfg.GroupKinds,
 			SkipImportsProcess: cfg.SkipImportsProcess,
+			ProjectRepo:        cfg.ProjectRepo,
+			GoGenPath:          cfg.GoGenPath,
 		})
 	return g
 }

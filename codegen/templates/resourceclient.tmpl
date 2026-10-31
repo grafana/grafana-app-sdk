@@ -9,7 +9,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/grafana/grafana-app-sdk/resource"
+	"github.com/grafana/grafana-app-sdk/resource"{{ range .Imports }}
+	{{.Alias}} "{{.Path}}"{{ end }}
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
