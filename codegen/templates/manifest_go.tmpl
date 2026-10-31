@@ -205,6 +205,9 @@ var appManifestData = app.ManifestData{
                 Schema: &versionSchema{{.Kind}}{{$.ToPackageName $v.Name}},{{end}}{{ if .SelectableFields }}
                 SelectableFields: []string{ {{ range .SelectableFields }}
                     "{{.}}",{{ end }}
+                },{{end}}{{ if .FixedNames }}
+                FixedNames: []string{ {{ range .FixedNames }}
+                    {{ goString . }},{{ end }}
                 },{{end}}{{ if .SecureValues }}
                 SecureValues: []app.ManifestVersionKindSecureValue{ {{ range .SecureValues }}
                     {Key: {{ goString .Key }}, Description: {{ goString .Description }}},{{ end }}

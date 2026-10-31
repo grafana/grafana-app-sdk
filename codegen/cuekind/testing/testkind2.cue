@@ -6,6 +6,7 @@ testKind2: {
 	current: "v1"
 	codegen: ts: enabled: false
 	listKeys: false
+	fixedNames: ["current"]
 	search: trash: false
 	versions: {
 		"v1": {
