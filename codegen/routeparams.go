@@ -1,6 +1,7 @@
 package codegen
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -51,8 +52,9 @@ var pathParameterPattern = regexp.MustCompile(`\{([^{}/]+)\}`)
 // PathParameterNames are the names of the parameters in a route path. A parameter that matches the
 // rest of the path may be written {name:*} or {name...}, and is named name.
 func PathParameterNames(path string) []string {
-	var names []string
-	for _, match := range pathParameterPattern.FindAllStringSubmatch(path, -1) {
+	matches := pathParameterPattern.FindAllStringSubmatch(path, -1)
+	names := make([]string, 0, len(matches))
+	for _, match := range matches {
 		names = append(names, strings.TrimSuffix(strings.TrimSuffix(match[1], ":*"), "..."))
 	}
 	return names
@@ -84,6 +86,8 @@ func ValidateRouteParams(path string, r CustomRouteRequest) error {
 			}
 		case CustomRouteParamInQuery:
 			queryParams++
+		default:
+			// header and cookie parameters have nothing more to check
 		}
 		if p.Example != nil {
 			schema := p.Schema
@@ -98,7 +102,7 @@ func ValidateRouteParams(path string, r CustomRouteRequest) error {
 		}
 	}
 	if queryParams > 0 && r.Query.Exists() {
-		return fmt.Errorf("the route declares query parameters in parameters and in the deprecated query: declare them in parameters")
+		return errors.New("the route declares query parameters in parameters and in the deprecated query: declare them in parameters")
 	}
 	return nil
 }
