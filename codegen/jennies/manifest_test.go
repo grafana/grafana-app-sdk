@@ -559,3 +559,74 @@ func TestCustomRouteResponseToSpec3Responses_EmptyResponse(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildPathPropsFromMethods_PathParameters(t *testing.T) {
+	route := func(params map[string]codegen.CustomRoutePathParam) codegen.CustomRoute {
+		return codegen.CustomRoute{Name: "getThing", Request: codegen.CustomRouteRequest{PathParams: params}}
+	}
+	get := func(t *testing.T, path string, r codegen.CustomRoute) (*spec3.Operation, error) {
+		t.Helper()
+		props, _, err := buildPathPropsFromMethods(path, map[string]codegen.CustomRoute{"GET": r})
+		if err != nil {
+			return nil, err
+		}
+		return props.Get, nil
+	}
+
+	t.Run("documented parameters are required path parameters, in name order", func(t *testing.T) {
+		op, err := get(t, "/things/{kind}/{group}", route(map[string]codegen.CustomRoutePathParam{
+			"kind":  {Description: "Kind of the thing", Example: "Dashboard"},
+			"group": {Description: "API group of the thing"},
+		}))
+		require.NoError(t, err)
+		require.Len(t, op.Parameters, 2)
+		assert.Equal(t, "group", op.Parameters[0].Name)
+		assert.Equal(t, "kind", op.Parameters[1].Name)
+		for _, p := range op.Parameters {
+			assert.Equal(t, "path", p.In)
+			assert.True(t, p.Required)
+			assert.Equal(t, spec.StringProperty(), p.Schema)
+		}
+		assert.Equal(t, "API group of the thing", op.Parameters[0].Description)
+		assert.Nil(t, op.Parameters[0].Example, "an example is only emitted when declared")
+		assert.Equal(t, "Dashboard", op.Parameters[1].Example)
+	})
+
+	t.Run("a route with no documented parameters has none", func(t *testing.T) {
+		op, err := get(t, "/things/{id}", route(nil))
+		require.NoError(t, err)
+		assert.Empty(t, op.Parameters)
+	})
+
+	t.Run("a parameter that matches the rest of the path is found by its name", func(t *testing.T) {
+		for _, path := range []string{"/files/{path}", "/files/{path...}", "/files/{path:*}"} {
+			op, err := get(t, path, route(map[string]codegen.CustomRoutePathParam{"path": {Description: "File path"}}))
+			require.NoError(t, err, path)
+			require.Len(t, op.Parameters, 1, path)
+			assert.Equal(t, "path", op.Parameters[0].Name, path)
+		}
+	})
+
+	t.Run("a parameter that is not in the path is an error", func(t *testing.T) {
+		_, err := get(t, "/things/{id}", route(map[string]codegen.CustomRoutePathParam{"idd": {Description: "typo"}}))
+		require.ErrorContains(t, err, `path parameter "idd" is not a parameter in the path "/things/{id}"`)
+	})
+}
+
+func TestBuildPathPropsFromMethods_OperationID(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		route codegen.CustomRoute
+		want  string
+	}{
+		{name: "the route's name by default", route: codegen.CustomRoute{Name: "createStar"}, want: "createStar"},
+		{name: "an override", route: codegen.CustomRoute{Name: "createStar", OperationID: "addStar"}, want: "addStar"},
+		{name: "a default when there is no name", route: codegen.CustomRoute{}, want: defaultRouteName("PUT", "/star")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			props, _, err := buildPathPropsFromMethods("/star", map[string]codegen.CustomRoute{"PUT": tc.route})
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, props.Put.OperationId)
+		})
+	}
+}

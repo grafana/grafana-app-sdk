@@ -707,6 +707,54 @@
                                     }
                                 }
                             },
+                            "/files/{file}": {
+                                "get": {
+                                    "operationId": "fetchTestKindFile",
+                                    "parameters": [
+                                        {
+                                            "name": "file",
+                                            "in": "path",
+                                            "description": "Name of the file",
+                                            "required": true,
+                                            "schema": {
+                                                "type": "string"
+                                            },
+                                            "example": "report.csv"
+                                        }
+                                    ],
+                                    "responses": {
+                                        "default": {
+                                            "description": "Default OK response",
+                                            "content": {
+                                                "application/json": {
+                                                    "schema": {
+                                                        "type": "object",
+                                                        "required": [
+                                                            "content",
+                                                            "apiVersion",
+                                                            "kind"
+                                                        ],
+                                                        "properties": {
+                                                            "apiVersion": {
+                                                                "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+                                                                "type": "string"
+                                                            },
+                                                            "content": {
+                                                                "type": "string"
+                                                            },
+                                                            "kind": {
+                                                                "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "additionalProperties": false
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
                             "/reconcile": {
                                 "post": {
                                     "summary": "Reconcile a TestKind",
@@ -1081,6 +1129,72 @@
                                     }
                                 }
                             }
+                        },
+                        "/namespaces/{namespace}/testkinds/{name}/files/{file}": {
+                            "get": {
+                                "operationId": "fetchTestKindFile",
+                                "parameters": [
+                                    {
+                                        "description": "Name of the file",
+                                        "example": "report.csv",
+                                        "in": "path",
+                                        "name": "file",
+                                        "required": true,
+                                        "schema": {
+                                            "type": "string"
+                                        }
+                                    }
+                                ],
+                                "responses": {
+                                    "default": {
+                                        "content": {
+                                            "application/json": {
+                                                "schema": {
+                                                    "additionalProperties": false,
+                                                    "properties": {
+                                                        "apiVersion": {
+                                                            "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+                                                            "type": "string"
+                                                        },
+                                                        "content": {
+                                                            "type": "string"
+                                                        },
+                                                        "kind": {
+                                                            "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "content",
+                                                        "apiVersion",
+                                                        "kind"
+                                                    ],
+                                                    "type": "object"
+                                                }
+                                            }
+                                        },
+                                        "description": "Default OK response"
+                                    }
+                                }
+                            },
+                            "parameters": [
+                                {
+                                    "in": "path",
+                                    "name": "namespace",
+                                    "required": true,
+                                    "schema": {
+                                        "type": "string"
+                                    }
+                                },
+                                {
+                                    "in": "path",
+                                    "name": "name",
+                                    "required": true,
+                                    "schema": {
+                                        "type": "string"
+                                    }
+                                }
+                            ]
                         },
                         "/namespaces/{namespace}/testkinds/{name}/reconcile": {
                             "parameters": [
