@@ -141,8 +141,39 @@ routes: namespaced: "/update/{group}/{kind}/{id}": PUT: {
     query parameters in one or the other, not both.
   - A header or cookie parameter is documented in the OpenAPI only. It is not part of the generated
     client or the request types yet.
+
 For anything beyond this, such as responses other than the default, import or declare the OpenAPI
 itself, as below.
+
+### Returning the resource of a kind
+
+A route that returns the same resource the standard Kubernetes calls return for a kind, such as a
+route that finds the latest or the starred one, names the kind with `responseKind` instead of
+defining a `response`:
+
+```cue
+versions: v1: {
+    kinds: [star]  // a kind named Star
+    routes: namespaced: "/latest": GET: {
+        operationId:  "getLatestStar"
+        summary:      "Get the most recently starred item"
+        responseKind: "Star"
+    }
+}
+```
+
+- The OpenAPI response references the kind's resource, a `Star` component of the version with the
+  `apiVersion`, `kind`, `metadata`, `spec` and `status` of the kind, rather than a new schema. What
+  it references of the kind's schema (such as its `spec`) is a component named for the kind, like
+  `Star.spec`.
+- No response type is generated for the route. The generated client method returns the kind's own
+  generated Go type, here `(*Star, error)`, so what it returns can be used wherever the kind's
+  objects are.
+- `responseKind` has to be a kind of the same version, which generates Go code, and a route cannot
+  declare both it and a `response`. Its `responseMetadata` is not used, since the kind's resource
+  has its own.
+- When generating code by kind, a route can only return its own kind, because the types of other
+  kinds are in other packages. A version-level route cannot use `responseKind` then.
 
 ## Adding routes from a saved OpenAPI document
 

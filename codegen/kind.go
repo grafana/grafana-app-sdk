@@ -195,11 +195,14 @@ type CustomRoute struct {
 	Name string `json:"name"`
 	// OperationID identifies the route: it is the operationId of the generated OpenAPI operation,
 	// and names the generated Go types and client method.
-	OperationID      string                      `json:"operationId,omitempty"`
-	Summary          string                      `json:"summary,omitempty"`
-	Description      string                      `json:"description,omitempty"`
-	Request          CustomRouteRequest          `json:"request"`
-	Response         cue.Value                   `json:"response"`
+	OperationID string             `json:"operationId,omitempty"`
+	Summary     string             `json:"summary,omitempty"`
+	Description string             `json:"description,omitempty"`
+	Request     CustomRouteRequest `json:"request"`
+	Response    cue.Value          `json:"response"`
+	// ResponseKind is the name of a kind in the same version whose resource the route returns. The
+	// route then declares no Response: it references the kind's schema, and generates no response type.
+	ResponseKind     string                      `json:"responseKind,omitempty"`
 	ResponseMetadata CustomRouteResponseMetadata `json:"responseMetadata"`
 	Extensions       map[string]any              `json:"extensions,omitempty"`
 	// Authz is the optional declared authorization information for the route. If nil,

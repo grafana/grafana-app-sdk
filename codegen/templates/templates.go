@@ -563,12 +563,15 @@ type GoResourceClientMetadata struct {
 }
 
 type GoClientCustomRoute struct {
-	TypeName    string
-	Path        string
-	Method      string
-	HasParams   bool
-	HasBody     bool
-	ParamValues []GoCustomRouteParamValues
+	TypeName string
+	// ResponseType is the Go type the route's client method returns, which is the generated
+	// <TypeName>Response unless the route returns the resource of a kind.
+	ResponseType string
+	Path         string
+	Method       string
+	HasParams    bool
+	HasBody      bool
+	ParamValues  []GoCustomRouteParamValues
 }
 
 type GoCustomRouteParamValues struct {

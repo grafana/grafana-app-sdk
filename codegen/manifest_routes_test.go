@@ -3,6 +3,7 @@ package codegen
 import (
 	"testing"
 
+	"cuelang.org/go/cue/cuecontext"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -65,5 +66,32 @@ func TestSimpleManifest_ResolveRouteIDs(t *testing.T) {
 			"/star": {"PUT": {OperationID: "addStar"}, "DELETE": {OperationID: "addStar"}},
 		}}}})
 		require.ErrorContains(t, m.ResolveRouteIDs(), "must be unique in a version")
+	})
+}
+
+func TestSimpleManifest_ValidateRouteResponseKinds(t *testing.T) {
+	ctx := cuecontext.New()
+	manifest := func(route CustomRoute) *SimpleManifest {
+		return &SimpleManifest{AllVersions: map[string]*SimpleVersion{"v1": {
+			AllKinds: []VersionedKind{{Kind: "Thing"}},
+			CustomRoutes: &VersionCustomRoutes{
+				Namespaced: map[string]map[string]CustomRoute{"/latest": {"GET": route}},
+			},
+		}}}
+	}
+
+	t.Run("a route returns a kind of its version", func(t *testing.T) {
+		require.NoError(t, manifest(CustomRoute{ResponseKind: "Thing", Response: ctx.CompileString("_")}).ValidateRouteResponseKinds())
+	})
+	t.Run("a route returns a kind that is not in its version", func(t *testing.T) {
+		err := manifest(CustomRoute{ResponseKind: "Other"}).ValidateRouteResponseKinds()
+		require.ErrorContains(t, err, `custom route GET /latest of the version (namespaced) in version v1 has responseKind "Other", which is not a kind of the version`)
+	})
+	t.Run("a route does not declare a response and a kind", func(t *testing.T) {
+		err := manifest(CustomRoute{ResponseKind: "Thing", Response: ctx.CompileString("{name: string}")}).ValidateRouteResponseKinds()
+		require.ErrorContains(t, err, "declares a response and a responseKind")
+	})
+	t.Run("a route without a kind is not checked", func(t *testing.T) {
+		require.NoError(t, manifest(CustomRoute{Response: ctx.CompileString("{name: string}")}).ValidateRouteResponseKinds())
 	})
 }

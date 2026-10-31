@@ -119,7 +119,7 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 
 func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, packageName string, filenamePrefix string, customRoute codegen.CustomRoute, openAPINamer func(string) string) (codejen.Files, error) {
 	files := make(codejen.Files, 0, 1)
-	if !customRoute.Response.Exists() {
+	if customRoute.ResponseKind == "" && !customRoute.Response.Exists() {
 		return nil, errors.New("custom route response is required")
 	}
 	if !customRoute.ResponseMetadata.TypeMeta && (customRoute.ResponseMetadata.ListMeta || customRoute.ResponseMetadata.ObjectMeta) {
@@ -128,13 +128,15 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 	if filenamePrefix != "" {
 		filenamePrefix = fmt.Sprintf("%s_", filenamePrefix)
 	}
-	// Response
+	// Response. A route that returns the resource of a kind uses the kind's generated type, so it has no response type of its own.
 	typeName := exportField(customRoute.Name)
-	responseFiles, err := c.generateResponseTypes(customRoute, typeName, packageName, filenamePrefix, basePath, openAPINamer)
-	if err != nil {
-		return nil, err
+	if customRoute.ResponseKind == "" {
+		responseFiles, err := c.generateResponseTypes(customRoute, typeName, packageName, filenamePrefix, basePath, openAPINamer)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, responseFiles...)
 	}
-	files = append(files, responseFiles...)
 
 	// Request
 	requestTypeName := fmt.Sprintf("%sRequest", typeName)
