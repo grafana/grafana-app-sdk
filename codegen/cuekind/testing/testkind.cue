@@ -248,6 +248,11 @@ testKind: {
 							}
 						}
 						request: {
+							// The fields of query define the parameters; this documents them.
+							queryParams: {
+								q: {description: "Terms to look for", example: "dashboards"}
+								limit: example: "25"
+							}
 							query: {
 								q: string
 								limit?: int | *10

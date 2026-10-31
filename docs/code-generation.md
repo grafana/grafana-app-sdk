@@ -110,10 +110,18 @@ routes: namespaced: "/update/{group}/{kind}/{id}": PUT: {
     operationId: "addStar"
     summary:     "Add a starred item"
     description: "Adds the item to the stars of the object."
-    request: pathParams: {
-        group: {description: "API group of the item", example: "dashboard.grafana.app"}
-        kind:  {description: "Kind of the item", example: "Dashboard"}
-        id:    {description: "Name of the item"}
+    request: {
+        pathParams: {
+            group: {description: "API group of the item", example: "dashboard.grafana.app"}
+            kind:  {description: "Kind of the item", example: "Dashboard"}
+            id:    {description: "Name of the item"}
+        }
+        queryParams: {
+            reason: {description: "Why the item is starred", example: "reference"}
+        }
+        query: {
+            reason?: string
+        }
     }
     response: {message: string}
 }
@@ -127,12 +135,15 @@ routes: namespaced: "/update/{group}/{kind}/{id}": PUT: {
   declares one or the other, and `operationId` wins when both are there. `name` has to start with a
   Kubernetes verb (`get`, `create`, `delete`, ...), which `operationId` does not.
 - `summary` and `description` describe the operation.
-- `request.pathParams` documents the parameters in the route's path, by name. Each is a required
-  string, so only a `description` and an `example` are declared. A name that is not a parameter in
-  the path is an error.
-- `request.query` documents query parameters. Their descriptions come from the CUE doc comments on
-  each field.
-
+- `request.pathParams` and `request.queryParams` document the parameters of the route, by name, with
+  the same fields: a `description` and an `example`. What a parameter is comes from elsewhere, so
+  only its documentation is declared here.
+  - A path parameter is always a required string, defined by the route's path. A name that is not a
+    parameter in the path is an error.
+  - A query parameter is a field of `request.query`, which defines its type, and whether it is
+    required. A name that is not a field of `query` is an error. The `example` is read as the type of
+    the field, so an integer field gets an integer example. A `description` declared here wins over
+    the field's doc comment, which describes the parameter when none is declared.
 For anything beyond this, such as responses other than the default, import or declare the OpenAPI
 itself, as below.
 

@@ -141,7 +141,7 @@ SchemaWithOperatorState: Schema & {
 #AdmissionCapability: {
 	operations: [...string]
 }
-#CustomRoutePathParam: {
+#CustomRouteParam: {
 	// description documents the parameter in the generated OpenAPI.
 	description?: string
 	// example is an example value for the parameter in the generated OpenAPI.
@@ -150,7 +150,11 @@ SchemaWithOperatorState: Schema & {
 #CustomRouteRequest: {
 	// pathParams documents the parameters in the route's path, by name. Each name must be a
 	// parameter in the path. A path parameter is always a string, and always required.
-	pathParams?: [string]: #CustomRoutePathParam
+	pathParams?: [string]: #CustomRouteParam
+	// queryParams documents the fields of query, by name. Each name must be a field of query, which
+	// declares the parameter's type, and whether it is required. A description declared here wins
+	// over the field's doc comment.
+	queryParams?: [string]: #CustomRouteParam
 	query?: _
 	body?:  _
 }

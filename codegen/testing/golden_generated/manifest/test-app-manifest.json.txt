@@ -828,7 +828,8 @@
                                             "schema": {
                                                 "type": "integer",
                                                 "default": 10
-                                            }
+                                            },
+                                            "example": 25
                                         },
                                         {
                                             "name": "offset",
@@ -841,10 +842,12 @@
                                         {
                                             "name": "q",
                                             "in": "query",
+                                            "description": "Terms to look for",
                                             "required": true,
                                             "schema": {
                                                 "type": "string"
-                                            }
+                                            },
+                                            "example": "dashboards"
                                         }
                                     ],
                                     "responses": {
@@ -1282,6 +1285,7 @@
                                 "operationId": "getTestKindSearchResult",
                                 "parameters": [
                                     {
+                                        "example": 25,
                                         "in": "query",
                                         "name": "limit",
                                         "schema": {
@@ -1298,6 +1302,8 @@
                                         }
                                     },
                                     {
+                                        "description": "Terms to look for",
+                                        "example": "dashboards",
                                         "in": "query",
                                         "name": "q",
                                         "required": true,
