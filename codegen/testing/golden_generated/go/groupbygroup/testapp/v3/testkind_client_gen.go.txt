@@ -126,13 +126,16 @@ func (c *TestKindClient) CreateEmptyResp(ctx context.Context, identifier resourc
 }
 
 type FetchTestKindFileRequest struct {
+	Params  FetchTestKindFileRequestParams
 	Headers http.Header
 }
 
 func (c *TestKindClient) FetchTestKindFile(ctx context.Context, identifier resource.Identifier, request FetchTestKindFileRequest) (*FetchTestKindFileResponse, error) {
+	params := url.Values{}
 	resp, err := c.client.SubresourceRequest(ctx, identifier, resource.CustomRouteRequestOptions{
 		Path:    "/files/{file}",
 		Verb:    "GET",
+		Query:   params,
 		Headers: request.Headers,
 	})
 	if err != nil {

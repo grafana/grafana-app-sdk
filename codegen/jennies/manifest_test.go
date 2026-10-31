@@ -561,56 +561,138 @@ func TestCustomRouteResponseToSpec3Responses_EmptyResponse(t *testing.T) {
 	}
 }
 
-func TestBuildPathPropsFromMethods_PathParameters(t *testing.T) {
-	route := func(params map[string]codegen.CustomRouteParam) codegen.CustomRoute {
-		return codegen.CustomRoute{Name: "getThing", Request: codegen.CustomRouteRequest{PathParams: params}}
-	}
-	get := func(t *testing.T, path string, r codegen.CustomRoute) (*spec3.Operation, error) {
+func TestBuildPathPropsFromMethods_Parameters(t *testing.T) {
+	ctx := cuecontext.New()
+	schema := func(src string) cue.Value { return ctx.CompileString(src) }
+	get := func(t *testing.T, path string, request codegen.CustomRouteRequest) ([]*spec3.Parameter, error) {
 		t.Helper()
-		props, _, err := buildPathPropsFromMethods(path, map[string]codegen.CustomRoute{"GET": r})
+		props, _, err := buildPathPropsFromMethods(path, map[string]codegen.CustomRoute{"GET": {Name: "getThing", Request: request}})
 		if err != nil {
 			return nil, err
 		}
-		return props.Get, nil
+		return props.Get.Parameters, nil
+	}
+	byName := func(params []*spec3.Parameter) map[string]*spec3.Parameter {
+		out := map[string]*spec3.Parameter{}
+		for _, p := range params {
+			out[p.Name] = p
+		}
+		return out
 	}
 
-	t.Run("documented parameters are required path parameters, in name order", func(t *testing.T) {
-		op, err := get(t, "/things/{kind}/{group}", route(map[string]codegen.CustomRouteParam{
-			"kind":  {Description: "Kind of the thing", Example: "Dashboard"},
-			"group": {Description: "API group of the thing"},
-		}))
+	t.Run("a path parameter is a required string unless it has a schema", func(t *testing.T) {
+		params, err := get(t, "/things/{kind}/{id}/{group}", codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{
+			{Name: "kind", In: "path", Description: "Kind of the thing", Example: "Dashboard"},
+			{Name: "group", In: "path", Description: "API group of the thing"},
+			{Name: "id", In: "path", Schema: schema("int")},
+		}})
 		require.NoError(t, err)
-		require.Len(t, op.Parameters, 2)
-		assert.Equal(t, "group", op.Parameters[0].Name)
-		assert.Equal(t, "kind", op.Parameters[1].Name)
-		for _, p := range op.Parameters {
+		require.Len(t, params, 3)
+		assert.Equal(t, []string{"group", "id", "kind"}, []string{params[0].Name, params[1].Name, params[2].Name}, "in name order")
+		got := byName(params)
+		for _, p := range params {
 			assert.Equal(t, "path", p.In)
 			assert.True(t, p.Required)
-			assert.Equal(t, spec.StringProperty(), p.Schema)
 		}
-		assert.Equal(t, "API group of the thing", op.Parameters[0].Description)
-		assert.Nil(t, op.Parameters[0].Example, "an example is only emitted when declared")
-		assert.Equal(t, "Dashboard", op.Parameters[1].Example)
-	})
-
-	t.Run("a route with no documented parameters has none", func(t *testing.T) {
-		op, err := get(t, "/things/{id}", route(nil))
-		require.NoError(t, err)
-		assert.Empty(t, op.Parameters)
+		assert.Equal(t, spec.StringProperty(), got["group"].Schema)
+		assert.Equal(t, spec.StringOrArray{"integer"}, got["id"].Schema.Type)
+		assert.Equal(t, "Dashboard", got["kind"].Example)
+		assert.Nil(t, got["group"].Example, "an example is only emitted when declared")
 	})
 
 	t.Run("a parameter that matches the rest of the path is found by its name", func(t *testing.T) {
 		for _, path := range []string{"/files/{path}", "/files/{path...}", "/files/{path:*}"} {
-			op, err := get(t, path, route(map[string]codegen.CustomRouteParam{"path": {Description: "File path"}}))
+			params, err := get(t, path, codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{{Name: "path", In: "path"}}})
 			require.NoError(t, err, path)
-			require.Len(t, op.Parameters, 1, path)
-			assert.Equal(t, "path", op.Parameters[0].Name, path)
+			require.Len(t, params, 1, path)
 		}
 	})
 
-	t.Run("a parameter that is not in the path is an error", func(t *testing.T) {
-		_, err := get(t, "/things/{id}", route(map[string]codegen.CustomRouteParam{"idd": {Description: "typo"}}))
+	t.Run("a path parameter must be in the path, and cannot be optional", func(t *testing.T) {
+		_, err := get(t, "/things/{id}", codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{{Name: "idd", In: "path"}}})
 		require.ErrorContains(t, err, `path parameter "idd" is not a parameter in the path "/things/{id}"`)
+		_, err = get(t, "/things/{id}", codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{{Name: "id", In: "path", Required: new(false)}}})
+		require.ErrorContains(t, err, `path parameter "id" cannot be optional`)
+	})
+
+	t.Run("query parameters are defined by their entries", func(t *testing.T) {
+		params, err := get(t, "/search", codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{
+			{Name: "q", In: "query", Required: new(true), Description: "Terms to look for", Example: "dashboards"},
+			{Name: "limit", In: "query", Schema: schema("int | *10"), Example: int64(25), Deprecated: true},
+			{Name: "force", In: "query", Schema: schema("bool")},
+		}})
+		require.NoError(t, err)
+		got := byName(params)
+		require.Len(t, params, 3)
+		assert.Equal(t, "query", got["q"].In)
+		assert.True(t, got["q"].Required)
+		assert.Equal(t, spec.StringProperty(), got["q"].Schema, "a string unless it has a schema")
+		assert.Equal(t, "Terms to look for", got["q"].Description)
+		assert.Equal(t, "dashboards", got["q"].Example)
+		assert.False(t, got["limit"].Required, "a query parameter is optional unless it says so")
+		assert.Equal(t, spec.StringOrArray{"integer"}, got["limit"].Schema.Type)
+		assert.EqualValues(t, 10, got["limit"].Schema.Default, "the default comes from the schema")
+		assert.Equal(t, int64(25), got["limit"].Example)
+		assert.True(t, got["limit"].Deprecated)
+		assert.Equal(t, spec.StringOrArray{"boolean"}, got["force"].Schema.Type)
+	})
+
+	t.Run("the deprecated query still defines query parameters, from its doc comments", func(t *testing.T) {
+		params, err := get(t, "/search", codegen.CustomRouteRequest{Query: schema(`{
+			// The search terms.
+			q: string
+			limit?: int
+		}`)})
+		require.NoError(t, err)
+		got := byName(params)
+		assert.Equal(t, "The search terms.", got["q"].Description)
+		assert.True(t, got["q"].Required)
+		assert.False(t, got["limit"].Required)
+	})
+
+	t.Run("a route declares query parameters in one place", func(t *testing.T) {
+		_, err := get(t, "/search", codegen.CustomRouteRequest{
+			Query:      schema(`{q: string}`),
+			Parameters: []codegen.CustomRouteParam{{Name: "limit", In: "query"}},
+		})
+		require.ErrorContains(t, err, "declares query parameters in parameters and in the deprecated query")
+	})
+
+	t.Run("header and cookie parameters are emitted, after the path and query ones", func(t *testing.T) {
+		params, err := get(t, "/things/{id}", codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{
+			{Name: "session", In: "cookie", Required: new(true)},
+			{Name: "X-Request-Id", In: "header", Description: "Correlates the request in logs", Example: "7f0c"},
+			{Name: "page", In: "query"},
+			{Name: "id", In: "path"},
+		}})
+		require.NoError(t, err)
+		require.Len(t, params, 4)
+		assert.Equal(t, []string{"path", "query", "header", "cookie"}, []string{params[0].In, params[1].In, params[2].In, params[3].In})
+		got := byName(params)
+		assert.False(t, got["X-Request-Id"].Required, "optional unless it says so")
+		assert.True(t, got["session"].Required)
+	})
+
+	t.Run("a parameter is identified by its name and where it is", func(t *testing.T) {
+		_, err := get(t, "/things/{id}", codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{
+			{Name: "id", In: "path"}, {Name: "id", In: "query"}, {Name: "id", In: "header"},
+		}})
+		require.NoError(t, err, "the same name in other places is another parameter")
+		_, err = get(t, "/things/{id}", codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{
+			{Name: "id", In: "query"}, {Name: "id", In: "query"},
+		}})
+		require.ErrorContains(t, err, `query parameter "id" is declared twice`)
+	})
+
+	t.Run("an example has to satisfy the schema", func(t *testing.T) {
+		_, err := get(t, "/search", codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{
+			{Name: "limit", In: "query", Schema: schema("int"), Example: "many"},
+		}})
+		require.ErrorContains(t, err, `example many of query parameter "limit" does not satisfy its schema`)
+		_, err = get(t, "/search", codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{
+			{Name: "q", In: "query", Example: int64(3)},
+		}})
+		require.ErrorContains(t, err, `example 3 of query parameter "q" does not satisfy its schema`, "a parameter is a string without a schema")
 	})
 }
 
@@ -630,75 +712,4 @@ func TestBuildPathPropsFromMethods_OperationID(t *testing.T) {
 			assert.Equal(t, tc.want, props.Put.OperationId)
 		})
 	}
-}
-
-func TestBuildPathPropsFromMethods_QueryParameters(t *testing.T) {
-	query := cuecontext.New().CompileString(`{
-		// The search terms.
-		q: string
-		// How many results to return.
-		limit?: int
-		force?: bool
-	}`)
-	get := func(t *testing.T, query cue.Value, declared map[string]codegen.CustomRouteParam) ([]*spec3.Parameter, error) {
-		t.Helper()
-		props, _, err := buildPathPropsFromMethods("/search", map[string]codegen.CustomRoute{"GET": {
-			Name:    "getSearch",
-			Request: codegen.CustomRouteRequest{Query: query, QueryParams: declared},
-		}})
-		if err != nil {
-			return nil, err
-		}
-		return props.Get.Parameters, nil
-	}
-	byName := func(params []*spec3.Parameter) map[string]*spec3.Parameter {
-		out := map[string]*spec3.Parameter{}
-		for _, p := range params {
-			out[p.Name] = p
-		}
-		return out
-	}
-
-	t.Run("without declared documentation the doc comments describe the parameters", func(t *testing.T) {
-		params, err := get(t, query, nil)
-		require.NoError(t, err)
-		got := byName(params)
-		assert.Equal(t, "The search terms.", got["q"].Description)
-		assert.Nil(t, got["q"].Example)
-		assert.True(t, got["q"].Required, "the schema decides what is required")
-		assert.False(t, got["limit"].Required)
-	})
-
-	t.Run("declared documentation is added, and wins over a doc comment", func(t *testing.T) {
-		params, err := get(t, query, map[string]codegen.CustomRouteParam{
-			"q":     {Description: "Terms to look for", Example: "dashboards"},
-			"limit": {Example: "25"},
-			"force": {Example: "true"},
-		})
-		require.NoError(t, err)
-		got := byName(params)
-		assert.Equal(t, "Terms to look for", got["q"].Description)
-		assert.Equal(t, "dashboards", got["q"].Example)
-		assert.Equal(t, "How many results to return.", got["limit"].Description, "kept when none is declared")
-		assert.Equal(t, int64(25), got["limit"].Example, "an integer parameter gets an integer example")
-		assert.Equal(t, true, got["force"].Example)
-		assert.Equal(t, "query", got["q"].In)
-	})
-
-	t.Run("an example that is not of the parameter's type is an error", func(t *testing.T) {
-		_, err := get(t, query, map[string]codegen.CustomRouteParam{"limit": {Example: "many"}})
-		require.ErrorContains(t, err, `query parameter "limit": example "many" is not an integer`)
-		_, err = get(t, query, map[string]codegen.CustomRouteParam{"force": {Example: "maybe"}})
-		require.ErrorContains(t, err, `example "maybe" is not a boolean`)
-	})
-
-	t.Run("a parameter that is not a field of the query is an error", func(t *testing.T) {
-		_, err := get(t, query, map[string]codegen.CustomRouteParam{"offset": {Description: "typo"}})
-		require.ErrorContains(t, err, `query parameter "offset" is not a field of the request query`)
-	})
-
-	t.Run("documenting query parameters of a route with no query is an error", func(t *testing.T) {
-		_, err := get(t, cue.Value{}, map[string]codegen.CustomRouteParam{"q": {Description: "nothing to document"}})
-		require.ErrorContains(t, err, `query parameter "q" is not a field of the request query`)
-	})
 }

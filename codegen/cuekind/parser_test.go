@@ -204,18 +204,22 @@ func TestParseManifestRoutes(t *testing.T) {
 		require.Contains(t, v3Kind.Routes, "/search")
 		assert.Equal(t, "getTestKindSearchResult", v3Kind.Routes["/search"]["GET"].Name)
 
-		// Path parameter documentation and an operation ID that differs from the name
+		// A route identified by an operationId alone, with parameters in each of the places
 		file := v3Kind.Routes["/files/{file}"]["GET"]
 		assert.Equal(t, "fetchTestKindFile", file.OperationID)
 		assert.Equal(t, "fetchTestKindFile", file.Name, "the identifier the route resolves to")
-		assert.Equal(t, map[string]codegen.CustomRouteParam{
-			"file": {Description: "Name of the file", Example: "report.csv"},
-		}, file.Request.PathParams)
+		require.Len(t, file.Request.Parameters, 3)
+		assert.Equal(t, "file", file.Request.Parameters[0].Name)
+		assert.Equal(t, "path", file.Request.Parameters[0].In)
+		assert.Equal(t, "Name of the file", file.Request.Parameters[0].Description)
+		assert.Equal(t, "report.csv", file.Request.Parameters[0].Example)
+		assert.Equal(t, "query", file.Request.Parameters[1].In)
+		assert.Equal(t, true, file.Request.Parameters[1].Example)
+		assert.Equal(t, "header", file.Request.Parameters[2].In)
+		assert.Nil(t, file.Request.Parameters[2].Required, "required is only set when it is declared")
+		download := file.Request.QuerySchema()
+		require.True(t, download.Exists(), "a query parameter defines the query schema")
 		assert.Empty(t, v3Kind.Routes["/search"]["GET"].OperationID, "a route may still declare the deprecated name instead")
-		assert.Equal(t, map[string]codegen.CustomRouteParam{
-			"q":     {Description: "Terms to look for", Example: "dashboards"},
-			"limit": {Example: "25"},
-		}, v3Kind.Routes["/search"]["GET"].Request.QueryParams)
 
 		// Route authz, fully and partially specified
 		require.NotNil(t, v3Kind.Routes["/reconcile"]["POST"].Authz)
@@ -448,7 +452,7 @@ func TestParseManifestRouteOperationID(t *testing.T) {
 	route := func(path, fields string) string {
 		return fmt.Sprintf(`%q: PUT: {
 			%s
-			request: pathParams: id: description: "The object to star"
+			request: parameters: [{name: "id", in: "path", description: "The object to star"}]
 			response: {}
 		}`, path, fields)
 	}
@@ -529,4 +533,51 @@ func TestParseManifestRouteIDsAreUniquePerVersion(t *testing.T) {
 	require.NoError(t, err)
 	_, err = parser.ParseManifest("manifest")
 	require.NoError(t, err, "each version is its own OpenAPI document")
+}
+
+func TestParseManifestRouteParameters(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		request string
+		err     string
+	}{
+		{name: "one of each place", request: `parameters: [
+			{name: "id", in: "path", description: "The object"},
+			{name: "limit", in: "query", schema: int | *10, example: 25},
+			{name: "X-Request-Id", in: "header", required: true},
+			{name: "session", in: "cookie", deprecated: true},
+		]`},
+		{name: "a place that is not one", request: `parameters: [{name: "id", in: "body"}]`, err: "in"},
+		{name: "a name that is not one", request: `parameters: [{name: "bad name", in: "query"}]`, err: "name"},
+		{name: "an optional path parameter", request: `parameters: [{name: "id", in: "path", required: false}]`, err: "cannot be optional"},
+		{name: "a path parameter not in the path", request: `parameters: [{name: "other", in: "path"}]`, err: "is not a parameter in the path"},
+		{name: "an example that is not of the type", request: `parameters: [{name: "limit", in: "query", schema: int, example: "many"}]`, err: "does not satisfy its schema"},
+		{name: "the same parameter twice", request: `parameters: [{name: "a", in: "query"}, {name: "a", in: "query"}]`, err: "declared twice"},
+		{name: "query two ways", request: `query: {a: string}, parameters: [{name: "b", in: "query"}]`, err: "deprecated query"},
+		{name: "the deprecated query alone", request: `query: {a: string}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testingCue(t)
+			c.Root = c.Root.Context().CompileString(fmt.Sprintf(`
+				manifest: {
+					appName: "params-app"
+					versions: v1: {
+						kinds: []
+						routes: namespaced: "/things/{id}": GET: {
+							operationId: "getThing"
+							request: {%s}
+							response: {}
+						}
+					}
+				}`, tc.request))
+			parser, err := NewParser(c, false)
+			require.NoError(t, err)
+			_, err = parser.ParseManifest("manifest")
+			if tc.err != "" {
+				require.ErrorContains(t, err, tc.err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
 }

@@ -110,19 +110,12 @@ routes: namespaced: "/update/{group}/{kind}/{id}": PUT: {
     operationId: "addStar"
     summary:     "Add a starred item"
     description: "Adds the item to the stars of the object."
-    request: {
-        pathParams: {
-            group: {description: "API group of the item", example: "dashboard.grafana.app"}
-            kind:  {description: "Kind of the item", example: "Dashboard"}
-            id:    {description: "Name of the item"}
-        }
-        queryParams: {
-            reason: {description: "Why the item is starred", example: "reference"}
-        }
-        query: {
-            reason?: string
-        }
-    }
+    request: parameters: [
+        {name: "group", in: "path", description: "API group of the item", example: "dashboard.grafana.app"},
+        {name: "kind", in: "path", description: "Kind of the item", example: "Dashboard"},
+        {name: "id", in: "path", description: "Name of the item"},
+        {name: "reason", in: "query", description: "Why the item is starred", schema: string | *"reference"},
+    ]
     response: {message: string}
 }
 ```
@@ -135,15 +128,19 @@ routes: namespaced: "/update/{group}/{kind}/{id}": PUT: {
   declares one or the other, and `operationId` wins when both are there. `name` has to start with a
   Kubernetes verb (`get`, `create`, `delete`, ...), which `operationId` does not.
 - `summary` and `description` describe the operation.
-- `request.pathParams` and `request.queryParams` document the parameters of the route, by name, with
-  the same fields: a `description` and an `example`. What a parameter is comes from elsewhere, so
-  only its documentation is declared here.
-  - A path parameter is always a required string, defined by the route's path. A name that is not a
-    parameter in the path is an error.
-  - A query parameter is a field of `request.query`, which defines its type, and whether it is
-    required. A name that is not a field of `query` is an error. The `example` is read as the type of
-    the field, so an integer field gets an integer example. A `description` declared here wins over
-    the field's doc comment, which describes the parameter when none is declared.
+- `request.parameters` lists the parameters of the route, as in OpenAPI: each one has a `name` and
+  says where it is with `in` (`path`, `query`, `header` or `cookie`). A parameter is identified by
+  its name and `in`, so two cannot share both. The other fields are `description`, `required`,
+  `deprecated`, an `example` and a `schema`, which defaults to a string. An `example` has to be a
+  value of the schema's type.
+  - A path parameter has to be a parameter in the path, and is always required. Naming one that is
+    not in the path is an error.
+  - A query parameter is defined here: `schema` is its type, and `required` is whether it has to be
+    sent (false by default). They are also what the generated Go client takes for the route.
+    `request.query`, a CUE struct of the fields, is the deprecated spelling. A route declares its
+    query parameters in one or the other, not both.
+  - A header or cookie parameter is documented in the OpenAPI only. It is not part of the generated
+    client or the request types yet.
 For anything beyond this, such as responses other than the default, import or declare the OpenAPI
 itself, as below.
 

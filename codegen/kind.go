@@ -137,21 +137,39 @@ type EmbedField struct {
 
 // CustomRouteRequest represents the request part of a custom route definition.
 type CustomRouteRequest struct {
-	// PathParams documents the parameters in the route's path, by name.
-	PathParams map[string]CustomRouteParam `json:"pathParams,omitempty"`
-	// QueryParams documents the fields of Query, by name.
-	QueryParams map[string]CustomRouteParam `json:"queryParams,omitempty"`
-	Query       cue.Value                   `json:"query,omitempty"`
-	Body        cue.Value                   `json:"body,omitempty"`
+	// Parameters are the parameters of the route, as OpenAPI describes them: each says where it is.
+	Parameters []CustomRouteParam `json:"parameters,omitempty"`
+	// Query is the schema of the route's query parameters, whose fields are the parameters.
+	//
+	// Deprecated: declare the parameters with In "query" instead, and read them with QuerySchema.
+	Query cue.Value `json:"query,omitempty"`
+	Body  cue.Value `json:"body,omitempty"`
 }
 
-// CustomRouteParam documents one parameter of a custom route, in its path or in its query. What
-// the parameter is, its type and whether it is required, comes from the path, or from the query
-// schema, so only its documentation is declared.
+// CustomRouteParam is one parameter of a custom route, described as OpenAPI's parameter object
+// describes it.
 type CustomRouteParam struct {
+	// Name is the name of the parameter. A path parameter's is a parameter in the route's path.
+	Name string `json:"name"`
+	// In is where the parameter is: "path", "query", "header" or "cookie".
+	In          string `json:"in"`
 	Description string `json:"description,omitempty"`
-	Example     string `json:"example,omitempty"`
+	// Required is whether the request has to carry the parameter. A path parameter always does, and
+	// the others default to not.
+	Required   *bool `json:"required,omitempty"`
+	Deprecated bool  `json:"deprecated,omitempty"`
+	// Example is an example value, which has to satisfy Schema.
+	Example any `json:"example,omitempty"`
+	// Schema is the type of the parameter, which is a string when it is not declared.
+	Schema cue.Value `json:"schema,omitempty"`
 }
+
+const (
+	CustomRouteParamInPath   = "path"
+	CustomRouteParamInQuery  = "query"
+	CustomRouteParamInHeader = "header"
+	CustomRouteParamInCookie = "cookie"
+)
 
 type CustomRouteResponseMetadata struct {
 	TypeMeta   bool `json:"typeMeta"`

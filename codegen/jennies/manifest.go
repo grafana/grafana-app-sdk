@@ -10,9 +10,7 @@ import (
 	"go/format"
 	"maps"
 	"path/filepath"
-	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 
 	"cuelang.org/go/cue"
@@ -857,18 +855,10 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 			operationID = sourceRoute.Name
 		}
 
-		pathParameters, err := customRoutePathParameters(sourcePath, sourceRoute.Request.PathParams)
+		targetParameters, err := customRouteParameters(sourcePath, sourceRoute.Request)
 		if err != nil {
-			return spec3.PathProps{}, nil, fmt.Errorf("error converting path parameters for %s %s: %w", sourceMethod, sourcePath, err)
+			return spec3.PathProps{}, nil, fmt.Errorf("error converting parameters for %s %s: %w", sourceMethod, sourcePath, err)
 		}
-		queryParameters, err := cueSchemaToParameters(sourceRoute.Request.Query)
-		if err != nil {
-			return spec3.PathProps{}, nil, fmt.Errorf("error converting query schema for %s %s: %w", sourceMethod, sourcePath, err)
-		}
-		if err := documentQueryParameters(queryParameters, sourceRoute.Request.QueryParams); err != nil {
-			return spec3.PathProps{}, nil, fmt.Errorf("error converting query parameters for %s %s: %w", sourceMethod, sourcePath, err)
-		}
-		targetParameters := slices.Concat(pathParameters, queryParameters)
 		targetRequestBody, additional, err := cueSchemaToRequestBody(sourceRoute.Request.Body, operationID)
 		if err != nil {
 			return spec3.PathProps{}, nil, fmt.Errorf("error converting body schema for %s %s: %w", sourceMethod, sourcePath, err)
@@ -912,94 +902,72 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 	return targetPathProps, additionalSchemas, nil
 }
 
-// pathParameterPattern matches a parameter in a route path, such as {name}.
-var pathParameterPattern = regexp.MustCompile(`\{([^{}/]+)\}`)
+// customRouteParameters builds the OpenAPI parameters of a route: the path parameters, then the
+// query parameters, then the header and cookie parameters, each in name order. Path, header and
+// cookie parameters are as the route declares them. The query parameters are the fields of its
+// query schema, which defines their types, and whether they are required, with what the route
+// declares about each of them added: its description wins over the field's doc comment.
+func customRouteParameters(sourcePath string, request codegen.CustomRouteRequest) ([]*spec3.Parameter, error) {
+	if err := codegen.ValidateRouteParams(sourcePath, request); err != nil {
+		return nil, err
+	}
+	declared := slices.SortedFunc(slices.Values(request.Parameters), func(a, b codegen.CustomRouteParam) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+	byLocation := map[string][]*spec3.Parameter{}
+	declaredQuery := map[string]codegen.CustomRouteParam{}
+	for _, p := range declared {
+		if p.In == codegen.CustomRouteParamInQuery {
+			declaredQuery[p.Name] = p
+			continue
+		}
+		param, err := specParameter(p)
+		if err != nil {
+			return nil, err
+		}
+		byLocation[p.In] = append(byLocation[p.In], param)
+	}
 
-// customRoutePathParameters builds the documented path parameters of a route, in name order. A path
-// parameter is always a string, and always required. Every declared name must be a parameter in the
-// path: documenting one that is not there is a mistake in the route, not a parameter to emit.
-func customRoutePathParameters(sourcePath string, declared map[string]codegen.CustomRouteParam) ([]*spec3.Parameter, error) {
-	if len(declared) == 0 {
-		return nil, nil
+	query, err := cueSchemaToParameters(request.QuerySchema())
+	if err != nil {
+		return nil, fmt.Errorf("error converting query schema: %w", err)
 	}
-	inPath := map[string]bool{}
-	for _, match := range pathParameterPattern.FindAllStringSubmatch(sourcePath, -1) {
-		// A parameter matching the rest of the path may be written {name:*} or {name...}.
-		name := strings.TrimSuffix(strings.TrimSuffix(match[1], ":*"), "...")
-		inPath[name] = true
-	}
-	names := slices.Sorted(maps.Keys(declared))
-	parameters := make([]*spec3.Parameter, 0, len(names))
-	for _, name := range names {
-		if !inPath[name] {
-			return nil, fmt.Errorf("path parameter %q is not a parameter in the path %q", name, sourcePath)
-		}
-		param := &spec3.Parameter{}
-		param.Name = name
-		param.In = "path"
-		param.Required = true
-		param.Description = declared[name].Description
-		if example := declared[name].Example; example != "" {
-			param.Example = example
-		}
-		param.Schema = spec.StringProperty()
-		parameters = append(parameters, param)
-	}
-	return parameters, nil
-}
-
-// documentQueryParameters applies the documentation a route declares for its query parameters. The
-// query schema defines the parameters, with their types and whether they are required, so every
-// declared name must be one of its fields: documenting one that is not there is a mistake in the
-// route. A declared description wins over the one from the field's doc comment.
-func documentQueryParameters(parameters []*spec3.Parameter, declared map[string]codegen.CustomRouteParam) error {
-	for _, name := range slices.Sorted(maps.Keys(declared)) {
-		i := slices.IndexFunc(parameters, func(p *spec3.Parameter) bool { return p.Name == name })
-		if i < 0 {
-			return fmt.Errorf("query parameter %q is not a field of the request query", name)
-		}
-		param, doc := parameters[i], declared[name]
-		if doc.Description != "" {
-			param.Description = doc.Description
-		}
-		if doc.Example != "" {
-			example, err := exampleOfType(param.Schema, doc.Example)
-			if err != nil {
-				return fmt.Errorf("query parameter %q: %w", name, err)
+	for _, param := range query {
+		if d, ok := declaredQuery[param.Name]; ok {
+			if d.Description != "" {
+				param.Description = d.Description
 			}
-			param.Example = example
+			param.Deprecated = d.Deprecated
+			param.Example = d.Example
 		}
 	}
-	return nil
+	return slices.Concat(
+		byLocation[codegen.CustomRouteParamInPath],
+		query,
+		byLocation[codegen.CustomRouteParamInHeader],
+		byLocation[codegen.CustomRouteParamInCookie],
+	), nil
 }
 
-// exampleOfType reads an example, declared as a string, as the type of the parameter it is for, so
-// that the OpenAPI does not give an integer parameter a string for an example.
-func exampleOfType(schema *spec.Schema, example string) (any, error) {
-	if schema == nil || len(schema.Type) != 1 {
-		return example, nil
+// specParameter is a declared parameter as an OpenAPI parameter. A path parameter is always
+// required, and the others are not unless they say so. A parameter is a string unless it has a schema.
+func specParameter(p codegen.CustomRouteParam) (*spec3.Parameter, error) {
+	param := &spec3.Parameter{}
+	param.Name = p.Name
+	param.In = p.In
+	param.Description = p.Description
+	param.Deprecated = p.Deprecated
+	param.Example = p.Example
+	param.Required = p.In == codegen.CustomRouteParamInPath || (p.Required != nil && *p.Required)
+	param.Schema = spec.StringProperty()
+	if p.Schema.Exists() {
+		props, _, err := cueSchemaToSpecSchemaProps(p.Schema, "")
+		if err != nil {
+			return nil, fmt.Errorf("error converting the schema of %s parameter %q: %w", p.In, p.Name, err)
+		}
+		param.Schema = &spec.Schema{SchemaProps: props}
 	}
-	switch schema.Type[0] {
-	case "integer":
-		v, err := strconv.ParseInt(example, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("example %q is not an integer", example)
-		}
-		return v, nil
-	case "number":
-		v, err := strconv.ParseFloat(example, 64)
-		if err != nil {
-			return nil, fmt.Errorf("example %q is not a number", example)
-		}
-		return v, nil
-	case "boolean":
-		v, err := strconv.ParseBool(example)
-		if err != nil {
-			return nil, fmt.Errorf("example %q is not a boolean", example)
-		}
-		return v, nil
-	}
-	return example, nil
+	return param, nil
 }
 
 func cueSchemaToParameters(v cue.Value) ([]*spec3.Parameter, error) {

@@ -248,11 +248,6 @@ testKind: {
 							}
 						}
 						request: {
-							// The fields of query define the parameters; this documents them.
-							queryParams: {
-								q: {description: "Terms to look for", example: "dashboards"}
-								limit: example: "25"
-							}
 							query: {
 								q: string
 								limit?: int | *10
@@ -276,10 +271,12 @@ testKind: {
 						// The identifier of the route: the operationId of the OpenAPI operation, and the name of
 						// the generated Go types and client method. It has no name, which is the deprecated spelling.
 						operationId: "fetchTestKindFile"
-						request: pathParams: file: {
-							description: "Name of the file"
-							example:     "report.csv"
-						}
+						request: parameters: [
+							{name: "file", in: "path", description: "Name of the file", example: "report.csv"},
+							// A query parameter is defined here: its type, whether it is required and its default.
+							{name: "download", in: "query", description: "Send the file as an attachment", schema: bool | *false, example: true},
+							{name: "X-Request-Id", in: "header", description: "Correlates the request in logs", example: "7f0c"},
+						]
 						response: {
 							content: string
 						}
