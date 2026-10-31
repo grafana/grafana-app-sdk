@@ -255,6 +255,22 @@ SchemaWithOperatorState: Schema & {
 	global: bool | *false
 }
 
+// #KindProvisioning declares whether provisioning (Git Sync) manages a kind.
+#KindProvisioning: {
+	// enabled declares whether provisioning manages resources of this kind.
+	enabled: bool | *false
+}
+
+// #KindUI declares how user interfaces display a kind.
+#KindUI: {
+	// label is the singular display name of the kind.
+	label?: string
+	// pluralLabel is the plural display name of the kind.
+	pluralLabel?: string
+	// icon is the name of a Grafana UI icon for the kind.
+	icon?: string
+}
+
 // #KindEmbed defines the embedding document independently of search fields.
 // Kinds with a custom embedding builder omit this section.
 #KindEmbed: {
@@ -372,6 +388,10 @@ Kind: S={
 	search: #KindSearch
 	// embed defines the embedding document independently of search fields.
 	embed?: #KindEmbed
+	// provisioning declares whether provisioning (Git Sync) manages this kind.
+	provisioning?: #KindProvisioning
+	// ui declares how user interfaces display this kind.
+	ui?: #KindUI
 	// routes is a map of path patterns to custom routes that will be exposed as subresources for this kind.
 	// entries here should not conflict with subresources (like spec and status) in the schema for the kind.
 	routes?: #CustomRouteCapability

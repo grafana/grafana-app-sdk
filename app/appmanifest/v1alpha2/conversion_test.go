@@ -304,6 +304,49 @@ func TestSearchEndpointsConversion(t *testing.T) {
 	}
 }
 
+func TestProvisioningAndUIConversion(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		provisioning *app.ManifestVersionKindProvisioning
+		ui           *app.ManifestVersionKindUI
+	}{
+		{name: "unset"},
+		{name: "empty", provisioning: &app.ManifestVersionKindProvisioning{}, ui: &app.ManifestVersionKindUI{}},
+		{name: "provisioning disabled", provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(false)}},
+		{name: "provisioning enabled", provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)}},
+		{name: "partial ui", ui: &app.ManifestVersionKindUI{Icon: "apps"}},
+		{
+			name:         "full",
+			provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
+			ui:           &app.ManifestVersionKindUI{Label: "Widget", PluralLabel: "Widgets", Icon: "apps"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			md := app.ManifestData{
+				AppName: "foo",
+				Versions: []app.ManifestVersion{{
+					Name:   "v1",
+					Served: true,
+					Kinds: []app.ManifestVersionKind{{
+						Kind:         "Foo",
+						Scope:        "Namespaced",
+						Provisioning: tc.provisioning,
+						UI:           tc.ui,
+					}},
+				}},
+			}
+
+			spec, err := SpecFromManifestData(md)
+			require.NoError(t, err)
+
+			roundTripped, err := spec.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, tc.provisioning, roundTripped.Versions[0].Kinds[0].Provisioning)
+			assert.Equal(t, tc.ui, roundTripped.Versions[0].Kinds[0].UI)
+		})
+	}
+}
+
 func TestEmbedConversion(t *testing.T) {
 	for _, tc := range []struct {
 		name           string

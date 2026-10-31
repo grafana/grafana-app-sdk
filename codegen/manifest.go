@@ -247,6 +247,8 @@ type VersionedKind struct {
 	ListKeys                 *bool                     `json:"listKeys"`
 	Search                   KindSearch                `json:"search"`
 	Embed                    *KindEmbed                `json:"embed,omitempty"`
+	Provisioning             *KindProvisioning         `json:"provisioning,omitempty"`
+	UI                       *KindUI                   `json:"ui,omitempty"`
 	// Schema is the CUE schema for the version
 	// This should eventually be changed to JSONSchema/OpenAPI(/AST?)
 	Schema       cue.Value                            `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)

@@ -799,6 +799,10 @@
                                         "description": "Plural is the plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
                                         "type": "string"
                                     },
+                                    "provisioning": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindProvisioning",
+                                        "description": "provisioning declares whether provisioning (Git Sync) manages this kind."
+                                    },
                                     "routes": {
                                         "additionalProperties": true,
                                         "description": "Routes is a map of subresource route path to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.\nDeprecated: routes now live in ManifestVersion#openapi",
@@ -843,6 +847,10 @@
                                     "storage": {
                                         "$ref": "#/components/schemas/ManifestVersionKindStorage",
                                         "description": "storage declares storage-related behavior for this kind."
+                                    },
+                                    "ui": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindUI",
+                                        "description": "ui declares how user interfaces display this kind."
                                     },
                                     "userReadable": {
                                         "default": false,
@@ -893,6 +901,17 @@
                                 ],
                                 "type": "object"
                             },
+                            "ManifestVersionKindProvisioning": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "enabled": {
+                                        "default": false,
+                                        "description": "enabled declares whether provisioning manages resources of this kind.",
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            },
                             "ManifestVersionKindSearch": {
                                 "additionalProperties": false,
                                 "description": "#ManifestVersionKindSearch declares which search endpoints are served for a kind.",
@@ -926,6 +945,24 @@
                                     "listKeys": {
                                         "description": "listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.",
                                         "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            },
+                            "ManifestVersionKindUI": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "icon": {
+                                        "description": "icon is the name of a Grafana UI icon for the kind.",
+                                        "type": "string"
+                                    },
+                                    "label": {
+                                        "description": "label is the singular display name of the kind.",
+                                        "type": "string"
+                                    },
+                                    "pluralLabel": {
+                                        "description": "pluralLabel is the plural display name of the kind.",
+                                        "type": "string"
                                     }
                                 },
                                 "type": "object"
