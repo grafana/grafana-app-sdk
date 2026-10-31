@@ -581,3 +581,40 @@ func TestParseManifestRouteParameters(t *testing.T) {
 		})
 	}
 }
+
+func TestParseManifestFixedNames(t *testing.T) {
+	for _, tc := range []struct {
+		name, declaration string
+		want              []string
+		invalid           bool
+	}{
+		{name: "omitted"},
+		{name: "one", declaration: `fixedNames: ["current"]`, want: []string{"current"}},
+		{name: "with dashes", declaration: `fixedNames: ["my-name", "b2"]`, want: []string{"my-name", "b2"}},
+		{name: "not an object name", declaration: `fixedNames: ["Bad Name"]`, invalid: true},
+		{name: "a path", declaration: `fixedNames: ["a/b"]`, invalid: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testingCue(t)
+			c.Root = c.Root.Context().CompileString(fmt.Sprintf(`
+				shared: {kind: "Foo", schema: spec: title: string, %s}
+				manifest: {
+					appName: "fixed-app"
+					versions: {
+						v1: kinds: [shared]
+					}
+				}`, tc.declaration))
+			parser, err := NewParser(c, false)
+			require.NoError(t, err)
+			manifest, err := parser.ParseManifest("manifest")
+			if tc.invalid {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			kinds := manifest.Versions()[0].Kinds()
+			require.Len(t, kinds, 1)
+			assert.Equal(t, tc.want, kinds[0].FixedNames)
+		})
+	}
+}

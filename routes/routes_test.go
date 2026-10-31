@@ -529,3 +529,76 @@ func TestParseUnservedHeadDoesNotFallBackToGet(t *testing.T) {
 		require.Equal(t, http.StatusMethodNotAllowed, response.Code)
 	}
 }
+
+// A kind's fixed names are answered by the app, so a route at exactly one is
+// allowed where it would otherwise shadow the kind's resource.
+func TestParseFixedNames(t *testing.T) {
+	version := func(paths map[string]spec3.PathProps, fixed ...string) app.ManifestVersion {
+		v := testVersion(paths)
+		v.Kinds[0].FixedNames = fixed
+		v.Kinds[1].FixedNames = fixed
+		return v
+	}
+
+	t.Run("a route at a fixed name is a route of the version", func(t *testing.T) {
+		routes, problems := Parse(version(map[string]spec3.PathProps{
+			"/namespaces/{namespace}/things/current": get(),
+		}, "current"), Options{})
+		require.Empty(t, problems)
+		require.Len(t, routes, 1)
+		require.True(t, routes[0].Namespaced)
+		require.Equal(t, "things/current", routes[0].Path)
+		require.Nil(t, routes[0].Kind, "it is not a route of an object of the kind")
+		require.Contains(t, routes[0].Pattern, "namespaces/{namespace}/things/current")
+	})
+
+	t.Run("only the kind's own fixed names are allowed", func(t *testing.T) {
+		_, problems := Parse(version(map[string]spec3.PathProps{
+			"/namespaces/{namespace}/things/other":         get(),
+			"/namespaces/{namespace}/things/current/extra": get(),
+			"/namespaces/{namespace}/things/{name}":        get(),
+		}, "current"), Options{})
+		require.Equal(t, map[string]string{
+			"/namespaces/{namespace}/things/other":         "shadows the things resource; a kind route must be below things/{name}/",
+			"/namespaces/{namespace}/things/current/extra": "shadows the things resource; a kind route must be below things/{name}/",
+			"/namespaces/{namespace}/things/{name}":        "shadows the things resource; a kind route must be below things/{name}/",
+		}, reasons(problems))
+	})
+
+	t.Run("a fixed name does not make another kind's path available", func(t *testing.T) {
+		v := testVersion(map[string]spec3.PathProps{"/namespaces/{namespace}/nodes/current": get()})
+		v.Kinds[0].FixedNames = []string{"current"} // Thing, not Node
+		_, problems := Parse(v, Options{})
+		require.Equal(t, map[string]string{
+			"/namespaces/{namespace}/nodes/current": "shadows the nodes resource; a kind route must be below nodes/{name}/",
+		}, reasons(problems))
+	})
+
+	t.Run("the route is in the scope of the kind", func(t *testing.T) {
+		_, problems := Parse(version(map[string]spec3.PathProps{
+			"/things/current":                       get(),
+			"/namespaces/{namespace}/nodes/current": get(),
+		}, "current"), Options{})
+		require.Equal(t, map[string]string{
+			"/things/current":                       "Thing is namespaced, so its routes must be under namespaces/{namespace}",
+			"/namespaces/{namespace}/nodes/current": "Node is cluster scoped, so its routes cannot be under namespaces/{namespace}",
+		}, reasons(problems))
+	})
+
+	t.Run("an escaped fixed name is the same name", func(t *testing.T) {
+		routes, problems := Parse(version(map[string]spec3.PathProps{
+			"/namespaces/{namespace}/things/%63urrent": get(),
+		}, "current"), Options{})
+		require.Empty(t, problems)
+		require.Len(t, routes, 1)
+	})
+
+	t.Run("a fixed name does not take away the kind's subresource routes", func(t *testing.T) {
+		routes, problems := Parse(version(map[string]spec3.PathProps{
+			"/namespaces/{namespace}/things/{name}/sub": get(),
+			"/namespaces/{namespace}/things/current":    get(),
+		}, "current"), Options{})
+		require.Empty(t, problems)
+		require.Len(t, routes, 2)
+	})
+}

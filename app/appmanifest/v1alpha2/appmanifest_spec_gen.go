@@ -84,6 +84,10 @@ type AppManifestManifestVersionKind struct {
 	SearchFields             []AppManifestSearchField              `json:"searchFields,omitempty"`
 	// storage declares storage-related behavior for this kind.
 	Storage *AppManifestManifestVersionKindStorage `json:"storage,omitempty"`
+	// fixedNames are names of objects of this kind that are never stored: the app
+	// answers requests for them itself. A route at exactly <plural>/<name> is
+	// allowed for each.
+	FixedNames []string `json:"fixedNames,omitempty"`
 	// search declares which search endpoints are served for this kind.
 	// /search and /trash default to enabled; /search/hybrid and global index inclusion default to disabled.
 	Search *AppManifestManifestVersionKindSearch `json:"search,omitempty"`
