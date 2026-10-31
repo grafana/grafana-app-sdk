@@ -1,6 +1,8 @@
 package codegen
 
 import (
+	"cmp"
+
 	"cuelang.org/go/cue"
 )
 
@@ -167,9 +169,11 @@ type CustomRouteAuthz struct {
 
 // CustomRoute represents a single custom route definition for a specific HTTP method.
 type CustomRoute struct {
+	// Name is the deprecated spelling of OperationID. Once the manifest is parsed it holds the
+	// route's identifier, whichever of the two the route declared.
 	Name string `json:"name"`
-	// OperationID overrides the operationId of the generated OpenAPI operation, which is
-	// otherwise Name. Name still names the generated Go types and schemas.
+	// OperationID identifies the route: it is the operationId of the generated OpenAPI operation,
+	// and names the generated Go types and client method.
 	OperationID      string                      `json:"operationId,omitempty"`
 	Summary          string                      `json:"summary,omitempty"`
 	Description      string                      `json:"description,omitempty"`
@@ -180,6 +184,11 @@ type CustomRoute struct {
 	// Authz is the optional declared authorization information for the route. If nil,
 	// no authz openAPI extensions are added to the generated route.
 	Authz *CustomRouteAuthz `json:"authz,omitempty"`
+}
+
+// ID is the identifier of the route: its operationId, or else its deprecated name.
+func (r CustomRoute) ID() string {
+	return cmp.Or(r.OperationID, r.Name)
 }
 
 type KindVersion struct {

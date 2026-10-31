@@ -1,0 +1,18 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package v3
+
+// +k8s:openapi-gen=true
+type FetchTestKindFileBody struct {
+	Content string `json:"content"`
+}
+
+// NewFetchTestKindFileBody creates a new FetchTestKindFileBody object.
+func NewFetchTestKindFileBody() *FetchTestKindFileBody {
+	return &FetchTestKindFileBody{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for FetchTestKindFileBody.
+func (FetchTestKindFileBody) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.FetchTestKindFileBody"
+}

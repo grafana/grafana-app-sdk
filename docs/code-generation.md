@@ -101,12 +101,12 @@ This sets up your project with a go module, a `kinds` directory with a CUE modul
 
 ## Documenting custom routes
 
-A custom route declared in CUE can carry the documentation that ends up in the OpenAPI the manifest
-publishes, so clients generated from it are readable:
+A custom route declared in CUE identifies itself with an `operationId`, and can carry the
+documentation that ends up in the OpenAPI the manifest publishes, so clients generated from it are
+readable:
 
 ```cue
 routes: namespaced: "/update/{group}/{kind}/{id}": PUT: {
-    name:        "createStar"
     operationId: "addStar"
     summary:     "Add a starred item"
     description: "Adds the item to the stars of the object."
@@ -119,16 +119,19 @@ routes: namespaced: "/update/{group}/{kind}/{id}": PUT: {
 }
 ```
 
+- `operationId` is required. It is the `operationId` of the OpenAPI operation, so say what the
+  route does, and it must be unique among the routes of a version, on its kinds and on the version
+  itself, because OpenAPI does not allow two in a document. It also names the generated Go types and
+  client method (`AddStar` here), so it has to be an identifier.
+- `name` is the deprecated spelling of `operationId`, kept so existing routes keep working. A route
+  declares one or the other, and `operationId` wins when both are there. `name` has to start with a
+  Kubernetes verb (`get`, `create`, `delete`, ...), which `operationId` does not.
 - `summary` and `description` describe the operation.
 - `request.pathParams` documents the parameters in the route's path, by name. Each is a required
   string, so only a `description` and an `example` are declared. A name that is not a parameter in
   the path is an error.
 - `request.query` documents query parameters. Their descriptions come from the CUE doc comments on
   each field.
-- `name` names the generated Go types and schemas, so it has to start with a Kubernetes verb
-  (`get`, `create`, `delete`, ...). `operationId` overrides only the `operationId` of the OpenAPI
-  operation, which clients generated from the OpenAPI are named for. It can be any identifier.
-  Without it, the `operationId` is `name`.
 
 For anything beyond this, such as responses other than the default, import or declare the OpenAPI
 itself, as below.
