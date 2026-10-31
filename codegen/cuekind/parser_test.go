@@ -208,10 +208,14 @@ func TestParseManifestRoutes(t *testing.T) {
 		file := v3Kind.Routes["/files/{file}"]["GET"]
 		assert.Equal(t, "fetchTestKindFile", file.OperationID)
 		assert.Equal(t, "fetchTestKindFile", file.Name, "the identifier the route resolves to")
-		assert.Equal(t, map[string]codegen.CustomRoutePathParam{
+		assert.Equal(t, map[string]codegen.CustomRouteParam{
 			"file": {Description: "Name of the file", Example: "report.csv"},
 		}, file.Request.PathParams)
 		assert.Empty(t, v3Kind.Routes["/search"]["GET"].OperationID, "a route may still declare the deprecated name instead")
+		assert.Equal(t, map[string]codegen.CustomRouteParam{
+			"q":     {Description: "Terms to look for", Example: "dashboards"},
+			"limit": {Example: "25"},
+		}, v3Kind.Routes["/search"]["GET"].Request.QueryParams)
 
 		// Route authz, fully and partially specified
 		require.NotNil(t, v3Kind.Routes["/reconcile"]["POST"].Authz)

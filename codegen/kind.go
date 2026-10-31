@@ -138,14 +138,17 @@ type EmbedField struct {
 // CustomRouteRequest represents the request part of a custom route definition.
 type CustomRouteRequest struct {
 	// PathParams documents the parameters in the route's path, by name.
-	PathParams map[string]CustomRoutePathParam `json:"pathParams,omitempty"`
-	Query      cue.Value                       `json:"query,omitempty"`
-	Body       cue.Value                       `json:"body,omitempty"`
+	PathParams map[string]CustomRouteParam `json:"pathParams,omitempty"`
+	// QueryParams documents the fields of Query, by name.
+	QueryParams map[string]CustomRouteParam `json:"queryParams,omitempty"`
+	Query       cue.Value                   `json:"query,omitempty"`
+	Body        cue.Value                   `json:"body,omitempty"`
 }
 
-// CustomRoutePathParam documents one parameter in a custom route's path. A path parameter is
-// always a string and always required, so only its documentation is declared.
-type CustomRoutePathParam struct {
+// CustomRouteParam documents one parameter of a custom route, in its path or in its query. What
+// the parameter is, its type and whether it is required, comes from the path, or from the query
+// schema, so only its documentation is declared.
+type CustomRouteParam struct {
 	Description string `json:"description,omitempty"`
 	Example     string `json:"example,omitempty"`
 }
