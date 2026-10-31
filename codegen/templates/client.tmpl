@@ -10,7 +10,8 @@ import (
 	"net/url"
 
     "k8s.io/apimachinery/pkg/runtime/schema"
-	"github.com/grafana/grafana-app-sdk/resource"
+	"github.com/grafana/grafana-app-sdk/resource"{{ range .Imports }}
+	{{.Alias}} "{{.Path}}"{{ end }}
 )
 
 type CustomRouteClient struct {

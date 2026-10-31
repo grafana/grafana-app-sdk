@@ -560,6 +560,7 @@ type GoResourceClientMetadata struct {
 	KindPrefix   string
 	Subresources []GoResourceClientSubresource
 	CustomRoutes []GoClientCustomRoute
+	Imports      []GoImport
 }
 
 type GoClientCustomRoute struct {
@@ -567,11 +568,19 @@ type GoClientCustomRoute struct {
 	// ResponseType is the Go type the route's client method returns, which is the generated
 	// <TypeName>Response unless the route returns the resource of a kind.
 	ResponseType string
-	Path         string
-	Method       string
-	HasParams    bool
-	HasBody      bool
-	ParamValues  []GoCustomRouteParamValues
+	// ResponseImport is the package of ResponseType, when it is not the package of the client.
+	ResponseImport *GoImport
+	Path           string
+	Method         string
+	HasParams      bool
+	HasBody        bool
+	ParamValues    []GoCustomRouteParamValues
+}
+
+// GoImport is a package a generated file imports, with the name it is imported as.
+type GoImport struct {
+	Alias string
+	Path  string
 }
 
 type GoCustomRouteParamValues struct {
@@ -606,6 +615,7 @@ type GoCustomRouteClientMetadata struct {
 	ClusterRoutes    []GoClientCustomRoute
 	Group            string
 	Version          string
+	Imports          []GoImport
 }
 
 func WriteGoCustomRouteClient(metadata GoCustomRouteClientMetadata, out io.Writer) error {

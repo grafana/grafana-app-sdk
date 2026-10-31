@@ -172,8 +172,8 @@ versions: v1: {
 - `responseKind` has to be a kind of the same version, which generates Go code, and a route cannot
   declare both it and a `response`. Its `responseMetadata` is not used, since the kind's resource
   has its own.
-- When generating code by kind, a route can only return its own kind, because the types of other
-  kinds are in other packages. A version-level route cannot use `responseKind` then.
+- When generating code by kind (`kinds.grouping: "kind"`), the kind's type is in its own package,
+  which the client imports from the project's Go module, so that has to be set (`codegen.goModule`).
 
 ## Adding routes from a saved OpenAPI document
 
