@@ -367,3 +367,21 @@ func (m *SimpleManifest) ValidateRouteParams() error {
 		return nil
 	})
 }
+
+// ValidateRouteResponseKinds checks the kind that a custom route returns, if it declares one with
+// ResponseKind: it has to be a kind of the same version, and the route cannot also declare a response.
+func (m *SimpleManifest) ValidateRouteResponseKinds() error {
+	return m.eachRoute(func(version, scope, path, method string, route *CustomRoute) error {
+		if route.ResponseKind == "" {
+			return nil
+		}
+		at := fmt.Sprintf("custom route %s %s of %s in version %s", method, path, scope, version)
+		if route.Response.Exists() && route.Response.IncompleteKind() != cue.TopKind {
+			return fmt.Errorf("%s declares a response and a responseKind: it declares one or the other", at)
+		}
+		if !slices.ContainsFunc(m.AllVersions[version].AllKinds, func(k VersionedKind) bool { return k.Kind == route.ResponseKind }) {
+			return fmt.Errorf("%s has responseKind %q, which is not a kind of the version", at, route.ResponseKind)
+		}
+		return nil
+	})
+}

@@ -77,6 +77,12 @@ testManifestV3: {
 				}
 			}
 		}
+		// Returns the resource of a kind, as its get call does, so it references the kind
+		// instead of defining a response type.
+		"/latest": GET: {
+			operationId:  "getLatestTestKind"
+			responseKind: "TestKind"
+		}
 	}
 }
 

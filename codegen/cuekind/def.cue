@@ -189,6 +189,11 @@ SchemaWithOperatorState: Schema & {
 	description?: string
 	request:  #CustomRouteRequest
 	response: #CustomRouteResponse
+	// responseKind is the name of a kind in the same version whose resource the route returns, as the
+	// standard Kubernetes calls for that kind do: it references the kind's schema instead of defining
+	// a response, and the generated client returns the kind's Go type instead of a generated one. A
+	// route that declares it does not declare a response.
+	responseKind?: =~"^[A-Za-z][A-Za-z0-9]*$"
 	// responseMetadata allows codegen to include kubernetes metadata in the generated response object.
 	// It is also copied into the AppManifest responseMetadata for use in kube-OpenAPI generation.
 	responseMetadata: #CustomRouteResponseMetadata
