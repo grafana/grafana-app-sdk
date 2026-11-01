@@ -14,6 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/spec3"
 	"k8s.io/kube-openapi/pkg/validation/spec"
@@ -144,27 +145,45 @@ func (m *ManifestData) Validate() error {
 	type kindData struct {
 		kind         string
 		plural       string
+		resource     string
 		scope        string
 		conversion   bool
 		userReadable bool
 		folderScoped bool
 		version      string
 	}
+	hasPreferredVersion := false
 	var errs error
 	kinds := make(map[string]kindData)
 	for _, version := range m.Versions {
 		namespacedRoutes := make(map[string]struct{})
 		clusterRoutes := make(map[string]struct{})
+		if version.Name == m.PreferredVersion {
+			hasPreferredVersion = true
+		}
 		for _, kind := range version.Kinds {
+			if kind.Plural == "" {
+				errs = multierror.Append(errs, fmt.Errorf("kind '%s' in version '%s' has no plural", kind.Kind, version.Name))
+			}
+			if kind.Resource == "" {
+				errs = multierror.Append(errs, fmt.Errorf("kind '%s' in version '%s' has no resource", kind.Kind, version.Name))
+			}
+			if kind.Resource != "" {
+				// The resource is used as a path segment in the k8s GroupVersionResource URL, so it must be a valid lowercase DNS label
+				if msgs := validation.IsDNS1123Label(kind.Resource); len(msgs) > 0 {
+					errs = multierror.Append(errs, fmt.Errorf("kind '%s' in version '%s' has an invalid resource '%s': %s", kind.Kind, version.Name, kind.Resource, strings.Join(msgs, "; ")))
+				}
+			}
 			if kind.Scope == "Cluster" {
-				clusterRoutes[kind.Resource()] = struct{}{}
+				clusterRoutes[kind.Resource] = struct{}{}
 			} else {
-				namespacedRoutes[kind.Resource()] = struct{}{}
+				namespacedRoutes[kind.Resource] = struct{}{}
 			}
 			if k, ok := kinds[kind.Kind]; !ok {
 				k = kindData{
 					kind:         kind.Kind,
 					plural:       kind.Plural,
+					resource:     kind.Resource,
 					scope:        kind.Scope,
 					conversion:   kind.Conversion,
 					userReadable: kind.UserReadable,
@@ -175,6 +194,9 @@ func (m *ManifestData) Validate() error {
 			} else {
 				if k.plural != kind.Plural {
 					errs = multierror.Append(errs, fmt.Errorf("kind '%s' has a different plural in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
+				}
+				if k.resource != kind.Resource {
+					errs = multierror.Append(errs, fmt.Errorf("kind '%s' has a different resource in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
 				}
 				if k.scope != kind.Scope {
 					errs = multierror.Append(errs, fmt.Errorf("kind '%s' has a different scope in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
@@ -247,6 +269,9 @@ func (m *ManifestData) Validate() error {
 			}
 		}
 	}
+	if !hasPreferredVersion && m.PreferredVersion != "" {
+		errs = multierror.Append(errs, fmt.Errorf("unknown preferred version: %q", m.PreferredVersion))
+	}
 	return multierror.Append(errs, m.validateKindRoutes(), m.validateRoles(), m.validateEmbed()).ErrorOrNil()
 }
 
@@ -269,7 +294,7 @@ func (m *ManifestData) validateRoles() error {
 	resources := make(map[string]string)
 	for _, version := range m.Versions {
 		for _, kind := range version.Kinds {
-			resources[strings.ToLower(kind.Kind)] = kind.Resource()
+			resources[strings.ToLower(kind.Kind)] = kind.Resource
 		}
 	}
 	routeSubresources, errs := m.routeSubresources()
@@ -337,7 +362,7 @@ func (m *ManifestData) routeSubresources() (map[string]map[string]bool, error) {
 	for _, version := range m.Versions {
 		for _, kind := range version.Kinds {
 			for _, rpath := range slices.Sorted(maps.Keys(kind.Routes)) {
-				visit(fmt.Sprintf("kind %q version %q route %q", kind.Kind, version.Name, rpath), kind.Resource(), firstSegment(rpath), kind.Routes[rpath])
+				visit(fmt.Sprintf("kind %q version %q route %q", kind.Kind, version.Name, rpath), kind.Resource, firstSegment(rpath), kind.Routes[rpath])
 			}
 		}
 		routes := version.Routes //nolint:staticcheck // Routes is deprecated but older manifests still declare routes there
@@ -377,7 +402,7 @@ func (m *ManifestData) validateEmbed() error {
 	var errs error
 	for _, version := range m.Versions {
 		for _, kind := range version.Kinds {
-			resource := kind.Resource()
+			resource := kind.Resource
 			resources[resource] = struct{}{}
 			if _, ok := m.Embed[resource]; kind.Embed != nil && !ok {
 				errs = multierror.Append(errs, fmt.Errorf("kind %q version %q declares embedding fields without embed configuration for resource %q", kind.Kind, version.Name, resource))
@@ -428,6 +453,7 @@ func (m *ManifestData) Kinds() []ManifestKind {
 				k = ManifestKind{
 					Kind:         kind.Kind,
 					Plural:       kind.Plural,
+					Resource:     kind.Resource,
 					Scope:        kind.Scope,
 					Conversion:   kind.Conversion,
 					UserReadable: kind.UserReadable,
@@ -458,8 +484,10 @@ type ManifestKind struct {
 	Kind string `json:"kind" yaml:"kind"`
 	// Scope if the scope of the kind, typically restricted to "Namespaced" or "Cluster"
 	Scope string `json:"scope" yaml:"scope"`
-	// Plural is the plural of the kind
+	// Plural is the capitalized, human readable plural of the kind
 	Plural string `json:"plural" yaml:"plural"`
+	// Resource is the lowercase plural used in the k8s GroupVersionResource URL
+	Resource string `json:"resource" yaml:"resource"`
 	// Versions is the set of versions for the kind. This list should be ordered as a series of progressively later versions.
 	Versions []ManifestKindVersion `json:"versions" yaml:"versions"`
 	// Conversion is true if the app has a conversion capability for this kind
@@ -544,8 +572,11 @@ func (r ManifestVersionRoutes) IsZero() bool {
 type ManifestVersionKind struct {
 	// Kind is the name of the kind. This should begin with a capital letter and be CamelCased
 	Kind string `json:"kind" yaml:"kind"`
-	// Plural is the plural version of `kind`. This is optional and defaults to the kind + "s" if not present.
-	Plural string `json:"plural,omitempty" yaml:"plural,omitempty"`
+	// Plural is the capitalized, human readable plural version of `kind` (e.g. "Issues"). Both Plural and Resource are required.
+	Plural string `json:"plural" yaml:"plural"`
+	// Resource is the all-lowercase plural used as the resource in the k8s GroupVersionResource URL (e.g. "issues").
+	// Both Plural and Resource are required.
+	Resource string `json:"resource" yaml:"resource"`
 	// Scope dictates the scope of the kind. This field must be the same for all versions of the kind.
 	// Different values will result in an error or undefined behavior.
 	Scope string `json:"scope" yaml:"scope"`
@@ -634,14 +665,6 @@ type ManifestVersionKindEmbedField struct {
 	Name string `json:"name" yaml:"name"`
 	// Path supplies a string or string array from the resource and must not be empty.
 	Path string `json:"path" yaml:"path"`
-}
-
-// Resource defines the k8s resource path for the kind. It is a lowercase version of the plural name.
-func (m *ManifestVersionKind) Resource() string {
-	if m.Plural != "" {
-		return strings.ToLower(m.Plural)
-	}
-	return strings.ToLower(m.Kind) + "s"
 }
 
 // HasListKeysEndpoint reports whether the kind serves generic list-keys endpoints.

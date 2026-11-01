@@ -62,13 +62,13 @@ func NewCustomRouteHandler(cfg CustomRouteHandlerConfig) (*CustomRouteHandler, e
 	registered := make(map[string]string)
 	for _, v := range cfg.Manifest.Versions {
 		for _, k := range v.Kinds {
-			if k.Plural == "" || k.Kind == "" {
+			if k.Resource == "" || k.Kind == "" {
 				continue
 			}
-			key := fmt.Sprintf("%s/%s/%s", cfg.Manifest.Group, v.Name, k.Plural)
+			key := fmt.Sprintf("%s/%s/%s", cfg.Manifest.Group, v.Name, k.Resource)
 			if existing, ok := registered[key]; ok {
-				return nil, fmt.Errorf("duplicate plural %q for group %q version %q: kinds %q and %q",
-					k.Plural, cfg.Manifest.Group, v.Name, existing, k.Kind)
+				return nil, fmt.Errorf("duplicate resource %q for group %q version %q: kinds %q and %q",
+					k.Resource, cfg.Manifest.Group, v.Name, existing, k.Kind)
 			}
 			registered[key] = k.Kind
 		}
@@ -86,14 +86,14 @@ func (h *CustomRouteHandler) Register(mux *http.ServeMux) {
 		versionPath := fmt.Sprintf("%s/%s/%s", apisBasePath, h.manifest.Group, v.Name)
 
 		for _, k := range v.Kinds {
-			if k.Plural == "" || k.Kind == "" {
+			if k.Resource == "" || k.Kind == "" {
 				continue
 			}
-			pattern := fmt.Sprintf("%s/namespaces/{namespace}/%s/{name}/{path...}", versionPath, k.Plural)
+			pattern := fmt.Sprintf("%s/namespaces/{namespace}/%s/{name}/{path...}", versionPath, k.Resource)
 			if resource.SchemaScope(k.Scope) == resource.ClusterScope {
-				pattern = fmt.Sprintf("%s/%s/{name}/{path...}", versionPath, k.Plural)
+				pattern = fmt.Sprintf("%s/%s/{name}/{path...}", versionPath, k.Resource)
 			}
-			mux.HandleFunc(pattern, h.dispatchRoute(h.manifest.Group, v.Name, k.Kind, k.Plural))
+			mux.HandleFunc(pattern, h.dispatchRoute(h.manifest.Group, v.Name, k.Kind, k.Resource))
 		}
 
 		// Version-level routes leave kind/plural empty.

@@ -75,8 +75,11 @@ appManifestv1alpha2: appManifestKind & {
 		#ManifestVersionKind: S={
 			// Kind is the name of the kind. This should begin with a capital letter and be CamelCased
 			kind: string
-			// Plural is the plural version of `kind`. This is optional and defaults to the kind + "s" if not present.
+			// Plural is the human readable plural version of `kind`. This is optional and defaults to the kind + "s" if not present.
 			plural?: string
+			// Resource is the lowercase plural used as the resource in the k8s GroupVersionResource URL.
+			// This is optional and defaults to the lowercase of plural if not present.
+			resource?: string
 			// Scope dictates the scope of the kind. This field must be the same for all versions of the kind.
 			// Different values will result in an error or undefined behavior.
 			scope: *"Namespaced" | "Cluster"

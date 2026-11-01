@@ -43,7 +43,8 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 		for kidx, kind := range version.Kinds {
 			k := app.ManifestVersionKind{
 				Kind:             kind.Kind,
-				Plural:           strings.ToLower(kind.Kind) + "s",
+				Plural:           kind.Kind + "s",
+				Resource:         strings.ToLower(kind.Kind) + "s",
 				SelectableFields: kind.SelectableFields,
 				Scope:            string(kind.Scope),
 			}
@@ -55,7 +56,11 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				k.Storage = &app.ManifestVersionKindStorage{ListKeys: kind.Storage.ListKeys}
 			}
 			if kind.Plural != nil {
-				k.Plural = strings.ToLower(*kind.Plural)
+				k.Plural = capitalize(*kind.Plural)
+				k.Resource = strings.ToLower(*kind.Plural)
+			}
+			if kind.Resource != nil {
+				k.Resource = *kind.Resource
 			}
 			if kind.Conversion != nil {
 				k.Conversion = *kind.Conversion
@@ -401,6 +406,9 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 			if kind.Plural != "" {
 				k.Plural = &kind.Plural
 			}
+			if kind.Resource != "" {
+				k.Resource = &kind.Resource
+			}
 			if kind.Admission != nil {
 				k.Admission = &AppManifestAdmissionCapabilities{}
 				if kind.Admission.Mutation != nil {
@@ -602,4 +610,12 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 	}
 
 	return &manifestSpec, nil
+}
+
+// capitalize upper-cases the first letter of s, as Plural is the capitalized form of the resource name
+func capitalize(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }

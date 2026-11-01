@@ -30,7 +30,8 @@ func TestAppManifestKind_Read(t *testing.T) {
 	require.Nil(t, err)
 	schema := make(map[string]any)
 	require.Nil(t, json.Unmarshal(schemaBytes, &schema))
-	plural := "issues"
+	plural := "Issues"
+	resource := "issues"
 	served := true
 	preferred := "v1"
 	dryRunKinds := false
@@ -52,10 +53,11 @@ func TestAppManifestKind_Read(t *testing.T) {
 				Name:   "v1",
 				Served: &served,
 				Kinds: []AppManifestManifestVersionKind{{
-					Kind:   "Issue",
-					Plural: &plural,
-					Scope:  "Namespaced",
-					Schema: schema,
+					Kind:     "Issue",
+					Plural:   &plural,
+					Resource: &resource,
+					Scope:    "Namespaced",
+					Schema:   schema,
 					Routes: map[string]any{
 						"/foo": map[string]any{
 							"GET": map[string]any{
