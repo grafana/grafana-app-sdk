@@ -125,6 +125,30 @@ func (c *TestKindClient) CreateEmptyResp(ctx context.Context, identifier resourc
 	return &cast, nil
 }
 
+type FetchTestKindFileRequest struct {
+	Params  FetchTestKindFileRequestParams
+	Headers http.Header
+}
+
+func (c *TestKindClient) FetchTestKindFile(ctx context.Context, identifier resource.Identifier, request FetchTestKindFileRequest) (*FetchTestKindFileResponse, error) {
+	params := url.Values{}
+	resp, err := c.client.SubresourceRequest(ctx, identifier, resource.CustomRouteRequestOptions{
+		Path:    "/files/{file}",
+		Verb:    "GET",
+		Query:   params,
+		Headers: request.Headers,
+	})
+	if err != nil {
+		return nil, err
+	}
+	cast := FetchTestKindFileResponse{}
+	err = json.Unmarshal(resp, &cast)
+	if err != nil {
+		return nil, fmt.Errorf("unable to unmarshal response bytes into FetchTestKindFileResponse: %w", err)
+	}
+	return &cast, nil
+}
+
 type CreateReconcileRequestRequest struct {
 	Body    CreateReconcileRequestRequestBody
 	Headers http.Header

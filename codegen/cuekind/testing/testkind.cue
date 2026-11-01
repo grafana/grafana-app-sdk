@@ -77,6 +77,12 @@ testManifestV3: {
 				}
 			}
 		}
+		// Returns the resource of a kind, as its get call does, so it references the kind
+		// instead of defining a response type.
+		"/latest": GET: {
+			operationId:  "getLatestTestKind"
+			responseKind: "TestKind"
+		}
 	}
 }
 
@@ -263,6 +269,22 @@ testKind: {
 								}]
 							}]
 							total: int
+						}
+					}
+				}
+				"/files/{file}": {
+					GET: {
+						// The identifier of the route: the operationId of the OpenAPI operation, and the name of
+						// the generated Go types and client method. It has no name, which is the deprecated spelling.
+						operationId: "fetchTestKindFile"
+						request: parameters: [
+							{name: "file", in: "path", description: "Name of the file", example: "report.csv"},
+							// A query parameter is defined here: its type, whether it is required and its default.
+							{name: "download", in: "query", description: "Send the file as an attachment", schema: bool | *false, example: true},
+							{name: "X-Request-Id", in: "header", description: "Correlates the request in logs", example: "7f0c"},
+						]
+						response: {
+							content: string
 						}
 					}
 				}

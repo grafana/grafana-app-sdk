@@ -3,6 +3,7 @@ package jennies
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -245,6 +246,20 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		// routes
 		routes := &ver.Routes //nolint:staticcheck // Routes is deprecated but still emitted alongside OpenAPI
 		routesAdditionalSchemas := make(map[string]spec.SchemaProps)
+		// The resources of the kinds that routes return are components of the version
+		responseKinds, err := routeResponseKinds(version)
+		if err != nil {
+			return nil, err
+		}
+		for _, name := range slices.Sorted(maps.Keys(responseKinds)) {
+			resourceSchemas, err := kindResourceSchemas(responseKinds[name])
+			if err != nil {
+				return nil, err
+			}
+			for key, schema := range resourceSchemas {
+				routesAdditionalSchemas[key] = schema.SchemaProps
+			}
+		}
 		if len(version.Routes().Namespaced) > 0 {
 			routes.Namespaced = make(map[string]spec3.PathProps)
 			for sourcePath, sourceMethodsMap := range version.Routes().Namespaced {
@@ -681,80 +696,15 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 	}
 	// Only include CRD schemas if told to (there is a bug with recursive schemas and CRDs)
 	if includeSchema {
-		// Generate openAPI schemas for each non-definition field in the schema, then combine them into one OpenAPI document for the object
-		// If we attempt to generate openAPI for the entire schema, definitions will be included (and listed as required fields)
-		// for the object in the resulting OpenAPI document.
-		// As a hack for making sure the top-level fields include `x-kubernetes-preserve-unknown-fields: true`,
-		// we also convert the whole object to OpenAPI and check for additionalProperties
-		oapiBytes, err := cueToOpenAPIBytes(vk.Schema, vk.Kind)
-		if err != nil {
-			return app.ManifestVersionKind{}, err
-		}
-		schemaProps := simpleOpenAPIDoc[map[string]any]{}
-		err = json.Unmarshal(oapiBytes, &schemaProps)
-		if err != nil {
-			return app.ManifestVersionKind{}, err
-		}
-		if _, ok := schemaProps.Components.Schemas[vk.Kind]; !ok {
-			return app.ManifestVersionKind{}, fmt.Errorf("schema for kind '%s' not found", vk.Kind)
-		}
-		uncastKindProps, ok := schemaProps.Components.Schemas[vk.Kind]["properties"]
-		if !ok {
-			return app.ManifestVersionKind{}, fmt.Errorf("schema for kind '%s' does not contain a 'properties' key", vk.Kind)
-		}
-		kindProps, ok := uncastKindProps.(map[string]any)
-		if !ok {
-			return app.ManifestVersionKind{}, fmt.Errorf("schema for kind '%s' properties is not a map", vk.Kind)
-		}
-
-		it, err := vk.Schema.Fields(cue.Optional(true))
-		if err != nil {
-			return app.ManifestVersionKind{}, err // TODO: wrap error
-		}
 		schemas := make(map[string]any)
 		// Additional Schemas from custom routes
 		for key, val := range additionalSchemas {
 			schemas[key] = val
 		}
-		// Schemas from the kind schema
-		props := make(map[string]any)
-		for it.Next() {
-			field := it.Selector().String()
-			if field == keyMetadata || field == keyAPIVersion || field == keyKind { //nolint:goconst
-				continue // skip metadata (and apiVersion/kind if they exist)
-			}
-			oapiBytes, err := cueToOpenAPIBytes(it.Value(), field)
-			if err != nil {
-				return app.ManifestVersionKind{}, err
-			}
-			oapiProps := simpleOpenAPIDoc[map[string]any]{}
-			err = json.Unmarshal(oapiBytes, &oapiProps)
-			if err != nil {
-				return app.ManifestVersionKind{}, err
-			}
-			for k, v := range oapiProps.Components.Schemas {
-				if entry, ok := kindProps[k]; ok {
-					p, ok := entry.(map[string]any)
-					if ok && p["additionalProperties"] != nil {
-						v["additionalProperties"] = p["additionalProperties"]
-					}
-				}
-				schemas[k] = v
-			}
-			props[field] = map[string]any{
-				"$ref": "#/components/schemas/" + field,
-			}
+		if err := kindOpenAPISchemas(vk, schemas); err != nil {
+			return app.ManifestVersionKind{}, err
 		}
-		if len(vk.SecureValues) > 0 {
-			value := resource.InlineSecureValue{}
-			name := value.OpenAPIModelName()
-			schemas[name] = value.OpenAPIDefinition().Schema
-			props["secure"] = app.SecureValuesOpenAPISchemaWithReference(vk.SecureValues, spec.MustCreateRef("#/components/schemas/"+name))
-		}
-		schemas[vk.Kind] = map[string]any{
-			"properties": props,
-			"required":   []string{keySpec},
-		}
+		var err error
 		mver.Schema, err = app.VersionSchemaFromMap(map[string]any{
 			"components": map[string]any{
 				"schemas": schemas,
@@ -767,6 +717,81 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 	mver.SelectableFields = vk.SelectableFields
 	mver.SearchFields = searchFieldsToManifest(vk.SearchFields)
 	return mver, nil
+}
+
+// kindOpenAPISchemas adds the OpenAPI schemas of a kind's version to schemas: one for each field of
+// the kind's schema other than its metadata, and one for the kind itself, which references them.
+func kindOpenAPISchemas(vk codegen.VersionedKind, schemas map[string]any) error {
+	// Generate openAPI schemas for each non-definition field in the schema, then combine them into one OpenAPI document for the object
+	// If we attempt to generate openAPI for the entire schema, definitions will be included (and listed as required fields)
+	// for the object in the resulting OpenAPI document.
+	// As a hack for making sure the top-level fields include `x-kubernetes-preserve-unknown-fields: true`,
+	// we also convert the whole object to OpenAPI and check for additionalProperties
+	oapiBytes, err := cueToOpenAPIBytes(vk.Schema, vk.Kind)
+	if err != nil {
+		return err
+	}
+	schemaProps := simpleOpenAPIDoc[map[string]any]{}
+	err = json.Unmarshal(oapiBytes, &schemaProps)
+	if err != nil {
+		return err
+	}
+	if _, ok := schemaProps.Components.Schemas[vk.Kind]; !ok {
+		return fmt.Errorf("schema for kind '%s' not found", vk.Kind)
+	}
+	uncastKindProps, ok := schemaProps.Components.Schemas[vk.Kind]["properties"]
+	if !ok {
+		return fmt.Errorf("schema for kind '%s' does not contain a 'properties' key", vk.Kind)
+	}
+	kindProps, ok := uncastKindProps.(map[string]any)
+	if !ok {
+		return fmt.Errorf("schema for kind '%s' properties is not a map", vk.Kind)
+	}
+
+	it, err := vk.Schema.Fields(cue.Optional(true))
+	if err != nil {
+		return err // TODO: wrap error
+	}
+	// Schemas from the kind schema
+	props := make(map[string]any)
+	for it.Next() {
+		field := it.Selector().String()
+		if field == keyMetadata || field == keyAPIVersion || field == keyKind { //nolint:goconst
+			continue // skip metadata (and apiVersion/kind if they exist)
+		}
+		oapiBytes, err := cueToOpenAPIBytes(it.Value(), field)
+		if err != nil {
+			return err
+		}
+		oapiProps := simpleOpenAPIDoc[map[string]any]{}
+		err = json.Unmarshal(oapiBytes, &oapiProps)
+		if err != nil {
+			return err
+		}
+		for k, v := range oapiProps.Components.Schemas {
+			if entry, ok := kindProps[k]; ok {
+				p, ok := entry.(map[string]any)
+				if ok && p["additionalProperties"] != nil {
+					v["additionalProperties"] = p["additionalProperties"]
+				}
+			}
+			schemas[k] = v
+		}
+		props[field] = map[string]any{
+			"$ref": "#/components/schemas/" + field,
+		}
+	}
+	if len(vk.SecureValues) > 0 {
+		value := resource.InlineSecureValue{}
+		name := value.OpenAPIModelName()
+		schemas[name] = value.OpenAPIDefinition().Schema
+		props["secure"] = app.SecureValuesOpenAPISchemaWithReference(vk.SecureValues, spec.MustCreateRef("#/components/schemas/"+name))
+	}
+	schemas[vk.Kind] = map[string]any{
+		"properties": props,
+		"required":   []string{keySpec},
+	}
+	return nil
 }
 
 func searchFieldsToManifest(fields []codegen.SearchField) []app.ManifestVersionKindSearchField {
@@ -854,16 +879,25 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 			operationID = sourceRoute.Name
 		}
 
-		targetParameters, err := cueSchemaToParameters(sourceRoute.Request.Query)
+		targetParameters, err := customRouteParameters(sourcePath, sourceRoute.Request)
 		if err != nil {
-			return spec3.PathProps{}, nil, fmt.Errorf("error converting query schema for %s %s: %w", sourceMethod, sourcePath, err)
+			return spec3.PathProps{}, nil, fmt.Errorf("error converting parameters for %s %s: %w", sourceMethod, sourcePath, err)
 		}
 		targetRequestBody, additional, err := cueSchemaToRequestBody(sourceRoute.Request.Body, operationID)
 		if err != nil {
 			return spec3.PathProps{}, nil, fmt.Errorf("error converting body schema for %s %s: %w", sourceMethod, sourcePath, err)
 		}
 		maps.Copy(additionalSchemas, additional)
-		targetResponses, additional, err := customRouteResponseToSpec3Responses(sourceRoute.Response, sourceRoute.ResponseMetadata, operationID)
+		var targetResponses *spec3.Responses
+		if sourceRoute.ResponseKind != "" {
+			// The kind's resource is a component of the version, which the response references
+			targetResponses = responsesWithSchema(&spec.Schema{SchemaProps: spec.SchemaProps{
+				Ref: spec.MustCreateRef("#/components/schemas/" + sourceRoute.ResponseKind),
+			}})
+			additional = nil
+		} else {
+			targetResponses, additional, err = customRouteResponseToSpec3Responses(sourceRoute.Response, sourceRoute.ResponseMetadata, operationID)
+		}
 		if err != nil {
 			return spec3.PathProps{}, nil, fmt.Errorf("error converting response schema for %s %s: %w", sourceMethod, sourcePath, err)
 		}
@@ -876,7 +910,9 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 				Parameters:  targetParameters,
 				RequestBody: targetRequestBody,
 				Responses:   targetResponses,
-				OperationId: operationID,
+				// The operation ID is what clients generated from the OpenAPI are named for. It can
+				// differ from the route's name, which names the generated Go types and schemas.
+				OperationId: cmp.Or(sourceRoute.OperationID, operationID),
 			},
 		}
 		targetOperation.Extensions = customRouteExtensions(sourceRoute)
@@ -897,6 +933,74 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 		}
 	}
 	return targetPathProps, additionalSchemas, nil
+}
+
+// customRouteParameters builds the OpenAPI parameters of a route: the path parameters, then the
+// query parameters, then the header and cookie parameters, each in name order. Path, header and
+// cookie parameters are as the route declares them. The query parameters are the fields of its
+// query schema, which defines their types, and whether they are required, with what the route
+// declares about each of them added: its description wins over the field's doc comment.
+func customRouteParameters(sourcePath string, request codegen.CustomRouteRequest) ([]*spec3.Parameter, error) {
+	if err := codegen.ValidateRouteParams(sourcePath, request); err != nil {
+		return nil, err
+	}
+	declared := slices.SortedFunc(slices.Values(request.Parameters), func(a, b codegen.CustomRouteParam) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+	byLocation := map[string][]*spec3.Parameter{}
+	declaredQuery := map[string]codegen.CustomRouteParam{}
+	for _, p := range declared {
+		if p.In == codegen.CustomRouteParamInQuery {
+			declaredQuery[p.Name] = p
+			continue
+		}
+		param, err := specParameter(p)
+		if err != nil {
+			return nil, err
+		}
+		byLocation[p.In] = append(byLocation[p.In], param)
+	}
+
+	query, err := cueSchemaToParameters(request.QuerySchema())
+	if err != nil {
+		return nil, fmt.Errorf("error converting query schema: %w", err)
+	}
+	for _, param := range query {
+		if d, ok := declaredQuery[param.Name]; ok {
+			if d.Description != "" {
+				param.Description = d.Description
+			}
+			param.Deprecated = d.Deprecated
+			param.Example = d.Example
+		}
+	}
+	return slices.Concat(
+		byLocation[codegen.CustomRouteParamInPath],
+		query,
+		byLocation[codegen.CustomRouteParamInHeader],
+		byLocation[codegen.CustomRouteParamInCookie],
+	), nil
+}
+
+// specParameter is a declared parameter as an OpenAPI parameter. A path parameter is always
+// required, and the others are not unless they say so. A parameter is a string unless it has a schema.
+func specParameter(p codegen.CustomRouteParam) (*spec3.Parameter, error) {
+	param := &spec3.Parameter{}
+	param.Name = p.Name
+	param.In = p.In
+	param.Description = p.Description
+	param.Deprecated = p.Deprecated
+	param.Example = p.Example
+	param.Required = p.In == codegen.CustomRouteParamInPath || (p.Required != nil && *p.Required)
+	param.Schema = spec.StringProperty()
+	if p.Schema.Exists() {
+		props, _, err := cueSchemaToSpecSchemaProps(p.Schema, "")
+		if err != nil {
+			return nil, fmt.Errorf("error converting the schema of %s parameter %q: %w", p.In, p.Name, err)
+		}
+		param.Schema = &spec.Schema{SchemaProps: props}
+	}
+	return param, nil
 }
 
 func cueSchemaToParameters(v cue.Value) ([]*spec3.Parameter, error) {
@@ -1007,13 +1111,19 @@ func customRouteResponseToSpec3Responses(responseSchema cue.Value, metadata code
 		schemaProps.Required = append(schemaProps.Required, keyMetadata)
 	}
 
+	responses := responsesWithSchema(&spec.Schema{SchemaProps: schemaProps})
+	return responses, additionalSchemas, nil
+}
+
+// responsesWithSchema is the responses of a route whose default response is JSON of the schema.
+func responsesWithSchema(schema *spec.Schema) *spec3.Responses {
 	response := spec3.Response{
 		ResponseProps: spec3.ResponseProps{
 			Description: "Default OK response",
 			Content: map[string]*spec3.MediaType{
 				"application/json": {
 					MediaTypeProps: spec3.MediaTypeProps{
-						Schema: &spec.Schema{SchemaProps: schemaProps},
+						Schema: schema,
 					},
 				},
 			},
@@ -1022,13 +1132,11 @@ func customRouteResponseToSpec3Responses(responseSchema cue.Value, metadata code
 			Extensions: spec.Extensions{},
 		},
 	}
-
-	responses := &spec3.Responses{
+	return &spec3.Responses{
 		ResponsesProps: spec3.ResponsesProps{
 			Default: &response,
 		},
 	}
-	return responses, additionalSchemas, nil
 }
 
 func cueSchemaToSpecSchemaProps(v cue.Value, refPrefix string) (spec.SchemaProps, map[string]spec.SchemaProps, error) {
@@ -1070,6 +1178,11 @@ func prefixReferences(sch spec.SchemaProps, prefix string, rootSchemas map[strin
 	}
 	if sch.AdditionalProperties != nil && sch.AdditionalProperties.Schema != nil {
 		sch.AdditionalProperties.Schema.SchemaProps = prefixReferences(sch.AdditionalProperties.Schema.SchemaProps, prefix, rootSchemas)
+	}
+	for _, group := range [][]spec.Schema{sch.AllOf, sch.OneOf, sch.AnyOf} {
+		for idx := range group {
+			group[idx].SchemaProps = prefixReferences(group[idx].SchemaProps, prefix, rootSchemas)
+		}
 	}
 	if sch.Items != nil {
 		if sch.Items.Schema != nil {

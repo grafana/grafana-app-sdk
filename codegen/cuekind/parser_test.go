@@ -2,6 +2,7 @@ package cuekind
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -203,6 +204,23 @@ func TestParseManifestRoutes(t *testing.T) {
 		require.Contains(t, v3Kind.Routes, "/search")
 		assert.Equal(t, "getTestKindSearchResult", v3Kind.Routes["/search"]["GET"].Name)
 
+		// A route identified by an operationId alone, with parameters in each of the places
+		file := v3Kind.Routes["/files/{file}"]["GET"]
+		assert.Equal(t, "fetchTestKindFile", file.OperationID)
+		assert.Equal(t, "fetchTestKindFile", file.Name, "the identifier the route resolves to")
+		require.Len(t, file.Request.Parameters, 3)
+		assert.Equal(t, "file", file.Request.Parameters[0].Name)
+		assert.Equal(t, "path", file.Request.Parameters[0].In)
+		assert.Equal(t, "Name of the file", file.Request.Parameters[0].Description)
+		assert.Equal(t, "report.csv", file.Request.Parameters[0].Example)
+		assert.Equal(t, "query", file.Request.Parameters[1].In)
+		assert.Equal(t, true, file.Request.Parameters[1].Example)
+		assert.Equal(t, "header", file.Request.Parameters[2].In)
+		assert.Nil(t, file.Request.Parameters[2].Required, "required is only set when it is declared")
+		download := file.Request.QuerySchema()
+		require.True(t, download.Exists(), "a query parameter defines the query schema")
+		assert.Empty(t, v3Kind.Routes["/search"]["GET"].OperationID, "a route may still declare the deprecated name instead")
+
 		// Route authz, fully and partially specified
 		require.NotNil(t, v3Kind.Routes["/reconcile"]["POST"].Authz)
 		assert.Equal(t, codegen.CustomRouteAuthz{
@@ -325,9 +343,9 @@ func TestParseManifestInvalidCases(t *testing.T) {
 		},
 		// Kind-level route validation
 		{
-			name:        "kind route missing name",
+			name:        "kind route missing operationId",
 			selector:    "invalidRouteNameMissing",
-			errContains: `routes."/noname".GET.name: cannot convert non-concrete value`,
+			errContains: `custom route GET /noname of kind`,
 		},
 		{
 			name:        "kind route name bad prefix",
@@ -377,9 +395,9 @@ func TestParseManifestInvalidCases(t *testing.T) {
 			errContains: `routes.namespaced."/bad".POST.name: invalid value "notAValidPrefix"`,
 		},
 		{
-			name:        "version namespaced route missing name",
+			name:        "version namespaced route missing operationId",
 			selector:    "invalidNamespacedRouteMissingName",
-			errContains: `routes.namespaced."/noname".GET.name: cannot convert non-concrete value`,
+			errContains: `custom route GET /noname of the version (namespaced) in version v1 must declare an operationId`,
 		},
 		{
 			name:        "version cluster route bad name",
@@ -426,6 +444,140 @@ func TestParseManifestListKeys(t *testing.T) {
 				require.NotNil(t, kinds[0].ListKeys)
 				assert.Equal(t, tc.want, *kinds[0].ListKeys)
 			}
+		})
+	}
+}
+
+func TestParseManifestRouteOperationID(t *testing.T) {
+	route := func(path, fields string) string {
+		return fmt.Sprintf(`%q: PUT: {
+			%s
+			request: parameters: [{name: "id", in: "path", description: "The object to star"}]
+			response: {}
+		}`, path, fields)
+	}
+	for _, tc := range []struct {
+		name   string
+		routes []string
+		want   string // the resolved identifier of the first route
+		err    string
+	}{
+		{name: "an operationId", routes: []string{route("/star/{id}", `operationId: "addStar"`)}, want: "addStar"},
+		{name: "with underscores and digits", routes: []string{route("/star/{id}", `operationId: "add_star2"`)}, want: "add_star2"},
+		{name: "the deprecated name", routes: []string{route("/star/{id}", `name: "createStar"`)}, want: "createStar"},
+		{name: "both, where the operationId wins", routes: []string{route("/star/{id}", `name: "createStar", operationId: "addStar"`)}, want: "addStar"},
+		{name: "neither", routes: []string{route("/star/{id}", ``)}, err: "must declare an operationId"},
+		{name: "with a space", routes: []string{route("/star/{id}", `operationId: "add star"`)}, err: "operationId"},
+		{name: "starting with a digit", routes: []string{route("/star/{id}", `operationId: "2star"`)}, err: "operationId"},
+		{
+			name: "the same operationId twice",
+			routes: []string{
+				route("/star/{id}", `operationId: "addStar"`),
+				route("/like/{id}", `operationId: "addStar"`),
+			},
+			err: `operationId "addStar" is declared by both`,
+		},
+		{
+			name: "an operationId that is another route's name",
+			routes: []string{
+				route("/star/{id}", `name: "createStar"`),
+				route("/like/{id}", `operationId: "createStar"`),
+			},
+			err: `operationId "createStar" is declared by both`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testingCue(t)
+			c.Root = c.Root.Context().CompileString(fmt.Sprintf(`
+				manifest: {
+					appName: "ids-app"
+					versions: v1: {
+						kinds: []
+						routes: namespaced: {
+							%s
+						}
+					}
+				}`, strings.Join(tc.routes, "\n")))
+			parser, err := NewParser(c, false)
+			require.NoError(t, err)
+			manifest, err := parser.ParseManifest("manifest")
+			if tc.err != "" {
+				require.ErrorContains(t, err, tc.err)
+				return
+			}
+			require.NoError(t, err)
+			routes := manifest.Versions()[0].Routes().Namespaced
+			for _, methods := range routes {
+				for _, r := range methods {
+					if tc.want != "" && r.Name == tc.want {
+						return
+					}
+				}
+			}
+			require.Failf(t, "no route resolved to the identifier", "want %q in %v", tc.want, routes)
+		})
+	}
+}
+
+func TestParseManifestRouteIDsAreUniquePerVersion(t *testing.T) {
+	c := testingCue(t)
+	c.Root = c.Root.Context().CompileString(`
+		manifest: {
+			appName: "ids-app"
+			versions: {
+				v1: {kinds: [], routes: namespaced: "/star/{id}": PUT: {operationId: "addStar", request: {}, response: {}}}
+				v2: {kinds: [], routes: namespaced: "/star/{id}": PUT: {operationId: "addStar", request: {}, response: {}}}
+			}
+		}`)
+	parser, err := NewParser(c, false)
+	require.NoError(t, err)
+	_, err = parser.ParseManifest("manifest")
+	require.NoError(t, err, "each version is its own OpenAPI document")
+}
+
+func TestParseManifestRouteParameters(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		request string
+		err     string
+	}{
+		{name: "one of each place", request: `parameters: [
+			{name: "id", in: "path", description: "The object"},
+			{name: "limit", in: "query", schema: int | *10, example: 25},
+			{name: "X-Request-Id", in: "header", required: true},
+			{name: "session", in: "cookie", deprecated: true},
+		]`},
+		{name: "a place that is not one", request: `parameters: [{name: "id", in: "body"}]`, err: "in"},
+		{name: "a name that is not one", request: `parameters: [{name: "bad name", in: "query"}]`, err: "name"},
+		{name: "an optional path parameter", request: `parameters: [{name: "id", in: "path", required: false}]`, err: "cannot be optional"},
+		{name: "a path parameter not in the path", request: `parameters: [{name: "other", in: "path"}]`, err: "is not a parameter in the path"},
+		{name: "an example that is not of the type", request: `parameters: [{name: "limit", in: "query", schema: int, example: "many"}]`, err: "does not satisfy its schema"},
+		{name: "the same parameter twice", request: `parameters: [{name: "a", in: "query"}, {name: "a", in: "query"}]`, err: "declared twice"},
+		{name: "query two ways", request: `query: {a: string}, parameters: [{name: "b", in: "query"}]`, err: "deprecated query"},
+		{name: "the deprecated query alone", request: `query: {a: string}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testingCue(t)
+			c.Root = c.Root.Context().CompileString(fmt.Sprintf(`
+				manifest: {
+					appName: "params-app"
+					versions: v1: {
+						kinds: []
+						routes: namespaced: "/things/{id}": GET: {
+							operationId: "getThing"
+							request: {%s}
+							response: {}
+						}
+					}
+				}`, tc.request))
+			parser, err := NewParser(c, false)
+			require.NoError(t, err)
+			_, err = parser.ParseManifest("manifest")
+			if tc.err != "" {
+				require.ErrorContains(t, err, tc.err)
+				return
+			}
+			require.NoError(t, err)
 		})
 	}
 }

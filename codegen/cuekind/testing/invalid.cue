@@ -149,7 +149,7 @@ invalidVersionRouteName: {
 	}
 }
 
-// version-level namespaced route with missing name
+// version-level namespaced route with neither an operationId nor a name
 invalidNamespacedRouteMissingName: {
 	appName: "bad-ns-route"
 	versions: {
