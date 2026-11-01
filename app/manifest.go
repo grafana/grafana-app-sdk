@@ -140,7 +140,7 @@ func (m *ManifestData) IsEmpty() bool {
 
 // Validate validates the ManifestData to ensure that the kind data across all Versions is consistent
 //
-//nolint:gocognit,funlen
+//nolint:gocognit,funlen,gocyclo
 func (m *ManifestData) Validate() error {
 	type kindData struct {
 		kind         string
