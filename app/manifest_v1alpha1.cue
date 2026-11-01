@@ -53,6 +53,10 @@ appManifestv1alpha1: appManifestKind & {
 			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
 			// storage declares storage-related behavior for this kind.
 			storage?: #ManifestVersionKindStorage
+			// fixedNames are names of objects of this kind that are never stored: the app
+			// answers requests for them itself. A route at exactly <plural>/<name> is
+			// allowed for each.
+			fixedNames?: [...string]
 			// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 			// It may not prevent automatic conversion behavior between versions of the kind when set to false
 			// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).

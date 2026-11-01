@@ -1720,3 +1720,27 @@ func TestManifestVersionKind_ListKeysEndpoint(t *testing.T) {
 		})
 	}
 }
+
+func TestManifestVersionKind_FixedNames(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		fixed []string
+		has   map[string]bool
+	}{
+		{name: "omitted", has: map[string]bool{"current": false}},
+		{name: "one", fixed: []string{"current"}, has: map[string]bool{"current": true, "other": false}},
+		{name: "several", fixed: []string{"a", "b"}, has: map[string]bool{"a": true, "b": true, "c": false}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			kind := ManifestVersionKind{FixedNames: tc.fixed}
+			for name, want := range tc.has {
+				assert.Equal(t, want, kind.HasFixedName(name), name)
+			}
+			data, err := json.Marshal(kind)
+			require.NoError(t, err)
+			var decoded ManifestVersionKind
+			require.NoError(t, json.Unmarshal(data, &decoded))
+			assert.Equal(t, kind.FixedNames, decoded.FixedNames)
+		})
+	}
+}

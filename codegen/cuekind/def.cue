@@ -403,6 +403,11 @@ Kind: S={
 	searchFields?: [...#SearchField]
 	// listKeys controls whether generic list-keys endpoints are served for this kind.
 	listKeys: bool | *true
+	// fixedNames are names of objects of this kind that are never stored: the app
+	// answers requests for them itself. A route at exactly <plural>/<name>, declared
+	// at the version level, is allowed for each; it would otherwise be rejected for
+	// shadowing the kind's own resource. A name is a Kubernetes object name.
+	fixedNames?: [...=~"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"]
 	// search controls which search endpoints are served for this kind.
 	// /search and /trash are served unless the kind opts out here; /search/hybrid
 	// is not served and the kind is not in the global index unless the kind opts in.
