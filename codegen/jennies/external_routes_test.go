@@ -44,7 +44,7 @@ func TestMergeExternalVersionSubresources(t *testing.T) {
 			cuePost := &spec3.Operation{OperationProps: spec3.OperationProps{OperationId: "createCueDetails"}}
 			importedGet := &spec3.Operation{OperationProps: spec3.OperationProps{OperationId: "getExternalDetails"}}
 			version := app.ManifestVersion{Kinds: []app.ManifestVersionKind{{
-				Kind: "Foo", Plural: "foos", Scope: scope,
+				Kind: "Foo", Plural: "foos", Resource: "foos", Scope: scope,
 				Routes: map[string]spec3.PathProps{"/details": {Get: cueGet, Post: cuePost}},
 			}}}
 			source := app.ManifestVersionRoutes{
@@ -79,7 +79,7 @@ func TestMergeExternalVersionPreservesKindSchemas(t *testing.T) {
 			}, "Widget")
 			require.NoError(t, err)
 			version := app.ManifestVersion{Kinds: []app.ManifestVersionKind{{
-				Kind: "Widget", Plural: "widgets", Scope: "Cluster", Schema: schema,
+				Kind: "Widget", Plural: "widgets", Resource: "widgets", Scope: "Cluster", Schema: schema,
 			}}}
 			err = mergeExternalVersionRoutes(&version, app.ManifestVersionRoutes{
 				Cluster: map[string]spec3.PathProps{"/widgets/{name}/details": {Get: &spec3.Operation{}}},
@@ -105,7 +105,7 @@ func TestMergeExternalVersionSharedKindSchemas(t *testing.T) {
 			}, "Widget")
 			require.NoError(t, err)
 			version := app.ManifestVersion{Kinds: []app.ManifestVersionKind{{
-				Kind: "Widget", Plural: "widgets", Scope: "Cluster", Schema: kindSchema,
+				Kind: "Widget", Plural: "widgets", Resource: "widgets", Scope: "Cluster", Schema: kindSchema,
 			}}}
 			source := app.ManifestVersionRoutes{
 				Cluster: map[string]spec3.PathProps{"/widgets/{name}/details": {Get: &spec3.Operation{}}},

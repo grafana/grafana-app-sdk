@@ -170,6 +170,7 @@ var appManifestData = app.ManifestData{
             {
                 Kind: "{{.Kind}}",
                 Plural: "{{.Plural}}",
+                Resource: "{{.Resource}}",
                 Scope: "{{.Scope}}",
                 Conversion: {{.Conversion}}, {{ if .FolderScoped }}
                 FolderScoped: {{ goBoolPtr .FolderScoped }}, {{ end }}{{ if .Storage }}

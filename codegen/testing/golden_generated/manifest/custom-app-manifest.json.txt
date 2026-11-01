@@ -16,6 +16,7 @@
                     {
                         "kind": "CustomKind",
                         "plural": "CustomKinds",
+                        "resource": "customkinds",
                         "scope": "Namespaced",
                         "userReadable": false,
                         "schemas": {
@@ -110,6 +111,7 @@
                     {
                         "kind": "CustomKind",
                         "plural": "CustomKinds",
+                        "resource": "customkinds",
                         "scope": "Namespaced",
                         "userReadable": false,
                         "schemas": {

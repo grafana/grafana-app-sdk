@@ -17,7 +17,8 @@
         "kinds": [
           {
             "kind": "Issue",
-            "plural": "issues",
+            "plural": "Issues",
+            "resource": "issues",
             "scope": "Namespaced",
             "schemas": {
               "Issue": {
