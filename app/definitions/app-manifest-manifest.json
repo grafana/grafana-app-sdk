@@ -16,6 +16,7 @@
                     {
                         "kind": "AppManifest",
                         "plural": "AppManifests",
+                        "resource": "appmanifests",
                         "scope": "Cluster",
                         "userReadable": false,
                         "schemas": {
@@ -588,6 +589,7 @@
                     {
                         "kind": "AppManifest",
                         "plural": "AppManifests",
+                        "resource": "appmanifests",
                         "scope": "Cluster",
                         "userReadable": false,
                         "schemas": {
@@ -1408,6 +1410,7 @@
                     {
                         "kind": "RouteBackend",
                         "plural": "RouteBackends",
+                        "resource": "routebackends",
                         "scope": "Cluster",
                         "userReadable": false,
                         "admission": {
