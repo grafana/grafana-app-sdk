@@ -318,7 +318,11 @@
                                                                 "type": "string"
                                                             },
                                                             "plural": {
-                                                                "description": "Plural is the plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
+                                                                "description": "Plural is the human readable plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
+                                                                "type": "string"
+                                                            },
+                                                            "resource": {
+                                                                "description": "Resource is the lowercase plural used as the resource in the k8s GroupVersionResource URL.\nThis is optional and defaults to the lowercase of plural if not present.",
                                                                 "type": "string"
                                                             },
                                                             "routes": {
@@ -870,7 +874,11 @@
                                                                 "type": "string"
                                                             },
                                                             "plural": {
-                                                                "description": "Plural is the plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
+                                                                "description": "Plural is the human readable plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
+                                                                "type": "string"
+                                                            },
+                                                            "resource": {
+                                                                "description": "Resource is the lowercase plural used as the resource in the k8s GroupVersionResource URL.\nThis is optional and defaults to the lowercase of plural if not present.",
                                                                 "type": "string"
                                                             },
                                                             "routes": {

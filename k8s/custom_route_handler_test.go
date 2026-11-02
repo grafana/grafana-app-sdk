@@ -46,12 +46,12 @@ func testManifest() app.ManifestData {
 			Name: "v1",
 			Kinds: []app.ManifestVersionKind{{
 				Kind:   "Foo",
-				Plural: "foos",
-				Scope:  string(resource.NamespacedScope),
+				Plural: "foos", Resource: "foos",
+				Scope: string(resource.NamespacedScope),
 			}, {
 				Kind:   "Cluz",
-				Plural: "cluzes",
-				Scope:  string(resource.ClusterScope),
+				Plural: "cluzes", Resource: "cluzes",
+				Scope: string(resource.ClusterScope),
 			}},
 		}},
 	}
@@ -63,19 +63,19 @@ func TestNewCustomRouteHandler(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "Caller")
 	})
-	t.Run("duplicate plural", func(t *testing.T) {
+	t.Run("duplicate resource", func(t *testing.T) {
 		_, err := NewCustomRouteHandler(CustomRouteHandlerConfig{
 			Caller: &stubApp{},
 			Manifest: app.ManifestData{
 				Group: "g",
 				Versions: []app.ManifestVersion{{Name: "v1", Kinds: []app.ManifestVersionKind{
-					{Kind: "A", Plural: "things", Scope: "Namespaced"},
-					{Kind: "B", Plural: "things", Scope: "Namespaced"},
+					{Kind: "A", Plural: "things", Resource: "things", Scope: "Namespaced"},
+					{Kind: "B", Plural: "things", Resource: "things", Scope: "Namespaced"},
 				}}},
 			},
 		})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "duplicate plural")
+		assert.Contains(t, err.Error(), "duplicate resource")
 	})
 	t.Run("ok", func(t *testing.T) {
 		h, err := NewCustomRouteHandler(CustomRouteHandlerConfig{

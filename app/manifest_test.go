@@ -88,36 +88,88 @@ func TestManifestData_Validate(t *testing.T) {
 		name: "valid (empty manifest)",
 		data: ManifestData{},
 	}, {
+		name: "valid without preferred version",
+		data: ManifestData{Versions: []ManifestVersion{{Name: "v1"}}},
+	}, {
+		name: "valid preferred version",
+		data: ManifestData{
+			Versions:         []ManifestVersion{{Name: "v1"}, {Name: "v2"}},
+			PreferredVersion: "v2",
+		},
+	}, {
+		name: "unknown preferred version",
+		data: ManifestData{
+			Versions:         []ManifestVersion{{Name: "v1"}},
+			PreferredVersion: "v2",
+		},
+		expectedErr: multierror.Append(nil, errors.New(`unknown preferred version: "v2"`)),
+	}, {
+		name:        "preferred version without versions",
+		data:        ManifestData{PreferredVersion: "v1"},
+		expectedErr: multierror.Append(nil, errors.New(`unknown preferred version: "v1"`)),
+	}, {
+		name: "preferred version must match exactly",
+		data: ManifestData{
+			Versions:         []ManifestVersion{{Name: "v1"}},
+			PreferredVersion: "V1",
+		},
+		expectedErr: multierror.Append(nil, errors.New(`unknown preferred version: "V1"`)),
+	}, {
 		name: "plural mismatch",
 		data: ManifestData{
 			Versions: []ManifestVersion{{
 				Name: "v1",
 				Kinds: []ManifestVersionKind{{
 					Kind:   "Foo",
-					Plural: "foos",
+					Plural: "foos", Resource: "foos",
 				}},
 			}, {
 				Name: "v2",
 				Kinds: []ManifestVersionKind{{
 					Kind:   "Foo",
-					Plural: "bars",
+					Plural: "bars", Resource: "bars",
 				}},
 			}},
 		},
-		expectedErr: multierror.Append(nil, errors.New("kind 'Foo' has a different plural in versions 'v1' and 'v2'")),
+		expectedErr: multierror.Append(nil,
+			errors.New("kind 'Foo' has a different plural in versions 'v1' and 'v2'"),
+			errors.New("kind 'Foo' has a different resource in versions 'v1' and 'v2'")),
+	}, {
+		name: "missing plural and resource",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name:  "v1",
+				Kinds: []ManifestVersionKind{{Kind: "Foo"}},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("kind 'Foo' in version 'v1' has no plural"),
+			errors.New("kind 'Foo' in version 'v1' has no resource")),
+	}, {
+		name: "invalid resource name",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name:  "v1",
+				Kinds: []ManifestVersionKind{{Kind: "Foo", Plural: "Foos", Resource: "Foos"}},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("kind 'Foo' in version 'v1' has an invalid resource 'Foos': a lowercase RFC 1123 label must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?')")),
 	}, {
 		name: "scope mismatch",
 		data: ManifestData{
 			Versions: []ManifestVersion{{
 				Name: "v1",
 				Kinds: []ManifestVersionKind{{
-					Kind:  "Foo",
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
 					Scope: "Namespaced",
 				}},
 			}, {
 				Name: "v2",
 				Kinds: []ManifestVersionKind{{
-					Kind:  "Foo",
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
 					Scope: "Cluster",
 				}},
 			}},
@@ -129,13 +181,15 @@ func TestManifestData_Validate(t *testing.T) {
 			Versions: []ManifestVersion{{
 				Name: "v1",
 				Kinds: []ManifestVersionKind{{
-					Kind:       "Foo",
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
 					Conversion: true,
 				}},
 			}, {
 				Name: "v2",
 				Kinds: []ManifestVersionKind{{
-					Kind:       "Foo",
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
 					Conversion: false,
 				}},
 			}},
@@ -147,12 +201,14 @@ func TestManifestData_Validate(t *testing.T) {
 			Versions: []ManifestVersion{{
 				Name: "v1",
 				Kinds: []ManifestVersionKind{{
-					Kind: "Foo",
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
 				}},
 			}, {
 				Name: "v2",
 				Kinds: []ManifestVersionKind{{
-					Kind:         "Foo",
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
 					FolderScoped: new(false),
 				}},
 			}},
@@ -164,12 +220,14 @@ func TestManifestData_Validate(t *testing.T) {
 			Versions: []ManifestVersion{{
 				Name: "v1",
 				Kinds: []ManifestVersionKind{{
-					Kind: "Foo",
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
 				}},
 			}, {
 				Name: "v2",
 				Kinds: []ManifestVersionKind{{
-					Kind:         "Foo",
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
 					FolderScoped: new(true),
 				}},
 			}},
@@ -180,16 +238,16 @@ func TestManifestData_Validate(t *testing.T) {
 			Versions: []ManifestVersion{{
 				Name: "v1",
 				Kinds: []ManifestVersionKind{{
-					Kind:       "Foo",
-					Plural:     "foos",
+					Kind:   "Foo",
+					Plural: "foos", Resource: "foos",
 					Scope:      "Namespaced",
 					Conversion: true,
 				}},
 			}, {
 				Name: "v2",
 				Kinds: []ManifestVersionKind{{
-					Kind:       "Foo",
-					Plural:     "bars",
+					Kind:   "Foo",
+					Plural: "bars", Resource: "bars",
 					Scope:      "Cluster",
 					Conversion: false,
 				}},
@@ -197,6 +255,7 @@ func TestManifestData_Validate(t *testing.T) {
 		},
 		expectedErr: multierror.Append(nil,
 			errors.New("kind 'Foo' has a different plural in versions 'v1' and 'v2'"),
+			errors.New("kind 'Foo' has a different resource in versions 'v1' and 'v2'"),
 			errors.New("kind 'Foo' has a different scope in versions 'v1' and 'v2'"),
 			errors.New("kind 'Foo' conversion does not match in versions 'v1' and 'v2'")),
 	}, {
@@ -206,16 +265,16 @@ func TestManifestData_Validate(t *testing.T) {
 				Name: "v1",
 				Kinds: []ManifestVersionKind{{
 					Kind:   "Foo",
-					Plural: "foos",
-					Scope:  "Namespaced",
+					Plural: "foos", Resource: "foos",
+					Scope: "Namespaced",
 				}, {
 					Kind:   "Bar",
-					Plural: "bars",
-					Scope:  "Cluster",
+					Plural: "bars", Resource: "bars",
+					Scope: "Cluster",
 				}, {
 					Kind:   "Foobar",
-					Plural: "foobars",
-					Scope:  "Cluster",
+					Plural: "foobars", Resource: "foobars",
+					Scope: "Cluster",
 				}},
 				Routes: ManifestVersionRoutes{
 					Namespaced: map[string]spec3.PathProps{
@@ -238,15 +297,15 @@ func TestManifestData_Validate(t *testing.T) {
 				Name: "v1",
 				Kinds: []ManifestVersionKind{{
 					Kind:   "Foo",
-					Plural: "foos",
-					Scope:  "Namespaced",
+					Plural: "foos", Resource: "foos",
+					Scope: "Namespaced",
 					Search: &ManifestVersionKindSearch{
 						Endpoint: new(false),
 					},
 				}, {
 					Kind:   "Bar",
-					Plural: "bars",
-					Scope:  "Cluster",
+					Plural: "bars", Resource: "bars",
+					Scope: "Cluster",
 					Search: &ManifestVersionKindSearch{
 						Trash: new(false),
 					},
@@ -290,7 +349,7 @@ func TestManifestData_Validate(t *testing.T) {
 			AppName: "myapp",
 			Versions: []ManifestVersion{{
 				Name:  "v1",
-				Kinds: []ManifestVersionKind{{Kind: "Foo"}},
+				Kinds: []ManifestVersionKind{{Kind: "Foo", Plural: "Foos", Resource: "foos"}},
 			}},
 			Roles: map[string]ManifestRole{
 				"viewer-role": {
@@ -342,7 +401,8 @@ func TestManifestData_Validate(t *testing.T) {
 			Versions: []ManifestVersion{{
 				Name: "v1",
 				Kinds: []ManifestVersionKind{{
-					Kind: "Foo",
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
 					Routes: map[string]spec3.PathProps{
 						"/render": {Get: &spec3.Operation{}},
 						"/approve-request": {Post: &spec3.Operation{VendorExtensible: spec.VendorExtensible{Extensions: spec.Extensions{
@@ -351,7 +411,8 @@ func TestManifestData_Validate(t *testing.T) {
 						}}}},
 					},
 				}, {
-					Kind:  "Bar",
+					Kind:   "Bar",
+					Plural: "Bars", Resource: "bars",
 					Scope: "Cluster",
 				}},
 				Routes: ManifestVersionRoutes{
@@ -389,7 +450,8 @@ func TestManifestData_Validate(t *testing.T) {
 			Versions: []ManifestVersion{{
 				Name: "v1",
 				Kinds: []ManifestVersionKind{{
-					Kind: "Foo",
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
 					Routes: map[string]spec3.PathProps{
 						"/render": {Get: &spec3.Operation{VendorExtensible: spec.VendorExtensible{Extensions: spec.Extensions{
 							OpenAPIExtensionAuthzResource: "foos/render",
@@ -413,7 +475,8 @@ func TestManifestData_Validate(t *testing.T) {
 			Versions: []ManifestVersion{{
 				Name: "v1",
 				Kinds: []ManifestVersionKind{{
-					Kind: "Foo",
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
 					Routes: map[string]spec3.PathProps{
 						"/status":       {},
 						"status":        {},
@@ -436,12 +499,12 @@ func TestManifestData_Validate(t *testing.T) {
 				Name: "v1",
 				Kinds: []ManifestVersionKind{{
 					Kind:   "Foo",
-					Plural: "foos",
-					Scope:  "Namespaced",
+					Plural: "foos", Resource: "foos",
+					Scope: "Namespaced",
 				}, {
 					Kind:   "Bar",
-					Plural: "bars",
-					Scope:  "Cluster",
+					Plural: "bars", Resource: "bars",
+					Scope: "Cluster",
 				}},
 				Routes: ManifestVersionRoutes{
 					Namespaced: map[string]spec3.PathProps{
@@ -480,10 +543,12 @@ func TestManifestData_ValidateHybridRoutes(t *testing.T) {
 					Name: "v1",
 					Kinds: []ManifestVersionKind{{
 						Kind:   "Foo",
+						Plural: "Foos", Resource: "foos",
 						Scope:  "Namespaced",
 						Search: tt.search,
 					}, {
 						Kind:   "Bar",
+						Plural: "Bars", Resource: "bars",
 						Scope:  "Cluster",
 						Search: tt.search,
 					}},
@@ -519,19 +584,19 @@ func TestManifestData_ValidateEmbed(t *testing.T) {
 	}{
 		{
 			name:         "custom builder omits embedding declarations",
-			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Resource: "foos"}},
 		},
 		{
 			name:         "empty configuration remains optional",
 			embed:        map[string]ManifestResourceEmbed{},
-			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Resource: "foos"}},
 		},
 		{
 			name:  "positive revision with versioned fields",
 			embed: map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
 			kindVersions: []ManifestVersionKind{{
 				Kind:   "Foo",
-				Plural: "foos",
+				Plural: "foos", Resource: "foos",
 				Embed: &ManifestVersionKindEmbed{
 					Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
 				},
@@ -541,7 +606,8 @@ func TestManifestData_ValidateEmbed(t *testing.T) {
 			name:  "declared field requires a path",
 			embed: map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
 			kindVersions: []ManifestVersionKind{{
-				Kind: "Foo",
+				Kind:   "Foo",
+				Plural: "Foos", Resource: "foos",
 				Embed: &ManifestVersionKindEmbed{
 					Fields: []ManifestVersionKindEmbedField{{Name: "title"}},
 				},
@@ -551,31 +617,31 @@ func TestManifestData_ValidateEmbed(t *testing.T) {
 		{
 			name:         "resource revision without versioned fields",
 			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 2}},
-			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Resource: "foos"}},
 		},
 		{
 			name:         "zero revision",
 			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 0}},
-			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Resource: "foos"}},
 			wantErr:      "reembedVersion",
 		},
 		{
 			name:         "negative revision",
 			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: -1}},
-			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Resource: "foos"}},
 			wantErr:      "reembedVersion",
 		},
 		{
 			name:         "unknown resource",
 			embed:        map[string]ManifestResourceEmbed{"missing": {ReembedVersion: 1}},
-			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Resource: "foos"}},
 			wantErr:      "missing",
 		},
 		{
 			name: "versioned fields require a resource revision",
 			kindVersions: []ManifestVersionKind{{
 				Kind:   "Foo",
-				Plural: "foos",
+				Plural: "foos", Resource: "foos",
 				Embed: &ManifestVersionKindEmbed{
 					Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
 				},
@@ -584,38 +650,38 @@ func TestManifestData_ValidateEmbed(t *testing.T) {
 		},
 		{
 			name:         "empty versioned embed still requires a resource revision",
-			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Embed: &ManifestVersionKindEmbed{}}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Resource: "foos", Embed: &ManifestVersionKindEmbed{}}},
 			wantErr:      "foos",
 		},
 		{
 			name:         "resource key uses lowercase plural",
 			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
-			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "Foos"}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "Foos", Resource: "foos"}},
 		},
 		{
 			name:         "resource key cannot use kind name",
 			embed:        map[string]ManifestResourceEmbed{"Foo": {ReembedVersion: 1}},
-			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Resource: "foos"}},
 			wantErr:      "Foo",
 		},
 		{
 			name:         "resource key uses inferred plural",
 			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
-			kindVersions: []ManifestVersionKind{{Kind: "Foo"}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "Foos", Resource: "foos"}},
 		},
 		{
 			name:         "resource key supports explicit irregular plural",
 			embed:        map[string]ManifestResourceEmbed{"people": {ReembedVersion: 1}},
-			kindVersions: []ManifestVersionKind{{Kind: "Person", Plural: "people"}},
+			kindVersions: []ManifestVersionKind{{Kind: "Person", Plural: "people", Resource: "people"}},
 		},
 		{
 			name:  "only some API versions declare fields",
 			embed: map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
 			kindVersions: []ManifestVersionKind{
-				{Kind: "Foo", Plural: "foos"},
+				{Kind: "Foo", Plural: "foos", Resource: "foos"},
 				{
 					Kind:   "Foo",
-					Plural: "foos",
+					Plural: "foos", Resource: "foos",
 					Embed: &ManifestVersionKindEmbed{
 						Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
 					},
@@ -628,14 +694,14 @@ func TestManifestData_ValidateEmbed(t *testing.T) {
 			kindVersions: []ManifestVersionKind{
 				{
 					Kind:   "Foo",
-					Plural: "foos",
+					Plural: "foos", Resource: "foos",
 					Embed: &ManifestVersionKindEmbed{
 						Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
 					},
 				},
 				{
 					Kind:   "Foo",
-					Plural: "foos",
+					Plural: "foos", Resource: "foos",
 					Embed: &ManifestVersionKindEmbed{
 						Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.displayName"}},
 					},
@@ -661,36 +727,6 @@ func TestManifestData_ValidateEmbed(t *testing.T) {
 	}
 }
 
-func TestManifestVersionKind_Resource(t *testing.T) {
-	tests := []struct {
-		name     string
-		kind     ManifestVersionKind
-		expected string
-	}{
-		{
-			name: "explicit plural",
-			kind: ManifestVersionKind{
-				Kind:   "Person",
-				Plural: "People",
-			},
-			expected: "people",
-		},
-		{
-			name: "plural derived from kind",
-			kind: ManifestVersionKind{
-				Kind: "Widget",
-			},
-			expected: "widgets",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.expected, test.kind.Resource())
-		})
-	}
-}
-
 func TestManifestVersionKind_Subresources(t *testing.T) {
 	sch1, _ := VersionSchemaFromMap(jsonToMap([]byte(`{"spec":{"properties":{"foo":{"type":"string"}}},"metadata":{}}`)), "Foo")
 	sch2, _ := VersionSchemaFromMap(jsonToMap([]byte(`{"spec":{"properties":{"foo":{"type":"string"}}},"metadata":{},"status":{}}`)), "Foo")
@@ -705,7 +741,8 @@ func TestManifestVersionKind_Subresources(t *testing.T) {
 	}, {
 		name: "empty schema",
 		kind: ManifestVersionKind{
-			Kind: "Foo",
+			Kind:   "Foo",
+			Plural: "Foos", Resource: "foos",
 			Schema: &VersionSchema{
 				raw: map[string]any{},
 			},
@@ -714,7 +751,8 @@ func TestManifestVersionKind_Subresources(t *testing.T) {
 	}, {
 		name: "invalid schema",
 		kind: ManifestVersionKind{
-			Kind: "Foo",
+			Kind:   "Foo",
+			Plural: "Foos", Resource: "foos",
 			Schema: &VersionSchema{
 				raw: jsonToMap([]byte(`{"spec":{"properties":{"foo":{"type":"string"}}}}`)),
 			},
@@ -724,6 +762,7 @@ func TestManifestVersionKind_Subresources(t *testing.T) {
 		name: "no subresources",
 		kind: ManifestVersionKind{
 			Kind:   "Foo",
+			Plural: "Foos", Resource: "foos",
 			Schema: sch1,
 		},
 		expected: []string{},
@@ -731,6 +770,7 @@ func TestManifestVersionKind_Subresources(t *testing.T) {
 		name: "status subresource",
 		kind: ManifestVersionKind{
 			Kind:   "Foo",
+			Plural: "Foos", Resource: "foos",
 			Schema: sch2,
 		},
 		expected: []string{"status"},

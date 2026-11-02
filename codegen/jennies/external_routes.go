@@ -36,7 +36,7 @@ func externalKindRoutes(kind app.ManifestVersionKind, source app.ManifestVersion
 	if kind.Scope == "Cluster" {
 		paths = source.Cluster
 	}
-	prefix := "/" + kind.Resource() + "/{name}"
+	prefix := "/" + kind.Resource + "/{name}"
 	result := make(map[string]spec3.PathProps)
 	for path, props := range paths {
 		if strings.HasPrefix(path, prefix+"/") {
@@ -102,7 +102,7 @@ func mergeExternalVersionRoutes(version *app.ManifestVersion, source app.Manifes
 			remaining = source.Cluster
 		}
 		for path := range paths {
-			delete(remaining, "/"+kind.Resource()+"/{name}"+path)
+			delete(remaining, "/"+kind.Resource+"/{name}"+path)
 		}
 	}
 	return mergeExternalRoutes(&version.Routes, source) //nolint:staticcheck // Routes is deprecated but still emitted alongside OpenAPI

@@ -363,9 +363,11 @@ func TestEmbedConversion(t *testing.T) {
 					Name:   "v1",
 					Served: true,
 					Kinds: []app.ManifestVersionKind{{
-						Kind:  "Foo",
-						Scope: "Namespaced",
-						Embed: tc.embed,
+						Kind:     "Foo",
+						Plural:   "Foos",
+						Resource: "foos",
+						Scope:    "Namespaced",
+						Embed:    tc.embed,
 						SearchFields: []app.ManifestVersionKindSearchField{{
 							Name:         "category",
 							Path:         "spec.category",
@@ -442,8 +444,8 @@ func TestEmbedConversion_SharedReembedVersion(t *testing.T) {
 					},
 					{
 						Kind:   "Child",
-						Plural: "children",
-						Scope:  "Namespaced",
+						Plural: "children", Resource: "children",
+						Scope: "Namespaced",
 					},
 				},
 			},
@@ -460,8 +462,8 @@ func TestEmbedConversion_SharedReembedVersion(t *testing.T) {
 					},
 					{
 						Kind:   "Child",
-						Plural: "children",
-						Scope:  "Namespaced",
+						Plural: "children", Resource: "children",
+						Scope: "Namespaced",
 					},
 				},
 			},
