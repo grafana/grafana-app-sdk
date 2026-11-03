@@ -277,6 +277,7 @@ SchemaWithOperatorState: Schema & {
 	labelKey?: string
 	// url is the path of the page that shows one resource of the kind, such as "/a/my-app/widgets/{name}".
 	// User interfaces replace {name} with the name of the resource.
+	// Defaults to "/a/<appName>/<resource>/{name}", the page route of an app plugin with the ID appName.
 	url?: string
 	// icon is the name of a Grafana UI icon for the kind.
 	icon?: string

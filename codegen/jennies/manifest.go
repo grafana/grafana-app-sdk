@@ -233,6 +233,9 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 			if err != nil {
 				return nil, err
 			}
+			if mvkind.Extensions != nil && mvkind.Extensions.UI != nil && mvkind.Extensions.UI.URL == "" {
+				mvkind.Extensions.UI.URL = fmt.Sprintf("/a/%s/%s/{name}", manifest.AppName, mvkind.Resource)
+			}
 			if len(kind.Validation.Operations) > 0 {
 				hasAnyValidation = true
 			}
