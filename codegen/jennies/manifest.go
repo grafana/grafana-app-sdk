@@ -626,7 +626,7 @@ func manifestKindUI(ui *codegen.KindUI) *app.ManifestVersionKindUI {
 	if ui == nil || *ui == (codegen.KindUI{}) {
 		return nil
 	}
-	return &app.ManifestVersionKindUI{LabelKey: ui.LabelKey, Icon: ui.Icon}
+	return &app.ManifestVersionKindUI{LabelKey: ui.LabelKey, URL: ui.URL, Icon: ui.Icon}
 }
 
 type simpleOpenAPIDoc[T any] struct {

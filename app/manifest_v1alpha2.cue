@@ -164,6 +164,9 @@ appManifestv1alpha2: appManifestKind & {
 			// labelKey is the i18n key that user interfaces translate to the display name of the kind.
 			// The translation takes a count to select the singular or plural form, and falls back to kind or plural.
 			labelKey?: string
+			// url is the path of the page that shows one resource of the kind, such as "/a/my-app/widgets/{name}".
+			// User interfaces replace {name} with the name of the resource.
+			url?: string
 			// icon is the name of a Grafana UI icon for the kind.
 			icon?: string
 		}

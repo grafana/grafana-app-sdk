@@ -171,6 +171,9 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 					if ui.LabelKey != nil {
 						k.Extensions.UI.LabelKey = *ui.LabelKey
 					}
+					if ui.Url != nil {
+						k.Extensions.UI.URL = *ui.Url
+					}
 					if ui.Icon != nil {
 						k.Extensions.UI.Icon = *ui.Icon
 					}
@@ -517,6 +520,9 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 					k.Extensions.Ui = &AppManifestManifestVersionKindUI{}
 					if ui.LabelKey != "" {
 						k.Extensions.Ui.LabelKey = &ui.LabelKey
+					}
+					if ui.URL != "" {
+						k.Extensions.Ui.Url = &ui.URL
 					}
 					if ui.Icon != "" {
 						k.Extensions.Ui.Icon = &ui.Icon

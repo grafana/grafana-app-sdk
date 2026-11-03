@@ -329,7 +329,7 @@ func TestExtensionsConversion(t *testing.T) {
 			name: "full",
 			extensions: &app.ManifestVersionKindExtensions{
 				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
-				UI:           &app.ManifestVersionKindUI{LabelKey: "widget", Icon: "apps"},
+				UI:           &app.ManifestVersionKindUI{LabelKey: "widget", URL: "/a/foo/widgets/{name}", Icon: "apps"},
 			},
 		},
 	} {

@@ -251,9 +251,9 @@ func TestProcessKindVersion_Extensions(t *testing.T) {
 		},
 		{
 			name:       "ui",
-			extensions: &codegen.KindExtensions{UI: &codegen.KindUI{LabelKey: "widget", Icon: "apps"}},
+			extensions: &codegen.KindExtensions{UI: &codegen.KindUI{LabelKey: "widget", URL: "/a/foo/widgets/{name}", Icon: "apps"}},
 			expected: &app.ManifestVersionKindExtensions{
-				UI: &app.ManifestVersionKindUI{LabelKey: "widget", Icon: "apps"},
+				UI: &app.ManifestVersionKindUI{LabelKey: "widget", URL: "/a/foo/widgets/{name}", Icon: "apps"},
 			},
 		},
 	} {

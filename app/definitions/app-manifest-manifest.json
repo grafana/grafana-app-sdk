@@ -980,6 +980,10 @@
                                     "labelKey": {
                                         "description": "labelKey is the i18n key that user interfaces translate to the display name of the kind.\nThe translation takes a count to select the singular or plural form, and falls back to kind or plural.",
                                         "type": "string"
+                                    },
+                                    "url": {
+                                        "description": "url is the path of the page that shows one resource of the kind, such as \"/a/my-app/widgets/{name}\".\nUser interfaces replace {name} with the name of the resource.",
+                                        "type": "string"
                                     }
                                 },
                                 "type": "object"

@@ -108,6 +108,7 @@ var appManifestData = app.ManifestData{
 						},
 						UI: &app.ManifestVersionKindUI{
 							LabelKey: "testkind2",
+							URL:      "/a/test-app/testkind2s/{name}",
 							Icon:     "apps",
 						},
 					},

@@ -132,6 +132,7 @@ type KindProvisioning struct {
 // KindUI declares how user interfaces display a kind.
 type KindUI struct {
 	LabelKey string `json:"labelKey,omitempty"`
+	URL      string `json:"url,omitempty"`
 	Icon     string `json:"icon,omitempty"`
 }
 

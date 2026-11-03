@@ -11,6 +11,7 @@ testKind2: {
 		provisioning: enabled: true
 		ui: {
 			labelKey: "testkind2"
+			url:      "/a/test-app/testkind2s/{name}"
 			icon:     "apps"
 		}
 	}
