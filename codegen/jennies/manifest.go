@@ -603,6 +603,18 @@ func manifestKindEmbed(embed *codegen.KindEmbed) *app.ManifestVersionKindEmbed {
 	return &app.ManifestVersionKindEmbed{Fields: fields}
 }
 
+func manifestKindExtensions(extensions *codegen.KindExtensions) *app.ManifestVersionKindExtensions {
+	if extensions == nil {
+		return nil
+	}
+	provisioning := manifestKindProvisioning(extensions.Provisioning)
+	ui := manifestKindUI(extensions.UI)
+	if provisioning == nil && ui == nil {
+		return nil
+	}
+	return &app.ManifestVersionKindExtensions{Provisioning: provisioning, UI: ui}
+}
+
 func manifestKindProvisioning(provisioning *codegen.KindProvisioning) *app.ManifestVersionKindProvisioning {
 	if provisioning == nil || !provisioning.Enabled {
 		return nil
@@ -614,7 +626,7 @@ func manifestKindUI(ui *codegen.KindUI) *app.ManifestVersionKindUI {
 	if ui == nil || *ui == (codegen.KindUI{}) {
 		return nil
 	}
-	return &app.ManifestVersionKindUI{Label: ui.Label, PluralLabel: ui.PluralLabel, Icon: ui.Icon}
+	return &app.ManifestVersionKindUI{LabelKey: ui.LabelKey, Icon: ui.Icon}
 }
 
 type simpleOpenAPIDoc[T any] struct {
@@ -651,8 +663,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 	}
 	mver.Search = manifestKindSearch(vk.Search)
 	mver.Embed = manifestKindEmbed(vk.Embed)
-	mver.Provisioning = manifestKindProvisioning(vk.Provisioning)
-	mver.UI = manifestKindUI(vk.UI)
+	mver.Extensions = manifestKindExtensions(vk.Extensions)
 	if len(vk.Mutation.Operations) > 0 {
 		operations, err := sanitizeAdmissionOperations(vk.Mutation.Operations)
 		if err != nil {

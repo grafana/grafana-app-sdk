@@ -112,10 +112,8 @@ appManifestv1alpha2: appManifestKind & {
 			search?: #ManifestVersionKindSearch
 			// embed defines the embedding document independently of search fields.
 			embed?: #ManifestVersionKindEmbed
-			// provisioning declares whether provisioning (Git Sync) manages this kind.
-			provisioning?: #ManifestVersionKindProvisioning
-			// ui declares how user interfaces display this kind.
-			ui?: #ManifestVersionKindUI
+			// extensions declares how other Grafana features, such as provisioning and user interfaces, treat this kind.
+			extensions?: #ManifestVersionKindExtensions
 			// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 			// It may not prevent automatic conversion behavior between versions of the kind when set to false
 			// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
@@ -151,15 +149,21 @@ appManifestv1alpha2: appManifestKind & {
 			// Declaring an embedding field does not enable filtering embeddings by that field.
 			fields: [...#ManifestVersionKindEmbedField]
 		}
+		#ManifestVersionKindExtensions: {
+			// provisioning declares whether provisioning (Git Sync) manages this kind.
+			provisioning?: #ManifestVersionKindProvisioning
+			// ui declares how user interfaces display this kind.
+			ui?: #ManifestVersionKindUI
+		}
 		#ManifestVersionKindProvisioning: {
 			// enabled declares whether provisioning manages resources of this kind.
 			enabled?: bool | *false
 		}
+		// The display name of the kind comes from kind and plural.
 		#ManifestVersionKindUI: {
-			// label is the singular display name of the kind.
-			label?: string
-			// pluralLabel is the plural display name of the kind.
-			pluralLabel?: string
+			// labelKey is the i18n key that user interfaces translate to the display name of the kind.
+			// The translation takes a count to select the singular or plural form, and falls back to kind or plural.
+			labelKey?: string
 			// icon is the name of a Grafana UI icon for the kind.
 			icon?: string
 		}

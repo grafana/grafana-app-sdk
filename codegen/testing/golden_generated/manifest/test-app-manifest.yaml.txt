@@ -126,6 +126,12 @@ spec:
       - .spec.stringField
       userReadable: false
     - conversion: false
+      extensions:
+        provisioning:
+          enabled: true
+        ui:
+          icon: apps
+          labelKey: testkind2
       kind: TestKind2
       plural: TestKind2s
       resource: testkind2s

@@ -304,21 +304,33 @@ func TestSearchEndpointsConversion(t *testing.T) {
 	}
 }
 
-func TestProvisioningAndUIConversion(t *testing.T) {
+func TestExtensionsConversion(t *testing.T) {
 	for _, tc := range []struct {
-		name         string
-		provisioning *app.ManifestVersionKindProvisioning
-		ui           *app.ManifestVersionKindUI
+		name       string
+		extensions *app.ManifestVersionKindExtensions
 	}{
 		{name: "unset"},
-		{name: "empty", provisioning: &app.ManifestVersionKindProvisioning{}, ui: &app.ManifestVersionKindUI{}},
-		{name: "provisioning disabled", provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(false)}},
-		{name: "provisioning enabled", provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)}},
-		{name: "partial ui", ui: &app.ManifestVersionKindUI{Icon: "apps"}},
+		{name: "empty", extensions: &app.ManifestVersionKindExtensions{}},
 		{
-			name:         "full",
-			provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
-			ui:           &app.ManifestVersionKindUI{Label: "Widget", PluralLabel: "Widgets", Icon: "apps"},
+			name: "empty blocks",
+			extensions: &app.ManifestVersionKindExtensions{
+				Provisioning: &app.ManifestVersionKindProvisioning{},
+				UI:           &app.ManifestVersionKindUI{},
+			},
+		},
+		{
+			name: "provisioning disabled",
+			extensions: &app.ManifestVersionKindExtensions{
+				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(false)},
+			},
+		},
+		{name: "partial ui", extensions: &app.ManifestVersionKindExtensions{UI: &app.ManifestVersionKindUI{Icon: "apps"}}},
+		{
+			name: "full",
+			extensions: &app.ManifestVersionKindExtensions{
+				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
+				UI:           &app.ManifestVersionKindUI{LabelKey: "widget", Icon: "apps"},
+			},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -328,10 +340,9 @@ func TestProvisioningAndUIConversion(t *testing.T) {
 					Name:   "v1",
 					Served: true,
 					Kinds: []app.ManifestVersionKind{{
-						Kind:         "Foo",
-						Scope:        "Namespaced",
-						Provisioning: tc.provisioning,
-						UI:           tc.ui,
+						Kind:       "Foo",
+						Scope:      "Namespaced",
+						Extensions: tc.extensions,
 					}},
 				}},
 			}
@@ -341,8 +352,7 @@ func TestProvisioningAndUIConversion(t *testing.T) {
 
 			roundTripped, err := spec.ToManifestData()
 			require.NoError(t, err)
-			assert.Equal(t, tc.provisioning, roundTripped.Versions[0].Kinds[0].Provisioning)
-			assert.Equal(t, tc.ui, roundTripped.Versions[0].Kinds[0].UI)
+			assert.Equal(t, tc.extensions, roundTripped.Versions[0].Kinds[0].Extensions)
 		})
 	}
 }

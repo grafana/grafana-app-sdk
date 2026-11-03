@@ -230,25 +230,31 @@ func TestProcessKindVersion_Search(t *testing.T) {
 	}
 }
 
-func TestProcessKindVersion_ProvisioningAndUI(t *testing.T) {
+func TestProcessKindVersion_Extensions(t *testing.T) {
 	for _, tc := range []struct {
-		name                 string
-		provisioning         *codegen.KindProvisioning
-		ui                   *codegen.KindUI
-		expectedProvisioning *app.ManifestVersionKindProvisioning
-		expectedUI           *app.ManifestVersionKindUI
+		name       string
+		extensions *codegen.KindExtensions
+		expected   *app.ManifestVersionKindExtensions
 	}{
 		{name: "unset"},
-		{name: "empty", provisioning: &codegen.KindProvisioning{}, ui: &codegen.KindUI{}},
+		{name: "empty", extensions: &codegen.KindExtensions{}},
 		{
-			name:                 "provisioning enabled",
-			provisioning:         &codegen.KindProvisioning{Enabled: true},
-			expectedProvisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
+			name:       "empty blocks",
+			extensions: &codegen.KindExtensions{Provisioning: &codegen.KindProvisioning{}, UI: &codegen.KindUI{}},
+		},
+		{
+			name:       "provisioning enabled",
+			extensions: &codegen.KindExtensions{Provisioning: &codegen.KindProvisioning{Enabled: true}},
+			expected: &app.ManifestVersionKindExtensions{
+				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
+			},
 		},
 		{
 			name:       "ui",
-			ui:         &codegen.KindUI{Label: "Widget", PluralLabel: "Widgets", Icon: "apps"},
-			expectedUI: &app.ManifestVersionKindUI{Label: "Widget", PluralLabel: "Widgets", Icon: "apps"},
+			extensions: &codegen.KindExtensions{UI: &codegen.KindUI{LabelKey: "widget", Icon: "apps"}},
+			expected: &app.ManifestVersionKindExtensions{
+				UI: &app.ManifestVersionKindUI{LabelKey: "widget", Icon: "apps"},
+			},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -257,12 +263,10 @@ func TestProcessKindVersion_ProvisioningAndUI(t *testing.T) {
 				PluralName:   "Foos",
 				Scope:        "Namespaced",
 				FolderScoped: true,
-				Provisioning: tc.provisioning,
-				UI:           tc.ui,
+				Extensions:   tc.extensions,
 			}, "v1", false)
 			require.NoError(t, err)
-			assert.Equal(t, tc.expectedProvisioning, mver.Provisioning)
-			assert.Equal(t, tc.expectedUI, mver.UI)
+			assert.Equal(t, tc.expected, mver.Extensions)
 		})
 	}
 }

@@ -7,11 +7,12 @@ testKind2: {
 	codegen: ts: enabled: false
 	listKeys: false
 	search: trash: false
-	provisioning: enabled: true
-	ui: {
-		label:       "Test kind"
-		pluralLabel: "Test kinds"
-		icon:        "apps"
+	extensions: {
+		provisioning: enabled: true
+		ui: {
+			labelKey: "testkind2"
+			icon:     "apps"
+		}
 	}
 	versions: {
 		"v1": {

@@ -161,19 +161,19 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 					}
 				}
 			}
-			if kind.Provisioning != nil {
-				k.Provisioning = &app.ManifestVersionKindProvisioning{Enabled: kind.Provisioning.Enabled}
-			}
-			if kind.Ui != nil {
-				k.UI = &app.ManifestVersionKindUI{}
-				if kind.Ui.Label != nil {
-					k.UI.Label = *kind.Ui.Label
+			if kind.Extensions != nil {
+				k.Extensions = &app.ManifestVersionKindExtensions{}
+				if kind.Extensions.Provisioning != nil {
+					k.Extensions.Provisioning = &app.ManifestVersionKindProvisioning{Enabled: kind.Extensions.Provisioning.Enabled}
 				}
-				if kind.Ui.PluralLabel != nil {
-					k.UI.PluralLabel = *kind.Ui.PluralLabel
-				}
-				if kind.Ui.Icon != nil {
-					k.UI.Icon = *kind.Ui.Icon
+				if ui := kind.Extensions.Ui; ui != nil {
+					k.Extensions.UI = &app.ManifestVersionKindUI{}
+					if ui.LabelKey != nil {
+						k.Extensions.UI.LabelKey = *ui.LabelKey
+					}
+					if ui.Icon != nil {
+						k.Extensions.UI.Icon = *ui.Icon
+					}
 				}
 			}
 			// Schema
@@ -508,19 +508,19 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 					}
 				}
 			}
-			if kind.Provisioning != nil {
-				k.Provisioning = &AppManifestManifestVersionKindProvisioning{Enabled: kind.Provisioning.Enabled}
-			}
-			if kind.UI != nil {
-				k.Ui = &AppManifestManifestVersionKindUI{}
-				if kind.UI.Label != "" {
-					k.Ui.Label = &kind.UI.Label
+			if kind.Extensions != nil {
+				k.Extensions = &AppManifestManifestVersionKindExtensions{}
+				if kind.Extensions.Provisioning != nil {
+					k.Extensions.Provisioning = &AppManifestManifestVersionKindProvisioning{Enabled: kind.Extensions.Provisioning.Enabled}
 				}
-				if kind.UI.PluralLabel != "" {
-					k.Ui.PluralLabel = &kind.UI.PluralLabel
-				}
-				if kind.UI.Icon != "" {
-					k.Ui.Icon = &kind.UI.Icon
+				if ui := kind.Extensions.UI; ui != nil {
+					k.Extensions.Ui = &AppManifestManifestVersionKindUI{}
+					if ui.LabelKey != "" {
+						k.Extensions.Ui.LabelKey = &ui.LabelKey
+					}
+					if ui.Icon != "" {
+						k.Extensions.Ui.Icon = &ui.Icon
+					}
 				}
 			}
 			// Routes

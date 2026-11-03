@@ -255,6 +255,14 @@ SchemaWithOperatorState: Schema & {
 	global: bool | *false
 }
 
+// #KindExtensions declares how other Grafana features treat a kind.
+#KindExtensions: {
+	// provisioning declares whether provisioning (Git Sync) manages this kind.
+	provisioning?: #KindProvisioning
+	// ui declares how user interfaces display this kind.
+	ui?: #KindUI
+}
+
 // #KindProvisioning declares whether provisioning (Git Sync) manages a kind.
 #KindProvisioning: {
 	// enabled declares whether provisioning manages resources of this kind.
@@ -262,11 +270,11 @@ SchemaWithOperatorState: Schema & {
 }
 
 // #KindUI declares how user interfaces display a kind.
+// The display name of the kind comes from kind and pluralName.
 #KindUI: {
-	// label is the singular display name of the kind.
-	label?: string
-	// pluralLabel is the plural display name of the kind.
-	pluralLabel?: string
+	// labelKey is the i18n key that user interfaces translate to the display name of the kind.
+	// The translation takes a count to select the singular or plural form, and falls back to kind or pluralName.
+	labelKey?: string
 	// icon is the name of a Grafana UI icon for the kind.
 	icon?: string
 }
@@ -388,10 +396,8 @@ Kind: S={
 	search: #KindSearch
 	// embed defines the embedding document independently of search fields.
 	embed?: #KindEmbed
-	// provisioning declares whether provisioning (Git Sync) manages this kind.
-	provisioning?: #KindProvisioning
-	// ui declares how user interfaces display this kind.
-	ui?: #KindUI
+	// extensions declares how other Grafana features, such as provisioning and user interfaces, treat this kind.
+	extensions?: #KindExtensions
 	// routes is a map of path patterns to custom routes that will be exposed as subresources for this kind.
 	// entries here should not conflict with subresources (like spec and status) in the schema for the kind.
 	routes?: #CustomRouteCapability

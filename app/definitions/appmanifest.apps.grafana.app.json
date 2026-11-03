@@ -864,6 +864,35 @@
                                                                 ],
                                                                 "type": "object"
                                                             },
+                                                            "extensions": {
+                                                                "properties": {
+                                                                    "provisioning": {
+                                                                        "properties": {
+                                                                            "enabled": {
+                                                                                "default": false,
+                                                                                "description": "enabled declares whether provisioning manages resources of this kind.",
+                                                                                "type": "boolean"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "ui": {
+                                                                        "description": "The display name of the kind comes from kind and plural.",
+                                                                        "properties": {
+                                                                            "icon": {
+                                                                                "description": "icon is the name of a Grafana UI icon for the kind.",
+                                                                                "type": "string"
+                                                                            },
+                                                                            "labelKey": {
+                                                                                "description": "labelKey is the i18n key that user interfaces translate to the display name of the kind.\nThe translation takes a count to select the singular or plural form, and falls back to kind or plural.",
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
                                                             "folderScoped": {
                                                                 "default": true,
                                                                 "description": "folderScoped controls whether resources of this kind are scoped to folders.\nOnly meaningful when scope is \"Namespaced\"; for cluster-scoped kinds the field is ignored.\nDefaults to true (folder-scoped).",
@@ -880,16 +909,6 @@
                                                             "resource": {
                                                                 "description": "Resource is the lowercase plural used as the resource in the k8s GroupVersionResource URL.\nThis is optional and defaults to the lowercase of plural if not present.",
                                                                 "type": "string"
-                                                            },
-                                                            "provisioning": {
-                                                                "properties": {
-                                                                    "enabled": {
-                                                                        "default": false,
-                                                                        "description": "enabled declares whether provisioning manages resources of this kind.",
-                                                                        "type": "boolean"
-                                                                    }
-                                                                },
-                                                                "type": "object"
                                                             },
                                                             "routes": {
                                                                 "description": "Routes is a map of subresource route path to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.\nDeprecated: routes now live in ManifestVersion#openapi",
@@ -1029,23 +1048,6 @@
                                                                     "listKeys": {
                                                                         "description": "listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.",
                                                                         "type": "boolean"
-                                                                    }
-                                                                },
-                                                                "type": "object"
-                                                            },
-                                                            "ui": {
-                                                                "properties": {
-                                                                    "icon": {
-                                                                        "description": "icon is the name of a Grafana UI icon for the kind.",
-                                                                        "type": "string"
-                                                                    },
-                                                                    "label": {
-                                                                        "description": "label is the singular display name of the kind.",
-                                                                        "type": "string"
-                                                                    },
-                                                                    "pluralLabel": {
-                                                                        "description": "pluralLabel is the plural display name of the kind.",
-                                                                        "type": "string"
                                                                     }
                                                                 },
                                                                 "type": "object"

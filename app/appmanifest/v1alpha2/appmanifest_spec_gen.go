@@ -89,10 +89,8 @@ type AppManifestManifestVersionKind struct {
 	Search *AppManifestManifestVersionKindSearch `json:"search,omitempty"`
 	// embed defines the embedding document independently of search fields.
 	Embed *AppManifestManifestVersionKindEmbed `json:"embed,omitempty"`
-	// provisioning declares whether provisioning (Git Sync) manages this kind.
-	Provisioning *AppManifestManifestVersionKindProvisioning `json:"provisioning,omitempty"`
-	// ui declares how user interfaces display this kind.
-	Ui *AppManifestManifestVersionKindUI `json:"ui,omitempty"`
+	// extensions declares how other Grafana features, such as provisioning and user interfaces, treat this kind.
+	Extensions *AppManifestManifestVersionKindExtensions `json:"extensions,omitempty"`
 	// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 	// It may not prevent automatic conversion behavior between versions of the kind when set to false
 	// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
@@ -366,6 +364,24 @@ func (AppManifestManifestVersionKindEmbedField) OpenAPIModelName() string {
 }
 
 // +k8s:openapi-gen=true
+type AppManifestManifestVersionKindExtensions struct {
+	// provisioning declares whether provisioning (Git Sync) manages this kind.
+	Provisioning *AppManifestManifestVersionKindProvisioning `json:"provisioning,omitempty"`
+	// ui declares how user interfaces display this kind.
+	Ui *AppManifestManifestVersionKindUI `json:"ui,omitempty"`
+}
+
+// NewAppManifestManifestVersionKindExtensions creates a new AppManifestManifestVersionKindExtensions object.
+func NewAppManifestManifestVersionKindExtensions() *AppManifestManifestVersionKindExtensions {
+	return &AppManifestManifestVersionKindExtensions{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindExtensions.
+func (AppManifestManifestVersionKindExtensions) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindExtensions"
+}
+
+// +k8s:openapi-gen=true
 type AppManifestManifestVersionKindProvisioning struct {
 	// enabled declares whether provisioning manages resources of this kind.
 	Enabled *bool `json:"enabled,omitempty"`
@@ -383,12 +399,12 @@ func (AppManifestManifestVersionKindProvisioning) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindProvisioning"
 }
 
+// The display name of the kind comes from kind and plural.
 // +k8s:openapi-gen=true
 type AppManifestManifestVersionKindUI struct {
-	// label is the singular display name of the kind.
-	Label *string `json:"label,omitempty"`
-	// pluralLabel is the plural display name of the kind.
-	PluralLabel *string `json:"pluralLabel,omitempty"`
+	// labelKey is the i18n key that user interfaces translate to the display name of the kind.
+	// The translation takes a count to select the singular or plural form, and falls back to kind or plural.
+	LabelKey *string `json:"labelKey,omitempty"`
 	// icon is the name of a Grafana UI icon for the kind.
 	Icon *string `json:"icon,omitempty"`
 }
