@@ -671,7 +671,7 @@ type ManifestVersionKindExtensions struct {
 
 // ManifestVersionKindProvisioning declares whether provisioning (Git Sync) manages a kind.
 type ManifestVersionKindProvisioning struct {
-	// Enabled declares whether provisioning manages resources of this kind. A nil value defaults to false.
+	// Enabled declares whether provisioning manages resources of this kind. A nil value defaults to true.
 	Enabled *bool `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 }
 
@@ -728,10 +728,10 @@ func (m *ManifestVersionKind) InGlobalSearchIndex() bool {
 }
 
 // IsProvisionable reports whether provisioning (Git Sync) manages the kind.
-// Kinds are not provisionable unless they explicitly opt in.
+// Kinds are provisionable unless they explicitly opt out.
 func (m *ManifestVersionKind) IsProvisionable() bool {
-	return m.Extensions != nil && m.Extensions.Provisioning != nil &&
-		m.Extensions.Provisioning.Enabled != nil && *m.Extensions.Provisioning.Enabled
+	return m.Extensions == nil || m.Extensions.Provisioning == nil ||
+		m.Extensions.Provisioning.Enabled == nil || *m.Extensions.Provisioning.Enabled
 }
 
 // isFolderScoped returns the effective folderScoped value for a kind, treating a nil pointer

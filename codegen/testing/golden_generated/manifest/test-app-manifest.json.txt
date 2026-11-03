@@ -228,7 +228,7 @@
                         },
                         "extensions": {
                             "provisioning": {
-                                "enabled": true
+                                "enabled": false
                             },
                             "ui": {
                                 "labelKey": "testkind2",

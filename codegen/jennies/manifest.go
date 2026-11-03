@@ -619,7 +619,7 @@ func manifestKindExtensions(extensions *codegen.KindExtensions) *app.ManifestVer
 }
 
 func manifestKindProvisioning(provisioning *codegen.KindProvisioning) *app.ManifestVersionKindProvisioning {
-	if provisioning == nil || !provisioning.Enabled {
+	if provisioning == nil || provisioning.Enabled {
 		return nil
 	}
 	return &app.ManifestVersionKindProvisioning{Enabled: &provisioning.Enabled}

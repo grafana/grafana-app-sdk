@@ -925,7 +925,7 @@
                                 "additionalProperties": false,
                                 "properties": {
                                     "enabled": {
-                                        "default": false,
+                                        "default": true,
                                         "description": "enabled declares whether provisioning manages resources of this kind.",
                                         "type": "boolean"
                                     }

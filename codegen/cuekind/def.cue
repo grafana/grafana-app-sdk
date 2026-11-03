@@ -266,7 +266,7 @@ SchemaWithOperatorState: Schema & {
 // #KindProvisioning declares whether provisioning (Git Sync) manages a kind.
 #KindProvisioning: {
 	// enabled declares whether provisioning manages resources of this kind.
-	enabled: bool | *false
+	enabled: bool | *true
 }
 
 // #KindUI declares how user interfaces display a kind.

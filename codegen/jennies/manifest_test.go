@@ -239,14 +239,14 @@ func TestProcessKindVersion_Extensions(t *testing.T) {
 		{name: "unset"},
 		{name: "empty", extensions: &codegen.KindExtensions{}},
 		{
-			name:       "empty blocks",
-			extensions: &codegen.KindExtensions{Provisioning: &codegen.KindProvisioning{}, UI: &codegen.KindUI{}},
+			name:       "default blocks",
+			extensions: &codegen.KindExtensions{Provisioning: &codegen.KindProvisioning{Enabled: true}, UI: &codegen.KindUI{}},
 		},
 		{
-			name:       "provisioning enabled",
-			extensions: &codegen.KindExtensions{Provisioning: &codegen.KindProvisioning{Enabled: true}},
+			name:       "provisioning disabled",
+			extensions: &codegen.KindExtensions{Provisioning: &codegen.KindProvisioning{Enabled: false}},
 			expected: &app.ManifestVersionKindExtensions{
-				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
+				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(false)},
 			},
 		},
 		{

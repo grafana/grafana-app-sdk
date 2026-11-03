@@ -8,7 +8,7 @@ testKind2: {
 	listKeys: false
 	search: trash: false
 	extensions: {
-		provisioning: enabled: true
+		provisioning: enabled: false
 		ui: {
 			labelKey: "testkind2"
 			icon:     "apps"

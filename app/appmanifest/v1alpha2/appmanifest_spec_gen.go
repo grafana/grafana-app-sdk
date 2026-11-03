@@ -390,7 +390,7 @@ type AppManifestManifestVersionKindProvisioning struct {
 // NewAppManifestManifestVersionKindProvisioning creates a new AppManifestManifestVersionKindProvisioning object.
 func NewAppManifestManifestVersionKindProvisioning() *AppManifestManifestVersionKindProvisioning {
 	return &AppManifestManifestVersionKindProvisioning{
-		Enabled: (func(input bool) *bool { return &input })(false),
+		Enabled: (func(input bool) *bool { return &input })(true),
 	}
 }
 

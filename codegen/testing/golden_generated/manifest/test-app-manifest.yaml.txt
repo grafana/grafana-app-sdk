@@ -128,7 +128,7 @@ spec:
     - conversion: false
       extensions:
         provisioning:
-          enabled: true
+          enabled: false
         ui:
           icon: apps
           labelKey: testkind2

@@ -1703,9 +1703,9 @@ func TestManifestVersionKind_IsProvisionable(t *testing.T) {
 		extensions *ManifestVersionKindExtensions
 		want       bool
 	}{
-		{name: "omitted"},
-		{name: "no provisioning", extensions: &ManifestVersionKindExtensions{}},
-		{name: "empty block", extensions: &ManifestVersionKindExtensions{Provisioning: &ManifestVersionKindProvisioning{}}},
+		{name: "omitted", want: true},
+		{name: "no provisioning", extensions: &ManifestVersionKindExtensions{}, want: true},
+		{name: "empty block", extensions: &ManifestVersionKindExtensions{Provisioning: &ManifestVersionKindProvisioning{}}, want: true},
 		{name: "disabled", extensions: &ManifestVersionKindExtensions{Provisioning: &ManifestVersionKindProvisioning{Enabled: new(false)}}},
 		{name: "enabled", extensions: &ManifestVersionKindExtensions{Provisioning: &ManifestVersionKindProvisioning{Enabled: new(true)}}, want: true},
 	} {

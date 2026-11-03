@@ -157,7 +157,7 @@ appManifestv1alpha2: appManifestKind & {
 		}
 		#ManifestVersionKindProvisioning: {
 			// enabled declares whether provisioning manages resources of this kind.
-			enabled?: bool | *false
+			enabled?: bool | *true
 		}
 		// The display name of the kind comes from kind and plural.
 		#ManifestVersionKindUI: {
