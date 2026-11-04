@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -916,16 +916,10 @@ The codebase is actively being optimized for production scale (10k-50k resources
 
 **Essential Documentation**:
 - Tutorial: `/docs/tutorials/issue-tracker/README.md` (start here!)
-- Platform concepts: `/docs/application-design/platform-concepts.md`
-- Operators: `/docs/operators.md`
 - Reconcilers: `/docs/writing-a-reconciler.md`
 - Admission control: `/docs/admission-control.md`
 - CUE kinds: `/docs/custom-kinds/writing-kinds.md`
 - Code generation: `/docs/code-generation.md`
-
-**Examples**:
-- Simple operator: `/examples/operator/simple/`
-- Resource usage: `/examples/resource/`
 
 **Community**:
 - GitHub: https://github.com/grafana/grafana-app-sdk
@@ -934,7 +928,7 @@ The codebase is actively being optimized for production scale (10k-50k resources
 
 ### Quick Reference: File Paths
 
-All file paths are absolute from repository root `/Users/igor/Code/grafana/grafana-app-sdk/`:
+All file paths are relative to the repository root:
 
 **Core Interfaces**:
 - `resource.Object`: `/resource/object.go`

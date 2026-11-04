@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -281,18 +282,24 @@ func TestConcurrentWatcher(t *testing.T) {
 	})
 
 	t.Run("event for the same object should be processed sequentially (ie by the same worker)", func(t *testing.T) {
+		var eventsMu sync.Mutex
 		events := make([]string, 0)
+		record := func(event string) {
+			eventsMu.Lock()
+			defer eventsMu.Unlock()
+			events = append(events, event)
+		}
 		mock := &mockWatcher{}
 		mock.AddFunc = func(ctx context.Context, o resource.Object) error {
-			events = append(events, "add")
+			record("add")
 			return nil
 		}
 		mock.UpdateFunc = func(ctx context.Context, _, _ resource.Object) error {
-			events = append(events, "update")
+			record("update")
 			return nil
 		}
 		mock.DeleteFunc = func(ctx context.Context, o resource.Object) error {
-			events = append(events, "delete")
+			record("delete")
 			return nil
 		}
 		var errCount atomic.Int64
@@ -318,6 +325,8 @@ func TestConcurrentWatcher(t *testing.T) {
 		assert.Equal(t, int64(1), mock.deleteAttempts.Load())
 		assert.Equal(t, int64(0), errCount.Load())
 		// Events received should be in the same order of events triggered always.
+		eventsMu.Lock()
+		defer eventsMu.Unlock()
 		assert.Equal(t, []string{"add", "update", "update", "delete"}, events)
 	})
 
@@ -483,6 +492,20 @@ func TestConcurrentInformer_PrometheusCollectors(t *testing.T) {
 		collectors := ci.PrometheusCollectors()
 		assert.Len(t, collectors, 1)
 	})
+
+	t.Run("forwards the wrapped informer's collectors", func(t *testing.T) {
+		wrapped := &collectorInformer{collectors: []prometheus.Collector{
+			prometheus.NewCounter(prometheus.CounterOpts{Name: "wrapped_events_total"}),
+			prometheus.NewGauge(prometheus.GaugeOpts{Name: "wrapped_queue_size"}),
+		}}
+
+		ci, err := NewConcurrentInformerFromOptions(wrapped, InformerOptions{
+			MetricsConfig: metrics.DefaultConfig("test"),
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, append([]prometheus.Collector{ci.queueDepth}, wrapped.collectors...), ci.PrometheusCollectors())
+	})
 }
 
 type noopInformer struct{}
@@ -490,3 +513,10 @@ type noopInformer struct{}
 func (m *noopInformer) AddEventHandler(_ ResourceWatcher) error { return nil }
 func (m *noopInformer) Run(ctx context.Context) error           { <-ctx.Done(); return nil }
 func (m *noopInformer) WaitForSync(ctx context.Context) error   { return nil }
+
+type collectorInformer struct {
+	noopInformer
+	collectors []prometheus.Collector
+}
+
+func (m *collectorInformer) PrometheusCollectors() []prometheus.Collector { return m.collectors }

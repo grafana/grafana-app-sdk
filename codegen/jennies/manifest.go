@@ -621,6 +621,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 		Kind:         vk.Kind,
 		SecureValues: vk.SecureValues,
 		Plural:       vk.PluralName,
+		Resource:     strings.ToLower(vk.PluralName),
 		Scope:        vk.Scope,
 		UserReadable: vk.UserReadable,
 		Conversion:   vk.Conversion,

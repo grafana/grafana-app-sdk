@@ -718,9 +718,9 @@ func TestInformerController_Run_BackoffRetry(t *testing.T) {
 	// The backoff retry test needs to take at least 16 seconds to run properly, so it's isolated to its own function
 	// to avoid the often-used default of a 30-second-timeout on tests affecting other retry tests which take a few seconds each to run
 	addError := errors.New("I AM ERROR")
-	addAttempt := 0
+	var addAttempt atomic.Int64
 	updateError := errors.New("JE SUIS ERROR")
-	updateAttempt := 0
+	var updateAttempt atomic.Int64
 	baseInterval := time.Second
 	jitter := time.Millisecond * 50
 	wg := sync.WaitGroup{}
@@ -752,20 +752,20 @@ func TestInformerController_Run_BackoffRetry(t *testing.T) {
 	c.AddWatcher(&SimpleWatcher{
 		AddFunc: func(ctx context.Context, object resource.Object) error {
 			addChan <- chanTuple{
-				attempt:     addAttempt,
+				attempt:     int(addAttempt.Load()),
 				lastAttempt: lastAdd,
 			}
 			lastAdd = time.Now()
-			addAttempt++
+			addAttempt.Add(1)
 			return addError
 		},
 		UpdateFunc: func(ctx context.Context, object resource.Object, object2 resource.Object) error {
 			updateChan <- chanTuple{
-				attempt:     updateAttempt,
+				attempt:     int(updateAttempt.Load()),
 				lastAttempt: lastUpdate,
 			}
 			lastUpdate = time.Now()
-			updateAttempt++
+			updateAttempt.Add(1)
 			return updateError
 		},
 	}, "foo")
@@ -810,8 +810,8 @@ func TestInformerController_Run_BackoffRetry(t *testing.T) {
 	inf.FireAdd(context.Background(), emptyObject)
 	inf.FireUpdate(context.Background(), nil, emptyObject)
 
-	assert.True(t, waitOrTimeout(&addWG, time.Second*30), fmt.Sprintf("timed out waiting for adds to finish (saw %d adds)", addAttempt))
-	assert.True(t, waitOrTimeout(&updateWG, time.Second*30), fmt.Sprintf("timed out waiting for updates to finish (saw %d updates)", updateAttempt))
+	assert.True(t, waitOrTimeout(&addWG, time.Second*30), fmt.Sprintf("timed out waiting for adds to finish (saw %d adds)", addAttempt.Load()))
+	assert.True(t, waitOrTimeout(&updateWG, time.Second*30), fmt.Sprintf("timed out waiting for updates to finish (saw %d updates)", updateAttempt.Load()))
 	cancel()
 	wg.Wait()
 }
@@ -820,8 +820,8 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 	// Because these tests take more time, isolate them to their own test function
 	t.Run("linear retry, update call interrupts add retry", func(t *testing.T) {
 		addError := errors.New("I AM ERROR")
-		addAttempt := 0
-		updateAttempt := 0
+		var addAttempt atomic.Int64
+		var updateAttempt atomic.Int64
 		wg := sync.WaitGroup{}
 		inf := &testInformer{
 			handlers: make([]ResourceWatcher, 0),
@@ -841,12 +841,12 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 		defer close(addCh)
 		c.AddWatcher(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
-				addCh <- addAttempt
-				addAttempt++
+				addCh <- int(addAttempt.Load())
+				addAttempt.Add(1)
 				return addError
 			},
 			UpdateFunc: func(ctx context.Context, object resource.Object, object2 resource.Object) error {
-				updateAttempt++
+				updateAttempt.Add(1)
 				return nil
 			},
 		}, "foo")
@@ -873,16 +873,16 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 		wg.Wait()
 		// We should have four total attempts, though we may be off-by-one because timing is hard,
 		// so we actually check that 3 <= attempts <= 5
-		assert.LessOrEqual(t, 3, addAttempt)
-		assert.GreaterOrEqual(t, 4, addAttempt)
-		assert.Equal(t, 1, updateAttempt)
+		assert.LessOrEqual(t, int64(3), addAttempt.Load())
+		assert.GreaterOrEqual(t, int64(4), addAttempt.Load())
+		assert.Equal(t, int64(1), updateAttempt.Load())
 	})
 
 	t.Run("linear retry, successful retry stops new retries", func(t *testing.T) {
 		addError := errors.New("I AM ERROR")
-		addAttempt := 0
+		var addAttempt atomic.Int64
 		updateError := errors.New("JE SUIS ERROR")
-		updateAttempt := 0
+		var updateAttempt atomic.Int64
 		wg := sync.WaitGroup{}
 		inf := &testInformer{
 			handlers: make([]ResourceWatcher, 0),
@@ -904,17 +904,15 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 		defer close(updateCh)
 		c.AddWatcher(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
-				addCh <- addAttempt
-				addAttempt++
-				if addAttempt >= 2 {
+				addCh <- int(addAttempt.Load())
+				if addAttempt.Add(1) >= 2 {
 					return nil
 				}
 				return addError
 			},
 			UpdateFunc: func(ctx context.Context, object resource.Object, object2 resource.Object) error {
-				updateCh <- updateAttempt
-				updateAttempt++
-				if updateAttempt >= 2 {
+				updateCh <- int(updateAttempt.Load())
+				if updateAttempt.Add(1) >= 2 {
 					return nil
 				}
 				return updateError
@@ -942,13 +940,13 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 		cancel()
 		wg.Wait()
 		// We should have only two attempts for each
-		assert.Equal(t, 2, addAttempt)
-		assert.Equal(t, 2, updateAttempt)
+		assert.Equal(t, int64(2), addAttempt.Load())
+		assert.Equal(t, int64(2), updateAttempt.Load())
 	})
 
 	t.Run("linear retry, retry halts when limit reached", func(t *testing.T) {
 		addError := errors.New("I AM ERROR")
-		addAttempt := 0
+		var addAttempt atomic.Int64
 		wg := sync.WaitGroup{}
 		inf := &testInformer{
 			handlers: make([]ResourceWatcher, 0),
@@ -968,8 +966,8 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 		defer close(addCh)
 		c.AddWatcher(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
-				addCh <- addAttempt
-				addAttempt++
+				addCh <- int(addAttempt.Load())
+				addAttempt.Add(1)
 				return addError
 			},
 		}, "foo")
@@ -991,7 +989,7 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 		cancel()
 		wg.Wait()
 		// We should have four total attempts, 1 initial and 3 retries
-		assert.Equal(t, 4, addAttempt)
+		assert.Equal(t, int64(4), addAttempt.Load())
 	})
 }
 

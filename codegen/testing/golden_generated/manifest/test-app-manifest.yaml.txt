@@ -50,6 +50,7 @@ spec:
           path: spec.stringField
       kind: TestKind
       plural: TestKinds
+      resource: testkinds
       schemas:
         OperatorState:
           additionalProperties: false
@@ -127,6 +128,7 @@ spec:
     - conversion: false
       kind: TestKind2
       plural: TestKind2s
+      resource: testkind2s
       schemas:
         OperatorState:
           additionalProperties: false
@@ -211,6 +213,7 @@ spec:
           path: spec.unionNull.str
       kind: TestKind
       plural: TestKinds
+      resource: testkinds
       schemas:
         Def:
           additionalProperties: false
@@ -405,6 +408,7 @@ spec:
       conversion: true
       kind: TestKind
       plural: TestKinds
+      resource: testkinds
       routes:
         /emptyresp:
           post:
@@ -978,6 +982,7 @@ spec:
       conversion: true
       kind: TestKind
       plural: TestKinds
+      resource: testkinds
       schemas:
         OperatorState:
           additionalProperties: false

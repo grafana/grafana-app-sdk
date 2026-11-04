@@ -6,28 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"os"
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/grafana/authlib/authn"
 
 	"github.com/grafana/grafana-app-sdk/app"
 )
-
-// EnvVarGrafanaJWKSURL names the environment variable holding the
-// URL of the JWKS used to verify access tokens. Keys are downloaded on demand.
-const EnvVarGrafanaJWKSURL = "GRAFANA_JWKS_URL"
-
-// EnvVarGrafanaJWKS names the environment variable holding the
-// JWKS used to verify access tokens, as a JSON document.
-const EnvVarGrafanaJWKS = "GRAFANA_JWKS"
-
-// EnvVarInsecureSkipAuthentication names the environment variable that, when
-// "true", makes Run serve plugin protocol v3 requests without verifying them
-// if no signing keys are configured (see WithInsecureSkipAuthentication).
-// Grafana sets it from insecure_skip_authentication = true in the plugin's
-// [plugin.<id>] settings. Use it only for local development.
-const EnvVarInsecureSkipAuthentication = "GF_PLUGIN_INSECURE_SKIP_AUTHENTICATION"
 
 // ErrNoSigningKeys is returned by buildAuthenticator when neither
 // EnvVarGrafanaJWKSURL nor EnvVarGrafanaJWKS is set.
@@ -37,8 +21,8 @@ var ErrNoSigningKeys = errors.New("no signing keys provided: set " + EnvVarGrafa
 // (see grpcplugin.ServeOpts.Authenticator) from environment variables.
 //
 // Picks up the signing keys from exactly one of:
-// - GRAFANA_JWKS_URL, the JWKS endpoint of the service that signs access tokens
-// - GRAFANA_JWKS, the JWKS itself, as a JSON document
+// - GF_JWKS_URL, the JWKS endpoint of the service that signs access tokens
+// - GF_JWKS, the JWKS itself, as a JSON document
 //
 // Access tokens must be signed by one of those keys and have the plugin ID or
 // the manifest's API group as an audience. The host requests the API group
@@ -46,8 +30,8 @@ var ErrNoSigningKeys = errors.New("no signing keys provided: set " + EnvVarGrafa
 // https URL, so in-cluster endpoints served over plain http work. An explicit
 // JWKS must contain only public signing keys, each with a key ID.
 func buildAuthenticator(pluginID string, manifestData *app.ManifestData) (authn.Authenticator, error) {
-	keysURL := os.Getenv(EnvVarGrafanaJWKSURL)
-	keysJSON := os.Getenv(EnvVarGrafanaJWKS)
+	keysURL := getEnv(EnvVarGrafanaJWKSURL)
+	keysJSON := getEnv(EnvVarGrafanaJWKS)
 	if keysURL == "" && keysJSON == "" {
 		return nil, ErrNoSigningKeys
 	}

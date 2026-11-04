@@ -15,7 +15,7 @@ You may have multiple versions of a kind, and they should share the same name an
 
 In the platform API, a kind is identified by the top-level attributes `kind` and `apiVersion` (where the `apiVersion` consists of the `group` and `version`--the group is used to identify the kind, and the version the specific schema). A kind is sometimes referenced as the Group and Kind combination (called GroupKind), or as the totality of Group, Kind, and Version (called GroupVersionKind, or GVK), which is the way to uniquely identify the schema of a resource.
 
-Kinds are the core of apps, as they are the data structure for all app data. Apps interact with the platform API to read, write, update, delete, list and watch kinds. For more on this, see [Operators and Event-Based Design](../operators.md).
+Kinds are the core of apps, as they are the data structure for all app data. Apps interact with the platform API to read, write, update, delete, list and watch kinds. For more on this, see [Writing a Reconciler](../writing-a-reconciler.md).
 
 Kinds belong to groups, which generally correlate to apps. In kubernetes, your kind's identifier when quering the API is `<group>/<version>/<plural>`, with `group` being the kind's full group (excepting very specific circumstances, this is your app name + `.ext.grafana.app`), `version` being the version you wish to use, and `plural` being the plural name of the kind (unless changed, this defaults to `LOWER(<kind>) + 's')`).
 

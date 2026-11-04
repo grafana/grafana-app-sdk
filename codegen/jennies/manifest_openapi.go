@@ -75,7 +75,7 @@ func buildVersionOpenAPI(version *app.ManifestVersion, kindRouteSchemas *routeSc
 	add("", routes.Cluster)
 	add("/namespaces/{namespace}", routes.Namespaced)
 	for _, kind := range version.Kinds {
-		prefix := "/" + kind.Resource() + "/{name}"
+		prefix := "/" + kind.Resource + "/{name}"
 		if kind.Scope != "Cluster" {
 			prefix = "/namespaces/{namespace}" + prefix
 		}

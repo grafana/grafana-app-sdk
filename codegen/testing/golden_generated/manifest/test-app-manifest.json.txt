@@ -21,6 +21,7 @@
                     {
                         "kind": "TestKind",
                         "plural": "TestKinds",
+                        "resource": "testkinds",
                         "scope": "Namespaced",
                         "userReadable": false,
                         "admission": {
@@ -139,6 +140,7 @@
                     {
                         "kind": "TestKind2",
                         "plural": "TestKind2s",
+                        "resource": "testkind2s",
                         "scope": "Namespaced",
                         "userReadable": false,
                         "schemas": {
@@ -235,6 +237,7 @@
                     {
                         "kind": "TestKind",
                         "plural": "TestKinds",
+                        "resource": "testkinds",
                         "scope": "Namespaced",
                         "userReadable": false,
                         "admission": {
@@ -524,6 +527,7 @@
                     {
                         "kind": "TestKind",
                         "plural": "TestKinds",
+                        "resource": "testkinds",
                         "scope": "Namespaced",
                         "userReadable": false,
                         "admission": {
@@ -1310,6 +1314,7 @@
                     {
                         "kind": "TestKind",
                         "plural": "TestKinds",
+                        "resource": "testkinds",
                         "scope": "Namespaced",
                         "userReadable": false,
                         "admission": {

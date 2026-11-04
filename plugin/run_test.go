@@ -201,7 +201,8 @@ func TestRun(t *testing.T) {
 	t.Run("does not start the app runner without a kube config", func(t *testing.T) {
 		stubManage(t, nil)
 		// BuildKubeConfig needs a router URL.
-		t.Setenv("API_ACCESS_ROUTER_URL", "")
+		t.Setenv(EnvVarAPIAccessRouterURL, "")
+		t.Setenv(legacyEnvVars[EnvVarAPIAccessRouterURL], "")
 		p := newFakeProvider("my-app")
 		runner := p.app.runner.(*fakeRunner)
 

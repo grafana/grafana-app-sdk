@@ -24,8 +24,8 @@ import (
 // implement App SDK functionality. It wraps plugin Manage().
 //
 // Plugin protocol v3 requests are authenticated with the authenticator from
-// WithAuthenticator or, without one, from GRAFANA_JWKS_URL or
-// GRAFANA_JWKS. Tokens must have the plugin ID or the manifest's
+// WithAuthenticator or, without one, from GF_JWKS_URL or
+// GF_JWKS. Tokens must have the plugin ID or the manifest's
 // API group as an audience. If neither is available, every plugin protocol v3
 // request is rejected, unless authentication is skipped for local development
 // with WithInsecureSkipAuthentication or GF_PLUGIN_INSECURE_SKIP_AUTHENTICATION=true,
@@ -223,7 +223,7 @@ func WithManageOpts(manageOpts backendapp.ManageOpts) RunOption {
 
 // WithAuthenticator sets the authenticator that verifies the access token on
 // each plugin protocol v3 request (see grpcplugin.ServeOpts.Authenticator),
-// instead of building one from GRAFANA_JWKS_URL or GRAFANA_JWKS.
+// instead of building one from GF_JWKS_URL or GF_JWKS.
 func WithAuthenticator(authenticator authn.Authenticator) RunOption {
 	return func(cfg *runConfig) {
 		cfg.authenticator = authenticator
@@ -232,7 +232,7 @@ func WithAuthenticator(authenticator authn.Authenticator) RunOption {
 
 // WithInsecureSkipAuthentication serves plugin protocol v3 requests without
 // verifying them when no authenticator is set or configured by
-// GRAFANA_JWKS_URL or GRAFANA_JWKS. A request's access token is parsed without
+// GF_JWKS_URL or GF_JWKS. A request's access token is parsed without
 // checking its signature, so handlers get the identity it claims; requests
 // without one have no identity, and their outbound requests act as the plugin
 // (see grpcplugin.ServeOpts.InsecureSkipAuthentication). Use it only for local development.
