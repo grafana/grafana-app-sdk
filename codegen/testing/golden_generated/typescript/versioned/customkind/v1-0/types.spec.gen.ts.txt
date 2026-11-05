@@ -80,6 +80,10 @@ export interface Spec {
 	floatField: number;
 	linkedList: RecursiveList;
 	exclusiveInt: number;
+	// Upper bounds that fit in 32 bits keep the declared width.
+	boundedInt: number;
+	boundedInt64: number;
+	positiveI32: number;
 }
 
 export const defaultSpec = (): Spec => ({
@@ -95,5 +99,8 @@ export const defaultSpec = (): Spec => ({
 	floatField: 0,
 	linkedList: defaultRecursiveList(),
 	exclusiveInt: 0,
+	boundedInt: 0,
+	boundedInt64: 0,
+	positiveI32: 0,
 });
 

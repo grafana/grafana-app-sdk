@@ -83,6 +83,10 @@ customKind: {
 					floatField: float64
 					linkedList: #RecursiveList
 					exclusiveInt: int & < 100 & > 10
+					// Upper bounds that fit in 32 bits keep the declared width.
+					boundedInt:   int & >0 & <=2147483647
+					boundedInt64: int64 & >0 & <=2147483647
+					positiveI32:  int32 & >0
 				}
 				status: {
 					statusField1: string
