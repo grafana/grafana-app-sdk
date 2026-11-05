@@ -135,8 +135,8 @@ github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815 h1:jKXYY/6zw
 github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815/go.mod h1:L+zFm3lz5Y61gLgMMfKgHZ+863BwVfkLpJLqB/BZvlk=
 github.com/grafana/codejen v0.0.4 h1:yZaWnoFvEXlz92mFlsRfEifZmU8pe0cj224GnDEZ7Y4=
 github.com/grafana/codejen v0.0.4/go.mod h1:1iFLhqDkKHy7C+CE21wGJP+p1oPipkJGOUo5Ilj7eZ0=
-github.com/grafana/cog v0.2.5-0.20261105105548-84842a031e98 h1:+AmRWxyr5z7rimKRHBpkBohERlnW5hQmNeoEBzb/530=
-github.com/grafana/cog v0.2.5-0.20261105105548-84842a031e98/go.mod h1:ZmjVHJAB/vu8OC5GZ5PrRKCaCFhqmpS9QM4/ZyOhdwA=
+github.com/grafana/cog v0.2.5-0.20261105152538-fbe5a852220d h1:5IXAUYobzLLRNpWM6euAI8uVyM1a+yp6OZRTX2Sq824=
+github.com/grafana/cog v0.2.5-0.20261105152538-fbe5a852220d/go.mod h1:ZmjVHJAB/vu8OC5GZ5PrRKCaCFhqmpS9QM4/ZyOhdwA=
 github.com/grafana/dskit v0.0.0-20260814134254-4a836a70f745 h1:kGigNSum3b7XJjemhtDMPko6IW5PBJLxoASR+Qzo6Rc=
 github.com/grafana/dskit v0.0.0-20260814134254-4a836a70f745/go.mod h1:dLUEt5k1Zv21//kvSk8ZR4kXjCq5oALBLu2LupLhj5k=
 github.com/grafana/grafana-app-sdk/logging v0.61.0 h1:SP9o0BVqVOepuuYn1nKXJuoyJAcFEnJlREHWZKe07X4=

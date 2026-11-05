@@ -19,7 +19,7 @@ require (
 	github.com/grafana/authlib v0.0.0-20260922202713-e3b571f7135d
 	github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815
 	github.com/grafana/codejen v0.0.4
-	github.com/grafana/cog v0.2.5-0.20261105105548-84842a031e98
+	github.com/grafana/cog v0.2.5-0.20261105152538-fbe5a852220d
 	github.com/grafana/grafana-app-sdk/logging v0.61.0
 	github.com/grafana/grafana-plugin-sdk-go v0.298.0
 	github.com/hashicorp/go-multierror v1.1.1
