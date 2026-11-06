@@ -223,6 +223,9 @@
                         "storage": {
                             "listKeys": false
                         },
+                        "fixedNames": [
+                            "current"
+                        ],
                         "search": {
                             "trash": false
                         },

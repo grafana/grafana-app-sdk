@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
+	"slices"
 	"strings"
 
 	"k8s.io/kube-openapi/pkg/spec3"
@@ -44,6 +45,7 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 			if kind.Storage != nil {
 				k.Storage = &app.ManifestVersionKindStorage{ListKeys: kind.Storage.ListKeys}
 			}
+			k.FixedNames = slices.Clone(kind.FixedNames)
 			if kind.Plural != nil {
 				k.Plural = capitalize(*kind.Plural)
 				k.Resource = strings.ToLower(*kind.Plural)
@@ -286,6 +288,7 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 			if kind.Storage != nil {
 				k.Storage = &AppManifestManifestVersionKindStorage{ListKeys: kind.Storage.ListKeys}
 			}
+			k.FixedNames = slices.Clone(kind.FixedNames)
 			// Convert the ManifestData's Schema into CRD Schema for v1alpha1
 			if kind.Schema != nil {
 				sch, err := kind.Schema.AsCRDMap(k.Kind)

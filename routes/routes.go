@@ -346,6 +346,18 @@ func (r *Route) resolve(kinds map[string]*app.ManifestVersionKind, reserved map[
 		return fmt.Errorf("invalid resource path: %w", err)
 	}
 	if kind := kinds[literalRoot]; kind != nil {
+		// The app answers a fixed name itself, so a route at exactly it shadows no
+		// stored object. It stays a route of the version, as it is not one of an
+		// object of the kind.
+		if literalName, err := url.PathUnescape(below); err == nil && kind.HasFixedName(literalName) {
+			if r.Namespaced == (kind.Scope == clusterScope) {
+				if r.Namespaced {
+					return errors.New(kind.Kind + " is cluster scoped, so its routes cannot be under " + NamespacedPrefix)
+				}
+				return errors.New(kind.Kind + " is namespaced, so its routes must be under " + NamespacedPrefix)
+			}
+			return nil
+		}
 		sub, ok := strings.CutPrefix(below, "{"+NameParameter+"}/")
 		first, _, _ := strings.Cut(sub, "/")
 		literalFirst, err := url.PathUnescape(first)
