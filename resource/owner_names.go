@@ -5,22 +5,22 @@ import (
 )
 
 // +enum
-type ResourceOwner string
+type Owner string
 
 const (
 	// Used when there is a single resource for a given org|stack
-	NamespaceResourceOwner ResourceOwner = "namespace"
+	NamespaceResourceOwner Owner = "namespace"
 	// Resource with a 1:1 user mapping
-	UserResourceOwner ResourceOwner = "user"
+	UserResourceOwner Owner = "user"
 	// Resource with a 1:1 team mapping
-	TeamResourceOwner ResourceOwner = "team"
+	TeamResourceOwner Owner = "team"
 	// The name does not match user, team or namespace
-	UnknownResourceOwner ResourceOwner = ""
+	UnknownResourceOwner Owner = ""
 )
 
 type OwnerReference struct {
-	Owner      ResourceOwner // the resource owner
-	Identifier string        // the team|user name
+	Owner      Owner  // the resource owner
+	Identifier string // the team|user name
 }
 
 func (o OwnerReference) AsName() string {
