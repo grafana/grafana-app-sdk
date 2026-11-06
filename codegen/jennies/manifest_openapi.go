@@ -11,6 +11,7 @@ import (
 	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/codegen"
 )
 
 // routeSchemaSet collects the route schemas of a version into the single
@@ -91,4 +92,67 @@ func buildVersionOpenAPI(version *app.ManifestVersion, kindRouteSchemas *routeSc
 		Components: app.ManifestVersionOpenAPIComponents{Schemas: kindRouteSchemas.schemas},
 	}
 	return nil
+}
+
+// kindResourceSchemas returns the components that describe the resource of a kind, as the standard
+// Kubernetes calls for it return it, which a route can reference with ResponseKind. The component
+// named for the kind is the resource, with its apiVersion, kind and metadata. What it references of
+// the kind's schema, such as its spec, is a component named for the kind and the schema, such as
+// Foo.spec, so that the kinds of a version do not share the names of their fields.
+func kindResourceSchemas(vk codegen.VersionedKind) (map[string]spec.Schema, error) {
+	raw := make(map[string]any)
+	if err := kindOpenAPISchemas(vk, raw); err != nil {
+		return nil, fmt.Errorf("schema of kind %s: %w", vk.Kind, err)
+	}
+	schemas := make(map[string]spec.Schema, len(raw))
+	for name, value := range raw {
+		b, err := json.Marshal(value)
+		if err != nil {
+			return nil, err
+		}
+		var schema spec.Schema
+		if err := json.Unmarshal(b, &schema); err != nil {
+			return nil, fmt.Errorf("schema %s of kind %s: %w", name, vk.Kind, err)
+		}
+		schema.SchemaProps = prefixReferences(schema.SchemaProps, vk.Kind+".", map[string]spec.SchemaProps{})
+		if name != vk.Kind {
+			schemas[vk.Kind+"."+name] = schema
+			continue
+		}
+		schema.Type = []string{"object"}
+		schema.Properties[keyAPIVersion] = apiVersionPropSchema
+		schema.Properties[keyKind] = kindPropSchema
+		schema.Properties[keyMetadata] = objectMetaPropSchema
+		schema.Required = append([]string{keyAPIVersion, keyKind, keyMetadata}, schema.Required...)
+		schemas[vk.Kind] = schema
+	}
+	return schemas, nil
+}
+
+// routeResponseKinds are the kinds of a version that its routes return with ResponseKind, by name.
+func routeResponseKinds(version codegen.Version) (map[string]codegen.VersionedKind, error) {
+	names := map[string]struct{}{}
+	visit := func(routes map[string]map[string]codegen.CustomRoute) {
+		for _, methods := range routes {
+			for _, route := range methods {
+				if route.ResponseKind != "" {
+					names[route.ResponseKind] = struct{}{}
+				}
+			}
+		}
+	}
+	for _, kind := range version.Kinds() {
+		visit(kind.Routes)
+	}
+	visit(version.Routes().Namespaced)
+	visit(version.Routes().Cluster)
+	kinds := make(map[string]codegen.VersionedKind, len(names))
+	for name := range names {
+		i := slices.IndexFunc(version.Kinds(), func(k codegen.VersionedKind) bool { return k.Kind == name })
+		if i < 0 {
+			return nil, fmt.Errorf("a route has responseKind %q, which is not a kind of version %s", name, version.Name())
+		}
+		kinds[name] = version.Kinds()[i]
+	}
+	return kinds, nil
 }
