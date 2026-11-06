@@ -1,4 +1,4 @@
-package resources_test
+package resource_test
 
 import (
 	"testing"
@@ -8,7 +8,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-func TestLegacyAuthorizer(t *testing.T) {
+func TestParseOwnerFromName(t *testing.T) {
 	tests := []struct {
 		name   string
 		input  string
