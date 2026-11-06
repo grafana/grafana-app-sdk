@@ -1,7 +1,9 @@
 package codegen
 
 import (
+	"fmt"
 	"iter"
+	"maps"
 	"slices"
 	"strings"
 
@@ -299,4 +301,87 @@ func PreferredVersionKinds(manifest AppManifest) iter.Seq2[Version, VersionedKin
 			}
 		}
 	}
+}
+
+// eachRoute visits every custom route of the manifest, on the kinds and on the versions, in a fixed
+// order, and keeps the changes the visit makes to the route.
+func (m *SimpleManifest) eachRoute(visit func(version, scope, path, method string, route *CustomRoute) error) error {
+	each := func(version, scope string, routes map[string]map[string]CustomRoute) error {
+		for _, path := range slices.Sorted(maps.Keys(routes)) {
+			for _, method := range slices.Sorted(maps.Keys(routes[path])) {
+				route := routes[path][method]
+				if err := visit(version, scope, path, strings.ToUpper(method), &route); err != nil {
+					return err
+				}
+				routes[path][method] = route
+			}
+		}
+		return nil
+	}
+	for _, name := range slices.Sorted(maps.Keys(m.AllVersions)) {
+		version := m.AllVersions[name]
+		for i := range version.AllKinds {
+			if err := each(name, "kind "+version.AllKinds[i].Kind, version.AllKinds[i].Routes); err != nil {
+				return err
+			}
+		}
+		if version.CustomRoutes != nil {
+			if err := each(name, "the version (namespaced)", version.CustomRoutes.Namespaced); err != nil {
+				return err
+			}
+			if err := each(name, "the version (cluster)", version.CustomRoutes.Cluster); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// ResolveRouteIDs gives every custom route its identifier, in Name, and checks them. A route
+// declares an operationId, or else the deprecated name, and one must be there. An identifier is the
+// operationId of a generated OpenAPI operation, and OpenAPI does not allow two in a document, so
+// the routes of a version, on its kinds and on the version itself, must each have their own.
+func (m *SimpleManifest) ResolveRouteIDs() error {
+	seen := map[string]string{} // by version and identifier
+	return m.eachRoute(func(version, scope, path, method string, route *CustomRoute) error {
+		at := fmt.Sprintf("%s %s of %s in version %s", method, path, scope, version)
+		id := route.ID()
+		if id == "" {
+			return fmt.Errorf("custom route %s must declare an operationId", at)
+		}
+		if other, ok := seen[version+"/"+id]; ok {
+			return fmt.Errorf("operationId %q is declared by both %s and %s, and must be unique in a version", id, other, at)
+		}
+		seen[version+"/"+id] = at
+		route.Name = id
+		return nil
+	})
+}
+
+// ValidateRouteParams checks the parameters every custom route declares.
+func (m *SimpleManifest) ValidateRouteParams() error {
+	return m.eachRoute(func(version, scope, path, method string, route *CustomRoute) error {
+		if err := ValidateRouteParams(path, route.Request); err != nil {
+			return fmt.Errorf("custom route %s %s of %s in version %s: %w", method, path, scope, version, err)
+		}
+		return nil
+	})
+}
+
+// ValidateRouteResponseKinds checks the kind that a custom route returns, if it declares one with
+// ResponseKind: it has to be a kind of the same version, and the route cannot also declare a response.
+func (m *SimpleManifest) ValidateRouteResponseKinds() error {
+	return m.eachRoute(func(version, scope, path, method string, route *CustomRoute) error {
+		if route.ResponseKind == "" {
+			return nil
+		}
+		at := fmt.Sprintf("custom route %s %s of %s in version %s", method, path, scope, version)
+		if route.Response.Exists() && route.Response.IncompleteKind() != cue.TopKind {
+			return fmt.Errorf("%s declares a response and a responseKind: it declares one or the other", at)
+		}
+		if !slices.ContainsFunc(m.AllVersions[version].AllKinds, func(k VersionedKind) bool { return k.Kind == route.ResponseKind }) {
+			return fmt.Errorf("%s has responseKind %q, which is not a kind of the version", at, route.ResponseKind)
+		}
+		return nil
+	})
 }

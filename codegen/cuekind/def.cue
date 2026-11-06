@@ -141,7 +141,32 @@ SchemaWithOperatorState: Schema & {
 #AdmissionCapability: {
 	operations: [...string]
 }
+// #CustomRouteParam is a parameter of a route, described as OpenAPI's parameter object describes it:
+// https://swagger.io/docs/specification/v3_0/describing-parameters/
+#CustomRouteParam: {
+	// name is the name of the parameter. A path parameter's name is a parameter in the route's path.
+	name: =~"^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+	// in is where the parameter is.
+	in: "path" | "query" | "header" | "cookie"
+	// description documents the parameter in the generated OpenAPI.
+	description?: string
+	// required is whether the request has to carry the parameter. A path parameter always does, so it
+	// cannot be false there; the others default to not required.
+	required?: bool
+	// deprecated marks the parameter as one that should no longer be used.
+	deprecated?: bool
+	// example is an example value for the parameter, which has to satisfy schema.
+	example?: _
+	// schema is the type of the parameter, such as int, or int | *10 for a default. It is a string
+	// when it is not declared.
+	schema?: _
+}
 #CustomRouteRequest: {
+	// parameters are the parameters of the route. A parameter with in: "query" defines a query
+	// parameter, so a route declares those here, or in query, and not both.
+	parameters?: [...#CustomRouteParam]
+	// query is the schema of the query parameters, whose fields are the parameters.
+	// Deprecated: declare them in parameters, with in: "query".
 	query?: _
 	body?:  _
 }
@@ -152,11 +177,23 @@ SchemaWithOperatorState: Schema & {
 	objectMeta: bool | *false
 }
 #CustomRoute: {
-	name:     =~"^(get|log|read|replace|patch|delete|deletecollection|watch|connect|proxy|list|create|patch)([A-Za-z0-9]+)$"
+	// operationId identifies the route. It is the operationId of the generated OpenAPI operation,
+	// so it must be unique among the routes of a version, and it names the generated Go types and
+	// client method, so it should say what the route does (for example, addStar). A route must
+	// declare it, or the deprecated name.
+	operationId?: =~"^[A-Za-z][A-Za-z0-9_]*$"
+	// name is the deprecated spelling of operationId, which wins when both are declared. It has to
+	// start with a Kubernetes verb, which operationId does not.
+	name?: =~"^(get|log|read|replace|patch|delete|deletecollection|watch|connect|proxy|list|create|patch)([A-Za-z0-9]+)$"
 	summary?: string
 	description?: string
 	request:  #CustomRouteRequest
 	response: #CustomRouteResponse
+	// responseKind is the name of a kind in the same version whose resource the route returns, as the
+	// standard Kubernetes calls for that kind do: it references the kind's schema instead of defining
+	// a response, and the generated client returns the kind's Go type instead of a generated one. A
+	// route that declares it does not declare a response.
+	responseKind?: =~"^[A-Za-z][A-Za-z0-9]*$"
 	// responseMetadata allows codegen to include kubernetes metadata in the generated response object.
 	// It is also copied into the AppManifest responseMetadata for use in kube-OpenAPI generation.
 	responseMetadata: #CustomRouteResponseMetadata
