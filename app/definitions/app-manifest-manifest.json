@@ -16,6 +16,7 @@
                     {
                         "kind": "AppManifest",
                         "plural": "AppManifests",
+                        "resource": "appmanifests",
                         "scope": "Cluster",
                         "userReadable": false,
                         "schemas": {
@@ -588,6 +589,7 @@
                     {
                         "kind": "AppManifest",
                         "plural": "AppManifests",
+                        "resource": "appmanifests",
                         "scope": "Cluster",
                         "userReadable": false,
                         "schemas": {
@@ -790,6 +792,10 @@
                                         "$ref": "#/components/schemas/ManifestVersionKindEmbed",
                                         "description": "embed defines the embedding document independently of search fields."
                                     },
+                                    "extensions": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindExtensions",
+                                        "description": "extensions declares how other Grafana features, such as provisioning and user interfaces, treat this kind."
+                                    },
                                     "folderScoped": {
                                         "default": true,
                                         "description": "folderScoped controls whether resources of this kind are scoped to folders.\nOnly meaningful when scope is \"Namespaced\"; for cluster-scoped kinds the field is ignored.\nDefaults to true (folder-scoped).",
@@ -901,6 +907,31 @@
                                 ],
                                 "type": "object"
                             },
+                            "ManifestVersionKindExtensions": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "provisioning": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindProvisioning",
+                                        "description": "provisioning declares whether provisioning (Git Sync) manages this kind."
+                                    },
+                                    "ui": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindUI",
+                                        "description": "ui declares how user interfaces display this kind."
+                                    }
+                                },
+                                "type": "object"
+                            },
+                            "ManifestVersionKindProvisioning": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "enabled": {
+                                        "default": true,
+                                        "description": "enabled declares whether provisioning manages resources of this kind.",
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            },
                             "ManifestVersionKindSearch": {
                                 "additionalProperties": false,
                                 "description": "#ManifestVersionKindSearch declares which search endpoints are served for a kind.",
@@ -934,6 +965,25 @@
                                     "listKeys": {
                                         "description": "listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.",
                                         "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            },
+                            "ManifestVersionKindUI": {
+                                "additionalProperties": false,
+                                "description": "The display name of the kind comes from kind and plural.",
+                                "properties": {
+                                    "icon": {
+                                        "description": "icon is the name of a Grafana UI icon for the kind.",
+                                        "type": "string"
+                                    },
+                                    "labelKey": {
+                                        "description": "labelKey is the i18n key that user interfaces translate to the display name of the kind.\nThe translation takes a count to select the singular or plural form, and falls back to kind or plural.",
+                                        "type": "string"
+                                    },
+                                    "url": {
+                                        "description": "url is the path of the page that shows one resource of the kind, such as \"/a/my-app/widgets/{name}\".\nUser interfaces replace {name} with the name of the resource.",
+                                        "type": "string"
                                     }
                                 },
                                 "type": "object"
@@ -1408,6 +1458,7 @@
                     {
                         "kind": "RouteBackend",
                         "plural": "RouteBackends",
+                        "resource": "routebackends",
                         "scope": "Cluster",
                         "userReadable": false,
                         "admission": {

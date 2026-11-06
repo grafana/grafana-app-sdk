@@ -102,6 +102,16 @@ var appManifestData = app.ManifestData{
 					Search: &app.ManifestVersionKindSearch{
 						Trash: func(b bool) *bool { return &b }(false),
 					},
+					Extensions: &app.ManifestVersionKindExtensions{
+						Provisioning: &app.ManifestVersionKindProvisioning{
+							Enabled: func(b bool) *bool { return &b }(false),
+						},
+						UI: &app.ManifestVersionKindUI{
+							LabelKey: "testkind2",
+							URL:      "/a/test-app/testkind2s/{name}",
+							Icon:     "apps",
+						},
+					},
 					Schema: &versionSchemaTestKind2v1,
 				},
 			},

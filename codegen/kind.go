@@ -118,6 +118,24 @@ type KindSearch struct {
 	Global bool `json:"global"`
 }
 
+// KindExtensions declares how other Grafana features treat a kind.
+type KindExtensions struct {
+	Provisioning *KindProvisioning `json:"provisioning,omitempty"`
+	UI           *KindUI           `json:"ui,omitempty"`
+}
+
+// KindProvisioning declares whether provisioning (Git Sync) manages a kind.
+type KindProvisioning struct {
+	Enabled bool `json:"enabled"`
+}
+
+// KindUI declares how user interfaces display a kind.
+type KindUI struct {
+	LabelKey string `json:"labelKey,omitempty"`
+	URL      string `json:"url,omitempty"`
+	Icon     string `json:"icon,omitempty"`
+}
+
 // KindEmbed defines the embedding document independently of search fields.
 // Kinds with a custom embedding builder omit this configuration.
 type KindEmbed struct {

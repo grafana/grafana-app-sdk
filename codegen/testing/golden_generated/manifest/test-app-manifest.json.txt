@@ -226,6 +226,16 @@
                         "search": {
                             "trash": false
                         },
+                        "extensions": {
+                            "provisioning": {
+                                "enabled": false
+                            },
+                            "ui": {
+                                "labelKey": "testkind2",
+                                "url": "/a/test-app/testkind2s/{name}",
+                                "icon": "apps"
+                            }
+                        },
                         "conversion": false
                     }
                 ]

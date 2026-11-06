@@ -7,6 +7,13 @@ testKind2: {
 	codegen: ts: enabled: false
 	listKeys: false
 	search: trash: false
+	extensions: {
+		provisioning: enabled: false
+		ui: {
+			labelKey: "testkind2"
+			icon:     "apps"
+		}
+	}
 	versions: {
 		"v1": {
 			schema: {

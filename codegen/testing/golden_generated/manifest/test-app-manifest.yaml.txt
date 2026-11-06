@@ -126,6 +126,13 @@ spec:
       - .spec.stringField
       userReadable: false
     - conversion: false
+      extensions:
+        provisioning:
+          enabled: false
+        ui:
+          icon: apps
+          labelKey: testkind2
+          url: /a/test-app/testkind2s/{name}
       kind: TestKind2
       plural: TestKind2s
       resource: testkind2s
