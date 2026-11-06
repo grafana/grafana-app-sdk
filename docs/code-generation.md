@@ -99,6 +99,82 @@ grafana-app-sdk project init <project go module name>
 ```
 This sets up your project with a go module, a `kinds` directory with a CUE module, a `Makefile` with some sample targets, and a `local` directory that can be used with `grafana-app-sdk project local` commands.
 
+## Documenting custom routes
+
+A custom route declared in CUE identifies itself with an `operationId`, and can carry the
+documentation that ends up in the OpenAPI the manifest publishes, so clients generated from it are
+readable:
+
+```cue
+routes: namespaced: "/update/{group}/{kind}/{id}": PUT: {
+    operationId: "addStar"
+    summary:     "Add a starred item"
+    description: "Adds the item to the stars of the object."
+    request: parameters: [
+        {name: "group", in: "path", description: "API group of the item", example: "dashboard.grafana.app"},
+        {name: "kind", in: "path", description: "Kind of the item", example: "Dashboard"},
+        {name: "id", in: "path", description: "Name of the item"},
+        {name: "reason", in: "query", description: "Why the item is starred", schema: string | *"reference"},
+    ]
+    response: {message: string}
+}
+```
+
+- `operationId` is required. It is the `operationId` of the OpenAPI operation, so say what the
+  route does, and it must be unique among the routes of a version, on its kinds and on the version
+  itself, because OpenAPI does not allow two in a document. It also names the generated Go types and
+  client method (`AddStar` here), so it has to be an identifier.
+- `name` is the deprecated spelling of `operationId`, kept so existing routes keep working. A route
+  declares one or the other, and `operationId` wins when both are there. `name` has to start with a
+  Kubernetes verb (`get`, `create`, `delete`, ...), which `operationId` does not.
+- `summary` and `description` describe the operation.
+- `request.parameters` lists the parameters of the route, as in OpenAPI: each one has a `name` and
+  says where it is with `in` (`path`, `query`, `header` or `cookie`). A parameter is identified by
+  its name and `in`, so two cannot share both. The other fields are `description`, `required`,
+  `deprecated`, an `example` and a `schema`, which defaults to a string. An `example` has to be a
+  value of the schema's type.
+  - A path parameter has to be a parameter in the path, and is always required. Naming one that is
+    not in the path is an error.
+  - A query parameter is defined here: `schema` is its type, and `required` is whether it has to be
+    sent (false by default). They are also what the generated Go client takes for the route.
+    `request.query`, a CUE struct of the fields, is the deprecated spelling. A route declares its
+    query parameters in one or the other, not both.
+  - A header or cookie parameter is documented in the OpenAPI only. It is not part of the generated
+    client or the request types yet.
+
+For anything beyond this, such as responses other than the default, import or declare the OpenAPI
+itself, as below.
+
+### Returning the resource of a kind
+
+A route that returns the same resource the standard Kubernetes calls return for a kind, such as a
+route that finds the latest or the starred one, names the kind with `responseKind` instead of
+defining a `response`:
+
+```cue
+versions: v1: {
+    kinds: [star]  // a kind named Star
+    routes: namespaced: "/latest": GET: {
+        operationId:  "getLatestStar"
+        summary:      "Get the most recently starred item"
+        responseKind: "Star"
+    }
+}
+```
+
+- The OpenAPI response references the kind's resource, a `Star` component of the version with the
+  `apiVersion`, `kind`, `metadata`, `spec` and `status` of the kind, rather than a new schema. What
+  it references of the kind's schema (such as its `spec`) is a component named for the kind, like
+  `Star.spec`.
+- No response type is generated for the route. The generated client method returns the kind's own
+  generated Go type, here `(*Star, error)`, so what it returns can be used wherever the kind's
+  objects are.
+- `responseKind` has to be a kind of the same version, which generates Go code, and a route cannot
+  declare both it and a `response`. Its `responseMetadata` is not used, since the kind's resource
+  has its own.
+- When generating code by kind (`kinds.grouping: "kind"`), the kind's type is in its own package,
+  which the client imports from the project's Go module, so that has to be set (`codegen.goModule`).
+
 ## Adding routes from a saved OpenAPI document
 
 Manifest generation with `definitions.manifestVersion: "v1alpha2"` (the default)
