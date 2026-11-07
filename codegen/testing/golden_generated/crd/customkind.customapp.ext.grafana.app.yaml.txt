@@ -78,6 +78,17 @@ spec:
               boolField:
                 default: false
                 type: boolean
+              boundedInt:
+                description: Upper bounds that fit in 32 bits keep the declared width.
+                exclusiveMinimum: true
+                maximum: 2147483647
+                minimum: 0
+                type: integer
+              boundedInt64:
+                exclusiveMinimum: true
+                maximum: 2147483647
+                minimum: 0
+                type: integer
               enum:
                 default: default
                 enum:
@@ -165,6 +176,10 @@ spec:
                   - details
                   type: object
                 type: object
+              positiveI32:
+                exclusiveMinimum: true
+                minimum: 0
+                type: integer
               timestamp:
                 format: date-time
                 type: string
@@ -211,6 +226,9 @@ spec:
             - floatField
             - linkedList
             - exclusiveInt
+            - boundedInt
+            - boundedInt64
+            - positiveI32
             type: object
           status:
             properties:

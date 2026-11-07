@@ -136,7 +136,11 @@ type CustomKindSpec struct {
 	BoolField    bool                       `json:"boolField"`
 	FloatField   float64                    `json:"floatField"`
 	LinkedList   CustomKindRecursiveList    `json:"linkedList"`
-	ExclusiveInt uint64                     `json:"exclusiveInt"`
+	ExclusiveInt int64                      `json:"exclusiveInt"`
+	// Upper bounds that fit in 32 bits keep the declared width.
+	BoundedInt   int64 `json:"boundedInt"`
+	BoundedInt64 int64 `json:"boundedInt64"`
+	PositiveI32  int32 `json:"positiveI32"`
 }
 
 // NewCustomKindSpec creates a new CustomKindSpec object.
