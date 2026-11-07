@@ -1208,7 +1208,6 @@ var customRouteToGoResponseType = map[string]any{
 	"v3|TestKind|search|GET": v3.GetTestKindSearchResultResponse{},
 
 	"v3||<namespace>/foobar|POST": v3.CreateFoobarResponse{},
-	"v3||<namespace>/latest|GET":  v3.GetLatestTestKindResponse{},
 }
 
 // ManifestCustomRouteResponsesAssociator returns the associated response go type for a given kind, version, custom route path, and method, if one exists.
