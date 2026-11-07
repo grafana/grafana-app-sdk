@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -560,6 +561,77 @@ func TestOpinionatedReconciler_Wrap(t *testing.T) {
 	res, err := op.Reconciler.Reconcile(ctx, rreq)
 	assert.Nil(t, err)
 	assert.Equal(t, rr, res)
+}
+
+type metricsSimpleReconciler struct {
+	SimpleReconciler
+	collectors []prometheus.Collector
+}
+
+func (m *metricsSimpleReconciler) PrometheusCollectors() []prometheus.Collector {
+	return m.collectors
+}
+
+func TestOpinionatedReconciler_RegisterMetricsCollectors(t *testing.T) {
+	t.Run("register collectors directly", func(t *testing.T) {
+		op, err := NewOpinionatedReconciler(&mockPatchClient{}, "finalizer")
+		require.NoError(t, err)
+
+		c1 := prometheus.NewCounter(prometheus.CounterOpts{Name: "test_reconciler_counter_1", Help: "test"})
+		c2 := prometheus.NewGauge(prometheus.GaugeOpts{Name: "test_reconciler_gauge_1", Help: "test"})
+
+		op.RegisterMetricsCollectors(c1, c2)
+
+		collectors := op.PrometheusCollectors()
+		assert.Len(t, collectors, 2)
+		assert.Contains(t, collectors, c1)
+		assert.Contains(t, collectors, c2)
+	})
+
+	t.Run("additive calls", func(t *testing.T) {
+		op, err := NewOpinionatedReconciler(&mockPatchClient{}, "finalizer")
+		require.NoError(t, err)
+
+		c1 := prometheus.NewCounter(prometheus.CounterOpts{Name: "test_reconciler_counter_2", Help: "test"})
+		c2 := prometheus.NewGauge(prometheus.GaugeOpts{Name: "test_reconciler_gauge_2", Help: "test"})
+
+		op.RegisterMetricsCollectors(c1)
+		op.RegisterMetricsCollectors(c2)
+
+		collectors := op.PrometheusCollectors()
+		assert.Len(t, collectors, 2)
+		assert.Contains(t, collectors, c1)
+		assert.Contains(t, collectors, c2)
+	})
+
+	t.Run("combined with Wrap", func(t *testing.T) {
+		op, err := NewOpinionatedReconciler(&mockPatchClient{}, "finalizer")
+		require.NoError(t, err)
+
+		wrapperCollector := prometheus.NewCounter(prometheus.CounterOpts{Name: "wrapper_reconciler_counter", Help: "test"})
+		reconciler := &metricsSimpleReconciler{
+			collectors: []prometheus.Collector{wrapperCollector},
+		}
+		op.Wrap(reconciler)
+
+		directCollector := prometheus.NewGauge(prometheus.GaugeOpts{Name: "direct_reconciler_gauge", Help: "test"})
+		op.RegisterMetricsCollectors(directCollector)
+
+		collectors := op.PrometheusCollectors()
+		assert.Len(t, collectors, 2)
+		assert.Contains(t, collectors, wrapperCollector)
+		assert.Contains(t, collectors, directCollector)
+	})
+
+	t.Run("no-op with no arguments", func(t *testing.T) {
+		op, err := NewOpinionatedReconciler(&mockPatchClient{}, "finalizer")
+		require.NoError(t, err)
+
+		op.RegisterMetricsCollectors()
+
+		collectors := op.PrometheusCollectors()
+		assert.Empty(t, collectors)
+	})
 }
 
 func TestTypedReconciler_Reconcile(t *testing.T) {
