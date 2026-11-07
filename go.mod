@@ -10,7 +10,7 @@ retract (
 )
 
 require (
-	cuelang.org/go v0.11.2
+	cuelang.org/go v0.17.1
 	github.com/bradfitz/gomemcache v0.0.0-20260422231931-4d751bb6e37c
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/emicklei/go-restful/v3 v3.14.0
@@ -20,7 +20,7 @@ require (
 	github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815
 	github.com/grafana/codejen v0.0.4
 	github.com/grafana/cog v0.2.4
-	github.com/grafana/grafana-app-sdk/logging v0.61.0
+	github.com/grafana/grafana-app-sdk/logging v0.61.1
 	github.com/grafana/grafana-plugin-sdk-go v0.298.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-plugin v1.8.0
