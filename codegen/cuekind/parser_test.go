@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 func TestParseManifestEmbedConfiguration(t *testing.T) {
@@ -615,6 +616,64 @@ func TestParseManifestFixedNames(t *testing.T) {
 			kinds := manifest.Versions()[0].Kinds()
 			require.Len(t, kinds, 1)
 			assert.Equal(t, tc.want, kinds[0].FixedNames)
+		})
+	}
+}
+
+func TestParseManifestNamingStrategy(t *testing.T) {
+	for _, tc := range []struct {
+		name, declaration string
+		want              *codegen.KindNamingStrategy
+		invalid           bool
+	}{
+		{name: "omitted"},
+		{
+			name:        "owners only",
+			declaration: `namingStrategy: {mode: "owner", owner: owners: ["user"]}`,
+			want: &codegen.KindNamingStrategy{Mode: "owner", Owner: &codegen.KindOwnerNames{
+				Owners: []resource.Owner{resource.UserResourceOwner},
+			}},
+		},
+		{
+			name: "everything",
+			declaration: `namingStrategy: {
+				mode: "owner"
+				owner: {
+					owners: ["namespace", "user", "team"]
+					allowOrgAdmin: true
+				}
+			}`,
+			want: &codegen.KindNamingStrategy{Mode: "owner", Owner: &codegen.KindOwnerNames{
+				Owners:        []resource.Owner{resource.NamespaceResourceOwner, resource.UserResourceOwner, resource.TeamResourceOwner},
+				AllowOrgAdmin: true,
+			}},
+		},
+		{name: "no owners", declaration: `namingStrategy: {mode: "owner", owner: owners: []}`, invalid: true},
+		{name: "unknown owner", declaration: `namingStrategy: {mode: "owner", owner: owners: ["group"]}`, invalid: true},
+		{name: "unknown mode", declaration: `namingStrategy: {mode: "folder", owner: owners: ["user"]}`, invalid: true},
+		{name: "mode without settings", declaration: `namingStrategy: mode: "owner"`, invalid: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testingCue(t)
+			c.Root = c.Root.Context().CompileString(fmt.Sprintf(`
+				shared: {kind: "Foo", schema: spec: title: string, %s}
+				manifest: {
+					appName: "owner-app"
+					versions: {
+						v1: kinds: [shared]
+					}
+				}`, tc.declaration))
+			parser, err := NewParser(c, false)
+			require.NoError(t, err)
+			manifest, err := parser.ParseManifest("manifest")
+			if tc.invalid {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			kinds := manifest.Versions()[0].Kinds()
+			require.Len(t, kinds, 1)
+			assert.Equal(t, tc.want, kinds[0].NamingStrategy)
 		})
 	}
 }

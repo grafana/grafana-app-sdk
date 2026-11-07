@@ -208,6 +208,8 @@ type CustomRoute struct {
 	// Authz is the optional declared authorization information for the route. If nil,
 	// no authz openAPI extensions are added to the generated route.
 	Authz *CustomRouteAuthz `json:"authz,omitempty"`
+	// AllowMissingParent serves the route of an object even when no object is stored under its name.
+	AllowMissingParent bool `json:"allowMissingParent,omitempty"`
 }
 
 // ID is the identifier of the route: its operationId, or else its deprecated name.

@@ -716,6 +716,15 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 	}
 	mver.SelectableFields = vk.SelectableFields
 	mver.FixedNames = vk.FixedNames
+	if vk.NamingStrategy != nil {
+		mver.NamingStrategy = &app.ManifestKindNamingStrategy{Mode: vk.NamingStrategy.Mode}
+		if vk.NamingStrategy.Owner != nil {
+			mver.NamingStrategy.Owner = &app.ManifestKindNamingStrategyOwner{
+				Owners:        slices.Clone(vk.NamingStrategy.Owner.Owners),
+				AllowOrgAdmin: vk.NamingStrategy.Owner.AllowOrgAdmin,
+			}
+		}
+	}
 	mver.SearchFields = searchFieldsToManifest(vk.SearchFields)
 	return mver, nil
 }
@@ -849,7 +858,7 @@ func toKindPermissionActions(actions []string) []app.KindPermissionAction {
 // explicitly-declared extensions plus any extensions derived from the route's authz section.
 // It returns nil if the route has no extensions.
 func customRouteExtensions(route codegen.CustomRoute) spec.Extensions {
-	if len(route.Extensions) == 0 && route.Authz == nil {
+	if len(route.Extensions) == 0 && route.Authz == nil && !route.AllowMissingParent {
 		return nil
 	}
 	extensions := make(spec.Extensions, len(route.Extensions))
@@ -862,6 +871,9 @@ func customRouteExtensions(route codegen.CustomRoute) spec.Extensions {
 		if route.Authz.Verb != nil {
 			extensions[sdkroutes.ExtensionAuthzVerb] = *route.Authz.Verb
 		}
+	}
+	if route.AllowMissingParent {
+		extensions[sdkroutes.ExtensionAllowMissingParent] = true
 	}
 	return extensions
 }

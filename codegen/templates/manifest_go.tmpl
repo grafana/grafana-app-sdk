@@ -209,6 +209,13 @@ var appManifestData = app.ManifestData{
                 },{{end}}{{ if .FixedNames }}
                 FixedNames: []string{ {{ range .FixedNames }}
                     {{ goString . }},{{ end }}
+                },{{end}}{{ if .NamingStrategy }}
+                NamingStrategy: &app.ManifestKindNamingStrategy{
+                    Mode: {{ goString .NamingStrategy.Mode }},{{ if .NamingStrategy.Owner }}
+                    Owner: &app.ManifestKindNamingStrategyOwner{
+                        Owners: []resource.Owner{ {{ range .NamingStrategy.Owner.Owners }}{{ goString (printf "%s" .) }}, {{ end }} },{{ if .NamingStrategy.Owner.AllowOrgAdmin }}
+                        AllowOrgAdmin: true,{{end}}
+                    },{{end}}
                 },{{end}}{{ if .SecureValues }}
                 SecureValues: []app.ManifestVersionKindSecureValue{ {{ range .SecureValues }}
                     {Key: {{ goString .Key }}, Description: {{ goString .Description }}},{{ end }}

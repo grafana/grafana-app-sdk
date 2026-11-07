@@ -206,6 +206,11 @@ SchemaWithOperatorState: Schema & {
 	// (x-grafana-declared-authz-resource, x-grafana-declared-authz-subresource, x-grafana-declared-authz-verb).
 	// If absent, no authz extensions are added to the route.
 	authz?: #CustomRouteAuthz
+	// allowMissingParent serves the route of an object even when no object is stored under its
+	// name, which a route of an object does not do otherwise (it answers 404). It is for a name
+	// the app answers itself, or whose object only exists once it is written. It is emitted as
+	// the openAPI extension x-grafana-allow-missing-parent.
+	allowMissingParent?: bool
 }
 #CustomRouteAuthz: {
 	// resource is the resource the authz check is performed against.
@@ -243,6 +248,19 @@ SchemaWithOperatorState: Schema & {
 	// jsonPath is a simple JSON path (i.e. with array notation) which is evaluated against
 	// each custom resource to produce the value for this column.
 	jsonPath: string
+}
+#NamingStrategy: {
+	// mode is the strategy. "owner" names objects for their owner: user-<id>, team-<id> or namespace.
+	mode: "owner"
+	// owner holds the settings of the "owner" strategy.
+	owner: #OwnerNamingStrategy
+}
+// #OwnerNamingStrategy is the naming strategy of a kind whose objects are named for their owner.
+#OwnerNamingStrategy: {
+	// owners are the kinds of owner a name can have: user-<id>, team-<id> or namespace.
+	owners: [...("user" | "team" | "namespace")] & [_, ...]
+	// allowOrgAdmin lets an org admin do anything to the kind, whoever owns the object.
+	allowOrgAdmin: bool | *false
 }
 // #SearchField describes a field exposed for search indexing and querying.
 // The type and capabilities values, and which capabilities are valid on which
@@ -408,6 +426,9 @@ Kind: S={
 	// at the version level, is allowed for each; it would otherwise be rejected for
 	// shadowing the kind's own resource. A name is a Kubernetes object name.
 	fixedNames?: [...=~"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"]
+	// namingStrategy declares what the name of an object of this kind means, and that access
+	// to the object follows from it instead of from the folder the object is in.
+	namingStrategy?: #NamingStrategy
 	// search controls which search endpoints are served for this kind.
 	// /search and /trash are served unless the kind opts out here; /search/hybrid
 	// is not served and the kind is not in the global index unless the kind opts in.

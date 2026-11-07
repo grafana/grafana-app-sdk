@@ -10,6 +10,7 @@ import (
 	"cuelang.org/go/cue"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 type AppManifest interface {
@@ -224,6 +225,17 @@ func (v *SimpleVersion) Routes() VersionCustomRoutes {
 	return *v.CustomRoutes
 }
 
+type KindNamingStrategy struct {
+	Mode  string          `json:"mode"`
+	Owner *KindOwnerNames `json:"owner,omitempty"`
+}
+
+// KindOwnerNames is the naming strategy of a kind whose objects are named for their owner.
+type KindOwnerNames struct {
+	Owners        []resource.Owner `json:"owners"`
+	AllowOrgAdmin bool             `json:"allowOrgAdmin"`
+}
+
 type VersionedKind struct {
 	// Kind is the unique-within-the-group name of the kind
 	Kind string `json:"kind"`
@@ -248,6 +260,7 @@ type VersionedKind struct {
 	SearchFields             []SearchField             `json:"searchFields,omitempty"`
 	ListKeys                 *bool                     `json:"listKeys"`
 	FixedNames               []string                  `json:"fixedNames,omitempty"`
+	NamingStrategy           *KindNamingStrategy       `json:"namingStrategy,omitempty"`
 	Search                   KindSearch                `json:"search"`
 	Embed                    *KindEmbed                `json:"embed,omitempty"`
 	// Schema is the CUE schema for the version

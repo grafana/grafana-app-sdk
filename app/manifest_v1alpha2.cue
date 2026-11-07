@@ -111,6 +111,9 @@ appManifestv1alpha2: appManifestKind & {
 			// answers requests for them itself. A route at exactly <plural>/<name> is
 			// allowed for each.
 			fixedNames?: [...string]
+			// namingStrategy declares what the name of an object of this kind means, and that
+			// access to the object follows from it.
+			namingStrategy?: #ManifestVersionKindNamingStrategy
 			// search declares which search endpoints are served for this kind.
 			// /search and /trash default to enabled; /search/hybrid and global index inclusion default to disabled.
 			search?: #ManifestVersionKindSearch
@@ -128,6 +131,19 @@ appManifestv1alpha2: appManifestKind & {
 			routes?: {
 				[string]: _
 			}
+		}
+		// #ManifestVersionKindNamingStrategy declares what the name of an object of a kind means.
+		#ManifestVersionKindNamingStrategy: {
+			// mode is the strategy: "owner" names objects for their owner (user-<id>, team-<id> or namespace).
+			mode: "owner"
+			// owner holds the settings of the "owner" strategy.
+			owner?: #ManifestVersionKindNamingStrategyOwner
+		}
+		#ManifestVersionKindNamingStrategyOwner: {
+			// owners are the kinds of owner a name can have.
+			owners: [...("user" | "team" | "namespace")]
+			// allowOrgAdmin lets an org admin do anything to the kind, whoever owns the object.
+			allowOrgAdmin?: bool
 		}
 		#ManifestVersionKindStorage: {
 			// listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.

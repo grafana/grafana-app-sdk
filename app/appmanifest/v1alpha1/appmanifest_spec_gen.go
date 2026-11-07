@@ -50,6 +50,9 @@ type AppManifestManifestVersionKind struct {
 	// answers requests for them itself. A route at exactly <plural>/<name> is
 	// allowed for each.
 	FixedNames []string `json:"fixedNames,omitempty"`
+	// namingStrategy declares what the name of an object of this kind means, and that
+	// access to the object follows from it.
+	NamingStrategy *AppManifestManifestVersionKindNamingStrategy `json:"namingStrategy,omitempty"`
 	// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 	// It may not prevent automatic conversion behavior between versions of the kind when set to false
 	// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
@@ -194,6 +197,47 @@ func NewAppManifestManifestVersionKindStorage() *AppManifestManifestVersionKindS
 // OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindStorage.
 func (AppManifestManifestVersionKindStorage) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha1.AppManifestManifestVersionKindStorage"
+}
+
+// #ManifestVersionKindNamingStrategy declares what the name of an object of a kind means.
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindNamingStrategy struct {
+	// mode is the strategy: "owner" names objects for their owner (user-<id>, team-<id> or namespace).
+	Mode string `json:"mode"`
+	// owner holds the settings of the "owner" strategy.
+	Owner *AppManifestManifestVersionKindNamingStrategyOwner `json:"owner,omitempty"`
+}
+
+// NewAppManifestManifestVersionKindNamingStrategy creates a new AppManifestManifestVersionKindNamingStrategy object.
+func NewAppManifestManifestVersionKindNamingStrategy() *AppManifestManifestVersionKindNamingStrategy {
+	return &AppManifestManifestVersionKindNamingStrategy{
+		Mode: "owner",
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindNamingStrategy.
+func (AppManifestManifestVersionKindNamingStrategy) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha1.AppManifestManifestVersionKindNamingStrategy"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindNamingStrategyOwner struct {
+	// owners are the kinds of owner a name can have.
+	Owners []AppManifestManifestVersionKindNamingStrategyOwnerOwners `json:"owners"`
+	// allowOrgAdmin lets an org admin do anything to the kind, whoever owns the object.
+	AllowOrgAdmin *bool `json:"allowOrgAdmin,omitempty"`
+}
+
+// NewAppManifestManifestVersionKindNamingStrategyOwner creates a new AppManifestManifestVersionKindNamingStrategyOwner object.
+func NewAppManifestManifestVersionKindNamingStrategyOwner() *AppManifestManifestVersionKindNamingStrategyOwner {
+	return &AppManifestManifestVersionKindNamingStrategyOwner{
+		Owners: []AppManifestManifestVersionKindNamingStrategyOwnerOwners{},
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindNamingStrategyOwner.
+func (AppManifestManifestVersionKindNamingStrategyOwner) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha1.AppManifestManifestVersionKindNamingStrategyOwner"
 }
 
 // +k8s:openapi-gen=true
@@ -409,6 +453,20 @@ const (
 // OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindScope.
 func (AppManifestManifestVersionKindScope) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha1.AppManifestManifestVersionKindScope"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindNamingStrategyOwnerOwners string
+
+const (
+	AppManifestManifestVersionKindNamingStrategyOwnerOwnersUser      AppManifestManifestVersionKindNamingStrategyOwnerOwners = "user"
+	AppManifestManifestVersionKindNamingStrategyOwnerOwnersTeam      AppManifestManifestVersionKindNamingStrategyOwnerOwners = "team"
+	AppManifestManifestVersionKindNamingStrategyOwnerOwnersNamespace AppManifestManifestVersionKindNamingStrategyOwnerOwners = "namespace"
+)
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindNamingStrategyOwnerOwners.
+func (AppManifestManifestVersionKindNamingStrategyOwnerOwners) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha1.AppManifestManifestVersionKindNamingStrategyOwnerOwners"
 }
 
 // +k8s:openapi-gen=true

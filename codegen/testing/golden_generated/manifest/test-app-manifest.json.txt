@@ -226,6 +226,16 @@
                         "fixedNames": [
                             "current"
                         ],
+                        "namingStrategy": {
+                            "mode": "owner",
+                            "owner": {
+                                "owners": [
+                                    "namespace",
+                                    "user"
+                                ],
+                                "allowOrgAdmin": true
+                            }
+                        },
                         "search": {
                             "trash": false
                         },
@@ -936,6 +946,7 @@
                                             }
                                         }
                                     },
+                                    "x-grafana-allow-missing-parent": true,
                                     "x-grafana-declared-authz-resource": "testkinds",
                                     "x-grafana-test": true,
                                     "x-grafana-test-value": {
@@ -1678,6 +1689,7 @@
                                         "description": "Default OK response"
                                     }
                                 },
+                                "x-grafana-allow-missing-parent": true,
                                 "x-grafana-declared-authz-resource": "testkinds",
                                 "x-grafana-test": true,
                                 "x-grafana-test-value": {

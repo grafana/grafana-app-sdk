@@ -32,6 +32,10 @@ const (
 	OpenAPIExtensionAuthzResource    = "x-grafana-declared-authz-resource"
 	OpenAPIExtensionAuthzSubresource = "x-grafana-declared-authz-subresource"
 
+	// OpenAPIExtensionAllowMissingParent declares, on a kind subresource route operation, that the
+	// route is served even when no object is stored under the name in its path.
+	OpenAPIExtensionAllowMissingParent = "x-grafana-allow-missing-parent"
+
 	ManifestRolePermissionSetViewer = "viewer"
 	ManifestRolePermissionSetEditor = "editor"
 	ManifestRolePermissionSetAdmin  = "admin"
@@ -616,6 +620,9 @@ type ManifestVersionKind struct {
 	// allowed for each, which would otherwise be rejected for shadowing the
 	// kind's own resource.
 	FixedNames []string `json:"fixedNames,omitempty" yaml:"fixedNames,omitempty"`
+	// NamingStrategy declares what the name of an object of this kind means, and that access to
+	// the object follows from it. A nil value means access does not follow from the name.
+	NamingStrategy *ManifestKindNamingStrategy `json:"namingStrategy,omitempty" yaml:"namingStrategy,omitempty"`
 	// Search declares which search endpoints are served for this kind.
 	// A nil value, or a nil field within it, means the endpoint takes its default.
 	Search *ManifestVersionKindSearch `json:"search,omitempty" yaml:"search,omitempty"`
@@ -670,6 +677,28 @@ type ManifestVersionKindEmbedField struct {
 	Name string `json:"name" yaml:"name"`
 	// Path supplies a string or string array from the resource and must not be empty.
 	Path string `json:"path" yaml:"path"`
+}
+
+// NamingStrategyModeOwner is the naming strategy of a kind whose objects are named for their owner.
+const NamingStrategyModeOwner = "owner"
+
+// ManifestVersionKindNamingStrategy declares what the name of an object of a kind means. Mode says
+// which strategy it is, and the field of that mode holds its settings.
+type ManifestKindNamingStrategy struct {
+	// Mode is the strategy. The only one so far is NamingStrategyModeOwner.
+	Mode string `json:"mode" yaml:"mode"`
+	// Owner is set when Mode is NamingStrategyModeOwner.
+	Owner *ManifestKindNamingStrategyOwner `json:"owner,omitempty" yaml:"owner,omitempty"`
+}
+
+// ManifestKindNamingStrategyOwner is the naming strategy of a kind whose objects are named
+// for their owner (see resource.OwnerReference): user-<id>, team-<id> or namespace.
+type ManifestKindNamingStrategyOwner struct {
+	// Owners are the kinds of owner a name can have.
+	// A name that does not parse as one of them is not accessible, except the kind's FixedNames.
+	Owners []sdkresource.Owner `json:"owners" yaml:"owners"`
+	// AllowOrgAdmin lets an org admin do anything to the kind, whoever owns the object.
+	AllowOrgAdmin bool `json:"allowOrgAdmin,omitempty" yaml:"allowOrgAdmin,omitempty"`
 }
 
 // HasFixedName reports whether name is one of the kind's fixed names.

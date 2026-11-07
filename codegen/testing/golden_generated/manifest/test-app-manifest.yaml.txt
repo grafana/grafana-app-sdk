@@ -129,6 +129,13 @@ spec:
       fixedNames:
       - current
       kind: TestKind2
+      namingStrategy:
+        mode: owner
+        owner:
+          allowOrgAdmin: true
+          owners:
+          - namespace
+          - user
       plural: TestKind2s
       resource: testkind2s
       schemas:
@@ -607,6 +614,7 @@ spec:
                       - kind
                       type: object
                 description: Default OK response
+            x-grafana-allow-missing-parent: true
             x-grafana-declared-authz-resource: testkinds
             x-grafana-test: true
             x-grafana-test-value:
@@ -1190,6 +1198,7 @@ spec:
                       - kind
                       type: object
                 description: Default OK response
+            x-grafana-allow-missing-parent: true
             x-grafana-declared-authz-resource: testkinds
             x-grafana-test: true
             x-grafana-test-value:
