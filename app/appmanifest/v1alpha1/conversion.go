@@ -11,6 +11,7 @@ import (
 	"k8s.io/kube-openapi/pkg/spec3"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 // ToManifestData is a function which converts this specific version of the AppManifestSpec (v1alpha1)
@@ -46,6 +47,7 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				k.Storage = &app.ManifestVersionKindStorage{ListKeys: kind.Storage.ListKeys}
 			}
 			k.FixedNames = slices.Clone(kind.FixedNames)
+			k.NamingStrategy = namingStrategyToManifestData(kind.NamingStrategy)
 			if kind.Plural != nil {
 				k.Plural = capitalize(*kind.Plural)
 				k.Resource = strings.ToLower(*kind.Plural)
@@ -289,6 +291,7 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				k.Storage = &AppManifestManifestVersionKindStorage{ListKeys: kind.Storage.ListKeys}
 			}
 			k.FixedNames = slices.Clone(kind.FixedNames)
+			k.NamingStrategy = namingStrategyFromManifestData(kind.NamingStrategy)
 			// Convert the ManifestData's Schema into CRD Schema for v1alpha1
 			if kind.Schema != nil {
 				sch, err := kind.Schema.AsCRDMap(k.Kind)
@@ -423,4 +426,40 @@ func capitalize(s string) string {
 		return s
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+func namingStrategyToManifestData(in *AppManifestManifestVersionKindNamingStrategy) *app.ManifestKindNamingStrategy {
+	if in == nil {
+		return nil
+	}
+	out := &app.ManifestKindNamingStrategy{Mode: in.Mode}
+	if in.Owner != nil {
+		out.Owner = &app.ManifestKindNamingStrategyOwner{
+			Owners:        make([]resource.Owner, 0, len(in.Owner.Owners)),
+			AllowOrgAdmin: in.Owner.AllowOrgAdmin != nil && *in.Owner.AllowOrgAdmin,
+		}
+		for _, owner := range in.Owner.Owners {
+			out.Owner.Owners = append(out.Owner.Owners, resource.Owner(owner))
+		}
+	}
+	return out
+}
+
+func namingStrategyFromManifestData(in *app.ManifestKindNamingStrategy) *AppManifestManifestVersionKindNamingStrategy {
+	if in == nil {
+		return nil
+	}
+	out := &AppManifestManifestVersionKindNamingStrategy{Mode: in.Mode}
+	if in.Owner != nil {
+		out.Owner = &AppManifestManifestVersionKindNamingStrategyOwner{
+			Owners: make([]AppManifestManifestVersionKindNamingStrategyOwnerOwners, 0, len(in.Owner.Owners)),
+		}
+		for _, owner := range in.Owner.Owners {
+			out.Owner.Owners = append(out.Owner.Owners, AppManifestManifestVersionKindNamingStrategyOwnerOwners(owner))
+		}
+		if in.Owner.AllowOrgAdmin {
+			out.Owner.AllowOrgAdmin = new(true)
+		}
+	}
+	return out
 }

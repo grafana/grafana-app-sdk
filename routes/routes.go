@@ -35,6 +35,10 @@ const (
 	ExtensionAuthzSubresource = app.OpenAPIExtensionAuthzSubresource
 	ExtensionAuthzVerb        = "x-grafana-declared-authz-verb"
 
+	// ExtensionAllowMissingParent declares, on an operation of a route of an object, that the route
+	// is served even when no object is stored under the name in its path.
+	ExtensionAllowMissingParent = app.OpenAPIExtensionAllowMissingParent
+
 	// NamespacedPrefix is the version-relative path namespaced routes mount
 	// under.
 	NamespacedPrefix = "namespaces/{" + NamespaceParameter + "}"

@@ -1,8 +1,9 @@
 package jennies
 
 import (
-	"cuelang.org/go/cue"
 	"testing"
+
+	"cuelang.org/go/cue"
 
 	"cuelang.org/go/cue/cuecontext"
 	"github.com/stretchr/testify/assert"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-app-sdk/routes"
 )
 
@@ -467,6 +469,24 @@ func TestCustomRouteExtensions(t *testing.T) {
 			},
 		},
 		{
+			name: "allow missing parent",
+			route: codegen.CustomRoute{
+				AllowMissingParent: true,
+			},
+			want: spec.Extensions{routes.ExtensionAllowMissingParent: true},
+		},
+		{
+			name: "allow missing parent alongside authz",
+			route: codegen.CustomRoute{
+				Authz:              &codegen.CustomRouteAuthz{Resource: "foos"},
+				AllowMissingParent: true,
+			},
+			want: spec.Extensions{
+				routes.ExtensionAuthzResource:      "foos",
+				routes.ExtensionAllowMissingParent: true,
+			},
+		},
+		{
 			name: "authz alongside extensions",
 			route: codegen.CustomRoute{
 				Extensions: map[string]any{"x-foo": true},
@@ -722,4 +742,29 @@ func TestProcessKindVersion_FixedNames(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, fixed, kind.FixedNames)
 	}
+}
+
+func TestProcessKindVersion_NamingStrategy(t *testing.T) {
+	kind, err := processKindVersion(codegen.VersionedKind{Kind: "Foo", Scope: "Namespaced"}, "v1", false)
+	require.NoError(t, err)
+	assert.Nil(t, kind.NamingStrategy)
+
+	kind, err = processKindVersion(codegen.VersionedKind{
+		Kind: "Foo", Scope: "Namespaced",
+		NamingStrategy: &codegen.KindNamingStrategy{
+			Mode: "owner",
+			Owner: &codegen.KindOwnerNames{
+				Owners:        []resource.Owner{resource.UserResourceOwner, resource.TeamResourceOwner},
+				AllowOrgAdmin: true,
+			},
+		},
+	}, "v1", false)
+	require.NoError(t, err)
+	assert.Equal(t, &app.ManifestKindNamingStrategy{
+		Mode: "owner",
+		Owner: &app.ManifestKindNamingStrategyOwner{
+			Owners:        []resource.Owner{resource.UserResourceOwner, resource.TeamResourceOwner},
+			AllowOrgAdmin: true,
+		},
+	}, kind.NamingStrategy)
 }

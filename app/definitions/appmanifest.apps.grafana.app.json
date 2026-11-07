@@ -324,6 +324,43 @@
                                                                 "description": "Kind is the name of the kind. This should begin with a capital letter and be CamelCased",
                                                                 "type": "string"
                                                             },
+                                                            "namingStrategy": {
+                                                                "description": "#ManifestVersionKindNamingStrategy declares what the name of an object of a kind means.",
+                                                                "properties": {
+                                                                    "mode": {
+                                                                        "description": "mode is the strategy: \"owner\" names objects for their owner (user-\u003cid\u003e, team-\u003cid\u003e or namespace).",
+                                                                        "type": "string"
+                                                                    },
+                                                                    "owner": {
+                                                                        "properties": {
+                                                                            "allowOrgAdmin": {
+                                                                                "description": "allowOrgAdmin lets an org admin do anything to the kind, whoever owns the object.",
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "owners": {
+                                                                                "description": "owners are the kinds of owner a name can have.",
+                                                                                "items": {
+                                                                                    "enum": [
+                                                                                        "user",
+                                                                                        "team",
+                                                                                        "namespace"
+                                                                                    ],
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "type": "array"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "owners"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "mode"
+                                                                ],
+                                                                "type": "object"
+                                                            },
                                                             "plural": {
                                                                 "description": "Plural is the human readable plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
                                                                 "type": "string"
@@ -886,6 +923,43 @@
                                                             "kind": {
                                                                 "description": "Kind is the name of the kind. This should begin with a capital letter and be CamelCased",
                                                                 "type": "string"
+                                                            },
+                                                            "namingStrategy": {
+                                                                "description": "#ManifestVersionKindNamingStrategy declares what the name of an object of a kind means.",
+                                                                "properties": {
+                                                                    "mode": {
+                                                                        "description": "mode is the strategy: \"owner\" names objects for their owner (user-\u003cid\u003e, team-\u003cid\u003e or namespace).",
+                                                                        "type": "string"
+                                                                    },
+                                                                    "owner": {
+                                                                        "properties": {
+                                                                            "allowOrgAdmin": {
+                                                                                "description": "allowOrgAdmin lets an org admin do anything to the kind, whoever owns the object.",
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "owners": {
+                                                                                "description": "owners are the kinds of owner a name can have.",
+                                                                                "items": {
+                                                                                    "enum": [
+                                                                                        "user",
+                                                                                        "team",
+                                                                                        "namespace"
+                                                                                    ],
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "type": "array"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "owners"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "mode"
+                                                                ],
+                                                                "type": "object"
                                                             },
                                                             "plural": {
                                                                 "description": "Plural is the human readable plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",

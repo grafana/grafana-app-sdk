@@ -12,6 +12,7 @@ import (
 	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 // ToManifestData is a function which converts this specific version of the AppManifestSpec (v1alpha2)
@@ -26,8 +27,8 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 	}
 	if s.Embed != nil {
 		data.Embed = make(map[string]app.ManifestResourceEmbed, len(s.Embed))
-		for resource, embed := range s.Embed {
-			data.Embed[resource] = app.ManifestResourceEmbed{ReembedVersion: int(embed.ReembedVersion)}
+		for r, embed := range s.Embed {
+			data.Embed[r] = app.ManifestResourceEmbed{ReembedVersion: int(embed.ReembedVersion)}
 		}
 	}
 	// Versions
@@ -57,6 +58,7 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				k.Storage = &app.ManifestVersionKindStorage{ListKeys: kind.Storage.ListKeys}
 			}
 			k.FixedNames = slices.Clone(kind.FixedNames)
+			k.NamingStrategy = namingStrategyToManifestData(kind.NamingStrategy)
 			if kind.Plural != nil {
 				k.Plural = capitalize(*kind.Plural)
 				k.Resource = strings.ToLower(*kind.Plural)
@@ -376,8 +378,8 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 	}
 	if data.Embed != nil {
 		manifestSpec.Embed = make(map[string]AppManifestResourceEmbed, len(data.Embed))
-		for resource, embed := range data.Embed {
-			manifestSpec.Embed[resource] = AppManifestResourceEmbed{ReembedVersion: int64(embed.ReembedVersion)}
+		for r, embed := range data.Embed {
+			manifestSpec.Embed[r] = AppManifestResourceEmbed{ReembedVersion: int64(embed.ReembedVersion)}
 		}
 	}
 	if data.PreferredVersion != "" {
@@ -403,6 +405,7 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				k.Storage = &AppManifestManifestVersionKindStorage{ListKeys: kind.Storage.ListKeys}
 			}
 			k.FixedNames = slices.Clone(kind.FixedNames)
+			k.NamingStrategy = namingStrategyFromManifestData(kind.NamingStrategy)
 			if kind.Schema != nil {
 				k.Schemas = kind.Schema.AsOpenAPI3SchemasMap()
 			}
@@ -621,4 +624,40 @@ func capitalize(s string) string {
 		return s
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+func namingStrategyToManifestData(in *AppManifestManifestVersionKindNamingStrategy) *app.ManifestKindNamingStrategy {
+	if in == nil {
+		return nil
+	}
+	out := &app.ManifestKindNamingStrategy{Mode: in.Mode}
+	if in.Owner != nil {
+		out.Owner = &app.ManifestKindNamingStrategyOwner{
+			Owners:        make([]resource.Owner, 0, len(in.Owner.Owners)),
+			AllowOrgAdmin: in.Owner.AllowOrgAdmin != nil && *in.Owner.AllowOrgAdmin,
+		}
+		for _, owner := range in.Owner.Owners {
+			out.Owner.Owners = append(out.Owner.Owners, resource.Owner(owner))
+		}
+	}
+	return out
+}
+
+func namingStrategyFromManifestData(in *app.ManifestKindNamingStrategy) *AppManifestManifestVersionKindNamingStrategy {
+	if in == nil {
+		return nil
+	}
+	out := &AppManifestManifestVersionKindNamingStrategy{Mode: in.Mode}
+	if in.Owner != nil {
+		out.Owner = &AppManifestManifestVersionKindNamingStrategyOwner{
+			Owners: make([]AppManifestManifestVersionKindNamingStrategyOwnerOwners, 0, len(in.Owner.Owners)),
+		}
+		for _, owner := range in.Owner.Owners {
+			out.Owner.Owners = append(out.Owner.Owners, AppManifestManifestVersionKindNamingStrategyOwnerOwners(owner))
+		}
+		if in.Owner.AllowOrgAdmin {
+			out.Owner.AllowOrgAdmin = new(true)
+		}
+	}
+	return out
 }
