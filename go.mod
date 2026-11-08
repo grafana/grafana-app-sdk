@@ -9,6 +9,9 @@ retract (
 	v0.18.3 // Tag was deleted and re-created with a new commit, causing GOPROXY conflicts
 )
 
+// Replace references to internal workspaces
+replace github.com/grafana/grafana-app-sdk/logging => ./logging
+
 require (
 	cuelang.org/go v0.11.2
 	github.com/bradfitz/gomemcache v0.0.0-20260422231931-4d751bb6e37c
@@ -16,11 +19,11 @@ require (
 	github.com/emicklei/go-restful/v3 v3.14.0
 	github.com/getkin/kin-openapi v0.152.0
 	github.com/go-jose/go-jose/v4 v4.1.8
-	github.com/grafana/authlib v0.0.0-20260922202713-e3b571f7135d
+	github.com/grafana/authlib v0.0.0-20261108003752-80ed9e737add
 	github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815
 	github.com/grafana/codejen v0.0.4
 	github.com/grafana/cog v0.2.4
-	github.com/grafana/grafana-app-sdk/logging v0.61.0
+	github.com/grafana/grafana-app-sdk/logging v0.0.0 // increments with each release
 	github.com/grafana/grafana-plugin-sdk-go v0.298.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-plugin v1.8.0
@@ -104,7 +107,7 @@ require (
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.12 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.1 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.4 // indirect
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.32.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.33.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
@@ -154,7 +157,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.47.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
-	go.yaml.in/yaml/v3 v3.0.5 // indirect
+	go.yaml.in/yaml/v3 v3.0.6 // indirect
 	golang.org/x/exp v0.0.0-20261014143641-f0251eb4aa3e // indirect
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
@@ -163,8 +166,8 @@ require (
 	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
 	gomodules.xyz/orderedmap v0.1.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20261012220534-4341edf3f941 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20261019180522-ce908d29299b // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20261026165753-2ffab32bce7e // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20261026165753-2ffab32bce7e // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/apiserver v0.37.2 // indirect
 	k8s.io/component-base v0.37.2 // indirect
