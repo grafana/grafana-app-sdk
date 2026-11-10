@@ -239,8 +239,10 @@
                         "search": {
                             "trash": false
                         },
-                        "provisioning": {
-                            "enabled": true
+                        "core": {
+                            "provisioning": {
+                                "enabled": true
+                            }
                         },
                         "conversion": false
                     }

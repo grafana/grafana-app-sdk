@@ -877,6 +877,21 @@
                                                                 "description": "Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.\nIt may not prevent automatic conversion behavior between versions of the kind when set to false\n(for example, CRDs will always support simple conversion, and this flag enables webhook conversion).\nThis field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.",
                                                                 "type": "boolean"
                                                             },
+                                                            "core": {
+                                                                "properties": {
+                                                                    "provisioning": {
+                                                                        "properties": {
+                                                                            "enabled": {
+                                                                                "default": false,
+                                                                                "description": "enabled declares whether provisioning manages resources of this kind.",
+                                                                                "type": "boolean"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
                                                             "embed": {
                                                                 "description": "Kinds with a custom embedding builder omit this section.",
                                                                 "properties": {
@@ -964,16 +979,6 @@
                                                             "plural": {
                                                                 "description": "Plural is the human readable plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
                                                                 "type": "string"
-                                                            },
-                                                            "provisioning": {
-                                                                "properties": {
-                                                                    "enabled": {
-                                                                        "default": false,
-                                                                        "description": "enabled declares whether provisioning manages resources of this kind.",
-                                                                        "type": "boolean"
-                                                                    }
-                                                                },
-                                                                "type": "object"
                                                             },
                                                             "resource": {
                                                                 "description": "Resource is the lowercase plural used as the resource in the k8s GroupVersionResource URL.\nThis is optional and defaults to the lowercase of plural if not present.",

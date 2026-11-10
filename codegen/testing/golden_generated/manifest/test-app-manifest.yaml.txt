@@ -126,6 +126,9 @@ spec:
       - .spec.stringField
       userReadable: false
     - conversion: false
+      core:
+        provisioning:
+          enabled: true
       fixedNames:
       - current
       kind: TestKind2
@@ -137,8 +140,6 @@ spec:
           - namespace
           - user
       plural: TestKind2s
-      provisioning:
-        enabled: true
       resource: testkind2s
       schemas:
         OperatorState:

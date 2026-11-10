@@ -233,18 +233,24 @@ func TestProcessKindVersion_Search(t *testing.T) {
 	}
 }
 
-func TestProcessKindVersion_Provisioning(t *testing.T) {
+func TestProcessKindVersion_Core(t *testing.T) {
 	for _, tc := range []struct {
-		name         string
-		provisioning *codegen.KindProvisioning
-		expected     *app.ManifestVersionKindProvisioning
+		name     string
+		core     *codegen.KindCore
+		expected *app.ManifestVersionKindCore
 	}{
 		{name: "unset"},
-		{name: "disabled", provisioning: &codegen.KindProvisioning{}},
+		{name: "empty", core: &codegen.KindCore{}},
 		{
-			name:         "enabled",
-			provisioning: &codegen.KindProvisioning{Enabled: true},
-			expected:     &app.ManifestVersionKindProvisioning{Enabled: new(true)},
+			name: "empty blocks",
+			core: &codegen.KindCore{Provisioning: &codegen.KindProvisioning{}},
+		},
+		{
+			name: "provisioning enabled",
+			core: &codegen.KindCore{Provisioning: &codegen.KindProvisioning{Enabled: true}},
+			expected: &app.ManifestVersionKindCore{
+				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
+			},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -253,10 +259,10 @@ func TestProcessKindVersion_Provisioning(t *testing.T) {
 				PluralName:   "Foos",
 				Scope:        "Namespaced",
 				FolderScoped: true,
-				Provisioning: tc.provisioning,
+				Core:         tc.core,
 			}, "v1", false)
 			require.NoError(t, err)
-			assert.Equal(t, tc.expected, mver.Provisioning)
+			assert.Equal(t, tc.expected, mver.Core)
 		})
 	}
 }

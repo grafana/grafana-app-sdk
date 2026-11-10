@@ -120,6 +120,11 @@ type KindSearch struct {
 	Global bool `json:"global"`
 }
 
+// KindCore declares how core App Platform features treat a kind.
+type KindCore struct {
+	Provisioning *KindProvisioning `json:"provisioning,omitempty"`
+}
+
 // KindProvisioning declares whether provisioning (Git Sync) manages a kind.
 type KindProvisioning struct {
 	Enabled bool `json:"enabled"`

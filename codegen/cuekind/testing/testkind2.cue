@@ -15,7 +15,7 @@ testKind2: {
 		}
 	}
 	search: trash: false
-	provisioning: enabled: true
+	core: provisioning: enabled: true
 	versions: {
 		"v1": {
 			schema: {

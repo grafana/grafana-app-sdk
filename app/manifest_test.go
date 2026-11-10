@@ -1699,17 +1699,18 @@ func TestManifestVersionKind_SearchEndpoints(t *testing.T) {
 
 func TestManifestVersionKind_IsProvisionable(t *testing.T) {
 	for _, tc := range []struct {
-		name         string
-		provisioning *ManifestVersionKindProvisioning
-		want         bool
+		name string
+		core *ManifestVersionKindCore
+		want bool
 	}{
 		{name: "omitted"},
-		{name: "empty block", provisioning: &ManifestVersionKindProvisioning{}},
-		{name: "disabled", provisioning: &ManifestVersionKindProvisioning{Enabled: new(false)}},
-		{name: "enabled", provisioning: &ManifestVersionKindProvisioning{Enabled: new(true)}, want: true},
+		{name: "no provisioning", core: &ManifestVersionKindCore{}},
+		{name: "empty block", core: &ManifestVersionKindCore{Provisioning: &ManifestVersionKindProvisioning{}}},
+		{name: "disabled", core: &ManifestVersionKindCore{Provisioning: &ManifestVersionKindProvisioning{Enabled: new(false)}}},
+		{name: "enabled", core: &ManifestVersionKindCore{Provisioning: &ManifestVersionKindProvisioning{Enabled: new(true)}}, want: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			kind := ManifestVersionKind{Kind: "Foo", Provisioning: tc.provisioning}
+			kind := ManifestVersionKind{Kind: "Foo", Core: tc.core}
 			assert.Equal(t, tc.want, kind.IsProvisionable())
 		})
 	}

@@ -96,8 +96,8 @@ type AppManifestManifestVersionKind struct {
 	Search *AppManifestManifestVersionKindSearch `json:"search,omitempty"`
 	// embed defines the embedding document independently of search fields.
 	Embed *AppManifestManifestVersionKindEmbed `json:"embed,omitempty"`
-	// provisioning declares whether provisioning (Git Sync) manages this kind.
-	Provisioning *AppManifestManifestVersionKindProvisioning `json:"provisioning,omitempty"`
+	// core declares how core App Platform features, such as provisioning, treat this kind.
+	Core *AppManifestManifestVersionKindCore `json:"core,omitempty"`
 	// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 	// It may not prevent automatic conversion behavior between versions of the kind when set to false
 	// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
@@ -409,6 +409,22 @@ func NewAppManifestManifestVersionKindEmbedField() *AppManifestManifestVersionKi
 // OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindEmbedField.
 func (AppManifestManifestVersionKindEmbedField) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindEmbedField"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindCore struct {
+	// provisioning declares whether provisioning (Git Sync) manages this kind.
+	Provisioning *AppManifestManifestVersionKindProvisioning `json:"provisioning,omitempty"`
+}
+
+// NewAppManifestManifestVersionKindCore creates a new AppManifestManifestVersionKindCore object.
+func NewAppManifestManifestVersionKindCore() *AppManifestManifestVersionKindCore {
+	return &AppManifestManifestVersionKindCore{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindCore.
+func (AppManifestManifestVersionKindCore) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindCore"
 }
 
 // +k8s:openapi-gen=true

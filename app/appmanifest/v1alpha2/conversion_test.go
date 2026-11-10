@@ -305,15 +305,31 @@ func TestSearchEndpointsConversion(t *testing.T) {
 	}
 }
 
-func TestProvisioningConversion(t *testing.T) {
+func TestCoreConversion(t *testing.T) {
 	for _, tc := range []struct {
-		name         string
-		provisioning *app.ManifestVersionKindProvisioning
+		name string
+		core *app.ManifestVersionKindCore
 	}{
 		{name: "unset"},
-		{name: "empty", provisioning: &app.ManifestVersionKindProvisioning{}},
-		{name: "disabled", provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(false)}},
-		{name: "enabled", provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)}},
+		{name: "empty", core: &app.ManifestVersionKindCore{}},
+		{
+			name: "empty blocks",
+			core: &app.ManifestVersionKindCore{
+				Provisioning: &app.ManifestVersionKindProvisioning{},
+			},
+		},
+		{
+			name: "provisioning disabled",
+			core: &app.ManifestVersionKindCore{
+				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(false)},
+			},
+		},
+		{
+			name: "provisioning enabled",
+			core: &app.ManifestVersionKindCore{
+				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
+			},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			md := app.ManifestData{
@@ -322,9 +338,9 @@ func TestProvisioningConversion(t *testing.T) {
 					Name:   "v1",
 					Served: true,
 					Kinds: []app.ManifestVersionKind{{
-						Kind:         "Foo",
-						Scope:        "Namespaced",
-						Provisioning: tc.provisioning,
+						Kind:  "Foo",
+						Scope: "Namespaced",
+						Core:  tc.core,
 					}},
 				}},
 			}
@@ -334,7 +350,7 @@ func TestProvisioningConversion(t *testing.T) {
 
 			roundTripped, err := spec.ToManifestData()
 			require.NoError(t, err)
-			assert.Equal(t, tc.provisioning, roundTripped.Versions[0].Kinds[0].Provisioning)
+			assert.Equal(t, tc.core, roundTripped.Versions[0].Kinds[0].Core)
 		})
 	}
 }
