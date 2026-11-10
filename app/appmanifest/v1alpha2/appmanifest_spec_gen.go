@@ -2,6 +2,10 @@
 
 package v1alpha2
 
+import (
+	json "encoding/json"
+)
+
 // +k8s:openapi-gen=true
 type AppManifestResourceEmbed struct {
 	// reembedVersion is a manual revision for requesting re-embedding of existing resources, shared by all API versions.
@@ -411,16 +415,127 @@ func (AppManifestManifestVersionKindEmbedField) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindEmbedField"
 }
 
-// Keys without a dot are Grafana extensions with a schema in the SDK:
-// "provisioning" (app.ManifestVersionKindProvisioning) and "ui" (app.ManifestVersionKindUI).
+// Keys without a dot are Grafana extensions with a schema in the SDK, such as provisioning.
 // Keys with a dot, such as "kgatlas.ext.grafana.app", are app-defined extensions with any value.
-// ToManifestData checks the SDK extensions against their Go types.
 // +k8s:openapi-gen=true
-type AppManifestManifestVersionKindExtensions map[string]interface{}
+type AppManifestManifestVersionKindExtensions struct {
+	// provisioning declares whether provisioning (Git Sync) manages this kind.
+	Provisioning *AppManifestManifestVersionKindProvisioning `json:"provisioning,omitempty"`
+	// ui declares how user interfaces display this kind.
+	Ui *AppManifestManifestVersionKindUI `json:"ui,omitempty"`
+	// AdditionalProperties holds the keys that are not declared fields.
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// NewAppManifestManifestVersionKindExtensions creates a new AppManifestManifestVersionKindExtensions object.
+func NewAppManifestManifestVersionKindExtensions() *AppManifestManifestVersionKindExtensions {
+	return &AppManifestManifestVersionKindExtensions{}
+}
+
+// MarshalJSON implements a custom JSON marshalling logic to encode `AppManifestManifestVersionKindExtensions` as JSON.
+func (resource AppManifestManifestVersionKindExtensions) MarshalJSON() ([]byte, error) {
+	type alias AppManifestManifestVersionKindExtensions
+	raw, err := json.Marshal(alias(resource))
+	if err != nil || len(resource.AdditionalProperties) == 0 {
+		return raw, err
+	}
+
+	fields := make(map[string]json.RawMessage)
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return nil, err
+	}
+	for key, value := range resource.AdditionalProperties {
+		if _, ok := fields[key]; ok {
+			continue
+		}
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return nil, err
+		}
+		fields[key] = encoded
+	}
+
+	return json.Marshal(fields)
+}
+
+// UnmarshalJSON implements a custom JSON unmarshalling logic to decode `AppManifestManifestVersionKindExtensions` from JSON.
+func (resource *AppManifestManifestVersionKindExtensions) UnmarshalJSON(raw []byte) error {
+	if raw == nil {
+		return nil
+	}
+
+	type alias AppManifestManifestVersionKindExtensions
+	decoded := alias(*resource)
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return err
+	}
+
+	fields := make(map[string]json.RawMessage)
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	delete(fields, "provisioning")
+	delete(fields, "ui")
+	for key, value := range fields {
+		var item interface{}
+		if err := json.Unmarshal(value, &item); err != nil {
+			return err
+		}
+		if decoded.AdditionalProperties == nil {
+			decoded.AdditionalProperties = make(map[string]interface{})
+		}
+		decoded.AdditionalProperties[key] = item
+	}
+
+	*resource = AppManifestManifestVersionKindExtensions(decoded)
+
+	return nil
+}
 
 // OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindExtensions.
 func (AppManifestManifestVersionKindExtensions) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindExtensions"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindProvisioning struct {
+	// enabled declares whether provisioning manages resources of this kind.
+	Enabled *bool `json:"enabled,omitempty"`
+}
+
+// NewAppManifestManifestVersionKindProvisioning creates a new AppManifestManifestVersionKindProvisioning object.
+func NewAppManifestManifestVersionKindProvisioning() *AppManifestManifestVersionKindProvisioning {
+	return &AppManifestManifestVersionKindProvisioning{
+		Enabled: (func(input bool) *bool { return &input })(false),
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindProvisioning.
+func (AppManifestManifestVersionKindProvisioning) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindProvisioning"
+}
+
+// The display name of the kind comes from kind and plural.
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindUI struct {
+	// labelKey is the i18n key that user interfaces translate to the display name of the kind.
+	// The translation takes a count to select the singular or plural form, and falls back to kind or plural.
+	LabelKey *string `json:"labelKey,omitempty"`
+	// url is the path of the page that shows one resource of the kind, such as "/a/my-app/widgets/{name}".
+	// User interfaces replace {name} with the name of the resource.
+	Url *string `json:"url,omitempty"`
+	// icon is the name of a Grafana UI icon for the kind.
+	Icon *string `json:"icon,omitempty"`
+}
+
+// NewAppManifestManifestVersionKindUI creates a new AppManifestManifestVersionKindUI object.
+func NewAppManifestManifestVersionKindUI() *AppManifestManifestVersionKindUI {
+	return &AppManifestManifestVersionKindUI{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindUI.
+func (AppManifestManifestVersionKindUI) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindUI"
 }
 
 // Deprecated: custom routes are moved to the openapi section

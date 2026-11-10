@@ -247,9 +247,9 @@
                                 "enabled": true
                             },
                             "ui": {
-                                "icon": "apps",
                                 "labelKey": "testkind2",
-                                "url": "/a/test-app/testkind2s/{name}"
+                                "url": "/a/test-app/testkind2s/{name}",
+                                "icon": "apps"
                             }
                         },
                         "conversion": false

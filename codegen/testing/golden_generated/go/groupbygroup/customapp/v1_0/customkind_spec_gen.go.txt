@@ -136,7 +136,7 @@ type CustomKindSpec struct {
 	BoolField    bool                       `json:"boolField"`
 	FloatField   float64                    `json:"floatField"`
 	LinkedList   CustomKindRecursiveList    `json:"linkedList"`
-	ExclusiveInt uint64                     `json:"exclusiveInt"`
+	ExclusiveInt int64                      `json:"exclusiveInt"`
 }
 
 // NewCustomKindSpec creates a new CustomKindSpec object.

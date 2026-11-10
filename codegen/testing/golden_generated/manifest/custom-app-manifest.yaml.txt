@@ -294,7 +294,7 @@ spec:
           - exclusiveInt
           type: object
         status:
-          additionalProperties: {}
+          additionalProperties: true
           properties:
             additionalFields:
               additionalProperties: true

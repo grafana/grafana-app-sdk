@@ -169,12 +169,29 @@ appManifestv1alpha2: appManifestKind & {
 			// Declaring an embedding field does not enable filtering embeddings by that field.
 			fields: [...#ManifestVersionKindEmbedField]
 		}
-		// Keys without a dot are Grafana extensions with a schema in the SDK:
-		// "provisioning" (app.ManifestVersionKindProvisioning) and "ui" (app.ManifestVersionKindUI).
+		// Keys without a dot are Grafana extensions with a schema in the SDK, such as provisioning.
 		// Keys with a dot, such as "kgatlas.ext.grafana.app", are app-defined extensions with any value.
-		// ToManifestData checks the SDK extensions against their Go types.
 		#ManifestVersionKindExtensions: {
+			// provisioning declares whether provisioning (Git Sync) manages this kind.
+			provisioning?: #ManifestVersionKindProvisioning
+			// ui declares how user interfaces display this kind.
+			ui?: #ManifestVersionKindUI
 			[string]: _
+		}
+		#ManifestVersionKindProvisioning: {
+			// enabled declares whether provisioning manages resources of this kind.
+			enabled?: bool | *false
+		}
+		// The display name of the kind comes from kind and plural.
+		#ManifestVersionKindUI: {
+			// labelKey is the i18n key that user interfaces translate to the display name of the kind.
+			// The translation takes a count to select the singular or plural form, and falls back to kind or plural.
+			labelKey?: string
+			// url is the path of the page that shows one resource of the kind, such as "/a/my-app/widgets/{name}".
+			// User interfaces replace {name} with the name of the resource.
+			url?: string
+			// icon is the name of a Grafana UI icon for the kind.
+			icon?: string
 		}
 		#ResourceEmbed: {
 			// reembedVersion is a manual revision for requesting re-embedding of existing resources, shared by all API versions.
