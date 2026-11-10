@@ -909,38 +909,9 @@
                                                                 "type": "object"
                                                             },
                                                             "extensions": {
-                                                                "description": "TODO: allow untyped keys for app-defined extensions, such as \"kgatlas.ext.grafana.app\", next to the typed ones.",
-                                                                "properties": {
-                                                                    "provisioning": {
-                                                                        "properties": {
-                                                                            "enabled": {
-                                                                                "default": false,
-                                                                                "description": "enabled declares whether provisioning manages resources of this kind.",
-                                                                                "type": "boolean"
-                                                                            }
-                                                                        },
-                                                                        "type": "object"
-                                                                    },
-                                                                    "ui": {
-                                                                        "description": "The display name of the kind comes from kind and plural.",
-                                                                        "properties": {
-                                                                            "icon": {
-                                                                                "description": "icon is the name of a Grafana UI icon for the kind.",
-                                                                                "type": "string"
-                                                                            },
-                                                                            "labelKey": {
-                                                                                "description": "labelKey is the i18n key that user interfaces translate to the display name of the kind.\nThe translation takes a count to select the singular or plural form, and falls back to kind or plural.",
-                                                                                "type": "string"
-                                                                            },
-                                                                            "url": {
-                                                                                "description": "url is the path of the page that shows one resource of the kind, such as \"/a/my-app/widgets/{name}\".\nUser interfaces replace {name} with the name of the resource.",
-                                                                                "type": "string"
-                                                                            }
-                                                                        },
-                                                                        "type": "object"
-                                                                    }
-                                                                },
-                                                                "type": "object"
+                                                                "description": "Keys without a dot are Grafana extensions with a schema in the SDK:\n\"provisioning\" (app.ManifestVersionKindProvisioning) and \"ui\" (app.ManifestVersionKindUI).\nKeys with a dot, such as \"kgatlas.ext.grafana.app\", are app-defined extensions with any value.\nToManifestData checks the SDK extensions against their Go types.",
+                                                                "type": "object",
+                                                                "x-kubernetes-preserve-unknown-fields": true
                                                             },
                                                             "fixedNames": {
                                                                 "description": "fixedNames are names of objects of this kind that are never stored: the app\nanswers requests for them itself. A route at exactly \u003cplural\u003e/\u003cname\u003e is\nallowed for each.",

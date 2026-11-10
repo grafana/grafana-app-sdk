@@ -166,21 +166,8 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				}
 			}
 			if kind.Extensions != nil {
-				k.Extensions = &app.ManifestVersionKindExtensions{}
-				if kind.Extensions.Provisioning != nil {
-					k.Extensions.Provisioning = &app.ManifestVersionKindProvisioning{Enabled: kind.Extensions.Provisioning.Enabled}
-				}
-				if ui := kind.Extensions.Ui; ui != nil {
-					k.Extensions.UI = &app.ManifestVersionKindUI{}
-					if ui.LabelKey != nil {
-						k.Extensions.UI.LabelKey = *ui.LabelKey
-					}
-					if ui.Url != nil {
-						k.Extensions.UI.URL = *ui.Url
-					}
-					if ui.Icon != nil {
-						k.Extensions.UI.Icon = *ui.Icon
-					}
+				if err := convertExtensions(kind.Extensions, &k.Extensions); err != nil {
+					return app.ManifestData{}, fmt.Errorf("kind %s extensions: %w", kind.Kind, err)
 				}
 			}
 			// Schema
@@ -518,21 +505,8 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				}
 			}
 			if kind.Extensions != nil {
-				k.Extensions = &AppManifestManifestVersionKindExtensions{}
-				if kind.Extensions.Provisioning != nil {
-					k.Extensions.Provisioning = &AppManifestManifestVersionKindProvisioning{Enabled: kind.Extensions.Provisioning.Enabled}
-				}
-				if ui := kind.Extensions.UI; ui != nil {
-					k.Extensions.Ui = &AppManifestManifestVersionKindUI{}
-					if ui.LabelKey != "" {
-						k.Extensions.Ui.LabelKey = &ui.LabelKey
-					}
-					if ui.URL != "" {
-						k.Extensions.Ui.Url = &ui.URL
-					}
-					if ui.Icon != "" {
-						k.Extensions.Ui.Icon = &ui.Icon
-					}
+				if err := convertExtensions(kind.Extensions, &k.Extensions); err != nil {
+					return nil, fmt.Errorf("kind %s extensions: %w", kind.Kind, err)
 				}
 			}
 			// Routes
@@ -696,4 +670,12 @@ func namingStrategyFromManifestData(in *app.ManifestKindNamingStrategy) *AppMani
 		}
 	}
 	return out
+}
+
+func convertExtensions(in, out any) error {
+	data, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, out)
 }

@@ -21,6 +21,7 @@ testKind2: {
 			labelKey: "testkind2"
 			icon:     "apps"
 		}
+		"kgatlas.ext.grafana.app": someKnowledgeGraphConfigOption: "foo"
 	}
 	versions: {
 		"v1": {

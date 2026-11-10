@@ -311,12 +311,14 @@ SchemaWithOperatorState: Schema & {
 }
 
 // #KindExtensions declares how other Grafana features treat a kind.
-// TODO: allow untyped keys for app-defined extensions, such as "kgatlas.ext.grafana.app", next to the typed ones.
+// Keys without a dot are Grafana extensions with a schema in the SDK, such as provisioning.
+// Keys with a dot, such as "kgatlas.ext.grafana.app", are app-defined extensions with any value.
 #KindExtensions: {
 	// provisioning declares whether provisioning (Git Sync) manages this kind.
 	provisioning?: #KindProvisioning
 	// ui declares how user interfaces display this kind.
 	ui?: #KindUI
+	[=~"\\."]: _
 }
 
 // #KindProvisioning declares whether provisioning (Git Sync) manages a kind.

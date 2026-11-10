@@ -111,6 +111,13 @@ var appManifestData = app.ManifestData{
 							URL:      "/a/test-app/testkind2s/{name}",
 							Icon:     "apps",
 						},
+						Additional: func() map[string]any {
+							var additional map[string]any
+							if err := json.Unmarshal([]byte("{\"kgatlas.ext.grafana.app\":{\"someKnowledgeGraphConfigOption\":\"foo\"}}"), &additional); err != nil {
+								panic(err)
+							}
+							return additional
+						}(),
 					},
 					Schema: &versionSchemaTestKind2v1,
 					FixedNames: []string{
