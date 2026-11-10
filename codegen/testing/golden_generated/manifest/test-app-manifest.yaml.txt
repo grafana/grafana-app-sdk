@@ -126,6 +126,9 @@ spec:
       - .spec.stringField
       userReadable: false
     - conversion: false
+      extensions:
+        provisioning:
+          enabled: true
       fixedNames:
       - current
       kind: TestKind2

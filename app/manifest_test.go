@@ -1697,6 +1697,25 @@ func TestManifestVersionKind_SearchEndpoints(t *testing.T) {
 	}
 }
 
+func TestManifestVersionKind_IsProvisionable(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		extensions *ManifestVersionKindExtensions
+		want       bool
+	}{
+		{name: "omitted"},
+		{name: "no provisioning", extensions: &ManifestVersionKindExtensions{}},
+		{name: "empty block", extensions: &ManifestVersionKindExtensions{Provisioning: &ManifestVersionKindProvisioning{}}},
+		{name: "disabled", extensions: &ManifestVersionKindExtensions{Provisioning: &ManifestVersionKindProvisioning{Enabled: new(false)}}},
+		{name: "enabled", extensions: &ManifestVersionKindExtensions{Provisioning: &ManifestVersionKindProvisioning{Enabled: new(true)}}, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			kind := ManifestVersionKind{Kind: "Foo", Extensions: tc.extensions}
+			assert.Equal(t, tc.want, kind.IsProvisionable())
+		})
+	}
+}
+
 func TestManifestVersionKind_ListKeysEndpoint(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

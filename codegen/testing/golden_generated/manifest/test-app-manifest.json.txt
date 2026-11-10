@@ -239,6 +239,11 @@
                         "search": {
                             "trash": false
                         },
+                        "extensions": {
+                            "provisioning": {
+                                "enabled": true
+                            }
+                        },
                         "conversion": false
                     }
                 ]
