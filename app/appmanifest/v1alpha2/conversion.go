@@ -170,6 +170,18 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				if kind.Extensions.Provisioning != nil {
 					k.Extensions.Provisioning = &app.ManifestVersionKindProvisioning{Enabled: kind.Extensions.Provisioning.Enabled}
 				}
+				if ui := kind.Extensions.Ui; ui != nil {
+					k.Extensions.UI = &app.ManifestVersionKindUI{}
+					if ui.LabelKey != nil {
+						k.Extensions.UI.LabelKey = *ui.LabelKey
+					}
+					if ui.Url != nil {
+						k.Extensions.UI.URL = *ui.Url
+					}
+					if ui.Icon != nil {
+						k.Extensions.UI.Icon = *ui.Icon
+					}
+				}
 			}
 			// Schema
 			if kind.Schemas != nil {
@@ -509,6 +521,18 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				k.Extensions = &AppManifestManifestVersionKindExtensions{}
 				if kind.Extensions.Provisioning != nil {
 					k.Extensions.Provisioning = &AppManifestManifestVersionKindProvisioning{Enabled: kind.Extensions.Provisioning.Enabled}
+				}
+				if ui := kind.Extensions.UI; ui != nil {
+					k.Extensions.Ui = &AppManifestManifestVersionKindUI{}
+					if ui.LabelKey != "" {
+						k.Extensions.Ui.LabelKey = &ui.LabelKey
+					}
+					if ui.URL != "" {
+						k.Extensions.Ui.Url = &ui.URL
+					}
+					if ui.Icon != "" {
+						k.Extensions.Ui.Icon = &ui.Icon
+					}
 				}
 			}
 			// Routes

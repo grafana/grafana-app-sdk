@@ -312,6 +312,14 @@ func TestExtensionsConversion(t *testing.T) {
 	}{
 		{name: "unset"},
 		{name: "empty", extensions: &app.ManifestVersionKindExtensions{}},
+		{name: "partial ui", extensions: &app.ManifestVersionKindExtensions{UI: &app.ManifestVersionKindUI{Icon: "apps"}}},
+		{
+			name: "provisioning and ui",
+			extensions: &app.ManifestVersionKindExtensions{
+				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
+				UI:           &app.ManifestVersionKindUI{LabelKey: "widget", URL: "/a/foo/widgets/{name}", Icon: "apps"},
+			},
+		},
 		{
 			name: "empty blocks",
 			extensions: &app.ManifestVersionKindExtensions{

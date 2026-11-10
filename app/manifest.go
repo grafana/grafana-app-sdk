@@ -628,7 +628,7 @@ type ManifestVersionKind struct {
 	Search *ManifestVersionKindSearch `json:"search,omitempty" yaml:"search,omitempty"`
 	// Embed defines the embedding document independently of search fields.
 	Embed *ManifestVersionKindEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
-	// Extensions declares how other Grafana features, such as provisioning, treat this kind.
+	// Extensions declares how other Grafana features, such as provisioning and user interfaces, treat this kind.
 	Extensions *ManifestVersionKindExtensions `json:"extensions,omitempty" yaml:"extensions,omitempty"`
 }
 
@@ -678,12 +678,27 @@ type ManifestVersionKindEmbed struct {
 type ManifestVersionKindExtensions struct {
 	// Provisioning declares whether provisioning (Git Sync) manages this kind.
 	Provisioning *ManifestVersionKindProvisioning `json:"provisioning,omitempty" yaml:"provisioning,omitempty"`
+	// UI declares how user interfaces display this kind.
+	UI *ManifestVersionKindUI `json:"ui,omitempty" yaml:"ui,omitempty"`
 }
 
 // ManifestVersionKindProvisioning declares whether provisioning (Git Sync) manages a kind.
 type ManifestVersionKindProvisioning struct {
 	// Enabled declares whether provisioning manages resources of this kind. A nil value defaults to false.
 	Enabled *bool `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+}
+
+// ManifestVersionKindUI declares how user interfaces display a kind.
+// The display name of the kind comes from Kind and Plural.
+type ManifestVersionKindUI struct {
+	// LabelKey is the i18n key that user interfaces translate to the display name of the kind.
+	// The translation takes a count to select the singular or plural form, and falls back to Kind or Plural.
+	LabelKey string `json:"labelKey,omitempty" yaml:"labelKey,omitempty"`
+	// URL is the path of the page that shows one resource of the kind, such as "/a/my-app/widgets/{name}".
+	// User interfaces replace {name} with the name of the resource.
+	URL string `json:"url,omitempty" yaml:"url,omitempty"`
+	// Icon is the name of a Grafana UI icon for the kind.
+	Icon string `json:"icon,omitempty" yaml:"icon,omitempty"`
 }
 
 // ManifestVersionKindEmbedField supplies text for the embedding document without exposing a search field.

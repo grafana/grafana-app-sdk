@@ -267,6 +267,75 @@ func TestProcessKindVersion_Extensions(t *testing.T) {
 	}
 }
 
+func TestProcessKindVersion_UI(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		ui       *codegen.KindUI
+		expected *app.ManifestVersionKindUI
+	}{
+		{name: "unset"},
+		{name: "empty", ui: &codegen.KindUI{}},
+		{
+			name:     "set",
+			ui:       &codegen.KindUI{LabelKey: "widget", URL: "/a/foo/widgets/{name}", Icon: "apps"},
+			expected: &app.ManifestVersionKindUI{LabelKey: "widget", URL: "/a/foo/widgets/{name}", Icon: "apps"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mver, err := processKindVersion(codegen.VersionedKind{
+				Kind:         "Foo",
+				PluralName:   "Foos",
+				Scope:        "Namespaced",
+				FolderScoped: true,
+				Extensions:   &codegen.KindExtensions{UI: tc.ui},
+			}, "v1", false)
+			require.NoError(t, err)
+			var ui *app.ManifestVersionKindUI
+			if mver.Extensions != nil {
+				ui = mver.Extensions.UI
+			}
+			assert.Equal(t, tc.expected, ui)
+		})
+	}
+}
+
+func TestBuildManifestData_UIURL(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		ui       *codegen.KindUI
+		expected *app.ManifestVersionKindUI
+	}{
+		{name: "no ui"},
+		{name: "default url", ui: &codegen.KindUI{Icon: "apps"}, expected: &app.ManifestVersionKindUI{Icon: "apps", URL: "/a/test/foos/{name}"}},
+		{name: "explicit url", ui: &codegen.KindUI{URL: "/a/other/foo/{name}"}, expected: &app.ManifestVersionKindUI{URL: "/a/other/foo/{name}"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			manifest := &codegen.SimpleManifest{
+				AppManifestProperties: codegen.AppManifestProperties{AppName: "test", FullGroup: "test.grafana.app"},
+				AllVersions: map[string]*codegen.SimpleVersion{
+					"v1": {
+						VersionProperties: codegen.VersionProperties{Name: "v1"},
+						AllKinds: []codegen.VersionedKind{{
+							Kind:       "Foo",
+							PluralName: "Foos",
+							Scope:      "Namespaced",
+							Extensions: &codegen.KindExtensions{UI: tc.ui},
+						}},
+					},
+				},
+			}
+
+			got, err := buildManifestData(manifest, false)
+			require.NoError(t, err)
+			var ui *app.ManifestVersionKindUI
+			if extensions := got.Versions[0].Kinds[0].Extensions; extensions != nil {
+				ui = extensions.UI
+			}
+			assert.Equal(t, tc.expected, ui)
+		})
+	}
+}
+
 func TestProcessKindVersion_Embed(t *testing.T) {
 	for _, tc := range []struct {
 		name     string

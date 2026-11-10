@@ -315,12 +315,28 @@ SchemaWithOperatorState: Schema & {
 #KindExtensions: {
 	// provisioning declares whether provisioning (Git Sync) manages this kind.
 	provisioning?: #KindProvisioning
+	// ui declares how user interfaces display this kind.
+	ui?: #KindUI
 }
 
 // #KindProvisioning declares whether provisioning (Git Sync) manages a kind.
 #KindProvisioning: {
 	// enabled declares whether provisioning manages resources of this kind.
 	enabled: bool | *false
+}
+
+// #KindUI declares how user interfaces display a kind.
+// The display name of the kind comes from kind and pluralName.
+#KindUI: {
+	// labelKey is the i18n key that user interfaces translate to the display name of the kind.
+	// The translation takes a count to select the singular or plural form, and falls back to kind or pluralName.
+	labelKey?: string
+	// url is the path of the page that shows one resource of the kind, such as "/a/my-app/widgets/{name}".
+	// User interfaces replace {name} with the name of the resource.
+	// Defaults to "/a/<appName>/<resource>/{name}", the page route of an app plugin with the ID appName.
+	url?: string
+	// icon is the name of a Grafana UI icon for the kind.
+	icon?: string
 }
 
 // #KindEmbed defines the embedding document independently of search fields.
