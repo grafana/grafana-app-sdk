@@ -15,9 +15,12 @@ testKind2: {
 		}
 	}
 	search: trash: false
-	core: ui: {
-		labelKey: "testkind2"
-		icon:     "apps"
+	core: {
+		provisioning: enabled: true
+		ui: {
+			labelKey: "testkind2"
+			icon:     "apps"
+		}
 	}
 	versions: {
 		"v1": {

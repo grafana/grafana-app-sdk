@@ -191,7 +191,10 @@ var appManifestData = app.ManifestData{
                         },{{ end }}
                     },
                 }, {{ end }}{{ if .Core }}
-                Core: &app.ManifestVersionKindCore{ {{ if .Core.UI }}
+                Core: &app.ManifestVersionKindCore{ {{ if .Core.Provisioning }}
+                    Provisioning: &app.ManifestVersionKindProvisioning{
+                        Enabled: {{ goBoolPtr .Core.Provisioning.Enabled }},
+                    },{{ end }}{{ if .Core.UI }}
                     UI: &app.ManifestVersionKindUI{ {{ if .Core.UI.LabelKey }}
                         LabelKey: {{ goString .Core.UI.LabelKey }},{{ end }}{{ if .Core.UI.URL }}
                         URL: {{ goString .Core.UI.URL }},{{ end }}{{ if .Core.UI.Icon }}

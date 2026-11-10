@@ -122,7 +122,13 @@ type KindSearch struct {
 
 // KindCore declares how core App Platform features treat a kind.
 type KindCore struct {
-	UI *KindUI `json:"ui,omitempty"`
+	Provisioning *KindProvisioning `json:"provisioning,omitempty"`
+	UI           *KindUI           `json:"ui,omitempty"`
+}
+
+// KindProvisioning declares whether provisioning (Git Sync) manages a kind.
+type KindProvisioning struct {
+	Enabled bool `json:"enabled"`
 }
 
 // KindUI declares how user interfaces display a kind.

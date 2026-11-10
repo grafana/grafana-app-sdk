@@ -127,6 +127,8 @@ spec:
       userReadable: false
     - conversion: false
       core:
+        provisioning:
+          enabled: true
         ui:
           icon: apps
           labelKey: testkind2

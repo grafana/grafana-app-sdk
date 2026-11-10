@@ -845,7 +845,7 @@
                                     },
                                     "core": {
                                         "$ref": "#/components/schemas/ManifestVersionKindCore",
-                                        "description": "core declares how core App Platform features, such as user interfaces, treat this kind."
+                                        "description": "core declares how core App Platform features, such as provisioning, treat this kind."
                                     },
                                     "embed": {
                                         "$ref": "#/components/schemas/ManifestVersionKindEmbed",
@@ -940,6 +940,10 @@
                             "ManifestVersionKindCore": {
                                 "additionalProperties": false,
                                 "properties": {
+                                    "provisioning": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindProvisioning",
+                                        "description": "provisioning declares whether provisioning (Git Sync) manages this kind."
+                                    },
                                     "ui": {
                                         "$ref": "#/components/schemas/ManifestVersionKindUI",
                                         "description": "ui declares how user interfaces display this kind."
@@ -1025,6 +1029,17 @@
                                 "required": [
                                     "owners"
                                 ],
+                                "type": "object"
+                            },
+                            "ManifestVersionKindProvisioning": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "enabled": {
+                                        "default": false,
+                                        "description": "enabled declares whether provisioning manages resources of this kind.",
+                                        "type": "boolean"
+                                    }
+                                },
                                 "type": "object"
                             },
                             "ManifestVersionKindSearch": {

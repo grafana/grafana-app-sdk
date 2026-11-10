@@ -879,6 +879,16 @@
                                                             },
                                                             "core": {
                                                                 "properties": {
+                                                                    "provisioning": {
+                                                                        "properties": {
+                                                                            "enabled": {
+                                                                                "default": false,
+                                                                                "description": "enabled declares whether provisioning manages resources of this kind.",
+                                                                                "type": "boolean"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
                                                                     "ui": {
                                                                         "description": "The display name of the kind comes from kind and plural.",
                                                                         "properties": {

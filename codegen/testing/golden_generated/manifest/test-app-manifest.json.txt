@@ -240,6 +240,9 @@
                             "trash": false
                         },
                         "core": {
+                            "provisioning": {
+                                "enabled": true
+                            },
                             "ui": {
                                 "labelKey": "testkind2",
                                 "url": "/a/test-app/testkind2s/{name}",

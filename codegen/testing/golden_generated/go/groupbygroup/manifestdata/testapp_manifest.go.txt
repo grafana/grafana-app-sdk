@@ -103,6 +103,9 @@ var appManifestData = app.ManifestData{
 						Trash: func(b bool) *bool { return &b }(false),
 					},
 					Core: &app.ManifestVersionKindCore{
+						Provisioning: &app.ManifestVersionKindProvisioning{
+							Enabled: func(b bool) *bool { return &b }(true),
+						},
 						UI: &app.ManifestVersionKindUI{
 							LabelKey: "testkind2",
 							URL:      "/a/test-app/testkind2s/{name}",

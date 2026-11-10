@@ -625,11 +625,12 @@ func manifestKindCore(core *codegen.KindCore) *app.ManifestVersionKindCore {
 	if core == nil {
 		return nil
 	}
+	provisioning := manifestKindProvisioning(core.Provisioning)
 	ui := manifestKindUI(core.UI)
-	if ui == nil {
+	if provisioning == nil && ui == nil {
 		return nil
 	}
-	return &app.ManifestVersionKindCore{UI: ui}
+	return &app.ManifestVersionKindCore{Provisioning: provisioning, UI: ui}
 }
 
 func manifestKindUI(ui *codegen.KindUI) *app.ManifestVersionKindUI {
@@ -637,6 +638,13 @@ func manifestKindUI(ui *codegen.KindUI) *app.ManifestVersionKindUI {
 		return nil
 	}
 	return &app.ManifestVersionKindUI{LabelKey: ui.LabelKey, URL: ui.URL, Icon: ui.Icon}
+}
+
+func manifestKindProvisioning(provisioning *codegen.KindProvisioning) *app.ManifestVersionKindProvisioning {
+	if provisioning == nil || !provisioning.Enabled {
+		return nil
+	}
+	return &app.ManifestVersionKindProvisioning{Enabled: &provisioning.Enabled}
 }
 
 type simpleOpenAPIDoc[T any] struct {

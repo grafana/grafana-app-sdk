@@ -312,11 +312,31 @@ func TestCoreConversion(t *testing.T) {
 	}{
 		{name: "unset"},
 		{name: "empty", core: &app.ManifestVersionKindCore{}},
-		{name: "empty ui", core: &app.ManifestVersionKindCore{UI: &app.ManifestVersionKindUI{}}},
 		{name: "partial ui", core: &app.ManifestVersionKindCore{UI: &app.ManifestVersionKindUI{Icon: "apps"}}},
 		{
-			name: "full ui",
-			core: &app.ManifestVersionKindCore{UI: &app.ManifestVersionKindUI{LabelKey: "widget", URL: "/a/foo/widgets/{name}", Icon: "apps"}},
+			name: "provisioning and ui",
+			core: &app.ManifestVersionKindCore{
+				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
+				UI:           &app.ManifestVersionKindUI{LabelKey: "widget", URL: "/a/foo/widgets/{name}", Icon: "apps"},
+			},
+		},
+		{
+			name: "empty blocks",
+			core: &app.ManifestVersionKindCore{
+				Provisioning: &app.ManifestVersionKindProvisioning{},
+			},
+		},
+		{
+			name: "provisioning disabled",
+			core: &app.ManifestVersionKindCore{
+				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(false)},
+			},
+		},
+		{
+			name: "provisioning enabled",
+			core: &app.ManifestVersionKindCore{
+				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
+			},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -96,7 +96,7 @@ type AppManifestManifestVersionKind struct {
 	Search *AppManifestManifestVersionKindSearch `json:"search,omitempty"`
 	// embed defines the embedding document independently of search fields.
 	Embed *AppManifestManifestVersionKindEmbed `json:"embed,omitempty"`
-	// core declares how core App Platform features, such as user interfaces, treat this kind.
+	// core declares how core App Platform features, such as provisioning, treat this kind.
 	Core *AppManifestManifestVersionKindCore `json:"core,omitempty"`
 	// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 	// It may not prevent automatic conversion behavior between versions of the kind when set to false
@@ -413,6 +413,8 @@ func (AppManifestManifestVersionKindEmbedField) OpenAPIModelName() string {
 
 // +k8s:openapi-gen=true
 type AppManifestManifestVersionKindCore struct {
+	// provisioning declares whether provisioning (Git Sync) manages this kind.
+	Provisioning *AppManifestManifestVersionKindProvisioning `json:"provisioning,omitempty"`
 	// ui declares how user interfaces display this kind.
 	Ui *AppManifestManifestVersionKindUI `json:"ui,omitempty"`
 }
@@ -425,6 +427,24 @@ func NewAppManifestManifestVersionKindCore() *AppManifestManifestVersionKindCore
 // OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindCore.
 func (AppManifestManifestVersionKindCore) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindCore"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindProvisioning struct {
+	// enabled declares whether provisioning manages resources of this kind.
+	Enabled *bool `json:"enabled,omitempty"`
+}
+
+// NewAppManifestManifestVersionKindProvisioning creates a new AppManifestManifestVersionKindProvisioning object.
+func NewAppManifestManifestVersionKindProvisioning() *AppManifestManifestVersionKindProvisioning {
+	return &AppManifestManifestVersionKindProvisioning{
+		Enabled: (func(input bool) *bool { return &input })(false),
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindProvisioning.
+func (AppManifestManifestVersionKindProvisioning) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindProvisioning"
 }
 
 // The display name of the kind comes from kind and plural.

@@ -167,6 +167,9 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 			}
 			if kind.Core != nil {
 				k.Core = &app.ManifestVersionKindCore{}
+				if kind.Core.Provisioning != nil {
+					k.Core.Provisioning = &app.ManifestVersionKindProvisioning{Enabled: kind.Core.Provisioning.Enabled}
+				}
 				if ui := kind.Core.Ui; ui != nil {
 					k.Core.UI = &app.ManifestVersionKindUI{}
 					if ui.LabelKey != nil {
@@ -516,6 +519,9 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 			}
 			if kind.Core != nil {
 				k.Core = &AppManifestManifestVersionKindCore{}
+				if kind.Core.Provisioning != nil {
+					k.Core.Provisioning = &AppManifestManifestVersionKindProvisioning{Enabled: kind.Core.Provisioning.Enabled}
+				}
 				if ui := kind.Core.UI; ui != nil {
 					k.Core.Ui = &AppManifestManifestVersionKindUI{}
 					if ui.LabelKey != "" {

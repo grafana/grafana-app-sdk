@@ -119,7 +119,7 @@ appManifestv1alpha2: appManifestKind & {
 			search?: #ManifestVersionKindSearch
 			// embed defines the embedding document independently of search fields.
 			embed?: #ManifestVersionKindEmbed
-			// core declares how core App Platform features, such as user interfaces, treat this kind.
+			// core declares how core App Platform features, such as provisioning, treat this kind.
 			core?: #ManifestVersionKindCore
 			// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 			// It may not prevent automatic conversion behavior between versions of the kind when set to false
@@ -170,8 +170,14 @@ appManifestv1alpha2: appManifestKind & {
 			fields: [...#ManifestVersionKindEmbedField]
 		}
 		#ManifestVersionKindCore: {
+			// provisioning declares whether provisioning (Git Sync) manages this kind.
+			provisioning?: #ManifestVersionKindProvisioning
 			// ui declares how user interfaces display this kind.
 			ui?: #ManifestVersionKindUI
+		}
+		#ManifestVersionKindProvisioning: {
+			// enabled declares whether provisioning manages resources of this kind.
+			enabled?: bool | *false
 		}
 		// The display name of the kind comes from kind and plural.
 		#ManifestVersionKindUI: {

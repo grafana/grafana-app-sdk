@@ -312,8 +312,16 @@ SchemaWithOperatorState: Schema & {
 
 // #KindCore declares how core App Platform features treat a kind.
 #KindCore: {
+	// provisioning declares whether provisioning (Git Sync) manages this kind.
+	provisioning?: #KindProvisioning
 	// ui declares how user interfaces display this kind.
 	ui?: #KindUI
+}
+
+// #KindProvisioning declares whether provisioning (Git Sync) manages a kind.
+#KindProvisioning: {
+	// enabled declares whether provisioning manages resources of this kind.
+	enabled: bool | *false
 }
 
 // #KindUI declares how user interfaces display a kind.
@@ -455,7 +463,7 @@ Kind: S={
 	search: #KindSearch
 	// embed defines the embedding document independently of search fields.
 	embed?: #KindEmbed
-	// core declares how core App Platform features, such as user interfaces, treat this kind.
+	// core declares how core App Platform features, such as provisioning, treat this kind.
 	core?: #KindCore
 	// routes is a map of path patterns to custom routes that will be exposed as subresources for this kind.
 	// entries here should not conflict with subresources (like spec and status) in the schema for the kind.
