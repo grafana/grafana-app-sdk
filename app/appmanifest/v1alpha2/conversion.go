@@ -165,11 +165,8 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 					}
 				}
 			}
-			if kind.Extensions != nil {
-				k.Extensions = &app.ManifestVersionKindExtensions{}
-				if kind.Extensions.Provisioning != nil {
-					k.Extensions.Provisioning = &app.ManifestVersionKindProvisioning{Enabled: kind.Extensions.Provisioning.Enabled}
-				}
+			if kind.Provisioning != nil {
+				k.Provisioning = &app.ManifestVersionKindProvisioning{Enabled: kind.Provisioning.Enabled}
 			}
 			// Schema
 			if kind.Schemas != nil {
@@ -505,11 +502,8 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 					}
 				}
 			}
-			if kind.Extensions != nil {
-				k.Extensions = &AppManifestManifestVersionKindExtensions{}
-				if kind.Extensions.Provisioning != nil {
-					k.Extensions.Provisioning = &AppManifestManifestVersionKindProvisioning{Enabled: kind.Extensions.Provisioning.Enabled}
-				}
+			if kind.Provisioning != nil {
+				k.Provisioning = &AppManifestManifestVersionKindProvisioning{Enabled: kind.Provisioning.Enabled}
 			}
 			// Routes
 			if kind.Routes != nil {

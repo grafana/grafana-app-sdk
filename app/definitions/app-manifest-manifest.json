@@ -847,10 +847,6 @@
                                         "$ref": "#/components/schemas/ManifestVersionKindEmbed",
                                         "description": "embed defines the embedding document independently of search fields."
                                     },
-                                    "extensions": {
-                                        "$ref": "#/components/schemas/ManifestVersionKindExtensions",
-                                        "description": "extensions declares how other Grafana features, such as provisioning, treat this kind."
-                                    },
                                     "fixedNames": {
                                         "description": "fixedNames are names of objects of this kind that are never stored: the app\nanswers requests for them itself. A route at exactly \u003cplural\u003e/\u003cname\u003e is\nallowed for each.",
                                         "items": {
@@ -874,6 +870,10 @@
                                     "plural": {
                                         "description": "Plural is the human readable plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
                                         "type": "string"
+                                    },
+                                    "provisioning": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindProvisioning",
+                                        "description": "provisioning declares whether provisioning (Git Sync) manages this kind."
                                     },
                                     "resource": {
                                         "description": "Resource is the lowercase plural used as the resource in the k8s GroupVersionResource URL.\nThis is optional and defaults to the lowercase of plural if not present.",
@@ -971,16 +971,6 @@
                                     "name",
                                     "path"
                                 ],
-                                "type": "object"
-                            },
-                            "ManifestVersionKindExtensions": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "provisioning": {
-                                        "$ref": "#/components/schemas/ManifestVersionKindProvisioning",
-                                        "description": "provisioning declares whether provisioning (Git Sync) manages this kind."
-                                    }
-                                },
                                 "type": "object"
                             },
                             "ManifestVersionKindNamingStrategy": {

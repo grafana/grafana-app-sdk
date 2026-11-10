@@ -628,8 +628,8 @@ type ManifestVersionKind struct {
 	Search *ManifestVersionKindSearch `json:"search,omitempty" yaml:"search,omitempty"`
 	// Embed defines the embedding document independently of search fields.
 	Embed *ManifestVersionKindEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
-	// Extensions declares how other Grafana features, such as provisioning, treat this kind.
-	Extensions *ManifestVersionKindExtensions `json:"extensions,omitempty" yaml:"extensions,omitempty"`
+	// Provisioning declares whether provisioning (Git Sync) manages this kind.
+	Provisioning *ManifestVersionKindProvisioning `json:"provisioning,omitempty" yaml:"provisioning,omitempty"`
 }
 
 // ManifestVersionKindSecureValue describes a secure value used by a kind.
@@ -671,12 +671,6 @@ type ManifestVersionKindEmbed struct {
 	// Fields supplies inputs, in declaration order, used only to generate the text to be embedded.
 	// Declaring an embedding field does not enable filtering embeddings by that field.
 	Fields []ManifestVersionKindEmbedField `json:"fields" yaml:"fields"`
-}
-
-// ManifestVersionKindExtensions declares how other Grafana features treat a kind.
-type ManifestVersionKindExtensions struct {
-	// Provisioning declares whether provisioning (Git Sync) manages this kind.
-	Provisioning *ManifestVersionKindProvisioning `json:"provisioning,omitempty" yaml:"provisioning,omitempty"`
 }
 
 // ManifestVersionKindProvisioning declares whether provisioning (Git Sync) manages a kind.
@@ -754,8 +748,7 @@ func (m *ManifestVersionKind) InGlobalSearchIndex() bool {
 // IsProvisionable reports whether provisioning (Git Sync) manages the kind.
 // Kinds are not provisionable unless they explicitly opt in.
 func (m *ManifestVersionKind) IsProvisionable() bool {
-	return m.Extensions != nil && m.Extensions.Provisioning != nil &&
-		m.Extensions.Provisioning.Enabled != nil && *m.Extensions.Provisioning.Enabled
+	return m.Provisioning != nil && m.Provisioning.Enabled != nil && *m.Provisioning.Enabled
 }
 
 // isFolderScoped returns the effective folderScoped value for a kind, treating a nil pointer

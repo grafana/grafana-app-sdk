@@ -96,8 +96,8 @@ type AppManifestManifestVersionKind struct {
 	Search *AppManifestManifestVersionKindSearch `json:"search,omitempty"`
 	// embed defines the embedding document independently of search fields.
 	Embed *AppManifestManifestVersionKindEmbed `json:"embed,omitempty"`
-	// extensions declares how other Grafana features, such as provisioning, treat this kind.
-	Extensions *AppManifestManifestVersionKindExtensions `json:"extensions,omitempty"`
+	// provisioning declares whether provisioning (Git Sync) manages this kind.
+	Provisioning *AppManifestManifestVersionKindProvisioning `json:"provisioning,omitempty"`
 	// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 	// It may not prevent automatic conversion behavior between versions of the kind when set to false
 	// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
@@ -409,22 +409,6 @@ func NewAppManifestManifestVersionKindEmbedField() *AppManifestManifestVersionKi
 // OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindEmbedField.
 func (AppManifestManifestVersionKindEmbedField) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindEmbedField"
-}
-
-// +k8s:openapi-gen=true
-type AppManifestManifestVersionKindExtensions struct {
-	// provisioning declares whether provisioning (Git Sync) manages this kind.
-	Provisioning *AppManifestManifestVersionKindProvisioning `json:"provisioning,omitempty"`
-}
-
-// NewAppManifestManifestVersionKindExtensions creates a new AppManifestManifestVersionKindExtensions object.
-func NewAppManifestManifestVersionKindExtensions() *AppManifestManifestVersionKindExtensions {
-	return &AppManifestManifestVersionKindExtensions{}
-}
-
-// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindExtensions.
-func (AppManifestManifestVersionKindExtensions) OpenAPIModelName() string {
-	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindExtensions"
 }
 
 // +k8s:openapi-gen=true
