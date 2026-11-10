@@ -310,8 +310,9 @@ SchemaWithOperatorState: Schema & {
 	global: bool | *false
 }
 
-// #KindCore declares how core App Platform features treat a kind.
-#KindCore: {
+// #KindExtensions declares how other Grafana features treat a kind.
+// TODO: allow untyped keys for app-defined extensions, such as "kgatlas.ext.grafana.app", next to the typed ones.
+#KindExtensions: {
 	// provisioning declares whether provisioning (Git Sync) manages this kind.
 	provisioning?: #KindProvisioning
 }
@@ -447,8 +448,8 @@ Kind: S={
 	search: #KindSearch
 	// embed defines the embedding document independently of search fields.
 	embed?: #KindEmbed
-	// core declares how core App Platform features, such as provisioning, treat this kind.
-	core?: #KindCore
+	// extensions declares how other Grafana features, such as provisioning, treat this kind.
+	extensions?: #KindExtensions
 	// routes is a map of path patterns to custom routes that will be exposed as subresources for this kind.
 	// entries here should not conflict with subresources (like spec and status) in the schema for the kind.
 	routes?: #CustomRouteCapability

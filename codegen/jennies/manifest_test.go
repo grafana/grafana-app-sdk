@@ -233,22 +233,22 @@ func TestProcessKindVersion_Search(t *testing.T) {
 	}
 }
 
-func TestProcessKindVersion_Core(t *testing.T) {
+func TestProcessKindVersion_Extensions(t *testing.T) {
 	for _, tc := range []struct {
-		name     string
-		core     *codegen.KindCore
-		expected *app.ManifestVersionKindCore
+		name       string
+		extensions *codegen.KindExtensions
+		expected   *app.ManifestVersionKindExtensions
 	}{
 		{name: "unset"},
-		{name: "empty", core: &codegen.KindCore{}},
+		{name: "empty", extensions: &codegen.KindExtensions{}},
 		{
-			name: "empty blocks",
-			core: &codegen.KindCore{Provisioning: &codegen.KindProvisioning{}},
+			name:       "empty blocks",
+			extensions: &codegen.KindExtensions{Provisioning: &codegen.KindProvisioning{}},
 		},
 		{
-			name: "provisioning enabled",
-			core: &codegen.KindCore{Provisioning: &codegen.KindProvisioning{Enabled: true}},
-			expected: &app.ManifestVersionKindCore{
+			name:       "provisioning enabled",
+			extensions: &codegen.KindExtensions{Provisioning: &codegen.KindProvisioning{Enabled: true}},
+			expected: &app.ManifestVersionKindExtensions{
 				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
 			},
 		},
@@ -259,10 +259,10 @@ func TestProcessKindVersion_Core(t *testing.T) {
 				PluralName:   "Foos",
 				Scope:        "Namespaced",
 				FolderScoped: true,
-				Core:         tc.core,
+				Extensions:   tc.extensions,
 			}, "v1", false)
 			require.NoError(t, err)
-			assert.Equal(t, tc.expected, mver.Core)
+			assert.Equal(t, tc.expected, mver.Extensions)
 		})
 	}
 }

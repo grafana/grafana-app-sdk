@@ -843,13 +843,13 @@
                                         "description": "Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.\nIt may not prevent automatic conversion behavior between versions of the kind when set to false\n(for example, CRDs will always support simple conversion, and this flag enables webhook conversion).\nThis field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.",
                                         "type": "boolean"
                                     },
-                                    "core": {
-                                        "$ref": "#/components/schemas/ManifestVersionKindCore",
-                                        "description": "core declares how core App Platform features, such as provisioning, treat this kind."
-                                    },
                                     "embed": {
                                         "$ref": "#/components/schemas/ManifestVersionKindEmbed",
                                         "description": "embed defines the embedding document independently of search fields."
+                                    },
+                                    "extensions": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindExtensions",
+                                        "description": "extensions declares how other Grafana features, such as provisioning, treat this kind."
                                     },
                                     "fixedNames": {
                                         "description": "fixedNames are names of objects of this kind that are never stored: the app\nanswers requests for them itself. A route at exactly \u003cplural\u003e/\u003cname\u003e is\nallowed for each.",
@@ -937,16 +937,6 @@
                                 ],
                                 "type": "object"
                             },
-                            "ManifestVersionKindCore": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "provisioning": {
-                                        "$ref": "#/components/schemas/ManifestVersionKindProvisioning",
-                                        "description": "provisioning declares whether provisioning (Git Sync) manages this kind."
-                                    }
-                                },
-                                "type": "object"
-                            },
                             "ManifestVersionKindEmbed": {
                                 "additionalProperties": false,
                                 "description": "Kinds with a custom embedding builder omit this section.",
@@ -981,6 +971,17 @@
                                     "name",
                                     "path"
                                 ],
+                                "type": "object"
+                            },
+                            "ManifestVersionKindExtensions": {
+                                "additionalProperties": false,
+                                "description": "TODO: allow untyped keys for app-defined extensions, such as \"kgatlas.ext.grafana.app\", next to the typed ones.",
+                                "properties": {
+                                    "provisioning": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindProvisioning",
+                                        "description": "provisioning declares whether provisioning (Git Sync) manages this kind."
+                                    }
+                                },
                                 "type": "object"
                             },
                             "ManifestVersionKindNamingStrategy": {

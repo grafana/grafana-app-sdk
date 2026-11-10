@@ -119,8 +119,8 @@ appManifestv1alpha2: appManifestKind & {
 			search?: #ManifestVersionKindSearch
 			// embed defines the embedding document independently of search fields.
 			embed?: #ManifestVersionKindEmbed
-			// core declares how core App Platform features, such as provisioning, treat this kind.
-			core?: #ManifestVersionKindCore
+			// extensions declares how other Grafana features, such as provisioning, treat this kind.
+			extensions?: #ManifestVersionKindExtensions
 			// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 			// It may not prevent automatic conversion behavior between versions of the kind when set to false
 			// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
@@ -169,7 +169,8 @@ appManifestv1alpha2: appManifestKind & {
 			// Declaring an embedding field does not enable filtering embeddings by that field.
 			fields: [...#ManifestVersionKindEmbedField]
 		}
-		#ManifestVersionKindCore: {
+		// TODO: allow untyped keys for app-defined extensions, such as "kgatlas.ext.grafana.app", next to the typed ones.
+		#ManifestVersionKindExtensions: {
 			// provisioning declares whether provisioning (Git Sync) manages this kind.
 			provisioning?: #ManifestVersionKindProvisioning
 		}

@@ -618,15 +618,15 @@ func manifestKindEmbed(embed *codegen.KindEmbed) *app.ManifestVersionKindEmbed {
 	return &app.ManifestVersionKindEmbed{Fields: fields}
 }
 
-func manifestKindCore(core *codegen.KindCore) *app.ManifestVersionKindCore {
-	if core == nil {
+func manifestKindExtensions(extensions *codegen.KindExtensions) *app.ManifestVersionKindExtensions {
+	if extensions == nil {
 		return nil
 	}
-	provisioning := manifestKindProvisioning(core.Provisioning)
+	provisioning := manifestKindProvisioning(extensions.Provisioning)
 	if provisioning == nil {
 		return nil
 	}
-	return &app.ManifestVersionKindCore{Provisioning: provisioning}
+	return &app.ManifestVersionKindExtensions{Provisioning: provisioning}
 }
 
 func manifestKindProvisioning(provisioning *codegen.KindProvisioning) *app.ManifestVersionKindProvisioning {
@@ -670,7 +670,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 	}
 	mver.Search = manifestKindSearch(vk.Search)
 	mver.Embed = manifestKindEmbed(vk.Embed)
-	mver.Core = manifestKindCore(vk.Core)
+	mver.Extensions = manifestKindExtensions(vk.Extensions)
 	if len(vk.Mutation.Operations) > 0 {
 		operations, err := sanitizeAdmissionOperations(vk.Mutation.Operations)
 		if err != nil {

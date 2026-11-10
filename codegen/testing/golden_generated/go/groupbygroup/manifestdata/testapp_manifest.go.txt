@@ -102,7 +102,7 @@ var appManifestData = app.ManifestData{
 					Search: &app.ManifestVersionKindSearch{
 						Trash: func(b bool) *bool { return &b }(false),
 					},
-					Core: &app.ManifestVersionKindCore{
+					Extensions: &app.ManifestVersionKindExtensions{
 						Provisioning: &app.ManifestVersionKindProvisioning{
 							Enabled: func(b bool) *bool { return &b }(true),
 						},

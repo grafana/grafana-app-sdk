@@ -305,28 +305,28 @@ func TestSearchEndpointsConversion(t *testing.T) {
 	}
 }
 
-func TestCoreConversion(t *testing.T) {
+func TestExtensionsConversion(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		core *app.ManifestVersionKindCore
+		name       string
+		extensions *app.ManifestVersionKindExtensions
 	}{
 		{name: "unset"},
-		{name: "empty", core: &app.ManifestVersionKindCore{}},
+		{name: "empty", extensions: &app.ManifestVersionKindExtensions{}},
 		{
 			name: "empty blocks",
-			core: &app.ManifestVersionKindCore{
+			extensions: &app.ManifestVersionKindExtensions{
 				Provisioning: &app.ManifestVersionKindProvisioning{},
 			},
 		},
 		{
 			name: "provisioning disabled",
-			core: &app.ManifestVersionKindCore{
+			extensions: &app.ManifestVersionKindExtensions{
 				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(false)},
 			},
 		},
 		{
 			name: "provisioning enabled",
-			core: &app.ManifestVersionKindCore{
+			extensions: &app.ManifestVersionKindExtensions{
 				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
 			},
 		},
@@ -338,9 +338,9 @@ func TestCoreConversion(t *testing.T) {
 					Name:   "v1",
 					Served: true,
 					Kinds: []app.ManifestVersionKind{{
-						Kind:  "Foo",
-						Scope: "Namespaced",
-						Core:  tc.core,
+						Kind:       "Foo",
+						Scope:      "Namespaced",
+						Extensions: tc.extensions,
 					}},
 				}},
 			}
@@ -350,7 +350,7 @@ func TestCoreConversion(t *testing.T) {
 
 			roundTripped, err := spec.ToManifestData()
 			require.NoError(t, err)
-			assert.Equal(t, tc.core, roundTripped.Versions[0].Kinds[0].Core)
+			assert.Equal(t, tc.extensions, roundTripped.Versions[0].Kinds[0].Extensions)
 		})
 	}
 }

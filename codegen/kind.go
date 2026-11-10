@@ -120,8 +120,9 @@ type KindSearch struct {
 	Global bool `json:"global"`
 }
 
-// KindCore declares how core App Platform features treat a kind.
-type KindCore struct {
+// KindExtensions declares how other Grafana features treat a kind.
+// TODO: keep untyped keys for app-defined extensions, such as "kgatlas.ext.grafana.app".
+type KindExtensions struct {
 	Provisioning *KindProvisioning `json:"provisioning,omitempty"`
 }
 

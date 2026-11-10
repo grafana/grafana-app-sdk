@@ -126,7 +126,7 @@ spec:
       - .spec.stringField
       userReadable: false
     - conversion: false
-      core:
+      extensions:
         provisioning:
           enabled: true
       fixedNames:
