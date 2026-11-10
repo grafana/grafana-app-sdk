@@ -165,6 +165,12 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 					}
 				}
 			}
+			if kind.Extensions != nil {
+				k.Extensions = &app.ManifestVersionKindExtensions{}
+				if kind.Extensions.Provisioning != nil {
+					k.Extensions.Provisioning = &app.ManifestVersionKindProvisioning{Enabled: kind.Extensions.Provisioning.Enabled}
+				}
+			}
 			// Schema
 			if kind.Schemas != nil {
 				toParse := make(map[string]any)
@@ -497,6 +503,12 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 						k.Embed.Fields[i].Name = field.Name
 						k.Embed.Fields[i].Path = field.Path
 					}
+				}
+			}
+			if kind.Extensions != nil {
+				k.Extensions = &AppManifestManifestVersionKindExtensions{}
+				if kind.Extensions.Provisioning != nil {
+					k.Extensions.Provisioning = &AppManifestManifestVersionKindProvisioning{Enabled: kind.Extensions.Provisioning.Enabled}
 				}
 			}
 			// Routes

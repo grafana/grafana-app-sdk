@@ -310,6 +310,18 @@ SchemaWithOperatorState: Schema & {
 	global: bool | *false
 }
 
+// #KindExtensions declares how other Grafana features treat a kind.
+#KindExtensions: {
+	// provisioning declares whether provisioning (Git Sync) manages this kind.
+	provisioning?: #KindProvisioning
+}
+
+// #KindProvisioning declares whether provisioning (Git Sync) manages a kind.
+#KindProvisioning: {
+	// enabled declares whether provisioning manages resources of this kind.
+	enabled: bool | *false
+}
+
 // #KindEmbed defines the embedding document independently of search fields.
 // Kinds with a custom embedding builder omit this section.
 #KindEmbed: {
@@ -435,6 +447,8 @@ Kind: S={
 	search: #KindSearch
 	// embed defines the embedding document independently of search fields.
 	embed?: #KindEmbed
+	// extensions declares how other Grafana features, such as provisioning, treat this kind.
+	extensions?: #KindExtensions
 	// routes is a map of path patterns to custom routes that will be exposed as subresources for this kind.
 	// entries here should not conflict with subresources (like spec and status) in the schema for the kind.
 	routes?: #CustomRouteCapability

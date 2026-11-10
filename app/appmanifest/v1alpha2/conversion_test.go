@@ -305,6 +305,56 @@ func TestSearchEndpointsConversion(t *testing.T) {
 	}
 }
 
+func TestExtensionsConversion(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		extensions *app.ManifestVersionKindExtensions
+	}{
+		{name: "unset"},
+		{name: "empty", extensions: &app.ManifestVersionKindExtensions{}},
+		{
+			name: "empty blocks",
+			extensions: &app.ManifestVersionKindExtensions{
+				Provisioning: &app.ManifestVersionKindProvisioning{},
+			},
+		},
+		{
+			name: "provisioning disabled",
+			extensions: &app.ManifestVersionKindExtensions{
+				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(false)},
+			},
+		},
+		{
+			name: "provisioning enabled",
+			extensions: &app.ManifestVersionKindExtensions{
+				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			md := app.ManifestData{
+				AppName: "foo",
+				Versions: []app.ManifestVersion{{
+					Name:   "v1",
+					Served: true,
+					Kinds: []app.ManifestVersionKind{{
+						Kind:       "Foo",
+						Scope:      "Namespaced",
+						Extensions: tc.extensions,
+					}},
+				}},
+			}
+
+			spec, err := SpecFromManifestData(md)
+			require.NoError(t, err)
+
+			roundTripped, err := spec.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, tc.extensions, roundTripped.Versions[0].Kinds[0].Extensions)
+		})
+	}
+}
+
 func TestEmbedConversion(t *testing.T) {
 	for _, tc := range []struct {
 		name           string

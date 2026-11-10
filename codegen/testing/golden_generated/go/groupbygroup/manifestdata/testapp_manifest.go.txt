@@ -102,6 +102,11 @@ var appManifestData = app.ManifestData{
 					Search: &app.ManifestVersionKindSearch{
 						Trash: func(b bool) *bool { return &b }(false),
 					},
+					Extensions: &app.ManifestVersionKindExtensions{
+						Provisioning: &app.ManifestVersionKindProvisioning{
+							Enabled: func(b bool) *bool { return &b }(true),
+						},
+					},
 					Schema: &versionSchemaTestKind2v1,
 					FixedNames: []string{
 						"current",

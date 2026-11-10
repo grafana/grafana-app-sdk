@@ -908,6 +908,21 @@
                                                                 ],
                                                                 "type": "object"
                                                             },
+                                                            "extensions": {
+                                                                "properties": {
+                                                                    "provisioning": {
+                                                                        "properties": {
+                                                                            "enabled": {
+                                                                                "default": false,
+                                                                                "description": "enabled declares whether provisioning manages resources of this kind.",
+                                                                                "type": "boolean"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
                                                             "fixedNames": {
                                                                 "description": "fixedNames are names of objects of this kind that are never stored: the app\nanswers requests for them itself. A route at exactly \u003cplural\u003e/\u003cname\u003e is\nallowed for each.",
                                                                 "items": {
