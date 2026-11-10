@@ -234,6 +234,9 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 			if err != nil {
 				return nil, err
 			}
+			if mvkind.Extensions != nil && mvkind.Extensions.UI != nil && mvkind.Extensions.UI.URL == "" {
+				mvkind.Extensions.UI.URL = fmt.Sprintf("/a/%s/%s/{name}", manifest.AppName, mvkind.Resource)
+			}
 			if len(kind.Validation.Operations) > 0 {
 				hasAnyValidation = true
 			}
@@ -623,10 +626,11 @@ func manifestKindExtensions(extensions *codegen.KindExtensions) *app.ManifestVer
 		return nil
 	}
 	provisioning := manifestKindProvisioning(extensions.Provisioning)
-	if provisioning == nil {
+	ui := manifestKindUI(extensions.UI)
+	if provisioning == nil && ui == nil {
 		return nil
 	}
-	return &app.ManifestVersionKindExtensions{Provisioning: provisioning}
+	return &app.ManifestVersionKindExtensions{Provisioning: provisioning, UI: ui}
 }
 
 func manifestKindProvisioning(provisioning *codegen.KindProvisioning) *app.ManifestVersionKindProvisioning {
@@ -634,6 +638,13 @@ func manifestKindProvisioning(provisioning *codegen.KindProvisioning) *app.Manif
 		return nil
 	}
 	return &app.ManifestVersionKindProvisioning{Enabled: &provisioning.Enabled}
+}
+
+func manifestKindUI(ui *codegen.KindUI) *app.ManifestVersionKindUI {
+	if ui == nil || *ui == (codegen.KindUI{}) {
+		return nil
+	}
+	return &app.ManifestVersionKindUI{LabelKey: ui.LabelKey, URL: ui.URL, Icon: ui.Icon}
 }
 
 type simpleOpenAPIDoc[T any] struct {

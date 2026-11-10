@@ -15,7 +15,13 @@ testKind2: {
 		}
 	}
 	search: trash: false
-	extensions: provisioning: enabled: true
+	extensions: {
+		provisioning: enabled: true
+		ui: {
+			labelKey: "testkind2"
+			icon:     "apps"
+		}
+	}
 	versions: {
 		"v1": {
 			schema: {
