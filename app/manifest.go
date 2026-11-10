@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -674,12 +675,82 @@ type ManifestVersionKindEmbed struct {
 }
 
 // ManifestVersionKindExtensions declares how other Grafana features treat a kind.
-// TODO: keep untyped keys for app-defined extensions, such as "kgatlas.ext.grafana.app".
+// Keys without a dot are typed fields. Keys with a dot, such as "kgatlas.ext.grafana.app", go to Additional.
 type ManifestVersionKindExtensions struct {
 	// Provisioning declares whether provisioning (Git Sync) manages this kind.
 	Provisioning *ManifestVersionKindProvisioning `json:"provisioning,omitempty" yaml:"provisioning,omitempty"`
 	// UI declares how user interfaces display this kind.
 	UI *ManifestVersionKindUI `json:"ui,omitempty" yaml:"ui,omitempty"`
+	// Additional holds app-defined extensions by their fully qualified key, such as "kgatlas.ext.grafana.app".
+	Additional map[string]any `json:"-" yaml:"-"`
+}
+
+type manifestVersionKindExtensionsTyped struct {
+	Provisioning *ManifestVersionKindProvisioning `json:"provisioning,omitempty"`
+	UI           *ManifestVersionKindUI           `json:"ui,omitempty"`
+}
+
+func (e ManifestVersionKindExtensions) MarshalJSON() ([]byte, error) {
+	return MarshalExtensions(manifestVersionKindExtensionsTyped{e.Provisioning, e.UI}, e.Additional)
+}
+
+func (e *ManifestVersionKindExtensions) UnmarshalJSON(data []byte) error {
+	var typed manifestVersionKindExtensionsTyped
+	additional, err := UnmarshalExtensions(data, &typed)
+	if err != nil {
+		return err
+	}
+	*e = ManifestVersionKindExtensions{Provisioning: typed.Provisioning, UI: typed.UI, Additional: additional}
+	return nil
+}
+
+// MarshalExtensions encodes the typed extensions in typed and the app-defined extensions in additional as one JSON object.
+func MarshalExtensions(typed any, additional map[string]any) ([]byte, error) {
+	data, err := json.Marshal(typed)
+	if err != nil || len(additional) == 0 {
+		return data, err
+	}
+	all := make(map[string]any, len(additional))
+	if err := json.Unmarshal(data, &all); err != nil {
+		return nil, err
+	}
+	maps.Copy(all, additional)
+	return json.Marshal(all)
+}
+
+// UnmarshalExtensions decodes keys without a dot strictly into typed, and returns the keys with a dot.
+// An unknown key without a dot is an error, so that a typo in a typed extension is not ignored.
+func UnmarshalExtensions(data []byte, typed any) (map[string]any, error) {
+	var all map[string]json.RawMessage
+	if err := json.Unmarshal(data, &all); err != nil {
+		return nil, err
+	}
+	known := make(map[string]json.RawMessage)
+	var additional map[string]any
+	for key, raw := range all {
+		if !strings.Contains(key, ".") {
+			known[key] = raw
+			continue
+		}
+		var val any
+		if err := json.Unmarshal(raw, &val); err != nil {
+			return nil, err
+		}
+		if additional == nil {
+			additional = make(map[string]any)
+		}
+		additional[key] = val
+	}
+	knownData, err := json.Marshal(known)
+	if err != nil {
+		return nil, err
+	}
+	dec := json.NewDecoder(bytes.NewReader(knownData))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(typed); err != nil {
+		return nil, fmt.Errorf("invalid extensions: %w", err)
+	}
+	return additional, nil
 }
 
 // ManifestVersionKindProvisioning declares whether provisioning (Git Sync) manages a kind.

@@ -199,7 +199,14 @@ var appManifestData = app.ManifestData{
                         LabelKey: {{ goString .Extensions.UI.LabelKey }},{{ end }}{{ if .Extensions.UI.URL }}
                         URL: {{ goString .Extensions.UI.URL }},{{ end }}{{ if .Extensions.UI.Icon }}
                         Icon: {{ goString .Extensions.UI.Icon }},{{ end }}
-                    },{{ end }}
+                    },{{ end }}{{ if .Extensions.Additional }}
+                    Additional: func() map[string]any {
+                        var additional map[string]any
+                        if err := json.Unmarshal([]byte({{ goString ($.ToJSONString .Extensions.Additional) }}), &additional); err != nil {
+                            panic(err)
+                        }
+                        return additional
+                    }(),{{ end }}
                 }, {{ end }}{{ if .Admission }}
                 Admission: &app.AdmissionCapabilities{
                     {{ if .Admission.Validation }} Validation: &app.ValidationCapability{

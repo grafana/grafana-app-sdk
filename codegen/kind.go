@@ -4,6 +4,8 @@ import (
 	"cmp"
 
 	"cuelang.org/go/cue"
+
+	"github.com/grafana/grafana-app-sdk/app"
 )
 
 // Kind is a common interface declaration for code generation.
@@ -121,10 +123,30 @@ type KindSearch struct {
 }
 
 // KindExtensions declares how other Grafana features treat a kind.
-// TODO: keep untyped keys for app-defined extensions, such as "kgatlas.ext.grafana.app".
+// Keys with a dot, such as "kgatlas.ext.grafana.app", go to Additional.
 type KindExtensions struct {
 	Provisioning *KindProvisioning `json:"provisioning,omitempty"`
 	UI           *KindUI           `json:"ui,omitempty"`
+	Additional   map[string]any    `json:"-"`
+}
+
+type kindExtensionsTyped struct {
+	Provisioning *KindProvisioning `json:"provisioning,omitempty"`
+	UI           *KindUI           `json:"ui,omitempty"`
+}
+
+func (e KindExtensions) MarshalJSON() ([]byte, error) {
+	return app.MarshalExtensions(kindExtensionsTyped{e.Provisioning, e.UI}, e.Additional)
+}
+
+func (e *KindExtensions) UnmarshalJSON(data []byte) error {
+	var typed kindExtensionsTyped
+	additional, err := app.UnmarshalExtensions(data, &typed)
+	if err != nil {
+		return err
+	}
+	*e = KindExtensions{Provisioning: typed.Provisioning, UI: typed.UI, Additional: additional}
+	return nil
 }
 
 // KindProvisioning declares whether provisioning (Git Sync) manages a kind.

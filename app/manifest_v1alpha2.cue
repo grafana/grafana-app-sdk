@@ -169,12 +169,14 @@ appManifestv1alpha2: appManifestKind & {
 			// Declaring an embedding field does not enable filtering embeddings by that field.
 			fields: [...#ManifestVersionKindEmbedField]
 		}
-		// TODO: allow untyped keys for app-defined extensions, such as "kgatlas.ext.grafana.app", next to the typed ones.
+		// Keys without a dot are Grafana extensions with a schema in the SDK, such as provisioning.
+		// Keys with a dot, such as "kgatlas.ext.grafana.app", are app-defined extensions with any value.
 		#ManifestVersionKindExtensions: {
 			// provisioning declares whether provisioning (Git Sync) manages this kind.
 			provisioning?: #ManifestVersionKindProvisioning
 			// ui declares how user interfaces display this kind.
 			ui?: #ManifestVersionKindUI
+			[string]: _
 		}
 		#ManifestVersionKindProvisioning: {
 			// enabled declares whether provisioning manages resources of this kind.

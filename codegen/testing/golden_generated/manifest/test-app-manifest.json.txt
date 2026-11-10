@@ -240,6 +240,9 @@
                             "trash": false
                         },
                         "extensions": {
+                            "kgatlas.ext.grafana.app": {
+                                "someKnowledgeGraphConfigOption": "foo"
+                            },
                             "provisioning": {
                                 "enabled": true
                             },

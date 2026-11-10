@@ -909,7 +909,7 @@
                                                                 "type": "object"
                                                             },
                                                             "extensions": {
-                                                                "description": "TODO: allow untyped keys for app-defined extensions, such as \"kgatlas.ext.grafana.app\", next to the typed ones.",
+                                                                "description": "Keys without a dot are Grafana extensions with a schema in the SDK, such as provisioning.\nKeys with a dot, such as \"kgatlas.ext.grafana.app\", are app-defined extensions with any value.",
                                                                 "properties": {
                                                                     "provisioning": {
                                                                         "properties": {
@@ -940,7 +940,8 @@
                                                                         "type": "object"
                                                                     }
                                                                 },
-                                                                "type": "object"
+                                                                "type": "object",
+                                                                "x-kubernetes-preserve-unknown-fields": true
                                                             },
                                                             "fixedNames": {
                                                                 "description": "fixedNames are names of objects of this kind that are never stored: the app\nanswers requests for them itself. A route at exactly \u003cplural\u003e/\u003cname\u003e is\nallowed for each.",

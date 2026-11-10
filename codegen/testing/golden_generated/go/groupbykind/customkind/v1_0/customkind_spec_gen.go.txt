@@ -136,7 +136,7 @@ type Spec struct {
 	BoolField    bool             `json:"boolField"`
 	FloatField   float64          `json:"floatField"`
 	LinkedList   RecursiveList    `json:"linkedList"`
-	ExclusiveInt uint64           `json:"exclusiveInt"`
+	ExclusiveInt int64            `json:"exclusiveInt"`
 }
 
 // NewSpec creates a new Spec object.

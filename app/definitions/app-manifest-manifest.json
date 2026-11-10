@@ -974,8 +974,8 @@
                                 "type": "object"
                             },
                             "ManifestVersionKindExtensions": {
-                                "additionalProperties": false,
-                                "description": "TODO: allow untyped keys for app-defined extensions, such as \"kgatlas.ext.grafana.app\", next to the typed ones.",
+                                "additionalProperties": true,
+                                "description": "Keys without a dot are Grafana extensions with a schema in the SDK, such as provisioning.\nKeys with a dot, such as \"kgatlas.ext.grafana.app\", are app-defined extensions with any value.",
                                 "properties": {
                                     "provisioning": {
                                         "$ref": "#/components/schemas/ManifestVersionKindProvisioning",

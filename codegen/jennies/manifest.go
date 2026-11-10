@@ -627,10 +627,10 @@ func manifestKindExtensions(extensions *codegen.KindExtensions) *app.ManifestVer
 	}
 	provisioning := manifestKindProvisioning(extensions.Provisioning)
 	ui := manifestKindUI(extensions.UI)
-	if provisioning == nil && ui == nil {
+	if provisioning == nil && ui == nil && len(extensions.Additional) == 0 {
 		return nil
 	}
-	return &app.ManifestVersionKindExtensions{Provisioning: provisioning, UI: ui}
+	return &app.ManifestVersionKindExtensions{Provisioning: provisioning, UI: ui, Additional: extensions.Additional}
 }
 
 func manifestKindUI(ui *codegen.KindUI) *app.ManifestVersionKindUI {
