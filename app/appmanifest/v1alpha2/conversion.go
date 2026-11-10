@@ -165,16 +165,19 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 					}
 				}
 			}
-			if ui := kind.Ui; ui != nil {
-				k.UI = &app.ManifestVersionKindUI{}
-				if ui.LabelKey != nil {
-					k.UI.LabelKey = *ui.LabelKey
-				}
-				if ui.Url != nil {
-					k.UI.URL = *ui.Url
-				}
-				if ui.Icon != nil {
-					k.UI.Icon = *ui.Icon
+			if kind.Core != nil {
+				k.Core = &app.ManifestVersionKindCore{}
+				if ui := kind.Core.Ui; ui != nil {
+					k.Core.UI = &app.ManifestVersionKindUI{}
+					if ui.LabelKey != nil {
+						k.Core.UI.LabelKey = *ui.LabelKey
+					}
+					if ui.Url != nil {
+						k.Core.UI.URL = *ui.Url
+					}
+					if ui.Icon != nil {
+						k.Core.UI.Icon = *ui.Icon
+					}
 				}
 			}
 			// Schema
@@ -511,16 +514,19 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 					}
 				}
 			}
-			if ui := kind.UI; ui != nil {
-				k.Ui = &AppManifestManifestVersionKindUI{}
-				if ui.LabelKey != "" {
-					k.Ui.LabelKey = &ui.LabelKey
-				}
-				if ui.URL != "" {
-					k.Ui.Url = &ui.URL
-				}
-				if ui.Icon != "" {
-					k.Ui.Icon = &ui.Icon
+			if kind.Core != nil {
+				k.Core = &AppManifestManifestVersionKindCore{}
+				if ui := kind.Core.UI; ui != nil {
+					k.Core.Ui = &AppManifestManifestVersionKindUI{}
+					if ui.LabelKey != "" {
+						k.Core.Ui.LabelKey = &ui.LabelKey
+					}
+					if ui.URL != "" {
+						k.Core.Ui.Url = &ui.URL
+					}
+					if ui.Icon != "" {
+						k.Core.Ui.Icon = &ui.Icon
+					}
 				}
 			}
 			// Routes

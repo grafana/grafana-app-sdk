@@ -102,10 +102,12 @@ var appManifestData = app.ManifestData{
 					Search: &app.ManifestVersionKindSearch{
 						Trash: func(b bool) *bool { return &b }(false),
 					},
-					UI: &app.ManifestVersionKindUI{
-						LabelKey: "testkind2",
-						URL:      "/a/test-app/testkind2s/{name}",
-						Icon:     "apps",
+					Core: &app.ManifestVersionKindCore{
+						UI: &app.ManifestVersionKindUI{
+							LabelKey: "testkind2",
+							URL:      "/a/test-app/testkind2s/{name}",
+							Icon:     "apps",
+						},
 					},
 					Schema: &versionSchemaTestKind2v1,
 					FixedNames: []string{

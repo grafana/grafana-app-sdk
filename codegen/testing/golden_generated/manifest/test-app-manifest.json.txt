@@ -239,10 +239,12 @@
                         "search": {
                             "trash": false
                         },
-                        "ui": {
-                            "labelKey": "testkind2",
-                            "url": "/a/test-app/testkind2s/{name}",
-                            "icon": "apps"
+                        "core": {
+                            "ui": {
+                                "labelKey": "testkind2",
+                                "url": "/a/test-app/testkind2s/{name}",
+                                "icon": "apps"
+                            }
                         },
                         "conversion": false
                     }

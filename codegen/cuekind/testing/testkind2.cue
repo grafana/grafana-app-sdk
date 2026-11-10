@@ -15,7 +15,7 @@ testKind2: {
 		}
 	}
 	search: trash: false
-	ui: {
+	core: ui: {
 		labelKey: "testkind2"
 		icon:     "apps"
 	}

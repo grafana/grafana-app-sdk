@@ -120,6 +120,11 @@ type KindSearch struct {
 	Global bool `json:"global"`
 }
 
+// KindCore declares how core App Platform features treat a kind.
+type KindCore struct {
+	UI *KindUI `json:"ui,omitempty"`
+}
+
 // KindUI declares how user interfaces display a kind.
 type KindUI struct {
 	LabelKey string `json:"labelKey,omitempty"`

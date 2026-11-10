@@ -628,8 +628,8 @@ type ManifestVersionKind struct {
 	Search *ManifestVersionKindSearch `json:"search,omitempty" yaml:"search,omitempty"`
 	// Embed defines the embedding document independently of search fields.
 	Embed *ManifestVersionKindEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
-	// UI declares how user interfaces display this kind.
-	UI *ManifestVersionKindUI `json:"ui,omitempty" yaml:"ui,omitempty"`
+	// Core declares how core App Platform features, such as user interfaces, treat this kind.
+	Core *ManifestVersionKindCore `json:"core,omitempty" yaml:"core,omitempty"`
 }
 
 // ManifestVersionKindSecureValue describes a secure value used by a kind.
@@ -671,6 +671,12 @@ type ManifestVersionKindEmbed struct {
 	// Fields supplies inputs, in declaration order, used only to generate the text to be embedded.
 	// Declaring an embedding field does not enable filtering embeddings by that field.
 	Fields []ManifestVersionKindEmbedField `json:"fields" yaml:"fields"`
+}
+
+// ManifestVersionKindCore declares how core App Platform features treat a kind.
+type ManifestVersionKindCore struct {
+	// UI declares how user interfaces display this kind.
+	UI *ManifestVersionKindUI `json:"ui,omitempty" yaml:"ui,omitempty"`
 }
 
 // ManifestVersionKindUI declares how user interfaces display a kind.

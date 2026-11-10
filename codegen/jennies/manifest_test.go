@@ -253,10 +253,14 @@ func TestProcessKindVersion_UI(t *testing.T) {
 				PluralName:   "Foos",
 				Scope:        "Namespaced",
 				FolderScoped: true,
-				UI:           tc.ui,
+				Core:         &codegen.KindCore{UI: tc.ui},
 			}, "v1", false)
 			require.NoError(t, err)
-			assert.Equal(t, tc.expected, mver.UI)
+			var ui *app.ManifestVersionKindUI
+			if mver.Core != nil {
+				ui = mver.Core.UI
+			}
+			assert.Equal(t, tc.expected, ui)
 		})
 	}
 }
@@ -281,7 +285,7 @@ func TestBuildManifestData_UIURL(t *testing.T) {
 							Kind:       "Foo",
 							PluralName: "Foos",
 							Scope:      "Namespaced",
-							UI:         tc.ui,
+							Core:       &codegen.KindCore{UI: tc.ui},
 						}},
 					},
 				},
@@ -289,7 +293,11 @@ func TestBuildManifestData_UIURL(t *testing.T) {
 
 			got, err := buildManifestData(manifest, false)
 			require.NoError(t, err)
-			assert.Equal(t, tc.expected, got.Versions[0].Kinds[0].UI)
+			var ui *app.ManifestVersionKindUI
+			if core := got.Versions[0].Kinds[0].Core; core != nil {
+				ui = core.UI
+			}
+			assert.Equal(t, tc.expected, ui)
 		})
 	}
 }

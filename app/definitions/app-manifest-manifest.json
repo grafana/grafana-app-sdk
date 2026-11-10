@@ -843,6 +843,10 @@
                                         "description": "Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.\nIt may not prevent automatic conversion behavior between versions of the kind when set to false\n(for example, CRDs will always support simple conversion, and this flag enables webhook conversion).\nThis field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.",
                                         "type": "boolean"
                                     },
+                                    "core": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindCore",
+                                        "description": "core declares how core App Platform features, such as user interfaces, treat this kind."
+                                    },
                                     "embed": {
                                         "$ref": "#/components/schemas/ManifestVersionKindEmbed",
                                         "description": "embed defines the embedding document independently of search fields."
@@ -920,10 +924,6 @@
                                         "$ref": "#/components/schemas/ManifestVersionKindStorage",
                                         "description": "storage declares storage-related behavior for this kind."
                                     },
-                                    "ui": {
-                                        "$ref": "#/components/schemas/ManifestVersionKindUI",
-                                        "description": "ui declares how user interfaces display this kind."
-                                    },
                                     "userReadable": {
                                         "default": false,
                                         "description": "userReadable controls whether end users may get/list cluster-scoped resources of this kind.\nOnly meaningful when scope is \"Cluster\"; for namespaced kinds the field is ignored.",
@@ -935,6 +935,16 @@
                                     "scope",
                                     "schemas"
                                 ],
+                                "type": "object"
+                            },
+                            "ManifestVersionKindCore": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "ui": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindUI",
+                                        "description": "ui declares how user interfaces display this kind."
+                                    }
+                                },
                                 "type": "object"
                             },
                             "ManifestVersionKindEmbed": {

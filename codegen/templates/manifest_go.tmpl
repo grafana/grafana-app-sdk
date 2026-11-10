@@ -190,11 +190,13 @@ var appManifestData = app.ManifestData{
                             Path: {{ goString .Path }},
                         },{{ end }}
                     },
-                }, {{ end }}{{ if .UI }}
-                UI: &app.ManifestVersionKindUI{ {{ if .UI.LabelKey }}
-                    LabelKey: {{ goString .UI.LabelKey }},{{ end }}{{ if .UI.URL }}
-                    URL: {{ goString .UI.URL }},{{ end }}{{ if .UI.Icon }}
-                    Icon: {{ goString .UI.Icon }},{{ end }}
+                }, {{ end }}{{ if .Core }}
+                Core: &app.ManifestVersionKindCore{ {{ if .Core.UI }}
+                    UI: &app.ManifestVersionKindUI{ {{ if .Core.UI.LabelKey }}
+                        LabelKey: {{ goString .Core.UI.LabelKey }},{{ end }}{{ if .Core.UI.URL }}
+                        URL: {{ goString .Core.UI.URL }},{{ end }}{{ if .Core.UI.Icon }}
+                        Icon: {{ goString .Core.UI.Icon }},{{ end }}
+                    },{{ end }}
                 }, {{ end }}{{ if .Admission }}
                 Admission: &app.AdmissionCapabilities{
                     {{ if .Admission.Validation }} Validation: &app.ValidationCapability{

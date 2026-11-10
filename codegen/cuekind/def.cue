@@ -310,6 +310,12 @@ SchemaWithOperatorState: Schema & {
 	global: bool | *false
 }
 
+// #KindCore declares how core App Platform features treat a kind.
+#KindCore: {
+	// ui declares how user interfaces display this kind.
+	ui?: #KindUI
+}
+
 // #KindUI declares how user interfaces display a kind.
 // The display name of the kind comes from kind and pluralName.
 #KindUI: {
@@ -449,8 +455,8 @@ Kind: S={
 	search: #KindSearch
 	// embed defines the embedding document independently of search fields.
 	embed?: #KindEmbed
-	// ui declares how user interfaces display this kind.
-	ui?: #KindUI
+	// core declares how core App Platform features, such as user interfaces, treat this kind.
+	core?: #KindCore
 	// routes is a map of path patterns to custom routes that will be exposed as subresources for this kind.
 	// entries here should not conflict with subresources (like spec and status) in the schema for the kind.
 	routes?: #CustomRouteCapability

@@ -305,15 +305,19 @@ func TestSearchEndpointsConversion(t *testing.T) {
 	}
 }
 
-func TestUIConversion(t *testing.T) {
+func TestCoreConversion(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		ui   *app.ManifestVersionKindUI
+		core *app.ManifestVersionKindCore
 	}{
 		{name: "unset"},
-		{name: "empty", ui: &app.ManifestVersionKindUI{}},
-		{name: "partial", ui: &app.ManifestVersionKindUI{Icon: "apps"}},
-		{name: "full", ui: &app.ManifestVersionKindUI{LabelKey: "widget", URL: "/a/foo/widgets/{name}", Icon: "apps"}},
+		{name: "empty", core: &app.ManifestVersionKindCore{}},
+		{name: "empty ui", core: &app.ManifestVersionKindCore{UI: &app.ManifestVersionKindUI{}}},
+		{name: "partial ui", core: &app.ManifestVersionKindCore{UI: &app.ManifestVersionKindUI{Icon: "apps"}}},
+		{
+			name: "full ui",
+			core: &app.ManifestVersionKindCore{UI: &app.ManifestVersionKindUI{LabelKey: "widget", URL: "/a/foo/widgets/{name}", Icon: "apps"}},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			md := app.ManifestData{
@@ -324,7 +328,7 @@ func TestUIConversion(t *testing.T) {
 					Kinds: []app.ManifestVersionKind{{
 						Kind:  "Foo",
 						Scope: "Namespaced",
-						UI:    tc.ui,
+						Core:  tc.core,
 					}},
 				}},
 			}
@@ -334,7 +338,7 @@ func TestUIConversion(t *testing.T) {
 
 			roundTripped, err := spec.ToManifestData()
 			require.NoError(t, err)
-			assert.Equal(t, tc.ui, roundTripped.Versions[0].Kinds[0].UI)
+			assert.Equal(t, tc.core, roundTripped.Versions[0].Kinds[0].Core)
 		})
 	}
 }
