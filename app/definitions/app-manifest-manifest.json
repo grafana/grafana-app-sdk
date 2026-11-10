@@ -847,10 +847,6 @@
                                         "$ref": "#/components/schemas/ManifestVersionKindEmbed",
                                         "description": "embed defines the embedding document independently of search fields."
                                     },
-                                    "extensions": {
-                                        "$ref": "#/components/schemas/ManifestVersionKindExtensions",
-                                        "description": "extensions declares how other Grafana features, such as provisioning and user interfaces, treat this kind."
-                                    },
                                     "fixedNames": {
                                         "description": "fixedNames are names of objects of this kind that are never stored: the app\nanswers requests for them itself. A route at exactly \u003cplural\u003e/\u003cname\u003e is\nallowed for each.",
                                         "items": {
@@ -924,6 +920,10 @@
                                         "$ref": "#/components/schemas/ManifestVersionKindStorage",
                                         "description": "storage declares storage-related behavior for this kind."
                                     },
+                                    "ui": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindUI",
+                                        "description": "ui declares how user interfaces display this kind."
+                                    },
                                     "userReadable": {
                                         "default": false,
                                         "description": "userReadable controls whether end users may get/list cluster-scoped resources of this kind.\nOnly meaningful when scope is \"Cluster\"; for namespaced kinds the field is ignored.",
@@ -973,20 +973,6 @@
                                 ],
                                 "type": "object"
                             },
-                            "ManifestVersionKindExtensions": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "provisioning": {
-                                        "$ref": "#/components/schemas/ManifestVersionKindProvisioning",
-                                        "description": "provisioning declares whether provisioning (Git Sync) manages this kind."
-                                    },
-                                    "ui": {
-                                        "$ref": "#/components/schemas/ManifestVersionKindUI",
-                                        "description": "ui declares how user interfaces display this kind."
-                                    }
-                                },
-                                "type": "object"
-                            },
                             "ManifestVersionKindNamingStrategy": {
                                 "additionalProperties": false,
                                 "description": "#ManifestVersionKindNamingStrategy declares what the name of an object of a kind means.",
@@ -1029,17 +1015,6 @@
                                 "required": [
                                     "owners"
                                 ],
-                                "type": "object"
-                            },
-                            "ManifestVersionKindProvisioning": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "enabled": {
-                                        "default": false,
-                                        "description": "enabled declares whether provisioning manages resources of this kind.",
-                                        "type": "boolean"
-                                    }
-                                },
                                 "type": "object"
                             },
                             "ManifestVersionKindSearch": {

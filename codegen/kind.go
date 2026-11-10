@@ -120,17 +120,6 @@ type KindSearch struct {
 	Global bool `json:"global"`
 }
 
-// KindExtensions declares how other Grafana features treat a kind.
-type KindExtensions struct {
-	Provisioning *KindProvisioning `json:"provisioning,omitempty"`
-	UI           *KindUI           `json:"ui,omitempty"`
-}
-
-// KindProvisioning declares whether provisioning (Git Sync) manages a kind.
-type KindProvisioning struct {
-	Enabled bool `json:"enabled"`
-}
-
 // KindUI declares how user interfaces display a kind.
 type KindUI struct {
 	LabelKey string `json:"labelKey,omitempty"`

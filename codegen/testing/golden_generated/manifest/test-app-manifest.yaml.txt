@@ -126,13 +126,6 @@ spec:
       - .spec.stringField
       userReadable: false
     - conversion: false
-      extensions:
-        provisioning:
-          enabled: true
-        ui:
-          icon: apps
-          labelKey: testkind2
-          url: /a/test-app/testkind2s/{name}
       fixedNames:
       - current
       kind: TestKind2
@@ -209,6 +202,10 @@ spec:
         trash: false
       storage:
         listKeys: false
+      ui:
+        icon: apps
+        labelKey: testkind2
+        url: /a/test-app/testkind2s/{name}
       userReadable: false
     name: v1
     served: true

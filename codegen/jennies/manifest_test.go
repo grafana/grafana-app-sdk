@@ -233,31 +233,18 @@ func TestProcessKindVersion_Search(t *testing.T) {
 	}
 }
 
-func TestProcessKindVersion_Extensions(t *testing.T) {
+func TestProcessKindVersion_UI(t *testing.T) {
 	for _, tc := range []struct {
-		name       string
-		extensions *codegen.KindExtensions
-		expected   *app.ManifestVersionKindExtensions
+		name     string
+		ui       *codegen.KindUI
+		expected *app.ManifestVersionKindUI
 	}{
 		{name: "unset"},
-		{name: "empty", extensions: &codegen.KindExtensions{}},
+		{name: "empty", ui: &codegen.KindUI{}},
 		{
-			name:       "empty blocks",
-			extensions: &codegen.KindExtensions{Provisioning: &codegen.KindProvisioning{}, UI: &codegen.KindUI{}},
-		},
-		{
-			name:       "provisioning enabled",
-			extensions: &codegen.KindExtensions{Provisioning: &codegen.KindProvisioning{Enabled: true}},
-			expected: &app.ManifestVersionKindExtensions{
-				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
-			},
-		},
-		{
-			name:       "ui",
-			extensions: &codegen.KindExtensions{UI: &codegen.KindUI{LabelKey: "widget", URL: "/a/foo/widgets/{name}", Icon: "apps"}},
-			expected: &app.ManifestVersionKindExtensions{
-				UI: &app.ManifestVersionKindUI{LabelKey: "widget", URL: "/a/foo/widgets/{name}", Icon: "apps"},
-			},
+			name:     "set",
+			ui:       &codegen.KindUI{LabelKey: "widget", URL: "/a/foo/widgets/{name}", Icon: "apps"},
+			expected: &app.ManifestVersionKindUI{LabelKey: "widget", URL: "/a/foo/widgets/{name}", Icon: "apps"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -266,10 +253,10 @@ func TestProcessKindVersion_Extensions(t *testing.T) {
 				PluralName:   "Foos",
 				Scope:        "Namespaced",
 				FolderScoped: true,
-				Extensions:   tc.extensions,
+				UI:           tc.ui,
 			}, "v1", false)
 			require.NoError(t, err)
-			assert.Equal(t, tc.expected, mver.Extensions)
+			assert.Equal(t, tc.expected, mver.UI)
 		})
 	}
 }
@@ -294,7 +281,7 @@ func TestBuildManifestData_UIURL(t *testing.T) {
 							Kind:       "Foo",
 							PluralName: "Foos",
 							Scope:      "Namespaced",
-							Extensions: &codegen.KindExtensions{UI: tc.ui},
+							UI:         tc.ui,
 						}},
 					},
 				},
@@ -302,11 +289,7 @@ func TestBuildManifestData_UIURL(t *testing.T) {
 
 			got, err := buildManifestData(manifest, false)
 			require.NoError(t, err)
-			var ui *app.ManifestVersionKindUI
-			if ext := got.Versions[0].Kinds[0].Extensions; ext != nil {
-				ui = ext.UI
-			}
-			assert.Equal(t, tc.expected, ui)
+			assert.Equal(t, tc.expected, got.Versions[0].Kinds[0].UI)
 		})
 	}
 }
