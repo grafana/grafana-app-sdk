@@ -877,7 +877,39 @@
                                                                 "description": "Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.\nIt may not prevent automatic conversion behavior between versions of the kind when set to false\n(for example, CRDs will always support simple conversion, and this flag enables webhook conversion).\nThis field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.",
                                                                 "type": "boolean"
                                                             },
-                                                            "core": {
+                                                            "embed": {
+                                                                "description": "Kinds with a custom embedding builder omit this section.",
+                                                                "properties": {
+                                                                    "fields": {
+                                                                        "description": "fields supplies inputs, in declaration order, used only to generate the text to be embedded.\nDeclaring an embedding field does not enable filtering embeddings by that field.",
+                                                                        "items": {
+                                                                            "properties": {
+                                                                                "name": {
+                                                                                    "description": "name labels this input in the embedding document.",
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "path": {
+                                                                                    "description": "path supplies a string or string array from the resource, using the same\ndot-separated paths and [*] projections as searchFields.",
+                                                                                    "minLength": 1,
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "required": [
+                                                                                "name",
+                                                                                "path"
+                                                                            ],
+                                                                            "type": "object"
+                                                                        },
+                                                                        "type": "array"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "fields"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "extensions": {
+                                                                "description": "TODO: allow untyped keys for app-defined extensions, such as \"kgatlas.ext.grafana.app\", next to the typed ones.",
                                                                 "properties": {
                                                                     "provisioning": {
                                                                         "properties": {
@@ -908,37 +940,6 @@
                                                                         "type": "object"
                                                                     }
                                                                 },
-                                                                "type": "object"
-                                                            },
-                                                            "embed": {
-                                                                "description": "Kinds with a custom embedding builder omit this section.",
-                                                                "properties": {
-                                                                    "fields": {
-                                                                        "description": "fields supplies inputs, in declaration order, used only to generate the text to be embedded.\nDeclaring an embedding field does not enable filtering embeddings by that field.",
-                                                                        "items": {
-                                                                            "properties": {
-                                                                                "name": {
-                                                                                    "description": "name labels this input in the embedding document.",
-                                                                                    "type": "string"
-                                                                                },
-                                                                                "path": {
-                                                                                    "description": "path supplies a string or string array from the resource, using the same\ndot-separated paths and [*] projections as searchFields.",
-                                                                                    "minLength": 1,
-                                                                                    "type": "string"
-                                                                                }
-                                                                            },
-                                                                            "required": [
-                                                                                "name",
-                                                                                "path"
-                                                                            ],
-                                                                            "type": "object"
-                                                                        },
-                                                                        "type": "array"
-                                                                    }
-                                                                },
-                                                                "required": [
-                                                                    "fields"
-                                                                ],
                                                                 "type": "object"
                                                             },
                                                             "fixedNames": {

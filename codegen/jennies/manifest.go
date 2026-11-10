@@ -234,8 +234,8 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 			if err != nil {
 				return nil, err
 			}
-			if mvkind.Core != nil && mvkind.Core.UI != nil && mvkind.Core.UI.URL == "" {
-				mvkind.Core.UI.URL = fmt.Sprintf("/a/%s/%s/{name}", manifest.AppName, mvkind.Resource)
+			if mvkind.Extensions != nil && mvkind.Extensions.UI != nil && mvkind.Extensions.UI.URL == "" {
+				mvkind.Extensions.UI.URL = fmt.Sprintf("/a/%s/%s/{name}", manifest.AppName, mvkind.Resource)
 			}
 			if len(kind.Validation.Operations) > 0 {
 				hasAnyValidation = true
@@ -621,16 +621,16 @@ func manifestKindEmbed(embed *codegen.KindEmbed) *app.ManifestVersionKindEmbed {
 	return &app.ManifestVersionKindEmbed{Fields: fields}
 }
 
-func manifestKindCore(core *codegen.KindCore) *app.ManifestVersionKindCore {
-	if core == nil {
+func manifestKindExtensions(extensions *codegen.KindExtensions) *app.ManifestVersionKindExtensions {
+	if extensions == nil {
 		return nil
 	}
-	provisioning := manifestKindProvisioning(core.Provisioning)
-	ui := manifestKindUI(core.UI)
+	provisioning := manifestKindProvisioning(extensions.Provisioning)
+	ui := manifestKindUI(extensions.UI)
 	if provisioning == nil && ui == nil {
 		return nil
 	}
-	return &app.ManifestVersionKindCore{Provisioning: provisioning, UI: ui}
+	return &app.ManifestVersionKindExtensions{Provisioning: provisioning, UI: ui}
 }
 
 func manifestKindUI(ui *codegen.KindUI) *app.ManifestVersionKindUI {
@@ -681,7 +681,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 	}
 	mver.Search = manifestKindSearch(vk.Search)
 	mver.Embed = manifestKindEmbed(vk.Embed)
-	mver.Core = manifestKindCore(vk.Core)
+	mver.Extensions = manifestKindExtensions(vk.Extensions)
 	if len(vk.Mutation.Operations) > 0 {
 		operations, err := sanitizeAdmissionOperations(vk.Mutation.Operations)
 		if err != nil {

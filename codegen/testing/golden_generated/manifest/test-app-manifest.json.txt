@@ -239,7 +239,7 @@
                         "search": {
                             "trash": false
                         },
-                        "core": {
+                        "extensions": {
                             "provisioning": {
                                 "enabled": true
                             },

@@ -190,15 +190,15 @@ var appManifestData = app.ManifestData{
                             Path: {{ goString .Path }},
                         },{{ end }}
                     },
-                }, {{ end }}{{ if .Core }}
-                Core: &app.ManifestVersionKindCore{ {{ if .Core.Provisioning }}
+                }, {{ end }}{{ if .Extensions }}
+                Extensions: &app.ManifestVersionKindExtensions{ {{ if .Extensions.Provisioning }}
                     Provisioning: &app.ManifestVersionKindProvisioning{
-                        Enabled: {{ goBoolPtr .Core.Provisioning.Enabled }},
-                    },{{ end }}{{ if .Core.UI }}
-                    UI: &app.ManifestVersionKindUI{ {{ if .Core.UI.LabelKey }}
-                        LabelKey: {{ goString .Core.UI.LabelKey }},{{ end }}{{ if .Core.UI.URL }}
-                        URL: {{ goString .Core.UI.URL }},{{ end }}{{ if .Core.UI.Icon }}
-                        Icon: {{ goString .Core.UI.Icon }},{{ end }}
+                        Enabled: {{ goBoolPtr .Extensions.Provisioning.Enabled }},
+                    },{{ end }}{{ if .Extensions.UI }}
+                    UI: &app.ManifestVersionKindUI{ {{ if .Extensions.UI.LabelKey }}
+                        LabelKey: {{ goString .Extensions.UI.LabelKey }},{{ end }}{{ if .Extensions.UI.URL }}
+                        URL: {{ goString .Extensions.UI.URL }},{{ end }}{{ if .Extensions.UI.Icon }}
+                        Icon: {{ goString .Extensions.UI.Icon }},{{ end }}
                     },{{ end }}
                 }, {{ end }}{{ if .Admission }}
                 Admission: &app.AdmissionCapabilities{

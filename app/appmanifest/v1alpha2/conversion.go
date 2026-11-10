@@ -165,21 +165,21 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 					}
 				}
 			}
-			if kind.Core != nil {
-				k.Core = &app.ManifestVersionKindCore{}
-				if kind.Core.Provisioning != nil {
-					k.Core.Provisioning = &app.ManifestVersionKindProvisioning{Enabled: kind.Core.Provisioning.Enabled}
+			if kind.Extensions != nil {
+				k.Extensions = &app.ManifestVersionKindExtensions{}
+				if kind.Extensions.Provisioning != nil {
+					k.Extensions.Provisioning = &app.ManifestVersionKindProvisioning{Enabled: kind.Extensions.Provisioning.Enabled}
 				}
-				if ui := kind.Core.Ui; ui != nil {
-					k.Core.UI = &app.ManifestVersionKindUI{}
+				if ui := kind.Extensions.Ui; ui != nil {
+					k.Extensions.UI = &app.ManifestVersionKindUI{}
 					if ui.LabelKey != nil {
-						k.Core.UI.LabelKey = *ui.LabelKey
+						k.Extensions.UI.LabelKey = *ui.LabelKey
 					}
 					if ui.Url != nil {
-						k.Core.UI.URL = *ui.Url
+						k.Extensions.UI.URL = *ui.Url
 					}
 					if ui.Icon != nil {
-						k.Core.UI.Icon = *ui.Icon
+						k.Extensions.UI.Icon = *ui.Icon
 					}
 				}
 			}
@@ -517,21 +517,21 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 					}
 				}
 			}
-			if kind.Core != nil {
-				k.Core = &AppManifestManifestVersionKindCore{}
-				if kind.Core.Provisioning != nil {
-					k.Core.Provisioning = &AppManifestManifestVersionKindProvisioning{Enabled: kind.Core.Provisioning.Enabled}
+			if kind.Extensions != nil {
+				k.Extensions = &AppManifestManifestVersionKindExtensions{}
+				if kind.Extensions.Provisioning != nil {
+					k.Extensions.Provisioning = &AppManifestManifestVersionKindProvisioning{Enabled: kind.Extensions.Provisioning.Enabled}
 				}
-				if ui := kind.Core.UI; ui != nil {
-					k.Core.Ui = &AppManifestManifestVersionKindUI{}
+				if ui := kind.Extensions.UI; ui != nil {
+					k.Extensions.Ui = &AppManifestManifestVersionKindUI{}
 					if ui.LabelKey != "" {
-						k.Core.Ui.LabelKey = &ui.LabelKey
+						k.Extensions.Ui.LabelKey = &ui.LabelKey
 					}
 					if ui.URL != "" {
-						k.Core.Ui.Url = &ui.URL
+						k.Extensions.Ui.Url = &ui.URL
 					}
 					if ui.Icon != "" {
-						k.Core.Ui.Icon = &ui.Icon
+						k.Extensions.Ui.Icon = &ui.Icon
 					}
 				}
 			}

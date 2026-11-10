@@ -15,7 +15,7 @@ testKind2: {
 		}
 	}
 	search: trash: false
-	core: {
+	extensions: {
 		provisioning: enabled: true
 		ui: {
 			labelKey: "testkind2"
