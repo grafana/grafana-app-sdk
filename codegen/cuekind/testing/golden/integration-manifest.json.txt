@@ -16,6 +16,7 @@
                     {
                         "kind": "Foo",
                         "plural": "Foos",
+                        "resource": "foos",
                         "scope": "Namespaced",
                         "userReadable": false,
                         "schemas": {
@@ -291,6 +292,7 @@
                     {
                         "kind": "Notification",
                         "plural": "Notifications",
+                        "resource": "notifications",
                         "scope": "Namespaced",
                         "userReadable": false,
                         "schemas": {

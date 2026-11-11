@@ -3,7 +3,7 @@
 An Informer is where an operator's add/update/delete events come from. It is the piece between the API and your
 reconciler or watcher: it learns that something changed, works out what kind of change it was, and hands the object
 to each registered handler. The `operator.InformerController` coordinates informers and handlers; see
-[Operators and Event-Based Design](operators.md) for how the pieces fit together.
+[Writing a Reconciler](writing-a-reconciler.md) for what sits on the other side of one.
 
 An informer answers two questions, and the implementations differ in how they answer them:
 

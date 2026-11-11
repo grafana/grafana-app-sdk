@@ -14,6 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/spec3"
 	"k8s.io/kube-openapi/pkg/validation/spec"
@@ -30,6 +31,10 @@ const (
 	// the resource and subresource its access check is made against.
 	OpenAPIExtensionAuthzResource    = "x-grafana-declared-authz-resource"
 	OpenAPIExtensionAuthzSubresource = "x-grafana-declared-authz-subresource"
+
+	// OpenAPIExtensionAllowMissingParent declares, on a kind subresource route operation, that the
+	// route is served even when no object is stored under the name in its path.
+	OpenAPIExtensionAllowMissingParent = "x-grafana-allow-missing-parent"
 
 	ManifestRolePermissionSetViewer = "viewer"
 	ManifestRolePermissionSetEditor = "editor"
@@ -139,32 +144,50 @@ func (m *ManifestData) IsEmpty() bool {
 
 // Validate validates the ManifestData to ensure that the kind data across all Versions is consistent
 //
-//nolint:gocognit,funlen
+//nolint:gocognit,funlen,gocyclo
 func (m *ManifestData) Validate() error {
 	type kindData struct {
 		kind         string
 		plural       string
+		resource     string
 		scope        string
 		conversion   bool
 		userReadable bool
 		folderScoped bool
 		version      string
 	}
+	hasPreferredVersion := false
 	var errs error
 	kinds := make(map[string]kindData)
 	for _, version := range m.Versions {
 		namespacedRoutes := make(map[string]struct{})
 		clusterRoutes := make(map[string]struct{})
+		if version.Name == m.PreferredVersion {
+			hasPreferredVersion = true
+		}
 		for _, kind := range version.Kinds {
+			if kind.Plural == "" {
+				errs = multierror.Append(errs, fmt.Errorf("kind '%s' in version '%s' has no plural", kind.Kind, version.Name))
+			}
+			if kind.Resource == "" {
+				errs = multierror.Append(errs, fmt.Errorf("kind '%s' in version '%s' has no resource", kind.Kind, version.Name))
+			}
+			if kind.Resource != "" {
+				// The resource is used as a path segment in the k8s GroupVersionResource URL, so it must be a valid lowercase DNS label
+				if msgs := validation.IsDNS1123Label(kind.Resource); len(msgs) > 0 {
+					errs = multierror.Append(errs, fmt.Errorf("kind '%s' in version '%s' has an invalid resource '%s': %s", kind.Kind, version.Name, kind.Resource, strings.Join(msgs, "; ")))
+				}
+			}
 			if kind.Scope == "Cluster" {
-				clusterRoutes[kind.Resource()] = struct{}{}
+				clusterRoutes[kind.Resource] = struct{}{}
 			} else {
-				namespacedRoutes[kind.Resource()] = struct{}{}
+				namespacedRoutes[kind.Resource] = struct{}{}
 			}
 			if k, ok := kinds[kind.Kind]; !ok {
 				k = kindData{
 					kind:         kind.Kind,
 					plural:       kind.Plural,
+					resource:     kind.Resource,
 					scope:        kind.Scope,
 					conversion:   kind.Conversion,
 					userReadable: kind.UserReadable,
@@ -175,6 +198,9 @@ func (m *ManifestData) Validate() error {
 			} else {
 				if k.plural != kind.Plural {
 					errs = multierror.Append(errs, fmt.Errorf("kind '%s' has a different plural in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
+				}
+				if k.resource != kind.Resource {
+					errs = multierror.Append(errs, fmt.Errorf("kind '%s' has a different resource in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
 				}
 				if k.scope != kind.Scope {
 					errs = multierror.Append(errs, fmt.Errorf("kind '%s' has a different scope in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
@@ -247,6 +273,9 @@ func (m *ManifestData) Validate() error {
 			}
 		}
 	}
+	if !hasPreferredVersion && m.PreferredVersion != "" {
+		errs = multierror.Append(errs, fmt.Errorf("unknown preferred version: %q", m.PreferredVersion))
+	}
 	return multierror.Append(errs, m.validateKindRoutes(), m.validateRoles(), m.validateEmbed()).ErrorOrNil()
 }
 
@@ -269,7 +298,7 @@ func (m *ManifestData) validateRoles() error {
 	resources := make(map[string]string)
 	for _, version := range m.Versions {
 		for _, kind := range version.Kinds {
-			resources[strings.ToLower(kind.Kind)] = kind.Resource()
+			resources[strings.ToLower(kind.Kind)] = kind.Resource
 		}
 	}
 	routeSubresources, errs := m.routeSubresources()
@@ -337,7 +366,7 @@ func (m *ManifestData) routeSubresources() (map[string]map[string]bool, error) {
 	for _, version := range m.Versions {
 		for _, kind := range version.Kinds {
 			for _, rpath := range slices.Sorted(maps.Keys(kind.Routes)) {
-				visit(fmt.Sprintf("kind %q version %q route %q", kind.Kind, version.Name, rpath), kind.Resource(), firstSegment(rpath), kind.Routes[rpath])
+				visit(fmt.Sprintf("kind %q version %q route %q", kind.Kind, version.Name, rpath), kind.Resource, firstSegment(rpath), kind.Routes[rpath])
 			}
 		}
 		routes := version.Routes //nolint:staticcheck // Routes is deprecated but older manifests still declare routes there
@@ -377,7 +406,7 @@ func (m *ManifestData) validateEmbed() error {
 	var errs error
 	for _, version := range m.Versions {
 		for _, kind := range version.Kinds {
-			resource := kind.Resource()
+			resource := kind.Resource
 			resources[resource] = struct{}{}
 			if _, ok := m.Embed[resource]; kind.Embed != nil && !ok {
 				errs = multierror.Append(errs, fmt.Errorf("kind %q version %q declares embedding fields without embed configuration for resource %q", kind.Kind, version.Name, resource))
@@ -428,6 +457,7 @@ func (m *ManifestData) Kinds() []ManifestKind {
 				k = ManifestKind{
 					Kind:         kind.Kind,
 					Plural:       kind.Plural,
+					Resource:     kind.Resource,
 					Scope:        kind.Scope,
 					Conversion:   kind.Conversion,
 					UserReadable: kind.UserReadable,
@@ -458,8 +488,10 @@ type ManifestKind struct {
 	Kind string `json:"kind" yaml:"kind"`
 	// Scope if the scope of the kind, typically restricted to "Namespaced" or "Cluster"
 	Scope string `json:"scope" yaml:"scope"`
-	// Plural is the plural of the kind
+	// Plural is the capitalized, human readable plural of the kind
 	Plural string `json:"plural" yaml:"plural"`
+	// Resource is the lowercase plural used in the k8s GroupVersionResource URL
+	Resource string `json:"resource" yaml:"resource"`
 	// Versions is the set of versions for the kind. This list should be ordered as a series of progressively later versions.
 	Versions []ManifestKindVersion `json:"versions" yaml:"versions"`
 	// Conversion is true if the app has a conversion capability for this kind
@@ -544,8 +576,11 @@ func (r ManifestVersionRoutes) IsZero() bool {
 type ManifestVersionKind struct {
 	// Kind is the name of the kind. This should begin with a capital letter and be CamelCased
 	Kind string `json:"kind" yaml:"kind"`
-	// Plural is the plural version of `kind`. This is optional and defaults to the kind + "s" if not present.
-	Plural string `json:"plural,omitempty" yaml:"plural,omitempty"`
+	// Plural is the capitalized, human readable plural version of `kind` (e.g. "Issues"). Both Plural and Resource are required.
+	Plural string `json:"plural" yaml:"plural"`
+	// Resource is the all-lowercase plural used as the resource in the k8s GroupVersionResource URL (e.g. "issues").
+	// Both Plural and Resource are required.
+	Resource string `json:"resource" yaml:"resource"`
 	// Scope dictates the scope of the kind. This field must be the same for all versions of the kind.
 	// Different values will result in an error or undefined behavior.
 	Scope string `json:"scope" yaml:"scope"`
@@ -580,6 +615,14 @@ type ManifestVersionKind struct {
 	SearchFields []ManifestVersionKindSearchField `json:"searchFields,omitempty" yaml:"searchFields,omitempty"`
 	// Storage declares storage-related behavior for this kind.
 	Storage *ManifestVersionKindStorage `json:"storage,omitempty" yaml:"storage,omitempty"`
+	// FixedNames are names of objects of this kind that are never stored: the app
+	// answers requests for them itself. A route at exactly <plural>/<name> is
+	// allowed for each, which would otherwise be rejected for shadowing the
+	// kind's own resource.
+	FixedNames []string `json:"fixedNames,omitempty" yaml:"fixedNames,omitempty"`
+	// NamingStrategy declares what the name of an object of this kind means, and that access to
+	// the object follows from it. A nil value means access does not follow from the name.
+	NamingStrategy *ManifestKindNamingStrategy `json:"namingStrategy,omitempty" yaml:"namingStrategy,omitempty"`
 	// Search declares which search endpoints are served for this kind.
 	// A nil value, or a nil field within it, means the endpoint takes its default.
 	Search *ManifestVersionKindSearch `json:"search,omitempty" yaml:"search,omitempty"`
@@ -587,6 +630,8 @@ type ManifestVersionKind struct {
 	Embed *ManifestVersionKindEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
 	// Watch declares how this kind's changes reach the app's handlers.
 	Watch *ManifestVersionKindWatch `json:"watch,omitempty" yaml:"watch,omitempty"`
+	// Extensions declares how other Grafana features, such as provisioning, treat this kind.
+	Extensions *ManifestVersionKindExtensions `json:"extensions,omitempty" yaml:"extensions,omitempty"`
 }
 
 // ManifestVersionKindWatch declares how a kind's changes reach the app's handlers: what the handlers need from the
@@ -654,7 +699,7 @@ func (m ManifestData) WatchMetadata() map[schema.GroupResource]ManifestVersionKi
 			if kind.Watch == nil || kind.Watch.Metadata == nil {
 				continue
 			}
-			gr := schema.GroupResource{Group: m.Group, Resource: kind.Resource()}
+			gr := schema.GroupResource{Group: m.Group, Resource: kind.Resource}
 			merged := out[gr]
 			merged.Labels = appendUnique(merged.Labels, kind.Watch.Metadata.Labels)
 			merged.Annotations = appendUnique(merged.Annotations, kind.Watch.Metadata.Annotations)
@@ -794,6 +839,19 @@ type ManifestVersionKindEmbed struct {
 	Fields []ManifestVersionKindEmbedField `json:"fields" yaml:"fields"`
 }
 
+// ManifestVersionKindExtensions declares how other Grafana features treat a kind.
+// TODO: keep untyped keys for app-defined extensions, such as "kgatlas.ext.grafana.app".
+type ManifestVersionKindExtensions struct {
+	// Provisioning declares whether provisioning (Git Sync) manages this kind.
+	Provisioning *ManifestVersionKindProvisioning `json:"provisioning,omitempty" yaml:"provisioning,omitempty"`
+}
+
+// ManifestVersionKindProvisioning declares whether provisioning (Git Sync) manages a kind.
+type ManifestVersionKindProvisioning struct {
+	// Enabled declares whether provisioning manages resources of this kind. A nil value defaults to false.
+	Enabled *bool `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+}
+
 // ManifestVersionKindEmbedField supplies text for the embedding document without exposing a search field.
 type ManifestVersionKindEmbedField struct {
 	// Name labels this input in the embedding document.
@@ -802,12 +860,31 @@ type ManifestVersionKindEmbedField struct {
 	Path string `json:"path" yaml:"path"`
 }
 
-// Resource defines the k8s resource path for the kind. It is a lowercase version of the plural name.
-func (m *ManifestVersionKind) Resource() string {
-	if m.Plural != "" {
-		return strings.ToLower(m.Plural)
-	}
-	return strings.ToLower(m.Kind) + "s"
+// NamingStrategyModeOwner is the naming strategy of a kind whose objects are named for their owner.
+const NamingStrategyModeOwner = "owner"
+
+// ManifestVersionKindNamingStrategy declares what the name of an object of a kind means. Mode says
+// which strategy it is, and the field of that mode holds its settings.
+type ManifestKindNamingStrategy struct {
+	// Mode is the strategy. The only one so far is NamingStrategyModeOwner.
+	Mode string `json:"mode" yaml:"mode"`
+	// Owner is set when Mode is NamingStrategyModeOwner.
+	Owner *ManifestKindNamingStrategyOwner `json:"owner,omitempty" yaml:"owner,omitempty"`
+}
+
+// ManifestKindNamingStrategyOwner is the naming strategy of a kind whose objects are named
+// for their owner (see resource.OwnerReference): user-<id>, team-<id> or namespace.
+type ManifestKindNamingStrategyOwner struct {
+	// Owners are the kinds of owner a name can have.
+	// A name that does not parse as one of them is not accessible, except the kind's FixedNames.
+	Owners []sdkresource.Owner `json:"owners" yaml:"owners"`
+	// AllowOrgAdmin lets an org admin do anything to the kind, whoever owns the object.
+	AllowOrgAdmin bool `json:"allowOrgAdmin,omitempty" yaml:"allowOrgAdmin,omitempty"`
+}
+
+// HasFixedName reports whether name is one of the kind's fixed names.
+func (m *ManifestVersionKind) HasFixedName(name string) bool {
+	return slices.Contains(m.FixedNames, name)
 }
 
 // HasListKeysEndpoint reports whether the kind serves generic list-keys endpoints.
@@ -839,6 +916,13 @@ func (m *ManifestVersionKind) HasHybridEndpoint() bool {
 // Kinds are not included unless they explicitly opt in.
 func (m *ManifestVersionKind) InGlobalSearchIndex() bool {
 	return m.Search != nil && m.Search.Global != nil && *m.Search.Global
+}
+
+// IsProvisionable reports whether provisioning (Git Sync) manages the kind.
+// Kinds are not provisionable unless they explicitly opt in.
+func (m *ManifestVersionKind) IsProvisionable() bool {
+	return m.Extensions != nil && m.Extensions.Provisioning != nil &&
+		m.Extensions.Provisioning.Enabled != nil && *m.Extensions.Provisioning.Enabled
 }
 
 // isFolderScoped returns the effective folderScoped value for a kind, treating a nil pointer

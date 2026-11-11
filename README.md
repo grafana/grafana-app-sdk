@@ -54,8 +54,6 @@ A typical grafana app deployment might look more like:
 
 ![Application Using SDK Diagram](docs/diagrams/design_pattern_simple.png)
 
-For more details on application design, see [application design documentation](docs/application-design/README.md).
-
 ## CLI Usage
 
 Full CLI usage is covered in [CLI docs page](docs/cli.md), but for a brief overview of the commands:
@@ -72,14 +70,12 @@ Full CLI usage is covered in [CLI docs page](docs/cli.md), but for a brief overv
 
 ## Examples
 
-The [examples](./examples) directory contains small examples of different grafana-app-sdk functionality. For a complete example app, you can follow the [tutorial project](docs/tutorials/issue-tracker/README.md) to build a functioning simple app with no prior knowledge necessary.
+For a complete example app, you can follow the [tutorial project](docs/tutorials/issue-tracker/README.md) to build a functioning simple app with no prior knowledge necessary.
 
 ## Further Reading
 
 Please see the [/docs](docs/README.md) directory for full documentation,
-or take a look at the [Design Patterns](docs/application-design/README.md), [App Platform Concepts](docs/application-design/platform-concepts.md), or the [tutorial](docs/tutorials/issue-tracker/README.md).
-
-The `examples` directory contains runnable example projects that use different SDK components.
+or take a look at the [tutorial](docs/tutorials/issue-tracker/README.md).
 
 Each package also contains a README.md detailing package usage and simple examples.
 

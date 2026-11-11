@@ -12,6 +12,7 @@ import (
 	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 func TestManifestVersionOpenAPIConversion(t *testing.T) {
@@ -304,6 +305,56 @@ func TestSearchEndpointsConversion(t *testing.T) {
 	}
 }
 
+func TestExtensionsConversion(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		extensions *app.ManifestVersionKindExtensions
+	}{
+		{name: "unset"},
+		{name: "empty", extensions: &app.ManifestVersionKindExtensions{}},
+		{
+			name: "empty blocks",
+			extensions: &app.ManifestVersionKindExtensions{
+				Provisioning: &app.ManifestVersionKindProvisioning{},
+			},
+		},
+		{
+			name: "provisioning disabled",
+			extensions: &app.ManifestVersionKindExtensions{
+				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(false)},
+			},
+		},
+		{
+			name: "provisioning enabled",
+			extensions: &app.ManifestVersionKindExtensions{
+				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			md := app.ManifestData{
+				AppName: "foo",
+				Versions: []app.ManifestVersion{{
+					Name:   "v1",
+					Served: true,
+					Kinds: []app.ManifestVersionKind{{
+						Kind:       "Foo",
+						Scope:      "Namespaced",
+						Extensions: tc.extensions,
+					}},
+				}},
+			}
+
+			spec, err := SpecFromManifestData(md)
+			require.NoError(t, err)
+
+			roundTripped, err := spec.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, tc.extensions, roundTripped.Versions[0].Kinds[0].Extensions)
+		})
+	}
+}
+
 func TestEmbedConversion(t *testing.T) {
 	for _, tc := range []struct {
 		name           string
@@ -363,9 +414,11 @@ func TestEmbedConversion(t *testing.T) {
 					Name:   "v1",
 					Served: true,
 					Kinds: []app.ManifestVersionKind{{
-						Kind:  "Foo",
-						Scope: "Namespaced",
-						Embed: tc.embed,
+						Kind:     "Foo",
+						Plural:   "Foos",
+						Resource: "foos",
+						Scope:    "Namespaced",
+						Embed:    tc.embed,
 						SearchFields: []app.ManifestVersionKindSearchField{{
 							Name:         "category",
 							Path:         "spec.category",
@@ -442,8 +495,8 @@ func TestEmbedConversion_SharedReembedVersion(t *testing.T) {
 					},
 					{
 						Kind:   "Child",
-						Plural: "children",
-						Scope:  "Namespaced",
+						Plural: "children", Resource: "children",
+						Scope: "Namespaced",
 					},
 				},
 			},
@@ -460,8 +513,8 @@ func TestEmbedConversion_SharedReembedVersion(t *testing.T) {
 					},
 					{
 						Kind:   "Child",
-						Plural: "children",
-						Scope:  "Namespaced",
+						Plural: "children", Resource: "children",
+						Scope: "Namespaced",
 					},
 				},
 			},
@@ -555,4 +608,70 @@ func TestWatchMetadataRoundTrips(t *testing.T) {
 
 	// A flag left unset must not come back as an explicit opt-out.
 	assert.Nil(t, spec.Versions[0].Kinds[0].Watch.Metadata.CreationTimestamp)
+}
+
+func TestFixedNamesConversion(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		fixed []string
+	}{
+		{name: "omitted"},
+		{name: "one", fixed: []string{"current"}},
+		{name: "several", fixed: []string{"a", "b"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := app.ManifestData{AppName: "foo", Versions: []app.ManifestVersion{{
+				Name: "v1", Served: true, Kinds: []app.ManifestVersionKind{{
+					Kind: "Foo", Scope: "Namespaced", FixedNames: tc.fixed,
+				}},
+			}}}
+			spec, err := SpecFromManifestData(data)
+			require.NoError(t, err)
+			encoded, err := json.Marshal(spec)
+			require.NoError(t, err)
+			var decoded AppManifestSpec
+			require.NoError(t, json.Unmarshal(encoded, &decoded))
+			roundTrip, err := decoded.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, tc.fixed, roundTrip.Versions[0].Kinds[0].FixedNames)
+		})
+	}
+}
+
+func TestNamingStrategyConversion(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		strategy *app.ManifestKindNamingStrategy
+	}{
+		{name: "omitted"},
+		{name: "mode only", strategy: &app.ManifestKindNamingStrategy{Mode: app.NamingStrategyModeOwner}},
+		{name: "owners only", strategy: &app.ManifestKindNamingStrategy{
+			Mode:  app.NamingStrategyModeOwner,
+			Owner: &app.ManifestKindNamingStrategyOwner{Owners: []resource.Owner{resource.UserResourceOwner}},
+		}},
+		{name: "everything", strategy: &app.ManifestKindNamingStrategy{
+			Mode: app.NamingStrategyModeOwner,
+			Owner: &app.ManifestKindNamingStrategyOwner{
+				Owners:        []resource.Owner{resource.NamespaceResourceOwner, resource.UserResourceOwner, resource.TeamResourceOwner},
+				AllowOrgAdmin: true,
+			},
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := app.ManifestData{AppName: "foo", Versions: []app.ManifestVersion{{
+				Name: "v1", Served: true, Kinds: []app.ManifestVersionKind{{
+					Kind: "Foo", Scope: "Namespaced", NamingStrategy: tc.strategy,
+				}},
+			}}}
+			spec, err := SpecFromManifestData(data)
+			require.NoError(t, err)
+			encoded, err := json.Marshal(spec)
+			require.NoError(t, err)
+			var decoded AppManifestSpec
+			require.NoError(t, json.Unmarshal(encoded, &decoded))
+			roundTrip, err := decoded.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, tc.strategy, roundTrip.Versions[0].Kinds[0].NamingStrategy)
+		})
+	}
 }

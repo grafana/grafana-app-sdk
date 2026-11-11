@@ -141,7 +141,32 @@ SchemaWithOperatorState: Schema & {
 #AdmissionCapability: {
 	operations: [...string]
 }
+// #CustomRouteParam is a parameter of a route, described as OpenAPI's parameter object describes it:
+// https://swagger.io/docs/specification/v3_0/describing-parameters/
+#CustomRouteParam: {
+	// name is the name of the parameter. A path parameter's name is a parameter in the route's path.
+	name: =~"^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+	// in is where the parameter is.
+	in: "path" | "query" | "header" | "cookie"
+	// description documents the parameter in the generated OpenAPI.
+	description?: string
+	// required is whether the request has to carry the parameter. A path parameter always does, so it
+	// cannot be false there; the others default to not required.
+	required?: bool
+	// deprecated marks the parameter as one that should no longer be used.
+	deprecated?: bool
+	// example is an example value for the parameter, which has to satisfy schema.
+	example?: _
+	// schema is the type of the parameter, such as int, or int | *10 for a default. It is a string
+	// when it is not declared.
+	schema?: _
+}
 #CustomRouteRequest: {
+	// parameters are the parameters of the route. A parameter with in: "query" defines a query
+	// parameter, so a route declares those here, or in query, and not both.
+	parameters?: [...#CustomRouteParam]
+	// query is the schema of the query parameters, whose fields are the parameters.
+	// Deprecated: declare them in parameters, with in: "query".
 	query?: _
 	body?:  _
 }
@@ -152,11 +177,23 @@ SchemaWithOperatorState: Schema & {
 	objectMeta: bool | *false
 }
 #CustomRoute: {
-	name:     =~"^(get|log|read|replace|patch|delete|deletecollection|watch|connect|proxy|list|create|patch)([A-Za-z0-9]+)$"
+	// operationId identifies the route. It is the operationId of the generated OpenAPI operation,
+	// so it must be unique among the routes of a version, and it names the generated Go types and
+	// client method, so it should say what the route does (for example, addStar). A route must
+	// declare it, or the deprecated name.
+	operationId?: =~"^[A-Za-z][A-Za-z0-9_]*$"
+	// name is the deprecated spelling of operationId, which wins when both are declared. It has to
+	// start with a Kubernetes verb, which operationId does not.
+	name?: =~"^(get|log|read|replace|patch|delete|deletecollection|watch|connect|proxy|list|create|patch)([A-Za-z0-9]+)$"
 	summary?: string
 	description?: string
 	request:  #CustomRouteRequest
 	response: #CustomRouteResponse
+	// responseKind is the name of a kind in the same version whose resource the route returns, as the
+	// standard Kubernetes calls for that kind do: it references the kind's schema instead of defining
+	// a response, and the generated client returns the kind's Go type instead of a generated one. A
+	// route that declares it does not declare a response.
+	responseKind?: =~"^[A-Za-z][A-Za-z0-9]*$"
 	// responseMetadata allows codegen to include kubernetes metadata in the generated response object.
 	// It is also copied into the AppManifest responseMetadata for use in kube-OpenAPI generation.
 	responseMetadata: #CustomRouteResponseMetadata
@@ -169,6 +206,11 @@ SchemaWithOperatorState: Schema & {
 	// (x-grafana-declared-authz-resource, x-grafana-declared-authz-subresource, x-grafana-declared-authz-verb).
 	// If absent, no authz extensions are added to the route.
 	authz?: #CustomRouteAuthz
+	// allowMissingParent serves the route of an object even when no object is stored under its
+	// name, which a route of an object does not do otherwise (it answers 404). It is for a name
+	// the app answers itself, or whose object only exists once it is written. It is emitted as
+	// the openAPI extension x-grafana-allow-missing-parent.
+	allowMissingParent?: bool
 }
 #CustomRouteAuthz: {
 	// resource is the resource the authz check is performed against.
@@ -206,6 +248,19 @@ SchemaWithOperatorState: Schema & {
 	// jsonPath is a simple JSON path (i.e. with array notation) which is evaluated against
 	// each custom resource to produce the value for this column.
 	jsonPath: string
+}
+#NamingStrategy: {
+	// mode is the strategy. "owner" names objects for their owner: user-<id>, team-<id> or namespace.
+	mode: "owner"
+	// owner holds the settings of the "owner" strategy.
+	owner: #OwnerNamingStrategy
+}
+// #OwnerNamingStrategy is the naming strategy of a kind whose objects are named for their owner.
+#OwnerNamingStrategy: {
+	// owners are the kinds of owner a name can have: user-<id>, team-<id> or namespace.
+	owners: [...("user" | "team" | "namespace")] & [_, ...]
+	// allowOrgAdmin lets an org admin do anything to the kind, whoever owns the object.
+	allowOrgAdmin: bool | *false
 }
 // #SearchField describes a field exposed for search indexing and querying.
 // The type and capabilities values, and which capabilities are valid on which
@@ -253,6 +308,19 @@ SchemaWithOperatorState: Schema & {
 	// Defaults off: before opting in, check how the kind's documents are authorized,
 	// since they are returned next to documents of other kinds.
 	global: bool | *false
+}
+
+// #KindExtensions declares how other Grafana features treat a kind.
+// TODO: allow untyped keys for app-defined extensions, such as "kgatlas.ext.grafana.app", next to the typed ones.
+#KindExtensions: {
+	// provisioning declares whether provisioning (Git Sync) manages this kind.
+	provisioning?: #KindProvisioning
+}
+
+// #KindProvisioning declares whether provisioning (Git Sync) manages a kind.
+#KindProvisioning: {
+	// enabled declares whether provisioning manages resources of this kind.
+	enabled: bool | *false
 }
 
 // #KindEmbed defines the embedding document independently of search fields.
@@ -397,6 +465,14 @@ Kind: S={
 	searchFields?: [...#SearchField]
 	// listKeys controls whether generic list-keys endpoints are served for this kind.
 	listKeys: bool | *true
+	// fixedNames are names of objects of this kind that are never stored: the app
+	// answers requests for them itself. A route at exactly <plural>/<name>, declared
+	// at the version level, is allowed for each; it would otherwise be rejected for
+	// shadowing the kind's own resource. A name is a Kubernetes object name.
+	fixedNames?: [...=~"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"]
+	// namingStrategy declares what the name of an object of this kind means, and that access
+	// to the object follows from it instead of from the folder the object is in.
+	namingStrategy?: #NamingStrategy
 	// search controls which search endpoints are served for this kind.
 	// /search and /trash are served unless the kind opts out here; /search/hybrid
 	// is not served and the kind is not in the global index unless the kind opts in.
@@ -406,6 +482,8 @@ Kind: S={
 	// watch declares how this kind's changes reach the app's handlers: what the handlers need from the change
 	// stream, and what the platform should announce alongside each change.
 	watch?: #Watch
+	// extensions declares how other Grafana features, such as provisioning, treat this kind.
+	extensions?: #KindExtensions
 	// routes is a map of path patterns to custom routes that will be exposed as subresources for this kind.
 	// entries here should not conflict with subresources (like spec and status) in the schema for the kind.
 	routes?: #CustomRouteCapability

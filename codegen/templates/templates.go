@@ -14,6 +14,7 @@ import (
 	"text/template"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/kube-openapi/pkg/spec3"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	"github.com/grafana/grafana-app-sdk/app"
@@ -452,6 +453,44 @@ func (m ManifestGoFileMetadata) Packages() []string {
 	return pkgs
 }
 
+// ReturnsKind returns true if the operation responds with the resource of a kind of the version, by
+// referencing its schema (responseKind), rather than with a response type of its own. No Go response
+// type is generated for such an operation.
+func (ManifestGoFileMetadata) ReturnsKind(version app.ManifestVersion, op *spec3.Operation) bool {
+	if op == nil || op.Responses == nil {
+		return false
+	}
+	responses := make([]*spec3.Response, 0, len(op.Responses.StatusCodeResponses)+1)
+	responses = append(responses, op.Responses.Default)
+	for _, r := range op.Responses.StatusCodeResponses {
+		responses = append(responses, r)
+	}
+	for _, r := range responses {
+		if r == nil {
+			continue
+		}
+		for _, content := range r.Content {
+			if content == nil || content.Schema == nil {
+				continue
+			}
+			ref, found := strings.CutPrefix(content.Schema.Ref.String(), "#/components/schemas/")
+			if found && slices.ContainsFunc(version.Kinds, func(k app.ManifestVersionKind) bool { return k.Kind == ref }) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// HasQueryParams returns true if the operation declares a query parameter, which is the only kind of
+// parameter that has a generated Go request params type.
+func (ManifestGoFileMetadata) HasQueryParams(op *spec3.Operation) bool {
+	if op == nil {
+		return false
+	}
+	return slices.ContainsFunc(op.Parameters, func(p *spec3.Parameter) bool { return p != nil && p.In == "query" })
+}
+
 func (ManifestGoFileMetadata) StripLeadingSlash(path string) string {
 	for len(path) > 0 && path[0] == '/' {
 		path = path[1:]
@@ -561,15 +600,27 @@ type GoResourceClientMetadata struct {
 	KindPrefix   string
 	Subresources []GoResourceClientSubresource
 	CustomRoutes []GoClientCustomRoute
+	Imports      []GoImport
 }
 
 type GoClientCustomRoute struct {
-	TypeName    string
-	Path        string
-	Method      string
-	HasParams   bool
-	HasBody     bool
-	ParamValues []GoCustomRouteParamValues
+	TypeName string
+	// ResponseType is the Go type the route's client method returns, which is the generated
+	// <TypeName>Response unless the route returns the resource of a kind.
+	ResponseType string
+	// ResponseImport is the package of ResponseType, when it is not the package of the client.
+	ResponseImport *GoImport
+	Path           string
+	Method         string
+	HasParams      bool
+	HasBody        bool
+	ParamValues    []GoCustomRouteParamValues
+}
+
+// GoImport is a package a generated file imports, with the name it is imported as.
+type GoImport struct {
+	Alias string
+	Path  string
 }
 
 type GoCustomRouteParamValues struct {
@@ -628,6 +679,7 @@ type GoCustomRouteClientMetadata struct {
 	ClusterRoutes    []GoClientCustomRoute
 	Group            string
 	Version          string
+	Imports          []GoImport
 }
 
 func WriteGoCustomRouteClient(metadata GoCustomRouteClientMetadata, out io.Writer) error {

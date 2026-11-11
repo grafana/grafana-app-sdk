@@ -3,6 +3,8 @@ package jennies
 import (
 	"testing"
 
+	"cuelang.org/go/cue"
+
 	"cuelang.org/go/cue/cuecontext"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-app-sdk/routes"
 )
 
@@ -226,6 +229,40 @@ func TestProcessKindVersion_Search(t *testing.T) {
 			}, "v1", false)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expected, mver.Search)
+		})
+	}
+}
+
+func TestProcessKindVersion_Extensions(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		extensions *codegen.KindExtensions
+		expected   *app.ManifestVersionKindExtensions
+	}{
+		{name: "unset"},
+		{name: "empty", extensions: &codegen.KindExtensions{}},
+		{
+			name:       "empty blocks",
+			extensions: &codegen.KindExtensions{Provisioning: &codegen.KindProvisioning{}},
+		},
+		{
+			name:       "provisioning enabled",
+			extensions: &codegen.KindExtensions{Provisioning: &codegen.KindProvisioning{Enabled: true}},
+			expected: &app.ManifestVersionKindExtensions{
+				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mver, err := processKindVersion(codegen.VersionedKind{
+				Kind:         "Foo",
+				PluralName:   "Foos",
+				Scope:        "Namespaced",
+				FolderScoped: true,
+				Extensions:   tc.extensions,
+			}, "v1", false)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, mver.Extensions)
 		})
 	}
 }
@@ -466,6 +503,24 @@ func TestCustomRouteExtensions(t *testing.T) {
 			},
 		},
 		{
+			name: "allow missing parent",
+			route: codegen.CustomRoute{
+				AllowMissingParent: true,
+			},
+			want: spec.Extensions{routes.ExtensionAllowMissingParent: true},
+		},
+		{
+			name: "allow missing parent alongside authz",
+			route: codegen.CustomRoute{
+				Authz:              &codegen.CustomRouteAuthz{Resource: "foos"},
+				AllowMissingParent: true,
+			},
+			want: spec.Extensions{
+				routes.ExtensionAuthzResource:      "foos",
+				routes.ExtensionAllowMissingParent: true,
+			},
+		},
+		{
 			name: "authz alongside extensions",
 			route: codegen.CustomRoute{
 				Extensions: map[string]any{"x-foo": true},
@@ -558,4 +613,192 @@ func TestCustomRouteResponseToSpec3Responses_EmptyResponse(t *testing.T) {
 			assert.ElementsMatch(t, tt.wantRequired, schema.Required)
 		})
 	}
+}
+
+func TestBuildPathPropsFromMethods_Parameters(t *testing.T) {
+	ctx := cuecontext.New()
+	schema := func(src string) cue.Value { return ctx.CompileString(src) }
+	get := func(t *testing.T, path string, request codegen.CustomRouteRequest) ([]*spec3.Parameter, error) {
+		t.Helper()
+		props, _, err := buildPathPropsFromMethods(path, map[string]codegen.CustomRoute{"GET": {Name: "getThing", Request: request}})
+		if err != nil {
+			return nil, err
+		}
+		return props.Get.Parameters, nil
+	}
+	byName := func(params []*spec3.Parameter) map[string]*spec3.Parameter {
+		out := map[string]*spec3.Parameter{}
+		for _, p := range params {
+			out[p.Name] = p
+		}
+		return out
+	}
+
+	t.Run("a path parameter is a required string unless it has a schema", func(t *testing.T) {
+		params, err := get(t, "/things/{kind}/{id}/{group}", codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{
+			{Name: "kind", In: "path", Description: "Kind of the thing", Example: "Dashboard"},
+			{Name: "group", In: "path", Description: "API group of the thing"},
+			{Name: "id", In: "path", Schema: schema("int")},
+		}})
+		require.NoError(t, err)
+		require.Len(t, params, 3)
+		assert.Equal(t, []string{"group", "id", "kind"}, []string{params[0].Name, params[1].Name, params[2].Name}, "in name order")
+		got := byName(params)
+		for _, p := range params {
+			assert.Equal(t, "path", p.In)
+			assert.True(t, p.Required)
+		}
+		assert.Equal(t, spec.StringProperty(), got["group"].Schema)
+		assert.Equal(t, spec.StringOrArray{"integer"}, got["id"].Schema.Type)
+		assert.Equal(t, "Dashboard", got["kind"].Example)
+		assert.Nil(t, got["group"].Example, "an example is only emitted when declared")
+	})
+
+	t.Run("a parameter that matches the rest of the path is found by its name", func(t *testing.T) {
+		for _, path := range []string{"/files/{path}", "/files/{path...}", "/files/{path:*}"} {
+			params, err := get(t, path, codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{{Name: "path", In: "path"}}})
+			require.NoError(t, err, path)
+			require.Len(t, params, 1, path)
+		}
+	})
+
+	t.Run("a path parameter must be in the path, and cannot be optional", func(t *testing.T) {
+		_, err := get(t, "/things/{id}", codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{{Name: "idd", In: "path"}}})
+		require.ErrorContains(t, err, `path parameter "idd" is not a parameter in the path "/things/{id}"`)
+		_, err = get(t, "/things/{id}", codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{{Name: "id", In: "path", Required: new(false)}}})
+		require.ErrorContains(t, err, `path parameter "id" cannot be optional`)
+	})
+
+	t.Run("query parameters are defined by their entries", func(t *testing.T) {
+		params, err := get(t, "/search", codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{
+			{Name: "q", In: "query", Required: new(true), Description: "Terms to look for", Example: "dashboards"},
+			{Name: "limit", In: "query", Schema: schema("int | *10"), Example: int64(25), Deprecated: true},
+			{Name: "force", In: "query", Schema: schema("bool")},
+		}})
+		require.NoError(t, err)
+		got := byName(params)
+		require.Len(t, params, 3)
+		assert.Equal(t, "query", got["q"].In)
+		assert.True(t, got["q"].Required)
+		assert.Equal(t, spec.StringProperty(), got["q"].Schema, "a string unless it has a schema")
+		assert.Equal(t, "Terms to look for", got["q"].Description)
+		assert.Equal(t, "dashboards", got["q"].Example)
+		assert.False(t, got["limit"].Required, "a query parameter is optional unless it says so")
+		assert.Equal(t, spec.StringOrArray{"integer"}, got["limit"].Schema.Type)
+		assert.EqualValues(t, 10, got["limit"].Schema.Default, "the default comes from the schema")
+		assert.Equal(t, int64(25), got["limit"].Example)
+		assert.True(t, got["limit"].Deprecated)
+		assert.Equal(t, spec.StringOrArray{"boolean"}, got["force"].Schema.Type)
+	})
+
+	t.Run("the deprecated query still defines query parameters, from its doc comments", func(t *testing.T) {
+		params, err := get(t, "/search", codegen.CustomRouteRequest{Query: schema(`{
+			// The search terms.
+			q: string
+			limit?: int
+		}`)})
+		require.NoError(t, err)
+		got := byName(params)
+		assert.Equal(t, "The search terms.", got["q"].Description)
+		assert.True(t, got["q"].Required)
+		assert.False(t, got["limit"].Required)
+	})
+
+	t.Run("a route declares query parameters in one place", func(t *testing.T) {
+		_, err := get(t, "/search", codegen.CustomRouteRequest{
+			Query:      schema(`{q: string}`),
+			Parameters: []codegen.CustomRouteParam{{Name: "limit", In: "query"}},
+		})
+		require.ErrorContains(t, err, "declares query parameters in parameters and in the deprecated query")
+	})
+
+	t.Run("header and cookie parameters are emitted, after the path and query ones", func(t *testing.T) {
+		params, err := get(t, "/things/{id}", codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{
+			{Name: "session", In: "cookie", Required: new(true)},
+			{Name: "X-Request-Id", In: "header", Description: "Correlates the request in logs", Example: "7f0c"},
+			{Name: "page", In: "query"},
+			{Name: "id", In: "path"},
+		}})
+		require.NoError(t, err)
+		require.Len(t, params, 4)
+		assert.Equal(t, []string{"path", "query", "header", "cookie"}, []string{params[0].In, params[1].In, params[2].In, params[3].In})
+		got := byName(params)
+		assert.False(t, got["X-Request-Id"].Required, "optional unless it says so")
+		assert.True(t, got["session"].Required)
+	})
+
+	t.Run("a parameter is identified by its name and where it is", func(t *testing.T) {
+		_, err := get(t, "/things/{id}", codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{
+			{Name: "id", In: "path"}, {Name: "id", In: "query"}, {Name: "id", In: "header"},
+		}})
+		require.NoError(t, err, "the same name in other places is another parameter")
+		_, err = get(t, "/things/{id}", codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{
+			{Name: "id", In: "query"}, {Name: "id", In: "query"},
+		}})
+		require.ErrorContains(t, err, `query parameter "id" is declared twice`)
+	})
+
+	t.Run("an example has to satisfy the schema", func(t *testing.T) {
+		_, err := get(t, "/search", codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{
+			{Name: "limit", In: "query", Schema: schema("int"), Example: "many"},
+		}})
+		require.ErrorContains(t, err, `example many of query parameter "limit" does not satisfy its schema`)
+		_, err = get(t, "/search", codegen.CustomRouteRequest{Parameters: []codegen.CustomRouteParam{
+			{Name: "q", In: "query", Example: int64(3)},
+		}})
+		require.ErrorContains(t, err, `example 3 of query parameter "q" does not satisfy its schema`, "a parameter is a string without a schema")
+	})
+}
+
+func TestBuildPathPropsFromMethods_OperationID(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		route codegen.CustomRoute
+		want  string
+	}{
+		{name: "the route's name by default", route: codegen.CustomRoute{Name: "createStar"}, want: "createStar"},
+		{name: "an override", route: codegen.CustomRoute{Name: "createStar", OperationID: "addStar"}, want: "addStar"},
+		{name: "a default when there is no name", route: codegen.CustomRoute{}, want: defaultRouteName("PUT", "/star")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			props, _, err := buildPathPropsFromMethods("/star", map[string]codegen.CustomRoute{"PUT": tc.route})
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, props.Put.OperationId)
+		})
+	}
+}
+
+func TestProcessKindVersion_FixedNames(t *testing.T) {
+	for _, fixed := range [][]string{nil, {"current"}, {"a", "b"}} {
+		kind, err := processKindVersion(codegen.VersionedKind{
+			Kind: "Foo", Scope: "Namespaced", FixedNames: fixed,
+		}, "v1", false)
+		require.NoError(t, err)
+		assert.Equal(t, fixed, kind.FixedNames)
+	}
+}
+
+func TestProcessKindVersion_NamingStrategy(t *testing.T) {
+	kind, err := processKindVersion(codegen.VersionedKind{Kind: "Foo", Scope: "Namespaced"}, "v1", false)
+	require.NoError(t, err)
+	assert.Nil(t, kind.NamingStrategy)
+
+	kind, err = processKindVersion(codegen.VersionedKind{
+		Kind: "Foo", Scope: "Namespaced",
+		NamingStrategy: &codegen.KindNamingStrategy{
+			Mode: "owner",
+			Owner: &codegen.KindOwnerNames{
+				Owners:        []resource.Owner{resource.UserResourceOwner, resource.TeamResourceOwner},
+				AllowOrgAdmin: true,
+			},
+		},
+	}, "v1", false)
+	require.NoError(t, err)
+	assert.Equal(t, &app.ManifestKindNamingStrategy{
+		Mode: "owner",
+		Owner: &app.ManifestKindNamingStrategyOwner{
+			Owners:        []resource.Owner{resource.UserResourceOwner, resource.TeamResourceOwner},
+			AllowOrgAdmin: true,
+		},
+	}, kind.NamingStrategy)
 }

@@ -58,7 +58,7 @@ All of these behaviors (except `Runner()` and `ManagedKinds()`) are actions take
 For example, when a new resource is created for a kind which the app manages, `Mutate` and `Validate` will both be called if supported. 
 `Convert` may be called if the stored version is different from the version used in the create request.
 
-`CallResourceCustomRoute` handles the [custom routes](./application-design/README.md#applications-with-custom-apis) declared in your manifest. 
+`CallResourceCustomRoute` handles the custom routes declared in your manifest. 
 The platform routes those requests to your app through the plugin runner; the standalone operator runner does not serve them.
 
 `ManagedKinds()` is used by the runner to get the go types for kinds managed by the app (as the manifest is data and does not contain the go types used).
@@ -195,7 +195,7 @@ func NewApp(cfg app.Config) (app.App, error) {
 	})
 }
 ```
-Point `"local.kubeconfig"` at your Grafana instance (the [local development environment](local-development.md) sets this up for you) to run it.
+Point `"local.kubeconfig"` at your Grafana instance to run it.
 
 You can expand on this to add [validation or mutation](admission-control.md) (or conversion). 
-The [tutorial](tutorials/issue-tracker/README.md) [sets up validation and mutation in part 8](tutorials/issue-tracker/08-adding-admission-control.md).
+The [tutorial](tutorials/issue-tracker/README.md) [sets up validation and mutation in part 7](tutorials/issue-tracker/07-adding-admission-control.md).

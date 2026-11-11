@@ -1,6 +1,8 @@
 package codegen
 
 import (
+	"cmp"
+
 	"cuelang.org/go/cue"
 )
 
@@ -118,6 +120,17 @@ type KindSearch struct {
 	Global bool `json:"global"`
 }
 
+// KindExtensions declares how other Grafana features treat a kind.
+// TODO: keep untyped keys for app-defined extensions, such as "kgatlas.ext.grafana.app".
+type KindExtensions struct {
+	Provisioning *KindProvisioning `json:"provisioning,omitempty"`
+}
+
+// KindProvisioning declares whether provisioning (Git Sync) manages a kind.
+type KindProvisioning struct {
+	Enabled bool `json:"enabled"`
+}
+
 // KindEmbed defines the embedding document independently of search fields.
 // Kinds with a custom embedding builder omit this configuration.
 type KindEmbed struct {
@@ -160,9 +173,39 @@ type EmbedField struct {
 
 // CustomRouteRequest represents the request part of a custom route definition.
 type CustomRouteRequest struct {
+	// Parameters are the parameters of the route, as OpenAPI describes them: each says where it is.
+	Parameters []CustomRouteParam `json:"parameters,omitempty"`
+	// Query is the schema of the route's query parameters, whose fields are the parameters.
+	//
+	// Deprecated: declare the parameters with In "query" instead, and read them with QuerySchema.
 	Query cue.Value `json:"query,omitempty"`
 	Body  cue.Value `json:"body,omitempty"`
 }
+
+// CustomRouteParam is one parameter of a custom route, described as OpenAPI's parameter object
+// describes it.
+type CustomRouteParam struct {
+	// Name is the name of the parameter. A path parameter's is a parameter in the route's path.
+	Name string `json:"name"`
+	// In is where the parameter is: "path", "query", "header" or "cookie".
+	In          string `json:"in"`
+	Description string `json:"description,omitempty"`
+	// Required is whether the request has to carry the parameter. A path parameter always does, and
+	// the others default to not.
+	Required   *bool `json:"required,omitempty"`
+	Deprecated bool  `json:"deprecated,omitempty"`
+	// Example is an example value, which has to satisfy Schema.
+	Example any `json:"example,omitempty"`
+	// Schema is the type of the parameter, which is a string when it is not declared.
+	Schema cue.Value `json:"schema,omitempty"`
+}
+
+const (
+	CustomRouteParamInPath   = "path"
+	CustomRouteParamInQuery  = "query"
+	CustomRouteParamInHeader = "header"
+	CustomRouteParamInCookie = "cookie"
+)
 
 type CustomRouteResponseMetadata struct {
 	TypeMeta   bool `json:"typeMeta"`
@@ -183,16 +226,31 @@ type CustomRouteAuthz struct {
 
 // CustomRoute represents a single custom route definition for a specific HTTP method.
 type CustomRoute struct {
-	Name             string                      `json:"name"`
-	Summary          string                      `json:"summary,omitempty"`
-	Description      string                      `json:"description,omitempty"`
-	Request          CustomRouteRequest          `json:"request"`
-	Response         cue.Value                   `json:"response"`
+	// Name is the deprecated spelling of OperationID. Once the manifest is parsed it holds the
+	// route's identifier, whichever of the two the route declared.
+	Name string `json:"name"`
+	// OperationID identifies the route: it is the operationId of the generated OpenAPI operation,
+	// and names the generated Go types and client method.
+	OperationID string             `json:"operationId,omitempty"`
+	Summary     string             `json:"summary,omitempty"`
+	Description string             `json:"description,omitempty"`
+	Request     CustomRouteRequest `json:"request"`
+	Response    cue.Value          `json:"response"`
+	// ResponseKind is the name of a kind in the same version whose resource the route returns. The
+	// route then declares no Response: it references the kind's schema, and generates no response type.
+	ResponseKind     string                      `json:"responseKind,omitempty"`
 	ResponseMetadata CustomRouteResponseMetadata `json:"responseMetadata"`
 	Extensions       map[string]any              `json:"extensions,omitempty"`
 	// Authz is the optional declared authorization information for the route. If nil,
 	// no authz openAPI extensions are added to the generated route.
 	Authz *CustomRouteAuthz `json:"authz,omitempty"`
+	// AllowMissingParent serves the route of an object even when no object is stored under its name.
+	AllowMissingParent bool `json:"allowMissingParent,omitempty"`
+}
+
+// ID is the identifier of the route: its operationId, or else its deprecated name.
+func (r CustomRoute) ID() string {
+	return cmp.Or(r.OperationID, r.Name)
 }
 
 type KindVersion struct {

@@ -510,7 +510,13 @@ func (c filteringClient) ListInto(ctx context.Context, namespace string, opts re
 // config where the two could disagree.
 func TestAnnouncedMetadataFromManifest(t *testing.T) {
 	kind := func(wm *app.ManifestVersionKindWatchMetadata) app.ManifestVersionKind {
-		return app.ManifestVersionKind{Kind: "Foo", Watch: &app.ManifestVersionKindWatch{Metadata: wm}}
+		return app.ManifestVersionKind{Kind: "Foo", Plural: "Foos", Resource: "foos",
+			Watch: &app.ManifestVersionKindWatch{Metadata: wm}}
+	}
+	// A second kind, so the intersection has two declarations to take: the map is keyed by resource.
+	otherKind := func(wm *app.ManifestVersionKindWatchMetadata) app.ManifestVersionKind {
+		return app.ManifestVersionKind{Kind: "Bar", Plural: "Bars", Resource: "bars",
+			Watch: &app.ManifestVersionKindWatch{Metadata: wm}}
 	}
 	manifest := func(kinds ...app.ManifestVersionKind) app.ManifestData {
 		return app.ManifestData{Group: "g", Versions: []app.ManifestVersion{{Name: "v1", Kinds: kinds}}}
@@ -547,9 +553,7 @@ func TestAnnouncedMetadataFromManifest(t *testing.T) {
 	// A filter is evaluated against whichever kind the informer serves, so only a key every declaring kind
 	// announces can be relied on.
 	t.Run("label keys intersect across declaring kinds", func(t *testing.T) {
-		shared := app.ManifestVersionKind{Kind: "Bar", Watch: &app.ManifestVersionKindWatch{
-			Metadata: &app.ManifestVersionKindWatchMetadata{Labels: []string{"app", "other"}},
-		}}
+		shared := otherKind(&app.ManifestVersionKindWatchMetadata{Labels: []string{"app", "other"}})
 		got := AnnouncedMetadataFromManifest(manifest(
 			kind(&app.ManifestVersionKindWatchMetadata{Labels: []string{"app", "tier"}}), shared))
 		assert.Equal(t, []string{"app"}, got.Labels)
@@ -557,9 +561,7 @@ func TestAnnouncedMetadataFromManifest(t *testing.T) {
 
 	// The configuration is app-wide while an informer serves one kind, so the weakest declaring kind governs.
 	t.Run("the weakest declaring kind governs", func(t *testing.T) {
-		weaker := app.ManifestVersionKind{Kind: "Bar", Watch: &app.ManifestVersionKindWatch{
-			Metadata: &app.ManifestVersionKindWatchMetadata{Finalizers: []string{"g/finalizer"}},
-		}}
+		weaker := otherKind(&app.ManifestVersionKindWatchMetadata{Finalizers: []string{"g/finalizer"}})
 		assert.Equal(t, operator.AnnouncedMetadata{Finalizers: true},
 			AnnouncedMetadataFromManifest(manifest(kind(all), weaker)))
 	})
@@ -567,15 +569,14 @@ func TestAnnouncedMetadataFromManifest(t *testing.T) {
 	// Declaring an empty block is not the same as declaring nothing: such a kind is watched over the bus and
 	// announces nothing, so it is the weakest one.
 	t.Run("an empty declaration governs", func(t *testing.T) {
-		empty := app.ManifestVersionKind{Kind: "Bar", Watch: &app.ManifestVersionKindWatch{
-			Metadata: &app.ManifestVersionKindWatchMetadata{},
-		}}
+		empty := otherKind(&app.ManifestVersionKindWatchMetadata{})
 		assert.Equal(t, operator.AnnouncedMetadata{}, AnnouncedMetadataFromManifest(manifest(kind(all), empty)))
 	})
 
 	t.Run("a kind which declares nothing is ignored, not counted as a refusal", func(t *testing.T) {
 		assert.Equal(t, operator.AnnouncedMetadata{DeletionTimestamp: true, Finalizers: true, Generation: true},
-			AnnouncedMetadataFromManifest(manifest(kind(all), app.ManifestVersionKind{Kind: "Undeclared"})))
+			AnnouncedMetadataFromManifest(manifest(kind(all),
+				app.ManifestVersionKind{Kind: "Undeclared", Plural: "Undeclareds", Resource: "undeclareds"})))
 	})
 
 	t.Run("no declarations at all", func(t *testing.T) {

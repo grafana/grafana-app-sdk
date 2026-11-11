@@ -115,7 +115,6 @@ linters:
       - internal/deepmap/
       - third_party$
       - builtin$
-      - examples$
       - k8s/client
       - k8s/cache
       - .*_gen\.go$
@@ -134,7 +133,6 @@ formatters:
       - internal/deepmap/
       - third_party$
       - builtin$
-      - examples$
       - k8s/client
       - k8s/cache
       - .*_gen\.go$

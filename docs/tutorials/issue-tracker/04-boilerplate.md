@@ -244,7 +244,7 @@ Here is where the `main` code to run the operator lives, and the docker file to 
 
 Here we only have one file, created for our Issue kind. If we had more kinds, we'd have more files here, as the `project component add operator` command generates a boilerplate watcher for each kind in CUE with a `target: "resource"`. This file defines a simple watcher object which implements `operator.ResourceWatcher`, with an additional `Sync` function which is used in conjunction with a `resource.OpinionatedWatcher`. All this boilerplate watcher does is check that it can cast the provided resource(s) into the `issue.Object` type, and then print a line to the console with the event type and details.
 
-Next, now that we have minimal functioning code, we can try, [deploying our project locally](05-local-deployment.md)
+Next, let's write the [front-end](05-frontend.md).
 
 ### Prev: [Generating Kind Code](03-generate-kind-code.md)
-### Next: [Local Deployment](05-local-deployment.md)
+### Next: [Writing Our Front-End](05-frontend.md)

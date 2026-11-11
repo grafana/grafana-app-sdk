@@ -140,7 +140,7 @@ All generated go code ends up in `pkg/generated/<kind name>/<kind version>`. For
 
 Additional `foo_x_gen.go` files will be generated for each subresource in your schema (and will be added as a field in `Foo`).
 
-To use this generated code in your project, see [Using Kinds](./using-kinds.md), [Operators & Event-Based Design](../operators.md), [Resource Objects](../resource-objects.md), or [Resource Stores](../resource-stores.md).
+To use this generated code in your project, see [Using Kinds](./using-kinds.md), [Writing a Reconciler](../writing-a-reconciler.md), [Resource Objects](../resource-objects.md), or [Resource Stores](../resource-stores.md).
 
 ### `plugin/src/generated`
 
@@ -154,7 +154,7 @@ Additional `types.x.gen.ts` files will be generated for each subresource in your
 ### `definitions`
 
 The `definitions` directory holds the generated JSON (or YAML, depending on your configuration) **[manifest](../app-manifest.md)** for your app, which is used to register your app and its kinds with the platform. 
-It also contains a Custom Resource Definition (CRD) file for each of your kinds, which the [local development environment](../local-development.md) uses.
+It also contains a Custom Resource Definition (CRD) file for each of your kinds.
 
 ### Toggling TypeScript/Go Codegen
 

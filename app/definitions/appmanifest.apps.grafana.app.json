@@ -313,12 +313,60 @@
                                                                 "description": "Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.\nIt may not prevent automatic conversion behavior between versions of the kind when set to false\n(for example, CRDs will always support simple conversion, and this flag enables webhook conversion).\nThis field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.",
                                                                 "type": "boolean"
                                                             },
+                                                            "fixedNames": {
+                                                                "description": "fixedNames are names of objects of this kind that are never stored: the app\nanswers requests for them itself. A route at exactly \u003cplural\u003e/\u003cname\u003e is\nallowed for each.",
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            },
                                                             "kind": {
                                                                 "description": "Kind is the name of the kind. This should begin with a capital letter and be CamelCased",
                                                                 "type": "string"
                                                             },
+                                                            "namingStrategy": {
+                                                                "description": "#ManifestVersionKindNamingStrategy declares what the name of an object of a kind means.",
+                                                                "properties": {
+                                                                    "mode": {
+                                                                        "description": "mode is the strategy: \"owner\" names objects for their owner (user-\u003cid\u003e, team-\u003cid\u003e or namespace).",
+                                                                        "type": "string"
+                                                                    },
+                                                                    "owner": {
+                                                                        "properties": {
+                                                                            "allowOrgAdmin": {
+                                                                                "description": "allowOrgAdmin lets an org admin do anything to the kind, whoever owns the object.",
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "owners": {
+                                                                                "description": "owners are the kinds of owner a name can have.",
+                                                                                "items": {
+                                                                                    "enum": [
+                                                                                        "user",
+                                                                                        "team",
+                                                                                        "namespace"
+                                                                                    ],
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "type": "array"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "owners"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "mode"
+                                                                ],
+                                                                "type": "object"
+                                                            },
                                                             "plural": {
-                                                                "description": "Plural is the plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
+                                                                "description": "Plural is the human readable plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
+                                                                "type": "string"
+                                                            },
+                                                            "resource": {
+                                                                "description": "Resource is the lowercase plural used as the resource in the k8s GroupVersionResource URL.\nThis is optional and defaults to the lowercase of plural if not present.",
                                                                 "type": "string"
                                                             },
                                                             "routes": {
@@ -860,6 +908,29 @@
                                                                 ],
                                                                 "type": "object"
                                                             },
+                                                            "extensions": {
+                                                                "description": "TODO: allow untyped keys for app-defined extensions, such as \"kgatlas.ext.grafana.app\", next to the typed ones.",
+                                                                "properties": {
+                                                                    "provisioning": {
+                                                                        "properties": {
+                                                                            "enabled": {
+                                                                                "default": false,
+                                                                                "description": "enabled declares whether provisioning manages resources of this kind.",
+                                                                                "type": "boolean"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "fixedNames": {
+                                                                "description": "fixedNames are names of objects of this kind that are never stored: the app\nanswers requests for them itself. A route at exactly \u003cplural\u003e/\u003cname\u003e is\nallowed for each.",
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            },
                                                             "folderScoped": {
                                                                 "default": true,
                                                                 "description": "folderScoped controls whether resources of this kind are scoped to folders.\nOnly meaningful when scope is \"Namespaced\"; for cluster-scoped kinds the field is ignored.\nDefaults to true (folder-scoped).",
@@ -869,8 +940,49 @@
                                                                 "description": "Kind is the name of the kind. This should begin with a capital letter and be CamelCased",
                                                                 "type": "string"
                                                             },
+                                                            "namingStrategy": {
+                                                                "description": "#ManifestVersionKindNamingStrategy declares what the name of an object of a kind means.",
+                                                                "properties": {
+                                                                    "mode": {
+                                                                        "description": "mode is the strategy: \"owner\" names objects for their owner (user-\u003cid\u003e, team-\u003cid\u003e or namespace).",
+                                                                        "type": "string"
+                                                                    },
+                                                                    "owner": {
+                                                                        "properties": {
+                                                                            "allowOrgAdmin": {
+                                                                                "description": "allowOrgAdmin lets an org admin do anything to the kind, whoever owns the object.",
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "owners": {
+                                                                                "description": "owners are the kinds of owner a name can have.",
+                                                                                "items": {
+                                                                                    "enum": [
+                                                                                        "user",
+                                                                                        "team",
+                                                                                        "namespace"
+                                                                                    ],
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "type": "array"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "owners"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "mode"
+                                                                ],
+                                                                "type": "object"
+                                                            },
                                                             "plural": {
-                                                                "description": "Plural is the plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
+                                                                "description": "Plural is the human readable plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
+                                                                "type": "string"
+                                                            },
+                                                            "resource": {
+                                                                "description": "Resource is the lowercase plural used as the resource in the k8s GroupVersionResource URL.\nThis is optional and defaults to the lowercase of plural if not present.",
                                                                 "type": "string"
                                                             },
                                                             "routes": {

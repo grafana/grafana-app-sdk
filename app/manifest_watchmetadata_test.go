@@ -18,15 +18,15 @@ func TestManifestData_WatchMetadata(t *testing.T) {
 		Group: "watchapp.ext.grafana.app",
 		Versions: []ManifestVersion{
 			{Name: "v1", Kinds: []ManifestVersionKind{
-				{Kind: "Foo", Watch: watchMetadata(&ManifestVersionKindWatchMetadata{
+				{Kind: "Foo", Plural: "Foos", Resource: "foos", Watch: watchMetadata(&ManifestVersionKindWatchMetadata{
 					Labels:     []string{"app"},
 					Finalizers: []string{"watchapp.grafana.app/finalizer"},
 					Generation: true,
 				})},
-				{Kind: "Undeclared"},
+				{Kind: "Undeclared", Plural: "Undeclareds", Resource: "undeclareds"},
 			}},
 			{Name: "v2", Kinds: []ManifestVersionKind{
-				{Kind: "Foo", Plural: "Foos", Watch: watchMetadata(&ManifestVersionKindWatchMetadata{
+				{Kind: "Foo", Plural: "Foos", Resource: "foos", Watch: watchMetadata(&ManifestVersionKindWatchMetadata{
 					// "app" repeats across versions and must not be duplicated.
 					Labels:            []string{"app", "tier"},
 					Annotations:       []string{"watchapp.grafana.app/paused"},
@@ -49,14 +49,16 @@ func TestManifestData_WatchMetadata(t *testing.T) {
 	}, got[schema.GroupResource{Group: "watchapp.ext.grafana.app", Resource: "foos"}])
 }
 
-// The resource name defaults to the lowercased kind plus "s", and an explicit plural is lowercased — a platform keys
-// its registration on the resource, so this has to match what it serves.
+// A platform keys its registration on the resource the API serves the kind as, which the kind declares rather than
+// the manifest deriving it from the kind name.
 func TestManifestData_WatchMetadataResourceNames(t *testing.T) {
 	data := ManifestData{
 		Group: "g",
 		Versions: []ManifestVersion{{Name: "v1", Kinds: []ManifestVersionKind{
-			{Kind: "Foo", Watch: watchMetadata(&ManifestVersionKindWatchMetadata{Labels: []string{"a"}})},
-			{Kind: "Entity", Plural: "Entities", Watch: watchMetadata(&ManifestVersionKindWatchMetadata{Labels: []string{"b"}})},
+			{Kind: "Foo", Plural: "Foos", Resource: "foos",
+				Watch: watchMetadata(&ManifestVersionKindWatchMetadata{Labels: []string{"a"}})},
+			{Kind: "Entity", Plural: "Entities", Resource: "entities",
+				Watch: watchMetadata(&ManifestVersionKindWatchMetadata{Labels: []string{"b"}})},
 		}}},
 	}
 

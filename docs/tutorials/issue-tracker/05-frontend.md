@@ -125,5 +125,5 @@ If we create a new issue, we can see that it shows up in the list, or via a `kub
 
 Now all that's left is to think a bit about our operator.
 
-### Prev: [Local Deployment](05-local-deployment.md)
-### Next: [Adding Operator Code](07-operator-watcher.md)
+### Prev: [Generating Boilerplate](04-boilerplate.md)
+### Next: [Adding Operator Code](06-operator-watcher.md)

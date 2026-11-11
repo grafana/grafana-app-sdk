@@ -75,8 +75,11 @@ appManifestv1alpha2: appManifestKind & {
 		#ManifestVersionKind: S={
 			// Kind is the name of the kind. This should begin with a capital letter and be CamelCased
 			kind: string
-			// Plural is the plural version of `kind`. This is optional and defaults to the kind + "s" if not present.
+			// Plural is the human readable plural version of `kind`. This is optional and defaults to the kind + "s" if not present.
 			plural?: string
+			// Resource is the lowercase plural used as the resource in the k8s GroupVersionResource URL.
+			// This is optional and defaults to the lowercase of plural if not present.
+			resource?: string
 			// Scope dictates the scope of the kind. This field must be the same for all versions of the kind.
 			// Different values will result in an error or undefined behavior.
 			scope: *"Namespaced" | "Cluster"
@@ -104,6 +107,13 @@ appManifestv1alpha2: appManifestKind & {
 			searchFields?: [...#SearchField]
 			// storage declares storage-related behavior for this kind.
 			storage?: #ManifestVersionKindStorage
+			// fixedNames are names of objects of this kind that are never stored: the app
+			// answers requests for them itself. A route at exactly <plural>/<name> is
+			// allowed for each.
+			fixedNames?: [...string]
+			// namingStrategy declares what the name of an object of this kind means, and that
+			// access to the object follows from it.
+			namingStrategy?: #ManifestVersionKindNamingStrategy
 			// search declares which search endpoints are served for this kind.
 			// /search and /trash default to enabled; /search/hybrid and global index inclusion default to disabled.
 			search?: #ManifestVersionKindSearch
@@ -111,6 +121,8 @@ appManifestv1alpha2: appManifestKind & {
 			embed?: #ManifestVersionKindEmbed
 			// watch declares how this kind's changes reach the app's handlers.
 			watch?: #ManifestVersionKindWatch
+			// extensions declares how other Grafana features, such as provisioning, treat this kind.
+			extensions?: #ManifestVersionKindExtensions
 			// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 			// It may not prevent automatic conversion behavior between versions of the kind when set to false
 			// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
@@ -151,6 +163,19 @@ appManifestv1alpha2: appManifestKind & {
 			// deletionTimestamp announces metadata.deletionTimestamp.
 			deletionTimestamp?: bool
 		}
+		// #ManifestVersionKindNamingStrategy declares what the name of an object of a kind means.
+		#ManifestVersionKindNamingStrategy: {
+			// mode is the strategy: "owner" names objects for their owner (user-<id>, team-<id> or namespace).
+			mode: "owner"
+			// owner holds the settings of the "owner" strategy.
+			owner?: #ManifestVersionKindNamingStrategyOwner
+		}
+		#ManifestVersionKindNamingStrategyOwner: {
+			// owners are the kinds of owner a name can have.
+			owners: [...("user" | "team" | "namespace")]
+			// allowOrgAdmin lets an org admin do anything to the kind, whoever owns the object.
+			allowOrgAdmin?: bool
+		}
 		#ManifestVersionKindStorage: {
 			// listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.
 			listKeys?: bool
@@ -172,6 +197,15 @@ appManifestv1alpha2: appManifestKind & {
 			// fields supplies inputs, in declaration order, used only to generate the text to be embedded.
 			// Declaring an embedding field does not enable filtering embeddings by that field.
 			fields: [...#ManifestVersionKindEmbedField]
+		}
+		// TODO: allow untyped keys for app-defined extensions, such as "kgatlas.ext.grafana.app", next to the typed ones.
+		#ManifestVersionKindExtensions: {
+			// provisioning declares whether provisioning (Git Sync) manages this kind.
+			provisioning?: #ManifestVersionKindProvisioning
+		}
+		#ManifestVersionKindProvisioning: {
+			// enabled declares whether provisioning manages resources of this kind.
+			enabled?: bool | *false
 		}
 		#ResourceEmbed: {
 			// reembedVersion is a manual revision for requesting re-embedding of existing resources, shared by all API versions.
