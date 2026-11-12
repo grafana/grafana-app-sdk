@@ -5,6 +5,8 @@ set -e
 echo 'Making sure we are on top of the main branch...'
 git checkout main
 git pull
+# Release tags live on detached release commits (not reachable from main), so pull won't fetch them.
+git fetch --tags origin
 
 if [[ $(git rev-list --count main...origin/main) -ne 0 ]]; then
   echo 'Your main branch is ahead of origin, bailing out!'
@@ -24,20 +26,22 @@ if ! which svu > /dev/null; then
   go install github.com/caarlos0/svu@latest
 fi
 
-TAG=$(svu current)
+# Release commits are tagged on a detached HEAD, so they are not reachable from main;
+# --tag-mode all-branches makes svu see them.
+TAG=$(svu current --tag-mode all-branches)
 echo "Latest release tag is '${TAG}', calculating the next one..."
 
 RELEASE=$1
 
 case "${RELEASE}" in
 patch)
-  TAG=$(svu patch)
+  TAG=$(svu patch --tag-mode all-branches)
   ;;
 minor)
-  TAG=$(svu minor)
+  TAG=$(svu minor --tag-mode all-branches)
   ;;
 major)
-  TAG=$(svu major)
+  TAG=$(svu major --tag-mode all-branches)
   ;;
 *)
   echo "$0 {patch | minor | major}" >&2
