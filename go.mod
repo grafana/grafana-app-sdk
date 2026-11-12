@@ -9,9 +9,6 @@ retract (
 	v0.18.3 // Tag was deleted and re-created with a new commit, causing GOPROXY conflicts
 )
 
-// Replace references to internal workspaces
-replace github.com/grafana/grafana-app-sdk/logging => ./logging
-
 require (
 	cuelang.org/go v0.11.2
 	github.com/bradfitz/gomemcache v0.0.0-20260422231931-4d751bb6e37c
@@ -23,7 +20,7 @@ require (
 	github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815
 	github.com/grafana/codejen v0.0.4
 	github.com/grafana/cog v0.2.4
-	github.com/grafana/grafana-app-sdk/logging v0.0.0 // placeholder: rewritten to the release version on the tagged commit by scripts/release.sh
+	github.com/grafana/grafana-app-sdk/logging v0.63.1 // placeholder: rewritten to the release version on the tagged commit by scripts/release.sh
 	github.com/grafana/grafana-plugin-sdk-go v0.298.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-plugin v1.8.0
