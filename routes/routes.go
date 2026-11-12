@@ -150,8 +150,15 @@ func Parse(version app.ManifestVersion, opts Options) ([]Route, []Problem) {
 	}
 	kinds := map[string]*app.ManifestVersionKind{}
 	for i := range version.Kinds {
-		if plural := strings.ToLower(version.Kinds[i].Plural); plural != "" {
-			kinds[plural] = &version.Kinds[i]
+		// Resource is the path segment the kind is served under, and may
+		// differ from the lowercased Plural. Fall back to Plural for manifests
+		// that do not set it.
+		resource := version.Kinds[i].Resource
+		if resource == "" {
+			resource = strings.ToLower(version.Kinds[i].Plural)
+		}
+		if resource != "" {
+			kinds[resource] = &version.Kinds[i]
 		}
 	}
 

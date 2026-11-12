@@ -602,3 +602,24 @@ func TestParseFixedNames(t *testing.T) {
 		require.Len(t, routes, 2)
 	})
 }
+
+func TestParseUsesKindResourceNotPlural(t *testing.T) {
+	version := app.ManifestVersion{
+		Name:  "v1",
+		Kinds: []app.ManifestVersionKind{{Kind: "Widget", Plural: "Widgets", Resource: "widgets-v2", Scope: "Namespaced"}},
+		OpenAPI: app.ManifestVersionOpenAPI{Paths: map[string]spec3.PathProps{
+			"/namespaces/{namespace}/widgets-v2/{name}/reload": get(),
+			"/namespaces/{namespace}/widgets/{name}/reload":    get(),
+		}},
+	}
+	routes, _ := Parse(version, Options{})
+	got := byDeclared(routes)
+	kindRoute := got["/namespaces/{namespace}/widgets-v2/{name}/reload"]
+	require.NotNil(t, kindRoute.Kind)
+	require.Equal(t, "Widget", kindRoute.Kind.Kind)
+	require.Equal(t, "reload", kindRoute.Subresource)
+	other, ok := got["/namespaces/{namespace}/widgets/{name}/reload"]
+	if ok {
+		require.Nil(t, other.Kind, "the lowercased Plural is not the served resource")
+	}
+}
