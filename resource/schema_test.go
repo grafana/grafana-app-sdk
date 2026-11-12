@@ -35,6 +35,35 @@ func TestNewSimpleSchema(t *testing.T) {
 	})
 }
 
+func TestSimpleSchema_Resource(t *testing.T) {
+	newSchema := func(opts ...SimpleSchemaOption) *SimpleSchema {
+		return NewSimpleSchema("g", "v", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[any]]{}, opts...)
+	}
+
+	t.Run("defaults to lowercased kind plus s without plural", func(t *testing.T) {
+		assert.Equal(t, "objs", newSchema(WithKind("Obj")).Resource())
+	})
+
+	t.Run("defaults to lowercased plural", func(t *testing.T) {
+		sch := newSchema(WithKind("Obj"), WithPlural("Things"))
+		assert.Equal(t, "things", sch.Resource())
+		assert.Equal(t, "Things", sch.Plural(), "Plural is unchanged")
+	})
+
+	t.Run("with resource differs from plural", func(t *testing.T) {
+		sch := newSchema(WithKind("FooBar"), WithPlural("foo_bars"), WithResource("foo-bars"))
+		assert.Equal(t, "foo-bars", sch.Resource())
+		assert.Equal(t, "foo_bars", sch.Plural(), "Plural is unchanged")
+	})
+
+	t.Run("kind group version resource uses resource", func(t *testing.T) {
+		k := Kind{Schema: newSchema(WithKind("FooBar"), WithPlural("foo_bars"), WithResource("foo-bars"))}
+		assert.Equal(t, "foo-bars", k.GroupVersionResource().Resource)
+		k = Kind{Schema: newSchema(WithKind("FooBar"), WithPlural("FooBars"))}
+		assert.Equal(t, "foobars", k.GroupVersionResource().Resource)
+	})
+}
+
 func TestSimpleSchema_ZeroValue(t *testing.T) {
 	// Test that the ZeroValue returns a copy of the original, not the original
 	orig := TypedSpecObject[string]{

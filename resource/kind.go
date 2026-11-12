@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -83,21 +82,16 @@ func (k Kind) GroupVersionKind() schema.GroupVersionKind {
 	}
 }
 
-// GroupVersionResource is a convenience method that assembles a schema.GroupVersionResource from Group(), Version(), and Plural()
+// GroupVersionResource is a convenience method that assembles a schema.GroupVersionResource from Group(), Version(), and Resource()
 func (k Kind) GroupVersionResource() schema.GroupVersionResource {
 	if k.Schema == nil {
 		return schema.GroupVersionResource{}
 	}
 
-	resource := strings.ToLower(k.Plural())
-	if resource == "" {
-		resource = strings.ToLower(k.Kind()) + "s"
-	}
-
 	return schema.GroupVersionResource{
 		Group:    k.Group(),
 		Version:  k.Version(),
-		Resource: resource,
+		Resource: k.Resource(),
 	}
 }
 

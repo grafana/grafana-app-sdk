@@ -382,6 +382,10 @@ Kind: S={
 	machineName:       strings.ToLower(strings.Replace(S.kind, "-", "_", -1))
 	pluralName:        =~"^([A-Z][a-zA-Z0-9-]{0,61}[a-zA-Z])$" | *(S.kind + "s")
 	pluralMachineName: strings.ToLower(strings.Replace(S.pluralName, "-", "_", -1))
+	// resource is the lowercase name the kind is served under in the API path
+	// (/apis/<group>/<version>/namespaces/<ns>/<resource>). It defaults to the lowercased pluralName
+	// (which, unlike pluralMachineName, keeps any '-'), and must be a valid DNS-1123 label.
+	resource: =~"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" | *strings.ToLower(S.pluralName)
 	// codegen contains properties specific to generating code using tooling. At the root level of the kind, it sets
 	// the defaults for the `codegen` field in all entries in `versions`. 
 	// Valus set in `versions[x]: codegen` will overwrite the value set here.

@@ -562,7 +562,7 @@ func (a *App) manageKind(kind AppManagedKind) error {
 	if kind.Kind.Schema == nil {
 		return errors.New("cannot manage an empty kind")
 	}
-	a.gvrToGVK[gvr(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Plural())] = gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())
+	a.gvrToGVK[gvr(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Resource())] = gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())
 	a.kinds[gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())] = kind
 	// If there are custom routes, validate them
 	for route, handler := range kind.CustomRoutes {
