@@ -104,7 +104,7 @@ var appManifestData = app.ManifestData{
 					},
 					Extensions: &app.ManifestVersionKindExtensions{
 						Provisioning: &app.ManifestVersionKindProvisioning{
-							Enabled: func(b bool) *bool { return &b }(true),
+							Enabled: new(true),
 						},
 					},
 					Schema: &versionSchemaTestKind2v1,
