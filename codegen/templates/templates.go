@@ -50,7 +50,7 @@ var (
 			if b == nil {
 				return "nil"
 			}
-			return "func(b bool) *bool { return &b }(" + strconv.FormatBool(*b) + ")"
+			return "new(" + strconv.FormatBool(*b) + ")"
 		},
 	}
 
