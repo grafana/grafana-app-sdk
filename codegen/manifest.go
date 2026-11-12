@@ -123,6 +123,7 @@ func (m *SimpleManifest) Kinds() []Kind {
 						MachineName:            kind.MachineName,
 						PluralMachineName:      kind.PluralMachineName,
 						PluralName:             kind.PluralName,
+						Resource:               kind.Resource,
 						Current:                m.PreferredVersion,
 						Scope:                  kind.Scope,
 						UserReadable:           kind.UserReadable,
@@ -239,6 +240,8 @@ type KindOwnerNames struct {
 type VersionedKind struct {
 	// Kind is the unique-within-the-group name of the kind
 	Kind string `json:"kind"`
+	// Resource is the lowercase API resource name where the kinds are served.
+	Resource string `json:"resource"`
 	// MachineName is the machine version of the Kind, which follows the regex: /^[a-z]+[a-z0-9]*$/
 	MachineName string `json:"machineName"`
 	// PluralMachineName is the plural of the MachineName
