@@ -1763,3 +1763,38 @@ func TestManifestVersionKind_FixedNames(t *testing.T) {
 		})
 	}
 }
+
+func TestManifestVersionKind_UnmarshalJSON_DefaultsResource(t *testing.T) {
+	t.Run("defaults to lowercased plural", func(t *testing.T) {
+		var k ManifestVersionKind
+		require.NoError(t, json.Unmarshal([]byte(`{"kind":"Foo","plural":"Foos","scope":"Namespaced"}`), &k))
+		assert.Equal(t, "foos", k.Resource)
+		assert.Equal(t, "Foos", k.Plural)
+	})
+	t.Run("keeps explicit resource", func(t *testing.T) {
+		var k ManifestVersionKind
+		require.NoError(t, json.Unmarshal([]byte(`{"kind":"Foo","plural":"Foos","resource":"fooz"}`), &k))
+		assert.Equal(t, "fooz", k.Resource)
+	})
+	t.Run("nested in ManifestData", func(t *testing.T) {
+		var m ManifestData
+		require.NoError(t, json.Unmarshal([]byte(`{"appName":"a","group":"g.example.com","preferredVersion":"v1","versions":[{"name":"v1","served":true,"kinds":[{"kind":"Foo","plural":"Foos","scope":"Namespaced"}]}]}`), &m))
+		assert.Equal(t, "foos", m.Versions[0].Kinds[0].Resource)
+	})
+	t.Run("empty plural stays empty and fails validation", func(t *testing.T) {
+		var k ManifestVersionKind
+		require.NoError(t, json.Unmarshal([]byte(`{"kind":"Foo"}`), &k))
+		assert.Empty(t, k.Resource)
+	})
+}
+
+func TestNewEmbeddedManifest_DefaultsResource(t *testing.T) {
+	in := ManifestData{Versions: []ManifestVersion{{Name: "v1", Kinds: []ManifestVersionKind{
+		{Kind: "Foo", Plural: "Foos"},
+		{Kind: "Bar", Plural: "Bars", Resource: "barz"},
+	}}}}
+	m := NewEmbeddedManifest(in)
+	assert.Equal(t, "foos", m.ManifestData.Versions[0].Kinds[0].Resource)
+	assert.Equal(t, "barz", m.ManifestData.Versions[0].Kinds[1].Resource)
+	assert.Empty(t, in.Versions[0].Kinds[0].Resource, "caller's data must not be mutated")
+}
