@@ -43,6 +43,7 @@ const (
 
 // NewEmbeddedManifest returns a Manifest which has the ManifestData embedded in it
 func NewEmbeddedManifest(manifestData ManifestData) Manifest {
+	manifestData.defaultKindResources()
 	return Manifest{
 		Location: ManifestLocation{
 			Type: ManifestLocationEmbedded,
@@ -572,14 +573,53 @@ func (r ManifestVersionRoutes) IsZero() bool {
 	return len(r.Namespaced) == 0 && len(r.Cluster) == 0 && len(r.Schemas) == 0
 }
 
+// defaultKindResource returns the Resource used for manifests written before Resource was a required field.
+func defaultKindResource(plural string) string {
+	return strings.ToLower(plural)
+}
+
+// defaultKindResources fills in Resource with the lowercased Plural for every kind that has none.
+// The versions and kinds slices are copied before being modified, so callers' data is untouched.
+func (m *ManifestData) defaultKindResources() {
+	versions := make([]ManifestVersion, len(m.Versions))
+	copy(versions, m.Versions)
+	for i := range versions {
+		kinds := make([]ManifestVersionKind, len(versions[i].Kinds))
+		copy(kinds, versions[i].Kinds)
+		for j := range kinds {
+			if kinds[j].Resource == "" {
+				kinds[j].Resource = defaultKindResource(kinds[j].Plural)
+			}
+		}
+		versions[i].Kinds = kinds
+	}
+	m.Versions = versions
+}
+
+// UnmarshalJSON decodes a ManifestVersionKind, defaulting Resource to the lowercased Plural when it is absent
+// so that manifests written before Resource existed keep working.
+func (m *ManifestVersionKind) UnmarshalJSON(data []byte) error {
+	type plain ManifestVersionKind
+	var p plain
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	if p.Resource == "" {
+		p.Resource = defaultKindResource(p.Plural)
+	}
+	*m = ManifestVersionKind(p)
+	return nil
+}
+
 // ManifestVersionKind contains details for a version of a kind in a Manifest
 type ManifestVersionKind struct {
 	// Kind is the name of the kind. This should begin with a capital letter and be CamelCased
 	Kind string `json:"kind" yaml:"kind"`
-	// Plural is the capitalized, human readable plural version of `kind` (e.g. "Issues"). Both Plural and Resource are required.
+	// Plural is the capitalized, human readable plural version of `kind` (e.g. "Issues"). Plural is required.
 	Plural string `json:"plural" yaml:"plural"`
 	// Resource is the all-lowercase plural used as the resource in the k8s GroupVersionResource URL (e.g. "issues").
-	// Both Plural and Resource are required.
+	// When loading from JSON or an embedded manifest, an empty Resource defaults to the lowercased Plural.
+	// Validate still requires it to be set, so a hand-built ManifestData must set it explicitly.
 	Resource string `json:"resource" yaml:"resource"`
 	// Scope dictates the scope of the kind. This field must be the same for all versions of the kind.
 	// Different values will result in an error or undefined behavior.
