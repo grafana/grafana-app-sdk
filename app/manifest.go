@@ -598,7 +598,7 @@ func (m *ManifestData) defaultKindResources() {
 
 // UnmarshalJSON decodes a ManifestVersionKind, defaulting Resource to the lowercased Plural when it is absent
 // so that manifests written before Resource existed keep working.
-func (k *ManifestVersionKind) UnmarshalJSON(data []byte) error {
+func (m *ManifestVersionKind) UnmarshalJSON(data []byte) error {
 	type plain ManifestVersionKind
 	var p plain
 	if err := json.Unmarshal(data, &p); err != nil {
@@ -607,7 +607,7 @@ func (k *ManifestVersionKind) UnmarshalJSON(data []byte) error {
 	if p.Resource == "" {
 		p.Resource = defaultKindResource(p.Plural)
 	}
-	*k = ManifestVersionKind(p)
+	*m = ManifestVersionKind(p)
 	return nil
 }
 
