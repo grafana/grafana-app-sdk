@@ -26,6 +26,11 @@ type Schema interface {
 	Kind() string
 	// Plural returns the plural name of the Schema kind
 	Plural() string
+	// Resource returns the lowercase resource name used in the Kubernetes API path
+	// (e.g. /apis/<group>/<version>/namespaces/<ns>/<resource>) and in the GroupVersionResource.
+	// It defaults to the lowercased Plural(), but can differ from it, as Plural() may use a
+	// machine-friendly form (e.g. "foo_bars") while the API serves "foo-bars".
+	Resource() string
 	// ZeroValue returns the "zero-value", "default", or "empty" version of an Object of this Schema
 	ZeroValue() Object
 	// ZeroListValue returns a ListObject implementation which represents an empty (or appropriately "zero-value")
@@ -63,6 +68,7 @@ type SimpleSchema struct {
 	version          string
 	kind             string
 	plural           string
+	resource         string
 	scope            SchemaScope
 	selectableFields []SelectableField
 	zero             Object
@@ -87,6 +93,18 @@ func (s *SimpleSchema) Kind() string {
 // Plural returns the SimpleSchema's Plural
 func (s *SimpleSchema) Plural() string {
 	return s.plural
+}
+
+// Resource returns the SimpleSchema's Resource if set with WithResource.
+// Otherwise it returns the lowercased Plural, or the lowercased Kind plus "s" if there is no Plural.
+func (s *SimpleSchema) Resource() string {
+	if s.resource != "" {
+		return s.resource
+	}
+	if s.plural != "" {
+		return strings.ToLower(s.plural)
+	}
+	return strings.ToLower(s.kind) + "s"
 }
 
 // Scope returns the SimpleSchema's Scope
@@ -141,6 +159,14 @@ type SimpleSchemaOption func(*SimpleSchema)
 func WithPlural(plural string) func(*SimpleSchema) {
 	return func(s *SimpleSchema) {
 		s.plural = plural
+	}
+}
+
+// WithResource returns a SimpleSchemaOption that sets the SimpleSchema's Resource to the provided string.
+// It only needs to be set when the resource served by the API differs from the lowercased Plural.
+func WithResource(resource string) func(*SimpleSchema) {
+	return func(s *SimpleSchema) {
+		s.resource = resource
 	}
 }
 

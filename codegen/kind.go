@@ -32,6 +32,8 @@ type KindProperties struct {
 	PluralMachineName string `json:"pluralMachineName"`
 	// PluralName is the plural of the Kind
 	PluralName string `json:"pluralName"`
+	// Resource is the lowercase API resource name the Kind is served under
+	Resource string `json:"resource"`
 	// Current is the version string of the version considered to be "current".
 	// This does not have to be the latest, but determines preference when generating code.
 	Current                string                      `json:"current"`

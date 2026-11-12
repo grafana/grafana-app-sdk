@@ -46,6 +46,13 @@ func (s *SchemaGenerator) Generate(appManifest codegen.AppManifest) (codejen.Fil
 		if err != nil {
 			return nil, err
 		}
+		// The API serves the kind's resource (the same value as the manifest's kind resource), which
+		// differs from the PluralMachineName used for Plural when the plural contains a '-'.
+		// Only emit the resource when it differs, to keep generated code for other kinds unchanged.
+		apiResource := ""
+		if r := kindResource(kind); r != strings.ToLower(kind.PluralMachineName) {
+			apiResource = r
+		}
 		b := bytes.Buffer{}
 		err = templates.WriteSchema(templates.SchemaMetadata{
 			Package:          ToPackageName(version.Name()),
@@ -53,6 +60,7 @@ func (s *SchemaGenerator) Generate(appManifest codegen.AppManifest) (codejen.Fil
 			Version:          version.Name(),
 			Kind:             kind.Kind,
 			Plural:           kind.PluralMachineName,
+			Resource:         apiResource,
 			Scope:            kind.Scope,
 			SelectableFields: sf,
 			FuncPrefix:       prefix,

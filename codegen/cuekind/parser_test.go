@@ -677,3 +677,41 @@ func TestParseManifestNamingStrategy(t *testing.T) {
 		})
 	}
 }
+
+func TestParseManifestResource(t *testing.T) {
+	for _, tc := range []struct {
+		name, declaration string
+		wantResource      string
+		wantMachinePlural string
+		invalid           bool
+	}{
+		{name: "default", declaration: ``, wantResource: "foos", wantMachinePlural: "foos"},
+		{name: "hyphenated plural keeps the dash", declaration: `pluralName: "Foo-Bars"`, wantResource: "foo-bars", wantMachinePlural: "foo_bars"},
+		{name: "override", declaration: `resource: "custom"`, wantResource: "custom", wantMachinePlural: "foos"},
+		{name: "not a DNS label", declaration: `resource: "Foo_Bars"`, invalid: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testingCue(t)
+			c.Root = c.Root.Context().CompileString(fmt.Sprintf(`
+				shared: {kind: "Foo", schema: spec: title: string, %s}
+				manifest: {
+					appName: "resource-app"
+					versions: {
+						v1: kinds: [shared]
+					}
+				}`, tc.declaration))
+			parser, err := NewParser(c, false)
+			require.NoError(t, err)
+			manifest, err := parser.ParseManifest("manifest")
+			if tc.invalid {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			kinds := manifest.Versions()[0].Kinds()
+			require.Len(t, kinds, 1)
+			assert.Equal(t, tc.wantResource, kinds[0].Resource)
+			assert.Equal(t, tc.wantMachinePlural, kinds[0].PluralMachineName)
+		})
+	}
+}
