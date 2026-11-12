@@ -111,6 +111,7 @@ data:
     {{ end }}
     kubernetesAggregator = true
     [grafana-apiserver]
+    kubernetes_aggregator_enabled = true
     remote_services_file = /app-aggregator/apiservices.yaml{{ if .ProxyClientCert.Enabled }}
     proxy_client_cert_file = /etc/proxy-client-certs/client-auth-proxy.crt
     proxy_client_key_file = /etc/proxy-client-certs/client-auth-proxy.key{{ end }}

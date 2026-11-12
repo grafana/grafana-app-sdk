@@ -233,6 +233,40 @@ func TestProcessKindVersion_Search(t *testing.T) {
 	}
 }
 
+func TestProcessKindVersion_Extensions(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		extensions *codegen.KindExtensions
+		expected   *app.ManifestVersionKindExtensions
+	}{
+		{name: "unset"},
+		{name: "empty", extensions: &codegen.KindExtensions{}},
+		{
+			name:       "empty blocks",
+			extensions: &codegen.KindExtensions{Provisioning: &codegen.KindProvisioning{}},
+		},
+		{
+			name:       "provisioning enabled",
+			extensions: &codegen.KindExtensions{Provisioning: &codegen.KindProvisioning{Enabled: true}},
+			expected: &app.ManifestVersionKindExtensions{
+				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mver, err := processKindVersion(codegen.VersionedKind{
+				Kind:         "Foo",
+				PluralName:   "Foos",
+				Scope:        "Namespaced",
+				FolderScoped: true,
+				Extensions:   tc.extensions,
+			}, "v1", false)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, mver.Extensions)
+		})
+	}
+}
+
 func TestProcessKindVersion_Embed(t *testing.T) {
 	for _, tc := range []struct {
 		name     string

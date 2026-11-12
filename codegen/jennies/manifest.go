@@ -618,6 +618,24 @@ func manifestKindEmbed(embed *codegen.KindEmbed) *app.ManifestVersionKindEmbed {
 	return &app.ManifestVersionKindEmbed{Fields: fields}
 }
 
+func manifestKindExtensions(extensions *codegen.KindExtensions) *app.ManifestVersionKindExtensions {
+	if extensions == nil {
+		return nil
+	}
+	provisioning := manifestKindProvisioning(extensions.Provisioning)
+	if provisioning == nil {
+		return nil
+	}
+	return &app.ManifestVersionKindExtensions{Provisioning: provisioning}
+}
+
+func manifestKindProvisioning(provisioning *codegen.KindProvisioning) *app.ManifestVersionKindProvisioning {
+	if provisioning == nil || !provisioning.Enabled {
+		return nil
+	}
+	return &app.ManifestVersionKindProvisioning{Enabled: &provisioning.Enabled}
+}
+
 type simpleOpenAPIDoc[T any] struct {
 	Components struct {
 		Schemas map[string]T `json:"schemas" yaml:"schemas"`
@@ -652,6 +670,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 	}
 	mver.Search = manifestKindSearch(vk.Search)
 	mver.Embed = manifestKindEmbed(vk.Embed)
+	mver.Extensions = manifestKindExtensions(vk.Extensions)
 	if len(vk.Mutation.Operations) > 0 {
 		operations, err := sanitizeAdmissionOperations(vk.Mutation.Operations)
 		if err != nil {

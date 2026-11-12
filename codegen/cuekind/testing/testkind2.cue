@@ -15,6 +15,7 @@ testKind2: {
 		}
 	}
 	search: trash: false
+	extensions: provisioning: enabled: true
 	versions: {
 		"v1": {
 			schema: {

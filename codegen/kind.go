@@ -120,6 +120,17 @@ type KindSearch struct {
 	Global bool `json:"global"`
 }
 
+// KindExtensions declares how other Grafana features treat a kind.
+// TODO: keep untyped keys for app-defined extensions, such as "kgatlas.ext.grafana.app".
+type KindExtensions struct {
+	Provisioning *KindProvisioning `json:"provisioning,omitempty"`
+}
+
+// KindProvisioning declares whether provisioning (Git Sync) manages a kind.
+type KindProvisioning struct {
+	Enabled bool `json:"enabled"`
+}
+
 // KindEmbed defines the embedding document independently of search fields.
 // Kinds with a custom embedding builder omit this configuration.
 type KindEmbed struct {

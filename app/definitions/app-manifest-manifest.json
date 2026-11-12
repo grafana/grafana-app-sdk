@@ -847,6 +847,10 @@
                                         "$ref": "#/components/schemas/ManifestVersionKindEmbed",
                                         "description": "embed defines the embedding document independently of search fields."
                                     },
+                                    "extensions": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindExtensions",
+                                        "description": "extensions declares how other Grafana features, such as provisioning, treat this kind."
+                                    },
                                     "fixedNames": {
                                         "description": "fixedNames are names of objects of this kind that are never stored: the app\nanswers requests for them itself. A route at exactly \u003cplural\u003e/\u003cname\u003e is\nallowed for each.",
                                         "items": {
@@ -969,6 +973,17 @@
                                 ],
                                 "type": "object"
                             },
+                            "ManifestVersionKindExtensions": {
+                                "additionalProperties": false,
+                                "description": "TODO: allow untyped keys for app-defined extensions, such as \"kgatlas.ext.grafana.app\", next to the typed ones.",
+                                "properties": {
+                                    "provisioning": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindProvisioning",
+                                        "description": "provisioning declares whether provisioning (Git Sync) manages this kind."
+                                    }
+                                },
+                                "type": "object"
+                            },
                             "ManifestVersionKindNamingStrategy": {
                                 "additionalProperties": false,
                                 "description": "#ManifestVersionKindNamingStrategy declares what the name of an object of a kind means.",
@@ -1011,6 +1026,17 @@
                                 "required": [
                                     "owners"
                                 ],
+                                "type": "object"
+                            },
+                            "ManifestVersionKindProvisioning": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "enabled": {
+                                        "default": false,
+                                        "description": "enabled declares whether provisioning manages resources of this kind.",
+                                        "type": "boolean"
+                                    }
+                                },
                                 "type": "object"
                             },
                             "ManifestVersionKindSearch": {
