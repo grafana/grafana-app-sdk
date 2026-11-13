@@ -155,6 +155,21 @@ func (ci *ConcurrentInformer) WaitForSync(ctx context.Context) error {
 	return ci.informer.WaitForSync(ctx)
 }
 
+// IdentityPayload forwards the wrapped informer's payload mode, so wrapping does not hide it from wiring which
+// refuses to pair an identity payload with a watcher that reads more than the identity. An informer which does not
+// declare one reports false.
+func (ci *ConcurrentInformer) IdentityPayload() bool {
+	identity, ok := ci.informer.(interface{ IdentityPayload() bool })
+	return ok && identity.IdentityPayload()
+}
+
+// DeliversOpinionatedMetadata forwards the wrapped informer's answer, for the same reason IdentityPayload does.
+// An informer which does not declare one reports false, which is the safe reading for the guard that consults it.
+func (ci *ConcurrentInformer) DeliversOpinionatedMetadata() bool {
+	capable, ok := ci.informer.(interface{ DeliversOpinionatedMetadata() bool })
+	return ok && capable.DeliversOpinionatedMetadata()
+}
+
 // PrometheusCollectors implements metrics.Provider.
 func (ci *ConcurrentInformer) PrometheusCollectors() []prometheus.Collector {
 	collectors := []prometheus.Collector{ci.queueDepth}

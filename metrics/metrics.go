@@ -6,6 +6,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/grafana/grafana-app-sdk/logging"
 )
 
 var (
@@ -59,4 +61,32 @@ func (e *Exporter) HTTPHandler() http.Handler {
 	return promhttp.InstrumentMetricHandler(
 		e.Registerer, promhttp.HandlerFor(e.Gatherer, promhttp.HandlerOpts{}),
 	)
+}
+
+// Register registers c with reg and returns it, or returns the equivalent collector already registered there.
+//
+// It is for collectors more than one component may build with the same descriptors: prometheus rejects the second
+// registration, and a component which ignores that keeps updating a collector nothing exports — which looks like a
+// metric that stopped rather than a wiring mistake. Returning the registered one instead means every component
+// updates the series actually scraped.
+//
+// A nil Registerer returns c unregistered, which is the SDK's default: a component exposes its collectors through
+// Provider and the app's Exporter registers them.
+func Register[T prometheus.Collector](reg prometheus.Registerer, c T) T {
+	if reg == nil {
+		return c
+	}
+	err := reg.Register(c)
+	if err == nil {
+		return c
+	}
+	if already, ok := errors.AsType[prometheus.AlreadyRegisteredError](err); ok {
+		if existing, ok := already.ExistingCollector.(T); ok {
+			return existing
+		}
+	}
+	// Anything else is a descriptor conflict rather than a duplicate, which no caller can act on from here. The
+	// collector is still returned, so the component works and exports nothing, rather than taking the process down.
+	logging.DefaultLogger.Error("could not register a prometheus collector", "error", err)
+	return c
 }

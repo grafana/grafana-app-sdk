@@ -443,7 +443,8 @@ func TestManifestGoGenerator(t *testing.T) {
 		// + empty response route body and object (2)
 		// + path parameter route body and object (2)
 		// + query parameter route params types and object (2)
-		require.Len(t, files, 22, "should be 22 files generated, got %d", len(files))
+		// + one informer per kind and version (5)
+		require.Len(t, files, 27, "should be 27 files generated, got %d", len(files))
 		// Check content against the golden files
 		for _, file := range files {
 			compareToGolden(t, codejen.Files{file}, "go/groupbygroup")
@@ -462,8 +463,8 @@ func TestManifestGoGenerator(t *testing.T) {
 		}).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
-		// 3 -> manifest, client v0_0, client v1_0
-		assert.Len(t, files, 3)
+		// 5 -> manifest, client v0_0, client v1_0, informer v0_0, informer v1_0
+		assert.Len(t, files, 5)
 		// Check content against the golden files
 		for _, file := range files {
 			compareToGolden(t, codejen.Files{file}, "go/groupbykind")

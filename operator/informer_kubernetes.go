@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
@@ -34,6 +35,7 @@ type KubernetesBasedInformer struct {
 	eventTimeout          time.Duration
 	errorHandlerFn        func(context.Context, error)
 	healthCheckName       string
+	deliveryMetrics       *InformerDeliveryMetrics
 }
 
 // InformerOptions are generic options for all Informer implementations.
@@ -82,6 +84,10 @@ type InformerOptions struct {
 	// MetricsConfig controls the namespace and histogram settings for Prometheus metrics
 	// exposed by components that use these options (e.g., ConcurrentInformer queue depth).
 	MetricsConfig metrics.Config
+	// DeliveryMetrics are the shared collectors the informer reports its event deliveries on. Set it to the same
+	// instance the process's bus and periodic informers use, so that a kind which moves between informers keeps its
+	// series. A nil value reports no deliveries.
+	DeliveryMetrics *InformerDeliveryMetrics
 	// ResourceKind is used as the "kind" label on queue depth metrics.
 	// When empty, the label value defaults to an empty string.
 	ResourceKind string
@@ -126,17 +132,27 @@ func NewKubernetesBasedInformer(
 		healthCheckName = fmt.Sprintf("%s?%s", healthCheckName, strings.Join(params, "&"))
 	}
 
+	shared := cache.NewSharedIndexInformer(
+		NewListerWatcher(client, sch, options.ListWatchOptions),
+		nil,
+		options.CacheResyncInterval,
+		cache.Indexers{
+			cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
+		})
+	if options.DeliveryMetrics != nil {
+		// One metering handler counts each delivery once, however many watchers are added later.
+		meter := deliveryMeter{metrics: newDeliveryKindMetrics(options.DeliveryMetrics, sch)}
+		if _, err := shared.AddEventHandler(meter); err != nil {
+			return nil, err
+		}
+	}
+
 	return &KubernetesBasedInformer{
-		schema:         sch,
-		eventTimeout:   timeout,
-		errorHandlerFn: errorHandler,
-		SharedIndexInformer: cache.NewSharedIndexInformer(
-			NewListerWatcher(client, sch, options.ListWatchOptions),
-			nil,
-			options.CacheResyncInterval,
-			cache.Indexers{
-				cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
-			}),
+		schema:                sch,
+		eventTimeout:          timeout,
+		errorHandlerFn:        errorHandler,
+		SharedIndexInformer:   shared,
+		deliveryMetrics:       options.DeliveryMetrics,
 		HealthCheckIgnoreSync: options.HealthCheckIgnoreSync,
 		healthCheckName:       healthCheckName,
 	}, nil
@@ -183,6 +199,13 @@ func (k *KubernetesBasedInformer) Run(ctx context.Context) error {
 // Schema returns the resource.Schema this informer is set up for
 func (k *KubernetesBasedInformer) Schema() resource.Schema {
 	return k.schema
+}
+
+// PrometheusCollectors implements metrics.Provider, exposing the delivery collectors the informer was given.
+// They are shared with every other informer built on the same InformerDeliveryMetrics, so registering an
+// already-registered collector is expected here and must be tolerated.
+func (k *KubernetesBasedInformer) PrometheusCollectors() []prometheus.Collector {
+	return k.deliveryMetrics.PrometheusCollectors()
 }
 
 func (k *KubernetesBasedInformer) HealthCheck(context.Context) error {
