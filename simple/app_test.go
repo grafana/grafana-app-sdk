@@ -571,6 +571,108 @@ func TestApp_ManageKind(t *testing.T) {
 	})
 }
 
+func TestApp_WatchNeeds(t *testing.T) {
+	supplierFor := func(called *operator.InformerKind, kind operator.InformerKind) InformerSupplier {
+		return func(resource.Kind, resource.ClientGenerator, operator.InformerOptions) (operator.Informer, error) {
+			*called = kind
+			return &mockInformer{}, nil
+		}
+	}
+
+	tests := []struct {
+		name      string
+		needs     operator.WatchNeeds
+		announces *operator.WatchMetadata
+		want      operator.InformerKind
+	}{
+		{
+			name: "unset needs are served by the watch supplier",
+			want: operator.InformerKindWatch,
+		},
+		{
+			name:      "a signal is served by the bus",
+			needs:     operator.WatchNeeds{Stream: operator.WatchStreamSignal},
+			announces: &operator.WatchMetadata{},
+			want:      operator.InformerKindBus,
+		},
+		{
+			name: "a signal whose metadata the bus does not announce falls back to the watch",
+			needs: operator.WatchNeeds{
+				Stream:   operator.WatchStreamSignal,
+				Metadata: operator.WatchMetadata{Finalizers: []string{"myapp/finalizer"}},
+			},
+			announces: &operator.WatchMetadata{Generation: true},
+			want:      operator.InformerKindWatch,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run("managed kind: "+tt.name, func(t *testing.T) {
+			var called operator.InformerKind
+			cfg := AppConfig{
+				InformerConfig: AppInformerConfig{
+					InformerSupplier: supplierFor(&called, operator.InformerKindWatch),
+				},
+				ManagedKinds: []AppManagedKind{{
+					Kind:             testKind(),
+					Reconciler:       &Reconciler{},
+					ReconcileOptions: BasicReconcileOptions{WatchNeeds: tt.needs},
+				}},
+			}
+			if tt.announces != nil {
+				cfg.InformerConfig.AlternateInformers = []AlternateInformer{{
+					Offer:    operator.InformerOffer{Kind: operator.InformerKindBus, Announces: tt.announces},
+					Supplier: supplierFor(&called, operator.InformerKindBus),
+				}}
+			}
+			createTestApp(t, cfg)
+			assert.Equal(t, tt.want, called)
+		})
+
+		t.Run("unmanaged kind: "+tt.name, func(t *testing.T) {
+			var called operator.InformerKind
+			cfg := AppConfig{
+				InformerConfig: AppInformerConfig{
+					InformerSupplier: supplierFor(&called, operator.InformerKindWatch),
+				},
+				UnmanagedKinds: []AppUnmanagedKind{{
+					Kind:             testKind(),
+					Reconciler:       &Reconciler{},
+					ReconcileOptions: UnmanagedKindReconcileOptions{WatchNeeds: tt.needs},
+				}},
+			}
+			if tt.announces != nil {
+				cfg.InformerConfig.AlternateInformers = []AlternateInformer{{
+					Offer:    operator.InformerOffer{Kind: operator.InformerKindBus, Announces: tt.announces},
+					Supplier: supplierFor(&called, operator.InformerKindBus),
+				}}
+			}
+			createTestApp(t, cfg)
+			assert.Equal(t, tt.want, called)
+		})
+	}
+
+	t.Run("an alternate informer with no supplier is not offered", func(t *testing.T) {
+		var called operator.InformerKind
+		createTestApp(t, AppConfig{
+			InformerConfig: AppInformerConfig{
+				InformerSupplier: supplierFor(&called, operator.InformerKindWatch),
+				AlternateInformers: []AlternateInformer{{
+					Offer: operator.InformerOffer{Kind: operator.InformerKindBus, Announces: &operator.WatchMetadata{}},
+				}},
+			},
+			ManagedKinds: []AppManagedKind{{
+				Kind:       testKind(),
+				Reconciler: &Reconciler{},
+				ReconcileOptions: BasicReconcileOptions{
+					WatchNeeds: operator.WatchNeeds{Stream: operator.WatchStreamSignal},
+				},
+			}},
+		})
+		assert.Equal(t, operator.InformerKindWatch, called)
+	})
+}
+
 func TestApp_Runner(t *testing.T) {
 	// TODO
 }
