@@ -668,8 +668,76 @@ type ManifestVersionKind struct {
 	Search *ManifestVersionKindSearch `json:"search,omitempty" yaml:"search,omitempty"`
 	// Embed defines the embedding document independently of search fields.
 	Embed *ManifestVersionKindEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
+	// Watch declares what the platform should announce alongside each change to this kind.
+	Watch *ManifestVersionKindWatch `json:"watch,omitempty" yaml:"watch,omitempty"`
 	// Extensions declares how other Grafana features, such as provisioning, treat this kind.
 	Extensions *ManifestVersionKindExtensions `json:"extensions,omitempty" yaml:"extensions,omitempty"`
+}
+
+// ManifestVersionKindWatch declares what the platform should announce alongside each change to a kind.
+//
+// Experimental: the watch section and everything which reads it may change in a minor release.
+type ManifestVersionKindWatch struct {
+	// Metadata declares which parts of an object's metadata the change notifications should carry.
+	Metadata *ManifestVersionKindWatchMetadata `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+}
+
+// ManifestVersionKindWatchMetadata is the allowlist of object metadata announced with a kind's changes, for a platform
+// which can announce changes out of band of the watch. The kind's owner sets it: the default is nothing, and every key
+// costs payload size on every notification, so it names what the handlers read rather than the whole object.
+//
+// It is a request, not a guarantee: a platform which announces no metadata ignores it.
+type ManifestVersionKindWatchMetadata struct {
+	// Labels are the metadata.labels keys to announce.
+	Labels []string `json:"labels,omitempty" yaml:"labels,omitempty"`
+	// Annotations are the metadata.annotations keys to announce.
+	Annotations []string `json:"annotations,omitempty" yaml:"annotations,omitempty"`
+	// Finalizers are the metadata.finalizers values to announce. An app whose reconciler is opinionated announces
+	// its own finalizer here, so that a delete in progress can be told from a fresh object without a read.
+	Finalizers []string `json:"finalizers,omitempty" yaml:"finalizers,omitempty"`
+	// Generation announces metadata.generation, which tells a spec change from a subresource one.
+	Generation bool `json:"generation,omitempty" yaml:"generation,omitempty"`
+	// CreationTimestamp announces metadata.creationTimestamp.
+	CreationTimestamp bool `json:"creationTimestamp,omitempty" yaml:"creationTimestamp,omitempty"`
+	// DeletionTimestamp announces metadata.deletionTimestamp, which makes a delete in progress visible.
+	DeletionTimestamp bool `json:"deletionTimestamp,omitempty" yaml:"deletionTimestamp,omitempty"`
+}
+
+// WatchMetadata returns the metadata each of the app's resources declares its change notifications should carry,
+// keyed by resource so that a platform can register it without walking versions itself.
+//
+// A kind's versions are unioned rather than required to match: announcing a key no version reads costs only payload
+// size, while missing one a version does read is a correctness problem. Resources which declare nothing are absent
+// from the map.
+func (m ManifestData) WatchMetadata() map[schema.GroupResource]ManifestVersionKindWatchMetadata {
+	out := map[schema.GroupResource]ManifestVersionKindWatchMetadata{}
+	for _, version := range m.Versions {
+		for _, kind := range version.Kinds {
+			if kind.Watch == nil || kind.Watch.Metadata == nil {
+				continue
+			}
+			gr := schema.GroupResource{Group: m.Group, Resource: kind.Resource}
+			merged := out[gr]
+			merged.Labels = appendUnique(merged.Labels, kind.Watch.Metadata.Labels)
+			merged.Annotations = appendUnique(merged.Annotations, kind.Watch.Metadata.Annotations)
+			merged.Finalizers = appendUnique(merged.Finalizers, kind.Watch.Metadata.Finalizers)
+			merged.Generation = merged.Generation || kind.Watch.Metadata.Generation
+			merged.CreationTimestamp = merged.CreationTimestamp || kind.Watch.Metadata.CreationTimestamp
+			merged.DeletionTimestamp = merged.DeletionTimestamp || kind.Watch.Metadata.DeletionTimestamp
+			out[gr] = merged
+		}
+	}
+	return out
+}
+
+// appendUnique adds the values of next which dst does not already have, preserving order.
+func appendUnique(dst, next []string) []string {
+	for _, value := range next {
+		if !slices.Contains(dst, value) {
+			dst = append(dst, value)
+		}
+	}
+	return dst
 }
 
 // ManifestVersionKindSecureValue describes a secure value used by a kind.

@@ -152,6 +152,33 @@ The `webhooks` paths are only emitted for the webhook types your kinds actually 
 
 > These path overrides configure the generated manifest only. The webhook servers the SDK runs for you (`k8s.WebhookHandler`/`k8s.WebhookServer`, and the `simple` App/Operator runners) always serve at the default `/validate`, `/mutate`, and `/convert` paths. Overriding the paths is intended for apps that serve webhooks with their own HTTP routing.
 
+## Watch (experimental)
+
+> **Experimental.** The `watch` section and `app.ManifestData.WatchMetadata()` may change in a minor release. Nothing in the SDK consumes the section yet.
+
+`watch` is the allowlist of object metadata announced with changes to your kind. You own the kind, so you set the list: the default is nothing, and each key you add grows every notification the kind publishes. Keep it to what your handlers actually read.
+
+```cue
+versions: {
+	"v1": {
+		watch: metadata: {
+			labels:            ["app"]
+			annotations:       ["example-app.ext.grafana.app/paused"]
+			finalizers:        ["example-app.ext.grafana.app/finalizer"]
+			generation:        true
+			deletionTimestamp: true
+		}
+		schema: { /* ... */ }
+	}
+}
+```
+
+This is the producing side of the change stream. A platform that announces changes out of band of the watch reads the list from the stored manifest and copies those keys into every notification for the kind, so a handler can act on a change without first reading the object. Announcing the whole object would defeat the point, which is why there is a list at all. What consumes the notifications — informers, suppliers, watchers — is app wiring, configured in Go rather than declared here.
+
+**An absent field means unknown, not empty.** A consumer cannot tell "this label is not set" from "this label was not announced", so a key your handlers read has to be on the list — that is the one cost of keeping it short. The list is a request, not a guarantee: a platform that announces no metadata ignores it.
+
+`ManifestData.WatchMetadata()` returns the declaration for that registration, keyed by `schema.GroupResource`. It unions a kind's versions rather than requiring them to agree: a key no version reads only costs payload size, while a key a version does read and nobody announced is a correctness bug.
+
 ## Roles
 
 `roles` grant users access to your app's kinds, and `roleBindings` assign them to the basic `viewer`, `editor`, and `admin` groups. If you define no roles, a reader, editor, and admin role covering every kind is generated. A role kind is either a kind name, such as `Issue`, or a kind and one of its custom routes, such as `Issue/render`, which grants the access check that route is authorized against: the route's first path segment, or the `subresource` its `authz` declares. The built-in `status` and `scale` subresources are not grantable: `Issue/status` is rejected, as is a kind custom route named `status` or `scale`. `status` is written by your app's own service identity using its permission on the parent resource (for example `issues:update`).

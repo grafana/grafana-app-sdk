@@ -206,6 +206,16 @@ spec:
       storage:
         listKeys: false
       userReadable: false
+      watch:
+        metadata:
+          annotations:
+          - testapp.ext.grafana.app/paused
+          deletionTimestamp: true
+          finalizers:
+          - testapp.ext.grafana.app/finalizer
+          generation: true
+          labels:
+          - app
     name: v1
     served: true
   - kinds:

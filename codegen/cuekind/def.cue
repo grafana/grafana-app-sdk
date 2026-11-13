@@ -323,6 +323,31 @@ SchemaWithOperatorState: Schema & {
 	enabled: bool | *false
 }
 
+// #Watch declares what a kind's change notifications should carry.
+// Experimental: this section may change in a minor release.
+#Watch: {
+	// metadata is the allowlist of object metadata announced with this kind's changes. Every key costs payload size
+	// on every notification, so it names what the handlers read rather than the whole object.
+	metadata?: #WatchMetadata
+}
+
+// #WatchMetadata declares which parts of an object's metadata a kind's change notifications carry.
+#WatchMetadata: {
+	// labels are the metadata.labels keys to announce.
+	labels?: [...string]
+	// annotations are the metadata.annotations keys to announce.
+	annotations?: [...string]
+	// finalizers are the metadata.finalizers values to announce. A kind whose reconciler is opinionated announces
+	// its app's finalizer here, so a delete in progress is visible without a read.
+	finalizers?: [...string]
+	// generation announces metadata.generation, which tells a spec change from a subresource one.
+	generation?: bool
+	// creationTimestamp announces metadata.creationTimestamp.
+	creationTimestamp?: bool
+	// deletionTimestamp announces metadata.deletionTimestamp, which makes a delete in progress visible.
+	deletionTimestamp?: bool
+}
+
 // #KindEmbed defines the embedding document independently of search fields.
 // Kinds with a custom embedding builder omit this section.
 #KindEmbed: {
@@ -452,6 +477,8 @@ Kind: S={
 	search: #KindSearch
 	// embed defines the embedding document independently of search fields.
 	embed?: #KindEmbed
+	// watch declares what the platform should announce alongside each change to this kind.
+	watch?: #Watch
 	// extensions declares how other Grafana features, such as provisioning, treat this kind.
 	extensions?: #KindExtensions
 	// routes is a map of path patterns to custom routes that will be exposed as subresources for this kind.

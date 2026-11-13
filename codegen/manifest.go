@@ -266,6 +266,7 @@ type VersionedKind struct {
 	NamingStrategy           *KindNamingStrategy       `json:"namingStrategy,omitempty"`
 	Search                   KindSearch                `json:"search"`
 	Embed                    *KindEmbed                `json:"embed,omitempty"`
+	Watch                    *Watch                    `json:"watch,omitempty"`
 	Extensions               *KindExtensions           `json:"extensions,omitempty"`
 	// Schema is the CUE schema for the version
 	// This should eventually be changed to JSONSchema/OpenAPI(/AST?)
