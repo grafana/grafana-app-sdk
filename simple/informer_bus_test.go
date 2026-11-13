@@ -759,3 +759,25 @@ func TestInformerSupplierFromManifest_SharesDeliveryMetrics(t *testing.T) {
 		watchOptions.DeliveryMetrics.PrometheusCollectors(),
 		"the bus informer reports its deliveries on the same collectors the watch does")
 }
+
+// A key projection carries no labels, and the informer matches every listed object against its selectors before
+// installing the snapshot — so the pairing would empty the snapshot on every re-list rather than narrow it.
+func TestBusInformerSupplier_KeyListerFactoryRejectsLabelFilters(t *testing.T) {
+	cfg := BusInformerConfig{
+		AnnouncedMetadata: operator.AnnouncedMetadata{Labels: []string{"app"}},
+		KeyListerFactory: func(resource.Kind, operator.ListWatchOptions) (operator.ResourceKeyLister, error) {
+			return keysReturning("150", operator.ResourceKey{Name: "a", ResourceVersion: "11"}), nil
+		},
+	}
+
+	_, err := BusInformerSupplier(resourcebus.NewFake(), cfg)(testKind(), stubClients{client: stubClient{}},
+		operator.InformerOptions{ListWatchOptions: operator.ListWatchOptions{LabelFilters: []string{"app=test"}}})
+
+	require.ErrorContains(t, err, "carries no labels")
+
+	t.Run("without the filters it is accepted", func(t *testing.T) {
+		_, err := BusInformerSupplier(resourcebus.NewFake(), cfg)(testKind(),
+			stubClients{client: stubClient{}}, operator.InformerOptions{})
+		require.NoError(t, err)
+	})
+}

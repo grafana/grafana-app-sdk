@@ -2,6 +2,7 @@ package simple
 
 import (
 	"errors"
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -31,7 +32,8 @@ var _ identityPayloadInformer = (*operator.BusInformer)(nil)
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type BusInformerConfig struct {
 	// Payload selects which object live events deliver. An empty value is operator.PayloadIdentity, which delivers
-	// identity only and so cannot be combined with an opinionated reconciler or watcher.
+	// identity plus the announced metadata, and so can be combined with an opinionated reconciler or watcher only
+	// where the bus announces the deletion timestamp, the finalizers and the generation. See AnnouncedMetadata.
 	Payload operator.BusPayload
 	// ResyncInterval is how often the full set is re-listed. The re-list is what catches changes the live stream did
 	// not deliver, so it is a correctness interval, not a nicety.
@@ -193,6 +195,13 @@ func (l listing) resolve(
 	// near-empty ones on every re-list and initial list, which no caller can detect from a resource.Object.
 	if l.payload == operator.PayloadHydrated {
 		return nil, nil, errors.New("KeyListerFactory cannot be used with PayloadHydrated: re-lists would deliver less than live events")
+	}
+	// A key projection carries no labels, and the informer matches every listed object against its selectors before
+	// installing the snapshot. Nothing listed this way could satisfy a label filter, so every re-list would read as
+	// a mass deletion rather than as a narrower set.
+	if len(opts.ListWatchOptions.LabelFilters) > 0 {
+		return nil, nil, fmt.Errorf("KeyListerFactory cannot be used with label filters (%s): the projection carries no labels, so nothing it lists could match them",
+			strings.Join(opts.ListWatchOptions.LabelFilters, ","))
 	}
 
 	keys, err := l.keyListerFactory(kind, opts.ListWatchOptions)

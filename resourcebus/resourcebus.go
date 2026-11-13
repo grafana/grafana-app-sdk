@@ -29,8 +29,9 @@ const (
 	VerbDeleted Verb = "deleted"
 )
 
-// Event is a single change announcement. It carries identity only: a subscriber which needs the object reads it from
-// the API, because the bus is a signal that something changed, not a replica of storage.
+// Event is a single change announcement. It carries the object's identity, and whatever metadata the publisher
+// announces with it, but never the object: a subscriber which needs that reads it from the API, because the bus is a
+// signal that something changed, not a replica of storage.
 //
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type Event struct {

@@ -22,17 +22,21 @@ kind with `ReconcileOptions.InformerSupplier` (the per-kind one wins). Or let th
 | --- | --- | --- |
 | `simple.DefaultInformerSupplier` | kubernetes watch | every object of the kind |
 | `simple.OptimizedInformerSupplier` | kubernetes watch | every object, in a cache tuned for large counts |
-| `simple.BusInformerSupplier` | a `resourcebus.Subscriber` | identity per object, in identity mode |
+| `simple.BusInformerSupplier` | a `resourcebus.Subscriber` | identity and metadata per object, no spec, in identity mode |
 | `simple.PeriodicInformerSupplier` | a re-list on a cadence, nothing live | nothing retained between passes |
 
 `DefaultInformerSupplier` is the one to use unless you have a reason not to. Reach for
 `OptimizedInformerSupplier` when a kind has more than ~10k objects, you watch cluster-scoped resources, or you are
 memory constrained; it respects `UseWatchList` and `WatchListPageSize`, which the default supplier ignores. Reach for
 `BusInformerSupplier` when your reconcilers read the object they act on anyway, so the cache earns nothing — see
-below. Its snapshot holds namespace, name and resource version per object, and no object bodies, whatever the lister
-returns: with `PayloadIdentity` the informer projects listed objects onto their identities before retaining them, so
-a full-object list and an identity list cost the same to hold. `PayloadHydrated` retains whole objects by
-definition, since that is what it delivers.
+below. With `PayloadIdentity` its snapshot holds each object's identity — namespace, name and resource version —
+plus the metadata a change notification can carry: labels, annotations, finalizers, generation, the timestamps and
+the UID. What it does **not** hold is the spec and the subresources, which is where an object's size lives. That is
+true whatever the lister returns, because the informer projects listed objects onto that shape before retaining
+them, so a full-object list and an identity list cost the same to hold. The metadata is kept rather than dropped
+because live events carry it: dropping it would make a re-list deliver less than the live stream, and would leave a
+label selector nothing to match on. `PayloadHydrated` retains whole objects by definition, since that is what it
+delivers.
 
 > [!CAUTION]
 > The bus informer, the periodic informer and the `resourcebus` contract are **experimental**. Their Go APIs may
@@ -218,11 +222,14 @@ end of the set and fails on any error, because a truncated snapshot diffs as a m
 A server which can return identities alone — namespace, name and resource version, which is all the diff needs —
 lists through those instead: implement `operator.ResourceKeyLister` and set `BusInformerConfig.KeyListerFactory`. The
 SDK builds the identity objects, records the projection, and falls back to the full-object list for a re-list the
-projection cannot serve. Three things follow:
+projection cannot serve. Four things follow:
 
-* Your key lister must honor the namespace and filters it is given, and report
-  `operator.ErrProjectionUnsupported` when it cannot — an identity carries no labels or fields, so nothing
-  downstream can apply a filter it did not.
+* Your key lister must honor the namespace it is given, and report `operator.ErrProjectionUnsupported` when it
+  cannot — an identity carries no labels or fields, so nothing downstream can apply a filter it did not.
+* Label filters are rejected with `KeyListerFactory` for that same reason, in the other direction: the informer
+  matches every listed object against its selectors before installing the snapshot, and nothing listed as a bare
+  identity could satisfy a label filter, so every re-list would read as a mass deletion. Use `ListerFactory` if you
+  need both, and return objects carrying the labels.
 * Only `operator.ErrProjectionUnsupported` falls back. Any other error fails the re-list, so a transient outage is
   retried next tick rather than served by the expensive path forever.
 * `PayloadHydrated` needs full objects, so configuring `KeyListerFactory` with it is rejected: re-lists would carry
@@ -240,9 +247,10 @@ lister, err := operator.NewPagedLister(kind, func(ctx context.Context, opts meta
 }, operator.PagedListerOptions{Payload: operator.PayloadIdentity})
 ```
 
-`PayloadIdentity` reads each item through the meta accessor and builds the kind's identity object, which works for
-any list — including a dynamic client's unstructured items, which nothing can convert. The default,
-`PayloadHydrated`, converts each item into a `resource.Object` of the kind and fails where it cannot.
+`PayloadIdentity` reads each item through the meta accessor and builds the kind's identity object — identity plus
+the metadata, so selectors still have something to match on — which works for any list, including a dynamic client's
+unstructured items, which nothing can convert. The default, `PayloadHydrated`, converts each item into a
+`resource.Object` of the kind and fails where it cannot.
 
 ### What a watcher can observe
 

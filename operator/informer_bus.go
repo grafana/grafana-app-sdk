@@ -28,10 +28,13 @@ import (
 type BusPayload string
 
 const (
-	// PayloadIdentity delivers the kind's zero value with namespace, name and resource version set. It suits a
-	// reconciler which treats an event as a signal and reads the object itself, and costs no API request per event.
-	// Nothing else on the object is populated, so a watcher which reads the spec, the deletion timestamp or the
-	// finalizer list must not use it; see the opinionated-watcher constraint in the docs.
+	// PayloadIdentity delivers the kind's zero value carrying namespace, name and resource version, plus whatever
+	// metadata the change source announced with the event — see AnnouncedMetadata. It suits a reconciler which
+	// treats an event as a signal and reads the object itself, and costs no API request per event.
+	//
+	// The spec and the subresources are never populated, and neither is a metadata field the source does not
+	// announce: a watcher which reads one of those must not use this payload. Announcing the deletion timestamp,
+	// the finalizers and the generation is what lets an opinionated reconciler or watcher use it at all.
 	PayloadIdentity BusPayload = "identity"
 	// PayloadHydrated reads the object from the API before dispatching, so watchers receive a full object as they
 	// would from a watch-backed informer, at the cost of one request per event. The ResourceLister must return full
@@ -349,8 +352,9 @@ func (b *BusInformer) Schema() resource.Schema { return b.kind.Schema }
 // such as a quota check which would otherwise cost an API list per reconcile, and nothing a reconcile's correctness
 // depends on. Read the object from the API for that.
 //
-// Identities, rather than objects, are deliberate: the informer keeps no per-object cache worth reading, and in
-// identity payload mode the stored objects carry nothing else anyway.
+// Identities, rather than objects, are deliberate: the informer keeps no per-object cache worth reading. What it
+// stores in identity payload mode is an identity and the announced metadata, with no spec or subresources, so
+// returning the objects would offer a view of something which is not the object.
 //
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 func (b *BusInformer) Snapshot() []resource.Identifier { return b.store.Identifiers() }

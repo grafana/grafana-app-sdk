@@ -1803,3 +1803,27 @@ func identifierNames(ids []resource.Identifier) []string {
 	}
 	return out
 }
+
+// What identity mode retains is the identity plus the metadata a notification can carry, and nothing of the body.
+// Dropping the metadata would make a re-list deliver less than the live stream and leave a selector nothing to
+// match on; keeping the body is what this informer exists to avoid.
+func TestBusInformer_SnapshotRetainsMetadataButNoBody(t *testing.T) {
+	listed := busObjRV("a", 10)
+	listed.SetLabels(map[string]string{"app": "test"})
+	listed.SetAnnotations(map[string]string{"example.grafana.app/paused": "true"})
+	listed.SetFinalizers([]string{"example.grafana.app/finalizer"})
+	listed.SetGeneration(7)
+	listed.Spec = map[string]any{"field": "a body which must not be retained"}
+
+	inf := newBusInformer(t, resourcebus.NewFake(), staticLister(listed), nil, BusInformerOptions{})
+	require.NoError(t, inf.relist(context.Background(), initialRelist))
+
+	held, ok := inf.store.Get(busTestNamespace, "a")
+	require.True(t, ok)
+	assert.Equal(t, map[string]string{"app": "test"}, held.GetLabels())
+	assert.Equal(t, map[string]string{"example.grafana.app/paused": "true"}, held.GetAnnotations())
+	assert.Equal(t, []string{"example.grafana.app/finalizer"}, held.GetFinalizers())
+	assert.Equal(t, int64(7), held.GetGeneration())
+	assert.Equal(t, "10", held.GetResourceVersion())
+	assert.Empty(t, held.(*resource.UntypedObject).Spec, "the body is what identity mode drops")
+}
