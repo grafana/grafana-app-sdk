@@ -223,7 +223,9 @@ simple.AppConfig{
                     Detail:   operator.WatchDetailIdentity,
                     Triggers: operator.WatchTriggerChange | operator.WatchTriggerSchedule,
                 },
-                Supplier: myEventBusInformerSupplier,
+                Supplier: simple.BusInformerSupplier(myBusSubscriber, simple.BusInformerConfig{
+                    ResyncInterval: 5 * time.Minute,
+                }),
             },
             simple.InformerSupplierOffer{
                 // This deployment sets InformerOptions.CacheResyncInterval, so its watch sweeps as well.
@@ -288,6 +290,56 @@ the informer's only source, so nothing else has to honour them. A server which c
 projecting less than whole objects, say — is reached through `ListerFactory`, which returns an
 `operator.ResourceLister` for the kind; the default is a paginated list over the kind's client, following continue
 tokens to the end of the set.
+
+### The event bus informer
+
+`simple.BusInformerSupplier` is the bus-backed mechanism in that table: `operator.BusInformer` takes its live stream
+from a `resourcebus.Subscriber` — a bus the storage layer publishes change notifications to — instead of a
+kubernetes watch, and so keeps no cache of the kind's objects.
+
+```go
+simple.BusInformerSupplier(myBusSubscriber, simple.BusInformerConfig{
+    ResyncInterval:    5 * time.Minute,
+    Group:             resourcebus.Group{Name: "myapp"},
+    AnnouncedMetadata: operator.AnnouncedMetadata{Labels: []string{"app"}, Generation: true},
+})
+```
+
+A nil subscriber returns a nil supplier, which as an offer is a mechanism the deployment does not have, so an app
+wired for a bus which is switched off needs no branch at the call site.
+
+**The periodic re-list is the correctness mechanism, not a nicety.** Each pass lists the kind and diffs it against
+the previous snapshot: a first-seen key is an add, a known key an update, a vanished key a delete carrying its
+last-known state. That is what catches a change the live stream did not deliver here — published while the
+subscription was down, routed to another member of a delivery `Group`, dropped when the informer's queue was full,
+or never announced at all. `ResyncInterval` is therefore an upper bound on how stale a replica can be.
+
+`Payload` decides what a live event delivers. The default, `operator.PayloadIdentity`, delivers the kind's zero value
+carrying namespace, name and resource version, plus whatever metadata the bus announces with the event, and costs no
+API request per event — handlers served by it read the object themselves. `operator.PayloadHydrated` reads the
+object before dispatching, at one request per event, and so serves a kind which reads the object off the delivery,
+including any kind using the `Opinionated` reconciler or watcher.
+
+A bus announces an allowlisted selection of each object's metadata, registered per resource by its owner, which the
+SDK cannot inspect — so `AnnouncedMetadata` is where an app states what it has arranged, and **an absent field means
+unknown rather than empty**. The informer copies the announced fields onto the object it hands a watcher, and
+refuses at construction a label filter reading a key the declaration does not list, since an unannounced label would
+read as unset on an object which has it. A field selector needs `PayloadHydrated` and a kind which declares the
+field in `selectableFields`. Every selector is then matched against live events *and* listed objects alike, since
+the subscription is scoped by namespace alone: an object whose labels stop matching arrives as a delete, one which
+starts matching as an add, exactly as a filtered watch reports them.
+
+`Group` joins the app's replicas into a set the bus shares delivery across, so each event reaches one replica rather
+than all of them. The re-list is what keeps each replica reconciled, so a group trades live volume, not correctness.
+
+`Snapshot`, `Count`, `Observe` and `Forget` expose the diffing state as **identities only** — never a view of the
+objects, which the informer does not keep. `Count` serves the staleness-tolerant count a quota check would otherwise
+pay an API list per reconcile for; under a shared group it can undercount until the next re-list, which is what
+`Observe` is for.
+
+Implementing the bus is the adopter's half: `resourcebus.Subscriber` is three methods — `Subscribe`, `WaitReady` and
+`Close` — over a leaf package which pulls in nothing but apimachinery's `schema`, and `resourcebus.NewFake()` is an
+in-memory one for tests.
 
 ### Checks
 
