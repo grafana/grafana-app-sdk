@@ -5,6 +5,10 @@ import (
 	"errors"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -87,6 +91,93 @@ func (l *clientLister) List(ctx context.Context) ([]resource.Object, string, err
 		}
 		out = append(out, page.GetItems()...)
 		continueTok = page.GetContinue()
+		if continueTok == "" {
+			break
+		}
+	}
+	return out, listRV, nil
+}
+
+// PageFunc reads one page of a list. The SDK supplies the limit and the continue token; the resource, the namespace
+// and the selectors are the caller's, closed over.
+//
+// Experimental: this API may change in a minor release.
+type PageFunc func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error)
+
+// PagedListerOptions configures the paged ResourceLister.
+//
+// Experimental: this API may change in a minor release.
+type PagedListerOptions struct {
+	// PageSize is the number of items to request per page. An empty value uses DefaultListerPageSize.
+	PageSize int
+}
+
+// NewPagedLister returns a ResourceLister over a paginated list function, for a client the SDK does not own: a
+// client-go generated clientset, whose List is a PageFunc but which cannot satisfy ListWatchClient. Prefer
+// NewClientLister where there is a resource.Client to list through.
+//
+// Each listed item is converted into a resource.Object of the kind, so the client's items have to be convertible —
+// a typed clientset's are; a dynamic client's unstructured ones are not, and are better listed through the kind's
+// own client.
+//
+// It follows continue tokens to the end of the set, for the reason NewClientLister does. An expired continue token
+// is one such error, rather than a reason to fall back to a single unpaginated list, which the server would
+// silently cap into exactly the truncated snapshot this avoids.
+//
+// Experimental: this API may change in a minor release.
+func NewPagedLister(kind resource.Kind, page PageFunc, opts PagedListerOptions) (ResourceLister, error) {
+	if page == nil {
+		return nil, errors.New("page function cannot be nil")
+	}
+	if kind.Schema == nil {
+		return nil, errors.New("kind cannot be empty")
+	}
+	if opts.PageSize <= 0 {
+		opts.PageSize = DefaultListerPageSize
+	}
+	return &pagedLister{kind: kind, page: page, opts: opts}, nil
+}
+
+type pagedLister struct {
+	kind resource.Kind
+	page PageFunc
+	opts PagedListerOptions
+}
+
+var _ ResourceLister = (*pagedLister)(nil)
+
+func (l *pagedLister) List(ctx context.Context) ([]resource.Object, string, error) {
+	var (
+		out         []resource.Object
+		listRV      string
+		continueTok string
+	)
+	for {
+		page, err := l.page(ctx, metav1.ListOptions{Limit: int64(l.opts.PageSize), Continue: continueTok})
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to list %s: %w", l.kind.GroupVersionKind().String(), err)
+		}
+		accessor, err := meta.ListAccessor(page)
+		if err != nil {
+			return nil, "", fmt.Errorf("list response is not a list: %w", err)
+		}
+		// A paginated list pins the resource version across pages via the continue token, so the first page's
+		// version dates the whole snapshot.
+		if listRV == "" {
+			listRV = accessor.GetResourceVersion()
+		}
+		items, err := meta.ExtractList(page)
+		if err != nil {
+			return nil, "", fmt.Errorf("could not read the list's items: %w", err)
+		}
+		for _, item := range items {
+			obj, err := toResourceObject(item, l.kind)
+			if err != nil {
+				return nil, "", err
+			}
+			out = append(out, obj)
+		}
+		continueTok = accessor.GetContinue()
 		if continueTok == "" {
 			break
 		}
