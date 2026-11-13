@@ -154,9 +154,9 @@ The `webhooks` paths are only emitted for the webhook types your kinds actually 
 
 ## Watch (experimental)
 
-> **Experimental.** The `watch` section and `app.ManifestData.WatchMetadata()` are experimental and may change in a minor release. Nothing in the SDK consumes the section yet: declaring it is a no-op beyond the generated manifest, and a platform which does not announce metadata ignores it.
+> **Experimental.** The `watch` section and `app.ManifestData.WatchMetadata()` may change in a minor release. Nothing in the SDK consumes the section yet.
 
-A kind's `watch` section declares, per version, which parts of an object's metadata its change notifications should carry:
+`watch` declares, per version, which parts of an object's metadata the platform should put into this kind's change notifications:
 
 ```cue
 versions: {
@@ -173,13 +173,11 @@ versions: {
 }
 ```
 
-This is for a platform which can announce changes out of band of the watch. Announcing a key lets a consumer decide what to do without reading the object — whether a delete is in progress, whether the change was to the spec — so each field is named rather than announcing everything, which would amount to carrying the object.
+It describes the *producing* side of the change stream: a platform which can announce changes out of band of the watch reads the allowlist from the stored manifest and puts those keys in each notification, so a consumer can decide what to do without reading the object. Who consumes those notifications — informers, suppliers, watchers — is app wiring, not a manifest declaration.
 
-Every field is opt-in, including `generation` and the timestamps, and **an absent field means unknown, not empty**: a consumer cannot tell "this label is not set" from "this label was not announced". It is a declaration, not a guarantee; a platform which announces no metadata ignores it.
+Every field is opt-in, and **an absent field means unknown, not empty**: a consumer cannot tell "this label is not set" from "this label was not announced". It is a declaration, not a guarantee; a platform which announces no metadata ignores it. It only covers kinds your app owns, since asking for a key means asking that kind's publisher to change its payload.
 
-The declaration belongs in the manifest because the registrar is the platform, not the app: it reads the allowlist from the stored `AppManifest`, which an app's in-process config cannot reach. For the same reason it only covers kinds the app owns — announcing metadata for a kind means asking that kind's publisher to change its notification payload.
-
-`ManifestData.WatchMetadata()` returns the declaration keyed by `schema.GroupResource`, so a platform can register it without walking versions. A kind's versions are unioned there rather than required to match: announcing a key no version reads costs payload size, while missing one a version does read is a correctness problem.
+`ManifestData.WatchMetadata()` returns the declaration keyed by `schema.GroupResource` for that registration, unioning a kind's versions: announcing a key no version reads costs payload size, while missing one a version does read is a correctness problem.
 
 ## Roles
 
