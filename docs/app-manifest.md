@@ -173,11 +173,11 @@ versions: {
 }
 ```
 
-It describes the *producing* side of the change stream: a platform which can announce changes out of band of the watch reads the allowlist from the stored manifest and puts those keys in each notification, so a consumer can decide what to do without reading the object. Who consumes those notifications — informers, suppliers, watchers — is app wiring, not a manifest declaration.
+This is the producing side of the change stream. A platform that announces changes out of band of the watch reads this allowlist from the stored manifest and copies those keys into every notification it publishes for the kind, so a handler can act on a change without first reading the object. What consumes those notifications — informers, suppliers, watchers — is app wiring, configured in Go rather than declared here.
 
-Every field is opt-in, and **an absent field means unknown, not empty**: a consumer cannot tell "this label is not set" from "this label was not announced". It is a declaration, not a guarantee; a platform which announces no metadata ignores it. It only covers kinds your app owns, since asking for a key means asking that kind's publisher to change its payload.
+Every field is opt-in, and **an absent field means unknown, not empty**. A consumer cannot tell "this label is not set" from "this label was not announced", so declare every key your handlers read. The section is a request, not a guarantee: a platform that announces no metadata ignores it. Declare it only for kinds your app owns, since asking for a key asks that kind's publisher to change what it publishes.
 
-`ManifestData.WatchMetadata()` returns the declaration keyed by `schema.GroupResource` for that registration, unioning a kind's versions: announcing a key no version reads costs payload size, while missing one a version does read is a correctness problem.
+`ManifestData.WatchMetadata()` returns the declaration for that registration, keyed by `schema.GroupResource`. It unions a kind's versions rather than requiring them to agree: a key no version reads only costs payload size, while a key a version does read and nobody announced is a correctness bug.
 
 ## Roles
 
