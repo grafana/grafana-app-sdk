@@ -161,6 +161,46 @@ type InformerSupplier func(
 	kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions,
 ) (operator.Informer, error)
 
+// InformerSupplierDecider picks the supplier which serves a kind, from what that kind's handlers need of the
+// changes they are watched by. Returning nil leaves the kind to AppInformerConfig.InformerSupplier, the API watch,
+// which serves every need.
+//
+// Experimental: this API may change in a minor release.
+type InformerSupplierDecider func(kind resource.Kind, needs operator.WatchOptions) InformerSupplier
+
+// InformerSupplierOffer is a watch mechanism a deployment can provide besides the API watch: a supplier, and what
+// the informers it builds provide. One offer satisfies every kind needing no more than it provides, so an offer
+// carrying whole objects serves a kind needing only an identity too.
+//
+// Experimental: this API may change in a minor release.
+type InformerSupplierOffer struct {
+	// Provides is what the informers Supplier builds give a kind's handlers.
+	Provides operator.WatchOptions
+	// Supplier builds them. A nil Supplier is an informer this deployment cannot provide, which is how a supplier
+	// whose transport is switched off is offered — rather than substituting another informer of its own accord,
+	// which would put the fallback in a second place nobody sees at the call site.
+	Supplier InformerSupplier
+}
+
+// NewInformerSupplierDecider returns an InformerSupplierDecider which gives each kind the first of these offers
+// which satisfies what its handlers need, so the order they are given in is the deployment's preference between the
+// informers which could serve the same kind. A kind no offer satisfies is left to
+// AppInformerConfig.InformerSupplier, the API watch, which satisfies every need.
+//
+// Cheapest-first is the usual order — the re-list, then the event bus, then an informer which hydrates each change
+// — but it is a choice, not the rule: a deployment preferring the latency of its bus over the cost of a re-list
+// offers the bus first, and every kind both could serve takes the bus.
+func NewInformerSupplierDecider(offers ...InformerSupplierOffer) InformerSupplierDecider {
+	return func(_ resource.Kind, needs operator.WatchOptions) InformerSupplier {
+		for _, offer := range offers {
+			if offer.Supplier != nil && needs.SatisfiedBy(offer.Provides) {
+				return offer.Supplier
+			}
+		}
+		return nil
+	}
+}
+
 // DefaultInformerSupplier is a default InformerSupplier function which creates a basic operator.KubernetesBasedInformer.
 // Note: This supplier does NOT respect WatchListPageSize or UseWatchList configuration.
 // For memory-optimized informers that support these options, use OptimizedInformerSupplier instead.
@@ -237,7 +277,20 @@ type AppInformerConfig struct {
 	InProgressFinalizerSupplier operator.FinalizerSupplier
 	// InformerSupplier can be set to specify a function for creating informers for kinds.
 	// If left unset, DefaultInformerSupplier will be used.
+	// It builds the API watch, which delivers each change carrying the whole object: it serves any kind
+	// InformerSupplierDecider does not pick a supplier for. Note that it re-delivers on a schedule only when
+	// InformerOptions.CacheResyncInterval is set, so a kind needing that trigger should be offered a mechanism
+	// which provides it.
 	InformerSupplier InformerSupplier
+	// InformerSupplierDecider picks the supplier for a kind from what that kind's handlers need of a change, so
+	// that a deployment which can provide a cheaper informer than the API watch — one fed by an event bus, or one
+	// which only re-lists on a schedule — serves the kinds not needing the watch with it. Returning nil for a kind
+	// leaves it to InformerSupplier, and so does leaving this unset.
+	//
+	// NewInformerSupplierDecider builds one from the suppliers a deployment has, in its order of preference.
+	//
+	// Experimental: this API may change in a minor release.
+	InformerSupplierDecider InformerSupplierDecider
 	// RetryProcessorConfig enables the concurrent retry processor when non-nil.
 	// When set, a RetryProcessor is created and its Prometheus metrics are included in PrometheusCollectors().
 	RetryProcessorConfig *operator.RetryProcessorConfig
@@ -292,6 +345,16 @@ type UnmanagedKindReconcileOptions struct {
 	// If true, the app must have permission to add finalizers to the unmanaged Kind, and if
 	// the AppUnmanagedKind is ever removed from the app, the finalizers added should be cleaned up.
 	UseOpinionated bool
+	// InformerSupplier can be set to use a different informer for this Kind than the rest of the app, in place of
+	// the one the App would pick for it. If left unset, the App picks from AppInformerConfig.
+	InformerSupplier InformerSupplier
+	// WatchOptions is what the Reconciler or Watcher needs of the changes it is watched by, which the App passes to
+	// AppInformerConfig.InformerSupplierDecider, and checks against any informer which says what it provides. Its
+	// zero value needs a delivery per change carrying the whole object, which is what the API watch gives a kind
+	// today.
+	//
+	// Experimental: this API may change in a minor release.
+	WatchOptions operator.WatchOptions
 }
 
 // BasicReconcileOptions are settings for the ListWatch and informer setup for a reconciliation loop
@@ -304,6 +367,15 @@ type BasicReconcileOptions struct {
 	FieldSelectors []string
 	// UsePlain can be set to true to avoid wrapping the Reconciler or Watcher in its Opinionated variant.
 	UsePlain bool
+	// InformerSupplier can be set to use a different informer for this Kind than the rest of the app, in place of
+	// the one the App would pick for it. If left unset, the App picks from AppInformerConfig.
+	InformerSupplier InformerSupplier
+	// WatchOptions is what the Reconciler or Watcher needs of the changes it is watched by, which the App passes to
+	// AppInformerConfig.InformerSupplierDecider and checks the informer it builds against. Its zero value needs
+	// operator.WatchStreamObject, which is what an informer provides unless it says otherwise.
+	//
+	// Experimental: this API may change in a minor release.
+	WatchOptions operator.WatchOptions
 }
 
 type AppCustomRouteMethod string
@@ -587,10 +659,12 @@ func (a *App) manageKind(kind AppManagedKind) error {
 			Reconciler: kind.Reconciler,
 			Watcher:    kind.Watcher,
 			ReconcileOptions: UnmanagedKindReconcileOptions{
-				Namespace:      kind.ReconcileOptions.Namespace,
-				LabelFilters:   kind.ReconcileOptions.LabelFilters,
-				FieldSelectors: kind.ReconcileOptions.FieldSelectors,
-				UseOpinionated: !kind.ReconcileOptions.UsePlain,
+				Namespace:        kind.ReconcileOptions.Namespace,
+				LabelFilters:     kind.ReconcileOptions.LabelFilters,
+				FieldSelectors:   kind.ReconcileOptions.FieldSelectors,
+				UseOpinionated:   !kind.ReconcileOptions.UsePlain,
+				InformerSupplier: kind.ReconcileOptions.InformerSupplier,
+				WatchOptions:     kind.ReconcileOptions.WatchOptions,
 			},
 		})
 	}
@@ -605,9 +679,9 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		return errors.New("please provide either Watcher or Reconciler, not both")
 	}
 	if kind.Reconciler != nil || kind.Watcher != nil {
-		infSupplier := a.cfg.InformerConfig.InformerSupplier
+		infSupplier := kind.ReconcileOptions.InformerSupplier
 		if infSupplier == nil {
-			infSupplier = DefaultInformerSupplier
+			infSupplier = a.informerSupplier(kind.Kind, watchNeeds(kind))
 		}
 
 		opts := a.cfg.InformerConfig.InformerOptions
@@ -622,6 +696,9 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 
 		inf, err := infSupplier(kind.Kind, a.clientGenerator, opts)
 		if err != nil {
+			return err
+		}
+		if err := a.checkWatchNeeds(kind, inf); err != nil {
 			return err
 		}
 		err = a.informerController.AddInformer(inf, kind.Kind.GroupVersionKind().String())
@@ -668,6 +745,60 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		}
 	}
 	return nil
+}
+
+// watchNeeds is what a kind's handlers need of the changes they are watched by. The Opinionated variants read the
+// deletion timestamp and the finalizer list off the object on the event, to tell a delete in progress from a fresh
+// object without a read, so they need the object itself whatever the kind declares.
+func watchNeeds(kind AppUnmanagedKind) operator.WatchOptions {
+	needs := kind.ReconcileOptions.WatchOptions
+	if needs.Detail == "" || kind.ReconcileOptions.UseOpinionated {
+		needs.Detail = operator.WatchDetailFullObject
+	}
+	if needs.Triggers == 0 {
+		needs.Triggers = operator.WatchTriggerChange
+	}
+	return needs
+}
+
+// informerSupplier asks the decider which supplier serves a kind with these needs, falling back to the API watch.
+func (a *App) informerSupplier(kind resource.Kind, needs operator.WatchOptions) InformerSupplier {
+	if decider := a.cfg.InformerConfig.InformerSupplierDecider; decider != nil {
+		if supplier := decider(kind, needs); supplier != nil {
+			return supplier
+		}
+	}
+	if a.cfg.InformerConfig.InformerSupplier != nil {
+		return a.cfg.InformerConfig.InformerSupplier
+	}
+	return DefaultInformerSupplier
+}
+
+// checkWatchNeeds reports an error when an informer which says what it provides provides less than its kind's
+// handlers need, which is a mechanism offered or set against a need it cannot serve. An informer which says nothing
+// is not checked: nothing can be read off it, and every informer the SDK ships delivers each change carrying the
+// whole object. The one need an unstating informer may silently miss is the scheduled sweep, which the API watch
+// only performs when a cache resync is configured, so that pairing is warned about.
+func (a *App) checkWatchNeeds(kind AppUnmanagedKind, inf operator.Informer) error {
+	provided, stated := operator.InformerWatchOptions(inf)
+	if !stated {
+		needs := watchNeeds(kind)
+		if needs.Triggers&operator.WatchTriggerSchedule != 0 && a.cfg.InformerConfig.InformerOptions.CacheResyncInterval == 0 {
+			logging.DefaultLogger.Warn("kind needs deliveries on a schedule, but its informer does not say it makes them and no cache resync is configured",
+				"kind", kind.Kind.GroupVersionKind().String())
+		}
+		return nil
+	}
+	needs := watchNeeds(kind)
+	if needs.SatisfiedBy(provided) {
+		return nil
+	}
+	handler := "its reconciler or watcher"
+	if kind.ReconcileOptions.UseOpinionated {
+		handler = "its opinionated reconciler or watcher"
+	}
+	return fmt.Errorf("informer for kind '%s' provides %s, but %s needs %s",
+		kind.Kind.GroupVersionKind().String(), provided, handler, needs)
 }
 
 // RegisterKindConverter adds a converter for a GroupKind, which will then be processed on Convert calls
