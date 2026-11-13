@@ -12,7 +12,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/cache"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/health"
@@ -163,7 +162,7 @@ type InformerSupplier func(
 
 // InformerSupplierDecider picks the supplier which serves a kind, from what that kind's handlers need of the
 // changes they are watched by. Returning nil leaves the kind to AppInformerConfig.InformerSupplier, the API watch,
-// which serves every need.
+// which serves every need but a scheduled sweep it is not configured to make.
 //
 // Experimental: this API may change in a minor release.
 type InformerSupplierDecider func(kind resource.Kind, needs operator.WatchOptions) InformerSupplier
@@ -185,7 +184,7 @@ type InformerSupplierOffer struct {
 // NewInformerSupplierDecider returns an InformerSupplierDecider which gives each kind the first of these offers
 // which satisfies what its handlers need, so the order they are given in is the deployment's preference between the
 // informers which could serve the same kind. A kind no offer satisfies is left to
-// AppInformerConfig.InformerSupplier, the API watch, which satisfies every need.
+// AppInformerConfig.InformerSupplier, the API watch.
 //
 // Cheapest-first is the usual order — the re-list, then the event bus, then an informer which hydrates each change
 // — but it is a choice, not the rule: a deployment preferring the latency of its bus over the cost of a re-list
@@ -199,66 +198,6 @@ func NewInformerSupplierDecider(offers ...InformerSupplierOffer) InformerSupplie
 		}
 		return nil
 	}
-}
-
-// DefaultInformerSupplier is a default InformerSupplier function which creates a basic operator.KubernetesBasedInformer.
-// Note: This supplier does NOT respect WatchListPageSize or UseWatchList configuration.
-// For memory-optimized informers that support these options, use OptimizedInformerSupplier instead.
-var DefaultInformerSupplier = func(
-	kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions,
-) (operator.Informer, error) {
-	client, err := clients.ClientFor(kind)
-	if err != nil {
-		return nil, err
-	}
-
-	if options.ResourceKind == "" {
-		options.ResourceKind = kind.GroupVersionKind().String()
-	}
-
-	inf, err := operator.NewKubernetesBasedInformer(kind, client, options)
-	if err != nil {
-		return nil, err
-	}
-
-	return operator.NewConcurrentInformerFromOptions(inf, options)
-}
-
-// OptimizedInformerSupplier is an InformerSupplier that uses CustomCacheInformer and respects
-// all configuration in InformerOptions, including UseWatchList and WatchListPageSize.
-// This supplier provides better memory efficiency for large-scale watches (>10K objects).
-//
-// Experimental: This API is experimental and may change in future releases.
-//
-// Recommended for:
-//   - Watching cluster-scoped resources (e.g., namespaces, nodes)
-//   - Watching large numbers of objects (>10K)
-//   - Environments with memory constraints
-//
-// Configuration tips:
-//   - Set WatchListPageSize to 5000-10000 for optimal memory usage
-//   - Set UseWatchList to true on Kubernetes 1.27+ for streaming support
-//   - Both can be combined: WatchListPageSize provides fallback pagination if UseWatchList is not available
-var OptimizedInformerSupplier = func(
-	kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions,
-) (operator.Informer, error) {
-	client, err := clients.ClientFor(kind)
-	if err != nil {
-		return nil, err
-	}
-
-	if options.ResourceKind == "" {
-		options.ResourceKind = kind.GroupVersionKind().String()
-	}
-
-	store := cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc)
-	lw := operator.NewListerWatcher(client, kind, options.ListWatchOptions)
-
-	inf := operator.NewCustomCacheInformer(store, lw, kind, operator.CustomCacheInformerOptions{
-		InformerOptions: options,
-	})
-
-	return operator.NewConcurrentInformerFromOptions(inf, options)
 }
 
 // AppInformerConfig contains configuration for the App's internal operator.InformerController
@@ -279,8 +218,9 @@ type AppInformerConfig struct {
 	// If left unset, DefaultInformerSupplier will be used.
 	// It builds the API watch, which delivers each change carrying the whole object: it serves any kind
 	// InformerSupplierDecider does not pick a supplier for. Note that it re-delivers on a schedule only when
-	// InformerOptions.CacheResyncInterval is set, so a kind needing that trigger should be offered a mechanism
-	// which provides it.
+	// InformerOptions.CacheResyncInterval is set, so a kind needing that trigger is refused unless one is
+	// configured or a mechanism which sweeps is offered. APIWatchInformerSupplier builds it with a choice of
+	// informer.
 	InformerSupplier InformerSupplier
 	// InformerSupplierDecider picks the supplier for a kind from what that kind's handlers need of a change, so
 	// that a deployment which can provide a cheaper informer than the API watch — one fed by an event bus, or one

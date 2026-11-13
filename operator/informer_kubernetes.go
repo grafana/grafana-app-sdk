@@ -17,8 +17,9 @@ import (
 )
 
 var (
-	_ Informer     = &KubernetesBasedInformer{}
-	_ health.Check = &KubernetesBasedInformer{}
+	_ Informer             = &KubernetesBasedInformer{}
+	_ WatchOptionsInformer = &KubernetesBasedInformer{}
+	_ health.Check         = &KubernetesBasedInformer{}
 )
 
 // KubernetesBasedInformer is a k8s apimachinery-based informer. It wraps a k8s cache.SharedIndexInformer,
@@ -32,6 +33,7 @@ type KubernetesBasedInformer struct {
 	schema                resource.Kind
 	runContext            context.Context
 	eventTimeout          time.Duration
+	cacheResyncInterval   time.Duration
 	errorHandlerFn        func(context.Context, error)
 	healthCheckName       string
 }
@@ -127,9 +129,10 @@ func NewKubernetesBasedInformer(
 	}
 
 	return &KubernetesBasedInformer{
-		schema:         sch,
-		eventTimeout:   timeout,
-		errorHandlerFn: errorHandler,
+		schema:              sch,
+		eventTimeout:        timeout,
+		cacheResyncInterval: options.CacheResyncInterval,
+		errorHandlerFn:      errorHandler,
 		SharedIndexInformer: cache.NewSharedIndexInformer(
 			NewListerWatcher(client, sch, options.ListWatchOptions),
 			nil,
@@ -140,6 +143,12 @@ func NewKubernetesBasedInformer(
 		HealthCheckIgnoreSync: options.HealthCheckIgnoreSync,
 		healthCheckName:       healthCheckName,
 	}, nil
+}
+
+// WatchOptions reports what this informer gives a kind's handlers: whole objects from the watch stream, delivered
+// per change, and the cache re-delivered on InformerOptions.CacheResyncInterval when one is set.
+func (k *KubernetesBasedInformer) WatchOptions() WatchOptions {
+	return apiWatchOptions(k.cacheResyncInterval)
 }
 
 // AddEventHandler adds a ResourceWatcher as an event handler for watch events from the informer.

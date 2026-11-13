@@ -23,7 +23,10 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-var _ Informer = &CustomCacheInformer{}
+var (
+	_ Informer             = &CustomCacheInformer{}
+	_ WatchOptionsInformer = &CustomCacheInformer{}
+)
 
 // MemcachedInformerOptions are the options for the MemcachedInformer.
 type MemcachedInformerOptions struct {
@@ -129,6 +132,12 @@ func NewCustomCacheInformer(
 		schema:    kind,
 		opts:      opts,
 	}
+}
+
+// WatchOptions reports what this informer gives a kind's handlers: whole objects from the watch stream, delivered
+// per change, and the cache re-delivered on CacheResyncInterval when one is set.
+func (c *CustomCacheInformer) WatchOptions() WatchOptions {
+	return apiWatchOptions(c.opts.CacheResyncInterval)
 }
 
 // PrometheusCollectors returns a list of prometheus collectors used by the informer and its objects (such as the cache).

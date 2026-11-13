@@ -244,13 +244,33 @@ event bus, since the re-list is offered first but delivers no individual change.
 the re-list. Cheapest-first is the usual order, not a rule the SDK imposes: offer the bus first and every kind both
 could serve takes the bus.
 
-`InformerSupplier` — the API watch — serves anything no offer satisfies, including every kind in an app which lists
-nothing. So a mechanism the deployment does not have is listed with a `nil` `Supplier` rather than substituting
+`InformerSupplier` — the API watch, which `simple.APIWatchInformerSupplier` builds — serves anything no offer
+satisfies, including every kind in an app which lists nothing. So a mechanism the deployment does not have is listed with a `nil` `Supplier` rather than substituting
 another of its own accord, and a kind falls back to being told more at more cost: an identity need in a deployment
 running no bus is watched.
 
 Two things bypass the selection: your own `InformerSupplierDecider` replaces the rule for the whole app, and
 `ReconcileOptions.InformerSupplier` sets the mechanism for one kind outright.
+
+### The API watch
+
+`simple.APIWatchInformerSupplier` is the mechanism in the first two rows of that table, and the one every kind in an
+app which lists no offers is served by: a watch stream of each change to the kind, carrying whole objects, held in a
+cache.
+
+```go
+simple.APIWatchInformerSupplier(simple.APIWatchInformerConfig{Optimized: true})
+```
+
+`Optimized` builds an `operator.CustomCacheInformer` rather than the client-go informer behind
+`operator.KubernetesBasedInformer`: it honours `InformerOptions.UseWatchList` and
+`InformerOptions.WatchListPageSize`, which the default informer ignores, and costs less memory on large object
+counts. `simple.DefaultInformerSupplier` and `simple.OptimizedInformerSupplier` are those two configurations.
+
+Whether it sweeps is the deployment's to set, so the informers it builds state `WatchTriggerSchedule` only when
+`InformerOptions.CacheResyncInterval` is set: a kind needing a sweep is refused when no interval is configured and no
+mechanism which sweeps is offered. That pass re-delivers each cached object as an **update**, where the re-list below
+delivers an add.
 
 ### The periodic informer
 
@@ -281,9 +301,9 @@ tokens to the end of the set.
 A mechanism says what it provides by implementing `operator.WatchOptionsInformer`. The app checks any informer which
 does against its kind's needs, so a mechanism listed or set against a need it cannot serve fails when the app is
 constructed, rather than losing what a reconcile reads. An informer which says nothing is not checked — there is
-nothing to read off it, and every informer the SDK ships delivers each change carrying the whole object. The one need
-it may silently miss is the scheduled sweep, so the app warns when a kind needs one, its informer says nothing, and
-no cache resync is configured.
+nothing to read off it. Every informer the SDK ships says what it provides, so this is one from outside it; the need
+such an informer may silently miss is the scheduled sweep, so the app warns when a kind needs one, its informer says
+nothing, and no cache resync is configured.
 
 A wrapper which says nothing of its own is read through to what it wraps, so the per-key worker wrapper the SDK's
 suppliers add neither hides a mechanism's statement nor turns silence into one; implement `operator.InformerWrapper`

@@ -3,6 +3,7 @@ package operator
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // WatchOptions is what a kind's handlers need of the changes they are watched by, and what a watch mechanism
@@ -40,6 +41,16 @@ func (o WatchOptions) triggers() WatchTriggers {
 		return WatchTriggerChange
 	}
 	return o.Triggers
+}
+
+// apiWatchOptions is what an informer backed by the API watch provides: whole objects, delivered per change, plus a
+// re-delivery of everything it has cached when a resync interval is configured.
+func apiWatchOptions(cacheResyncInterval time.Duration) WatchOptions {
+	triggers := WatchTriggerChange
+	if cacheResyncInterval > 0 {
+		triggers |= WatchTriggerSchedule
+	}
+	return WatchOptions{Detail: WatchDetailFullObject, Triggers: triggers}
 }
 
 // WatchDetail is how much a delivery carries. It is read two ways: as what a watch mechanism's deliveries carry,
