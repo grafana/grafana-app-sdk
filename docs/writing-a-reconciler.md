@@ -161,3 +161,76 @@ func NewMyKindReconciler(infoClient InfoClient, store *resource.TypedStore[*v1.M
 	}   
 }
 ```
+
+## Declaring What a Reconciler Needs From the Change Stream (experimental)
+
+> [!WARNING]
+> `WatchNeeds` and everything which reads it are experimental, and may change in a minor release.
+
+A watch-backed informer caches every object of a kind, which is what a reconciler reading objects out of the cache
+requires, and is more than many reconcilers use. A reconciler which re-reads the object it acts on only needs to know
+*which* object changed, and one which re-evaluates everything on a schedule — age-based cleanup, say — needs no
+individual change delivered at all.
+
+`ReconcileOptions.WatchNeeds` states that requirement, and the app resolves it against the informers the deployment can
+actually provide:
+
+```go
+simple.AppConfig{
+    ManagedKinds: []simple.AppManagedKind{{
+        Kind:       myKind.Kind(),
+        Reconciler: &myReconciler,
+        ReconcileOptions: simple.BasicReconcileOptions{
+            WatchNeeds: operator.WatchNeeds{
+                Stream: operator.WatchStreamSignal,
+                Metadata: operator.WatchMetadata{
+                    Finalizers:        []string{"myapp.ext.grafana.app/finalizer"},
+                    Generation:        true,
+                    DeletionTimestamp: true,
+                },
+            },
+        },
+    }},
+}
+```
+
+`Stream` is what the handlers need delivered:
+
+| Value | The handlers | Served by |
+| --- | --- | --- |
+| `WatchStreamObjects` (default) | read objects from the informer's cache | a watch |
+| `WatchStreamSignal` | re-read the object they act on | a change bus, or a watch |
+| `WatchStreamCadence` | re-evaluate every object on a schedule | a periodic re-list, a bus, or a watch |
+
+`Metadata` is the object metadata the handlers read off a change notification. It exists so a cheaper informer is only
+chosen when it can actually serve the handlers: a notification which does not carry the object itself carries only the
+metadata its producer announces, and a reconciler which decides from a finalizer cannot be served by one which does not
+announce that finalizer. A reconciler wrapped in its Opinionated variant reads the finalizer and the deletion
+timestamp, so declare those.
+
+Which informers a deployment can offer is not something an app ships knowing, so it is stated at wiring time rather
+than assumed:
+
+```go
+simple.AppInformerConfig{
+    AlternateInformers: []simple.AlternateInformer{{
+        Offer: operator.InformerOffer{
+            Kind:      operator.InformerKindBus,
+            Announces: &operator.WatchMetadata{Generation: true, DeletionTimestamp: true},
+        },
+        Supplier: myBusInformerSupplier,
+    }},
+}
+```
+
+Every fallback is upward in capability, so an unavailable or insufficient option never fails: a kind which needs a
+signal is served by a watch where no change bus is configured, which costs more memory and delivers strictly more.
+Leaving `WatchNeeds` unset keeps the informer a kind has always had, and the app logs a warning whenever it passes over
+a cheaper informer because of metadata it does not announce.
+
+`WatchNeeds.Resolve` is exported and holds the whole rule, so an operator which builds its informers itself rather than
+through `simple.App` reaches the same answer:
+
+```go
+informerKind, passedOver := needs.Resolve(offers...)
+```

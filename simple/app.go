@@ -237,13 +237,32 @@ type AppInformerConfig struct {
 	InProgressFinalizerSupplier operator.FinalizerSupplier
 	// InformerSupplier can be set to specify a function for creating informers for kinds.
 	// If left unset, DefaultInformerSupplier will be used.
+	// It serves operator.InformerKindWatch, which every kind's WatchNeeds can fall back to.
 	InformerSupplier InformerSupplier
+	// AlternateInformers are the informers this deployment can provide besides the watch-backed one which
+	// InformerSupplier builds, which a kind's declared WatchNeeds is resolved against. A deployment which runs no
+	// change bus leaves it empty, and every kind is served by a watch.
+	//
+	// Experimental: this API may change in a minor release.
+	AlternateInformers []AlternateInformer
 	// RetryProcessorConfig enables the concurrent retry processor when non-nil.
 	// When set, a RetryProcessor is created and its Prometheus metrics are included in PrometheusCollectors().
 	RetryProcessorConfig *operator.RetryProcessorConfig
 	// MetricsConfig controls the namespace and histogram settings for Prometheus metrics.
 	// Metrics are always created; an empty Namespace produces unprefixed metric names.
 	MetricsConfig metrics.Config
+}
+
+// AlternateInformer is an informer a deployment can provide besides the watch-backed one, paired with what its
+// change notifications carry so that a kind which reads metadata off a notification is not served by an informer
+// which does not announce it.
+//
+// Experimental: this API may change in a minor release.
+type AlternateInformer struct {
+	// Offer names the informer and the metadata its notifications carry.
+	Offer operator.InformerOffer
+	// Supplier builds it. A kind whose WatchNeeds resolves to Offer.Kind is served by this supplier.
+	Supplier InformerSupplier
 }
 
 // AppManagedKind is a Kind and associated functionality used by an App.
@@ -292,6 +311,12 @@ type UnmanagedKindReconcileOptions struct {
 	// If true, the app must have permission to add finalizers to the unmanaged Kind, and if
 	// the AppUnmanagedKind is ever removed from the app, the finalizers added should be cleaned up.
 	UseOpinionated bool
+	// WatchNeeds is what the Reconciler or Watcher requires of the change stream, which the App resolves against
+	// the informers this deployment can provide. Its zero value needs objects from a cache, which the watch-backed
+	// informer serves, so leaving it unset keeps the informer a kind has always had.
+	//
+	// Experimental: this API may change in a minor release.
+	WatchNeeds operator.WatchNeeds
 }
 
 // BasicReconcileOptions are settings for the ListWatch and informer setup for a reconciliation loop
@@ -304,6 +329,12 @@ type BasicReconcileOptions struct {
 	FieldSelectors []string
 	// UsePlain can be set to true to avoid wrapping the Reconciler or Watcher in its Opinionated variant.
 	UsePlain bool
+	// WatchNeeds is what the Reconciler or Watcher requires of the change stream, which the App resolves against
+	// the informers this deployment can provide. Its zero value needs objects from a cache, which the watch-backed
+	// informer serves, so leaving it unset keeps the informer a kind has always had.
+	//
+	// Experimental: this API may change in a minor release.
+	WatchNeeds operator.WatchNeeds
 }
 
 type AppCustomRouteMethod string
@@ -591,10 +622,42 @@ func (a *App) manageKind(kind AppManagedKind) error {
 				LabelFilters:   kind.ReconcileOptions.LabelFilters,
 				FieldSelectors: kind.ReconcileOptions.FieldSelectors,
 				UseOpinionated: !kind.ReconcileOptions.UsePlain,
+				WatchNeeds:     kind.ReconcileOptions.WatchNeeds,
 			},
 		})
 	}
 	return nil
+}
+
+// informerSupplier returns the supplier for the cheapest informer this deployment can provide which satisfies the
+// kind's declared needs. An unset need, and anything no alternate informer can serve, is served by the watch-backed
+// supplier.
+func (a *App) informerSupplier(kind resource.Kind, needs operator.WatchNeeds) InformerSupplier {
+	watchSupplier := a.cfg.InformerConfig.InformerSupplier
+	if watchSupplier == nil {
+		watchSupplier = DefaultInformerSupplier
+	}
+	offers := make([]operator.InformerOffer, 0, len(a.cfg.InformerConfig.AlternateInformers)+1)
+	offers = append(offers, operator.InformerOffer{Kind: operator.InformerKindWatch})
+	for _, alternate := range a.cfg.InformerConfig.AlternateInformers {
+		if alternate.Supplier != nil {
+			offers = append(offers, alternate.Offer)
+		}
+	}
+	resolved, passedOver := needs.Resolve(offers...)
+	if passedOver != "" {
+		logging.DefaultLogger.Warn("watch needs resolved to a more capable informer than requested",
+			"kind", kind.GroupVersionKind().String(), "informer", string(resolved), "reason", passedOver)
+	}
+	if resolved == operator.InformerKindWatch {
+		return watchSupplier
+	}
+	for _, alternate := range a.cfg.InformerConfig.AlternateInformers {
+		if alternate.Offer.Kind == resolved {
+			return alternate.Supplier
+		}
+	}
+	return watchSupplier
 }
 
 func (a *App) watchKind(kind AppUnmanagedKind) error {
@@ -605,10 +668,7 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		return errors.New("please provide either Watcher or Reconciler, not both")
 	}
 	if kind.Reconciler != nil || kind.Watcher != nil {
-		infSupplier := a.cfg.InformerConfig.InformerSupplier
-		if infSupplier == nil {
-			infSupplier = DefaultInformerSupplier
-		}
+		infSupplier := a.informerSupplier(kind.Kind, kind.ReconcileOptions.WatchNeeds)
 
 		opts := a.cfg.InformerConfig.InformerOptions
 		opts.ListWatchOptions = operator.ListWatchOptions{
