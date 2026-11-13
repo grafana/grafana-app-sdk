@@ -269,6 +269,26 @@ projecting less than whole objects, say — is reached through `ListerFactory`, 
 `operator.ResourceLister` for the kind; the default is a paginated list over the kind's client, following continue
 tokens to the end of the set.
 
+`operator.NewPagedLister` is that same paginated list over a client the SDK does not own — a generated clientset,
+whose `List` is a `PageFunc` but which is not a `resource.Client`. The SDK supplies the limit and the continue token;
+the namespace and the selectors the factory was handed are the caller's to close over, since nothing downstream
+re-applies them.
+
+```go
+simple.PeriodicInformerSupplier(simple.PeriodicInformerConfig{
+    ResyncInterval: time.Hour,
+    ListerFactory: func(kind resource.Kind, opts operator.ClientListerOptions) (operator.ResourceLister, error) {
+        return operator.NewPagedLister(kind, func(ctx context.Context, listOpts metav1.ListOptions) (runtime.Object, error) {
+            listOpts.LabelSelector = strings.Join(opts.ListWatchOptions.LabelFilters, ",")
+            return clientset.ExampleV1().Widgets(opts.ListWatchOptions.Namespace).List(ctx, listOpts)
+        }, operator.PagedListerOptions{PageSize: opts.PageSize})
+    },
+})
+```
+
+Each listed item is converted into a `resource.Object` of the kind, so the client's items have to be convertible: a
+typed clientset's are, a dynamic client's unstructured ones are not — list those through the kind's own client.
+
 ### Checks
 
 A mechanism states what it provides by implementing `operator.WatchOptionsInformer`; one which implements nothing
