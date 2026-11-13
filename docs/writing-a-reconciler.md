@@ -225,6 +225,14 @@ simple.AppConfig{
                 },
                 Supplier: myEventBusInformerSupplier,
             },
+            simple.InformerSupplierOffer{
+                // This deployment sets InformerOptions.CacheResyncInterval, so its watch sweeps as well.
+                Provides: operator.WatchOptions{
+                    Detail:   operator.WatchDetailFullObject,
+                    Triggers: operator.WatchTriggerChange | operator.WatchTriggerSchedule,
+                },
+                Supplier: simple.DefaultInformerSupplier,
+            },
         ),
     },
     ManagedKinds: []simple.AppManagedKind{{
@@ -244,10 +252,15 @@ event bus, since the re-list is offered first but delivers no individual change.
 the re-list. Cheapest-first is the usual order, not a rule the SDK imposes: offer the bus first and every kind both
 could serve takes the bus.
 
-`InformerSupplier` — the API watch — serves anything no offer satisfies, including every kind in an app which lists
-nothing. So a mechanism the deployment does not have is listed with a `nil` `Supplier` rather than substituting
-another of its own accord, and a kind falls back to being told more at more cost: an identity need in a deployment
-running no bus is watched.
+List the API watch itself, last, when you want it selected on its merits rather than reached as a fallback: it is
+the one mechanism which both delivers each change and sweeps, so a kind needing `change + schedule` is served by it
+and by nothing cheaper — but only where a cache resync is configured, which only the deployment knows. Stating it
+also means the app can check it like any other.
+
+`InformerSupplier` serves anything no offer satisfies, including every kind in an app which lists nothing, so a
+mechanism the deployment does not have is listed with a `nil` `Supplier` rather than substituting another of its own
+accord, and a kind falls back to being told more at more cost: an identity need in a deployment running no bus is
+watched.
 
 Two things bypass the selection: your own `InformerSupplierDecider` replaces the rule for the whole app, and
 `ReconcileOptions.InformerSupplier` sets the mechanism for one kind outright.
