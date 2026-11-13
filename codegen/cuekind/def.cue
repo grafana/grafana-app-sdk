@@ -323,16 +323,9 @@ SchemaWithOperatorState: Schema & {
 	enabled: bool | *false
 }
 
-// #Watch declares how a kind's changes reach the app's handlers.
+// #Watch declares what a kind's change notifications should carry.
 // Experimental: this section may change in a minor release.
 #Watch: {
-	// needs is what this kind's handlers require from the change stream. It states a requirement rather than an
-	// informer, because which informers a deployment can offer is not something an app ships knowing: a runtime
-	// resolves it to the cheapest one which satisfies it, falling back to a more capable one otherwise.
-	//   objects — handlers read objects from the informer's cache
-	//   signal  — handlers re-read the object they act on, so knowing which one changed is enough
-	//   cadence — handlers re-evaluate everything on a schedule; individual changes need not be delivered
-	needs?: "objects" | "signal" | "cadence"
 	// metadata declares the object metadata this kind's change notifications should carry. Announcing a key lets a
 	// consumer decide what to do without reading the object.
 	metadata?: #WatchMetadata
@@ -484,8 +477,7 @@ Kind: S={
 	search: #KindSearch
 	// embed defines the embedding document independently of search fields.
 	embed?: #KindEmbed
-	// watch declares how this kind's changes reach the app's handlers: what the handlers need from the change
-	// stream, and what the platform should announce alongside each change.
+	// watch declares what the platform should announce alongside each change to this kind.
 	watch?: #Watch
 	// extensions declares how other Grafana features, such as provisioning, treat this kind.
 	extensions?: #KindExtensions

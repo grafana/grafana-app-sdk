@@ -582,7 +582,6 @@ func TestWatchMetadataRoundTrips(t *testing.T) {
 			Kind:  "Foo",
 			Scope: "Namespaced",
 			Watch: &app.ManifestVersionKindWatch{
-				Needs: app.WatchNeedsSignal,
 				Metadata: &app.ManifestVersionKindWatchMetadata{
 					Labels:            []string{"app"},
 					Annotations:       []string{"watchapp.grafana.app/paused"},
@@ -605,8 +604,6 @@ func TestWatchMetadataRoundTrips(t *testing.T) {
 	assert.True(t, *spec.Versions[0].Kinds[0].Watch.Metadata.Generation)
 	require.NotNil(t, spec.Versions[0].Kinds[0].Watch.Metadata.DeletionTimestamp)
 	assert.True(t, *spec.Versions[0].Kinds[0].Watch.Metadata.DeletionTimestamp)
-	require.NotNil(t, spec.Versions[0].Kinds[0].Watch.Needs)
-	assert.Equal(t, AppManifestManifestVersionKindWatchNeedsSignal, *spec.Versions[0].Kinds[0].Watch.Needs)
 
 	back, err := spec.ToManifestData()
 	require.NoError(t, err)

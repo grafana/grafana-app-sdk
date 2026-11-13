@@ -666,7 +666,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 		mver.FolderScoped = &folderScoped
 	}
 	if vk.Watch != nil {
-		mver.Watch = &app.ManifestVersionKindWatch{Needs: app.ManifestVersionKindWatchNeeds(vk.Watch.Needs)}
+		mver.Watch = &app.ManifestVersionKindWatch{}
 		if md := vk.Watch.Metadata; md != nil {
 			mver.Watch.Metadata = &app.ManifestVersionKindWatchMetadata{
 				Labels:            md.Labels,

@@ -216,7 +216,6 @@ spec:
           generation: true
           labels:
           - app
-        needs: signal
     name: v1
     served: true
   - kinds:

@@ -1133,7 +1133,7 @@
                                                                 "type": "boolean"
                                                             },
                                                             "watch": {
-                                                                "description": "#ManifestVersionKindWatch declares how a kind's changes reach the app's handlers.\nExperimental: this section may change in a minor release.",
+                                                                "description": "#ManifestVersionKindWatch declares what a kind's change notifications should carry.\nExperimental: this section may change in a minor release.",
                                                                 "properties": {
                                                                     "metadata": {
                                                                         "description": "#ManifestVersionKindWatchMetadata declares which parts of an object's metadata a kind's change\nnotifications should carry, for a platform which can announce changes out of band of the watch.",
@@ -1173,15 +1173,6 @@
                                                                             }
                                                                         },
                                                                         "type": "object"
-                                                                    },
-                                                                    "needs": {
-                                                                        "description": "needs is what this kind's handlers require from the change stream. A runtime resolves it to the\ncheapest informer which satisfies it.\n  objects — handlers read objects from the informer's cache\n  signal  — handlers re-read the object, so knowing which one changed is enough\n  cadence — handlers re-evaluate everything on a schedule; changes need not be delivered",
-                                                                        "enum": [
-                                                                            "objects",
-                                                                            "signal",
-                                                                            "cadence"
-                                                                        ],
-                                                                        "type": "string"
                                                                     }
                                                                 },
                                                                 "type": "object"

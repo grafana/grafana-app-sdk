@@ -56,9 +56,6 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 			k.FolderScoped = kind.FolderScoped
 			if kind.Watch != nil {
 				k.Watch = &app.ManifestVersionKindWatch{}
-				if kind.Watch.Needs != nil {
-					k.Watch.Needs = app.ManifestVersionKindWatchNeeds(*kind.Watch.Needs)
-				}
 				if md := kind.Watch.Metadata; md != nil {
 					k.Watch.Metadata = &app.ManifestVersionKindWatchMetadata{
 						Labels:            md.Labels,
@@ -425,10 +422,6 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 			}
 			if kind.Watch != nil {
 				k.Watch = &AppManifestManifestVersionKindWatch{}
-				if kind.Watch.Needs != "" {
-					needs := AppManifestManifestVersionKindWatchNeeds(kind.Watch.Needs)
-					k.Watch.Needs = &needs
-				}
 				if md := kind.Watch.Metadata; md != nil {
 					k.Watch.Metadata = &AppManifestManifestVersionKindWatchMetadata{
 						Labels:      md.Labels,

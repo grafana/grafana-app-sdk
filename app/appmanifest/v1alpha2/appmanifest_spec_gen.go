@@ -96,7 +96,7 @@ type AppManifestManifestVersionKind struct {
 	Search *AppManifestManifestVersionKindSearch `json:"search,omitempty"`
 	// embed defines the embedding document independently of search fields.
 	Embed *AppManifestManifestVersionKindEmbed `json:"embed,omitempty"`
-	// watch declares how this kind's changes reach the app's handlers.
+	// watch declares what the platform should announce alongside each change to this kind.
 	Watch *AppManifestManifestVersionKindWatch `json:"watch,omitempty"`
 	// extensions declares how other Grafana features, such as provisioning, treat this kind.
 	Extensions *AppManifestManifestVersionKindExtensions `json:"extensions,omitempty"`
@@ -413,16 +413,10 @@ func (AppManifestManifestVersionKindEmbedField) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindEmbedField"
 }
 
-// #ManifestVersionKindWatch declares how a kind's changes reach the app's handlers.
+// #ManifestVersionKindWatch declares what a kind's change notifications should carry.
 // Experimental: this section may change in a minor release.
 // +k8s:openapi-gen=true
 type AppManifestManifestVersionKindWatch struct {
-	// needs is what this kind's handlers require from the change stream. A runtime resolves it to the
-	// cheapest informer which satisfies it.
-	//   objects — handlers read objects from the informer's cache
-	//   signal  — handlers re-read the object, so knowing which one changed is enough
-	//   cadence — handlers re-evaluate everything on a schedule; changes need not be delivered
-	Needs *AppManifestManifestVersionKindWatchNeeds `json:"needs,omitempty"`
 	// metadata declares the object metadata this kind's change notifications should carry.
 	Metadata *AppManifestManifestVersionKindWatchMetadata `json:"metadata,omitempty"`
 }
@@ -828,20 +822,6 @@ const (
 // OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindNamingStrategyOwnerOwners.
 func (AppManifestManifestVersionKindNamingStrategyOwnerOwners) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindNamingStrategyOwnerOwners"
-}
-
-// +k8s:openapi-gen=true
-type AppManifestManifestVersionKindWatchNeeds string
-
-const (
-	AppManifestManifestVersionKindWatchNeedsObjects AppManifestManifestVersionKindWatchNeeds = "objects"
-	AppManifestManifestVersionKindWatchNeedsSignal  AppManifestManifestVersionKindWatchNeeds = "signal"
-	AppManifestManifestVersionKindWatchNeedsCadence AppManifestManifestVersionKindWatchNeeds = "cadence"
-)
-
-// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindWatchNeeds.
-func (AppManifestManifestVersionKindWatchNeeds) OpenAPIModelName() string {
-	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindWatchNeeds"
 }
 
 // +k8s:openapi-gen=true

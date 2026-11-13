@@ -119,7 +119,7 @@ appManifestv1alpha2: appManifestKind & {
 			search?: #ManifestVersionKindSearch
 			// embed defines the embedding document independently of search fields.
 			embed?: #ManifestVersionKindEmbed
-			// watch declares how this kind's changes reach the app's handlers.
+			// watch declares what the platform should announce alongside each change to this kind.
 			watch?: #ManifestVersionKindWatch
 			// extensions declares how other Grafana features, such as provisioning, treat this kind.
 			extensions?: #ManifestVersionKindExtensions
@@ -136,15 +136,9 @@ appManifestv1alpha2: appManifestKind & {
 				[string]: _
 			}
 		}
-		// #ManifestVersionKindWatch declares how a kind's changes reach the app's handlers.
+		// #ManifestVersionKindWatch declares what a kind's change notifications should carry.
 		// Experimental: this section may change in a minor release.
 		#ManifestVersionKindWatch: {
-			// needs is what this kind's handlers require from the change stream. A runtime resolves it to the
-			// cheapest informer which satisfies it.
-			//   objects — handlers read objects from the informer's cache
-			//   signal  — handlers re-read the object, so knowing which one changed is enough
-			//   cadence — handlers re-evaluate everything on a schedule; changes need not be delivered
-			needs?: "objects" | "signal" | "cadence"
 			// metadata declares the object metadata this kind's change notifications should carry.
 			metadata?: #ManifestVersionKindWatchMetadata
 		}

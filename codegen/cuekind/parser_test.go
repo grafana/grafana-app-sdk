@@ -458,7 +458,6 @@ func TestParseManifestWatchMetadata(t *testing.T) {
 			kind: "Foo"
 			schema: spec: title: string
 			watch: {
-				needs: "signal"
 				metadata: {
 					labels: ["app", "tier"]
 					annotations: ["watch-app.grafana.app/paused"]
@@ -478,7 +477,6 @@ func TestParseManifestWatchMetadata(t *testing.T) {
 	kinds := manifest.Versions()[0].Kinds()
 	require.Len(t, kinds, 1)
 	require.NotNil(t, kinds[0].Watch)
-	assert.Equal(t, "signal", kinds[0].Watch.Needs)
 	require.NotNil(t, kinds[0].Watch.Metadata)
 	assert.Equal(t, []string{"app", "tier"}, kinds[0].Watch.Metadata.Labels)
 	assert.Equal(t, []string{"watch-app.grafana.app/paused"}, kinds[0].Watch.Metadata.Annotations)

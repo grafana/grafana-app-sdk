@@ -154,47 +154,30 @@ The `webhooks` paths are only emitted for the webhook types your kinds actually 
 
 ## Watch (experimental)
 
-> **Experimental.** The `watch` section, the `app.ManifestData` accessors that read it (`WatchNeeds`, `WatchMetadata`), and the resolution rule (`ManifestVersionKindWatchNeeds.Resolve`) are experimental and may change in a minor release. Nothing in the SDK consumes the section yet: declaring it is a no-op beyond the generated manifest, and a platform which does not read it ignores it.
+> **Experimental.** The `watch` section and `app.ManifestData.WatchMetadata()` are experimental and may change in a minor release. Nothing in the SDK consumes the section yet: declaring it is a no-op beyond the generated manifest, and a platform which does not announce metadata ignores it.
 
-A kind's `watch` section declares how its changes reach your app's handlers, per version:
+A kind's `watch` section declares, per version, which parts of an object's metadata its change notifications should carry:
 
 ```cue
 versions: {
 	"v1": {
-		watch: {
-			needs: "signal"
-			metadata: {
-				labels:            ["app"]
-				annotations:       ["example-app.ext.grafana.app/paused"]
-				finalizers:        ["example-app.ext.grafana.app/finalizer"]
-				generation:        true
-				deletionTimestamp: true
-			}
+		watch: metadata: {
+			labels:            ["app"]
+			annotations:       ["example-app.ext.grafana.app/paused"]
+			finalizers:        ["example-app.ext.grafana.app/finalizer"]
+			generation:        true
+			deletionTimestamp: true
 		}
 		schema: { /* ... */ }
 	}
 }
 ```
 
-### `needs`
-
-`needs` states what the kind's handlers require from the change stream, rather than naming an informer, because which informers a deployment can offer is not something an app ships knowing:
-
-| Value | Meaning |
-| --- | --- |
-| `objects` | Handlers read objects out of the informer's cache. The default, and the only value which requires a cache. |
-| `signal` | Handlers re-read the object they act on, so knowing which object changed is enough. |
-| `cadence` | Handlers re-evaluate every object on a schedule; individual changes need not be delivered at all. |
-
-A runtime resolves the declaration to the cheapest informer which satisfies it. Every fallback is upward in capability, so an unavailable option never fails: a kind which needs a `signal` is served by a watch where no cheaper source is configured, which costs more memory and delivers strictly more.
-
-One informer serves every version of a kind, so `WatchNeeds` takes the strongest requirement across a kind's versions — `objects` over `signal`, `signal` over `cadence`. A version which declares nothing is read as `objects`.
-
-### `metadata`
-
-`metadata` declares which parts of an object's metadata the kind's change notifications should carry, for a platform which can announce changes out of band of the watch. Announcing a key lets a consumer decide what to do without reading the object — whether a delete is in progress, whether the change was to the spec — so each field is named rather than announcing everything, which would amount to carrying the object.
+This is for a platform which can announce changes out of band of the watch. Announcing a key lets a consumer decide what to do without reading the object — whether a delete is in progress, whether the change was to the spec — so each field is named rather than announcing everything, which would amount to carrying the object.
 
 Every field is opt-in, including `generation` and the timestamps, and **an absent field means unknown, not empty**: a consumer cannot tell "this label is not set" from "this label was not announced". It is a declaration, not a guarantee; a platform which announces no metadata ignores it.
+
+The declaration belongs in the manifest because the registrar is the platform, not the app: it reads the allowlist from the stored `AppManifest`, which an app's in-process config cannot reach. For the same reason it only covers kinds the app owns — announcing metadata for a kind means asking that kind's publisher to change its notification payload.
 
 `ManifestData.WatchMetadata()` returns the declaration keyed by `schema.GroupResource`, so a platform can register it without walking versions. A kind's versions are unioned there rather than required to match: announcing a key no version reads costs payload size, while missing one a version does read is a correctness problem.
 

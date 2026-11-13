@@ -240,7 +240,6 @@
                             "trash": false
                         },
                         "watch": {
-                            "needs": "signal",
                             "metadata": {
                                 "labels": [
                                     "app"

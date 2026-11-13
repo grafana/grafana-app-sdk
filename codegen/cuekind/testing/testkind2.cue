@@ -19,7 +19,6 @@ testKind2: {
 	versions: {
 		"v1": {
 			watch: {
-				needs: "signal"
 				metadata: {
 					labels: ["app"]
 					annotations: ["testapp.ext.grafana.app/paused"]
