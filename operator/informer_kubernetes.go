@@ -34,6 +34,28 @@ type KubernetesBasedInformer struct {
 	eventTimeout          time.Duration
 	errorHandlerFn        func(context.Context, error)
 	healthCheckName       string
+	resyncInterval        time.Duration
+}
+
+// WatchOptions is what this informer gives a kind's handlers: each change as it happens, carrying the whole object,
+// to every instance of the app, since a watch is neither shared nor sharded. It sweeps as well when a cache resync
+// interval is configured, re-delivering the cache rather than reading the API — which re-evaluates every object but
+// discovers nothing the watch did not deliver.
+//
+// Experimental: this API may change in a minor release.
+func (k *KubernetesBasedInformer) WatchOptions() WatchOptions {
+	options := WatchOptions{Live: &WatchLiveOptions{
+		Detail:       WatchDetailFullObject,
+		Distribution: WatchDistributionAll,
+	}}
+	if k.resyncInterval > 0 {
+		options.Sweep = &WatchSweepOptions{
+			Detail:       WatchDetailFullObject,
+			Distribution: WatchDistributionAll,
+			Every:        k.resyncInterval,
+		}
+	}
+	return options
 }
 
 // InformerOptions are generic options for all Informer implementations.
@@ -85,6 +107,13 @@ type InformerOptions struct {
 	// ResourceKind is used as the "kind" label on queue depth metrics.
 	// When empty, the label value defaults to an empty string.
 	ResourceKind string
+	// WatchNeeds is what the kind's handlers need of the changes they are watched by, passed through to whichever
+	// mechanism was selected so that it can configure itself — its sweep cadence and page size, and whether its
+	// deliveries need to carry whole objects. An informer which does not read it is unaffected; the fields above
+	// which overlap it, CacheResyncInterval and WatchListPageSize, are set from it for informers which do not.
+	//
+	// Experimental: this API may change in a minor release.
+	WatchNeeds WatchOptions
 }
 
 // NewKubernetesBasedInformer creates a new KubernetesBasedInformer for the provided kind and options,
@@ -139,6 +168,7 @@ func NewKubernetesBasedInformer(
 			}),
 		HealthCheckIgnoreSync: options.HealthCheckIgnoreSync,
 		healthCheckName:       healthCheckName,
+		resyncInterval:        options.CacheResyncInterval,
 	}, nil
 }
 

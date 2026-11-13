@@ -581,6 +581,16 @@ func createTestApp(t *testing.T, cfg AppConfig) *App {
 	return a
 }
 
+func namedTestKind(kind string) resource.Kind {
+	sch := resource.NewSimpleSchema("foo", "v1", &resource.UntypedObject{}, &resource.UntypedList{}, resource.WithKind(kind))
+	return resource.Kind{
+		Schema: sch,
+		Codecs: map[resource.KindEncoding]resource.Codec{
+			resource.KindEncodingJSON: resource.NewJSONCodec(),
+		},
+	}
+}
+
 func testKind() resource.Kind {
 	sch := resource.NewSimpleSchema("foo", "v1", &resource.UntypedObject{}, &resource.UntypedList{}, resource.WithKind("Bar"))
 	return resource.Kind{
