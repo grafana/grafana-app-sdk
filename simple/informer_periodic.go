@@ -29,7 +29,7 @@ type PeriodicInformerConfig struct {
 // PeriodicInformerSupplier returns an InformerSupplier which creates operator.PeriodicInformer instances: no watch,
 // no subscription and no snapshot, just a re-list on a cadence delivering every listed object as an add.
 //
-// The informers it builds deliver whole objects on the schedule, so it is offered against
+// The informers it builds deliver whole objects on the schedule alone, so it is offered against
 // operator.WatchTriggerSchedule and serves the kinds which declare they need no more — see
 // NewInformerSupplierDecider. A kind needing a delivery per change is refused when the app is constructed rather
 // than served by this.

@@ -1,6 +1,9 @@
 package operator
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // WatchOptions is what a kind's handlers need of the changes they are watched by, and what a watch mechanism
 // provides. simple.App compares the two, which is why both sides use one type: an axis added here is added to the
@@ -8,46 +11,50 @@ import "fmt"
 //
 // Experimental: this API may change in a minor release.
 type WatchOptions struct {
-	// Detail is the least a delivery must carry: the whole object, or the identity of the object it is about. Its
-	// zero value needs WatchDetailFullObject.
+	// Detail is the least a delivery must carry: the whole object, or the identity of the object it is about.
+	// Its zero value needs WatchDetailFullObject.
 	Detail WatchDetail
-	// Trigger is what must cause a delivery. Its zero value needs WatchTriggerChange.
-	Trigger WatchTrigger
+	// Triggers are what must cause a delivery, as a set rather than a choice: a mechanism may both deliver each
+	// change and re-deliver everything on a schedule. Its zero value needs WatchTriggerChange.
+	Triggers WatchTriggers
 }
 
 // SatisfiedBy reports whether a mechanism providing provided can serve handlers needing o, which it does when it
-// satisfies every axis: a mechanism may carry the objects a kind reads and still not be told of a change in time
-// to deliver one.
+// carries at least the detail they read and triggers at least the deliveries they need. The axes are independent: a
+// mechanism may carry the objects a kind reads and still not deliver on what makes it act.
 func (o WatchOptions) SatisfiedBy(provided WatchOptions) bool {
-	return o.Detail.SatisfiedBy(provided.Detail) && o.Trigger.SatisfiedBy(provided.Trigger)
+	return o.Detail.SatisfiedBy(provided.Detail) && o.triggers()&^provided.triggers() == 0
 }
 
 // String describes both axes, for logs and errors.
 func (o WatchOptions) String() string {
-	detail, trigger := o.Detail, o.Trigger
+	detail := o.Detail
 	if detail == "" {
 		detail = WatchDetailFullObject
 	}
-	if trigger == "" {
-		trigger = WatchTriggerChange
+	return fmt.Sprintf("detail=%s triggers=%s", detail, o.triggers())
+}
+
+func (o WatchOptions) triggers() WatchTriggers {
+	if o.Triggers == 0 {
+		return WatchTriggerChange
 	}
-	return fmt.Sprintf("detail=%s trigger=%s", detail, trigger)
+	return o.Triggers
 }
 
 // WatchDetail is how much a delivery carries. It is read two ways: as what a watch mechanism's deliveries carry,
 // and as the least a kind's handlers need.
 //
-// It is about the delivery, not about the informer behind it: whether that informer holds a cache of the kind, and
-// whether its deliveries are shared among an app's replicas, are properties of the informer which no handler reads
-// through this.
+// It is about the delivery, not about the informer behind it: whether that informer holds a cache of the kind is a
+// property of the informer, which no handler reads through this.
 //
 // Experimental: this API may change in a minor release.
 type WatchDetail string
 
 const (
 	// WatchDetailFullObject is a delivery carrying the whole object. Handlers served by it read that object off the
-	// event, and read anything else through the API. It is what every informer the SDK ships carries, and what an
-	// informer is taken to carry when it says nothing, so it is also what a kind needs by needing nothing.
+	// event, and read anything else through the API. It is what every informer the SDK ships carries, so it is also
+	// what a kind needs by needing nothing.
 	WatchDetailFullObject WatchDetail = "full-object"
 	// WatchDetailIdentity is a delivery carrying only which object it is about — namespace, name and version.
 	// Handlers served by it re-read the object they act on, so a mechanism can carry it without holding a cache
@@ -57,37 +64,51 @@ const (
 
 // SatisfiedBy reports whether deliveries carrying provided can serve handlers needing d.
 func (d WatchDetail) SatisfiedBy(provided WatchDetail) bool {
-	// Anything this build of the SDK does not recognize reads as the object, so that an unknown need is needed in
-	// full and an unknown provision is not assumed to be short.
+	// Anything this build of the SDK does not recognize reads as the full object, so that an unknown need is needed
+	// in full and an unknown provision is not assumed to be short.
 	return provided != WatchDetailIdentity || d == WatchDetailIdentity
 }
 
-// WatchTrigger is what causes a delivery. It is read two ways: as what a watch mechanism delivers on, and as what a
-// kind's handlers need to be delivered on.
+// WatchTriggers is a set of what causes a delivery. It is read two ways: as what a watch mechanism delivers on, and
+// as what a kind's handlers need to be delivered on. A mechanism satisfies a kind when its set contains the kind's.
 //
 // Experimental: this API may change in a minor release.
-type WatchTrigger string
+type WatchTriggers uint8
 
 const (
-	// WatchTriggerChange delivers each change, as it happens. It is what a watch and an event bus do, and what a
+	// WatchTriggerChange delivers each change, as it happens. A watch and an event bus do this, and it is what a
 	// kind needs by needing nothing: a reconciler acting on a change has to be told of it.
-	WatchTriggerChange WatchTrigger = "change"
-	// WatchTriggerSchedule delivers every object on a schedule, whether it changed or not, so an individual change
-	// is seen on the next pass rather than when it happens. A re-list does this — its deliveries carry whole
-	// objects, it is only the individual change it does not announce. Handlers served by it re-evaluate everything
-	// on each pass, as age-based cleanup does.
-	WatchTriggerSchedule WatchTrigger = "schedule"
+	WatchTriggerChange WatchTriggers = 1 << iota
+	// WatchTriggerSchedule re-delivers every object on a schedule, whether it changed or not, so handlers served by
+	// it re-evaluate everything on each pass — age-based cleanup, for instance.
+	//
+	// More than one mechanism provides it, and they differ in what the pass reads. The API watch re-delivers from
+	// its cache (InformerOptions.CacheResyncInterval, unset by default and disabled when unset), so a pass costs
+	// nothing and discovers nothing the stream did not deliver. A re-list reads the API, so its pass is both the
+	// re-evaluation and the recovery of anything missed, at the cost of a list. A kind which needs the sweep only
+	// to re-evaluate state it has is served by either.
+	WatchTriggerSchedule
 )
 
-// SatisfiedBy reports whether a mechanism delivering on provided can serve handlers needing d.
-func (d WatchTrigger) SatisfiedBy(provided WatchTrigger) bool {
-	// An unrecognized value reads as WatchTriggerChange, for the same reason as WatchDetail.
-	return provided != WatchTriggerSchedule || d == WatchTriggerSchedule
+// String names the triggers in the set, for logs and errors.
+func (t WatchTriggers) String() string {
+	names := make([]string, 0, 2)
+	if t&WatchTriggerChange != 0 {
+		names = append(names, "change")
+	}
+	if t&WatchTriggerSchedule != 0 {
+		names = append(names, "schedule")
+	}
+	if len(names) == 0 {
+		return "none"
+	}
+	return strings.Join(names, "+")
 }
 
-// WatchOptionsInformer is an Informer which provides less than the default WatchOptions, and says so. An informer
-// which does not implement it carries whole objects and delivers each change, which is what every informer the SDK
-// shipped before this interface existed does.
+// WatchOptionsInformer is an Informer which says what it provides. An informer which does not implement it is not
+// taken to provide less: nothing can be read off it, so simple.App cannot check it against a kind's needs and does
+// not try. Implement it on any informer which carries less than the whole object, or which does not deliver each
+// change, so that pairing it with a kind it cannot serve fails rather than silently losing deliveries.
 //
 // Experimental: this API may change in a minor release.
 type WatchOptionsInformer interface {
@@ -96,11 +117,28 @@ type WatchOptionsInformer interface {
 	WatchOptions() WatchOptions
 }
 
-// InformerWatchOptions reports what inf provides, which is a delivery per change carrying the whole object unless
-// inf says otherwise.
-func InformerWatchOptions(inf Informer) WatchOptions {
-	if described, ok := inf.(WatchOptionsInformer); ok {
-		return described.WatchOptions()
+// InformerWrapper is an Informer which delegates to another one, as ConcurrentInformer does. Implement it on a
+// wrapper of your own so that what it wraps is still read for what it provides.
+//
+// Experimental: this API may change in a minor release.
+type InformerWrapper interface {
+	Informer
+	// Unwrap returns the Informer this one delegates to.
+	Unwrap() Informer
+}
+
+// InformerWatchOptions reports what inf says it provides, and whether it says anything at all. A wrapper which says
+// nothing of its own is read through to what it wraps, since wrapping must neither turn a mechanism's statement
+// into silence nor make silence read as the default.
+func InformerWatchOptions(inf Informer) (WatchOptions, bool) {
+	for {
+		if described, ok := inf.(WatchOptionsInformer); ok {
+			return described.WatchOptions(), true
+		}
+		wrapper, ok := inf.(InformerWrapper)
+		if !ok {
+			return WatchOptions{}, false
+		}
+		inf = wrapper.Unwrap()
 	}
-	return WatchOptions{Detail: WatchDetailFullObject, Trigger: WatchTriggerChange}
 }

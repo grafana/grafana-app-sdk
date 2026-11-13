@@ -87,18 +87,21 @@ func TestNewPeriodicInformer_Validation(t *testing.T) {
 	assert.Equal(t, listerTestKind.Schema, inf.Schema())
 }
 
-// The deliveries carry whole objects but are caused by the schedule, so only a kind which needs no more than that
-// can be served by one.
+// The deliveries carry whole objects but are caused by the schedule alone, so only a kind which needs no more than
+// that can be served by one.
 func TestPeriodicInformer_ProvidesScheduledFullObjects(t *testing.T) {
 	inf, err := NewPeriodicInformer(listerTestKind, staticLister(), PeriodicInformerOptions{})
 	require.NoError(t, err)
 
-	provided := WatchOptions{Detail: WatchDetailFullObject, Trigger: WatchTriggerSchedule}
-	assert.Equal(t, provided, InformerWatchOptions(inf))
+	provided, stated := InformerWatchOptions(inf)
+	require.True(t, stated)
+	assert.Equal(t, WatchOptions{Detail: WatchDetailFullObject, Triggers: WatchTriggerSchedule}, provided)
 	assert.False(t, WatchOptions{}.SatisfiedBy(provided), "a need for a delivery per change is not satisfied")
-	assert.True(t, WatchOptions{Trigger: WatchTriggerSchedule}.SatisfiedBy(provided))
-	assert.True(t, WatchOptions{Detail: WatchDetailIdentity, Trigger: WatchTriggerSchedule}.SatisfiedBy(provided),
+	assert.True(t, WatchOptions{Triggers: WatchTriggerSchedule}.SatisfiedBy(provided))
+	assert.True(t, WatchOptions{Detail: WatchDetailIdentity, Triggers: WatchTriggerSchedule}.SatisfiedBy(provided),
 		"a kind needing less detail than the whole object is served too")
+	assert.False(t, WatchOptions{Triggers: WatchTriggerChange | WatchTriggerSchedule}.SatisfiedBy(provided),
+		"a kind needing both triggers needs a mechanism which also delivers each change")
 }
 
 // Every pass delivers every listed object as an add, unchanged objects included: re-delivery is what re-triggers

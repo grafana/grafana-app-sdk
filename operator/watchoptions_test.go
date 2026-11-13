@@ -8,6 +8,15 @@ import (
 )
 
 func TestWatchOptions_SatisfiedBy(t *testing.T) {
+	var (
+		apiWatch        = WatchOptions{Detail: WatchDetailFullObject, Triggers: WatchTriggerChange}
+		resyncingWatch  = WatchOptions{Detail: WatchDetailFullObject, Triggers: WatchTriggerChange | WatchTriggerSchedule}
+		identityBus     = WatchOptions{Detail: WatchDetailIdentity, Triggers: WatchTriggerChange | WatchTriggerSchedule}
+		reList          = WatchOptions{Detail: WatchDetailFullObject, Triggers: WatchTriggerSchedule}
+		needsSweepToo   = WatchOptions{Triggers: WatchTriggerChange | WatchTriggerSchedule}
+		needsSweepAlone = WatchOptions{Triggers: WatchTriggerSchedule}
+	)
+
 	tests := []struct {
 		name     string
 		needs    WatchOptions
@@ -15,59 +24,72 @@ func TestWatchOptions_SatisfiedBy(t *testing.T) {
 		want     bool
 	}{
 		{
-			name: "zero needs are satisfied by a mechanism which says nothing",
-			want: true,
+			name:     "zero needs are satisfied by the API watch",
+			provided: apiWatch,
+			want:     true,
 		},
 		{
 			name:     "zero needs are not satisfied by identities",
-			provided: WatchOptions{Detail: WatchDetailIdentity, Trigger: WatchTriggerChange},
+			provided: identityBus,
 			want:     false,
 		},
 		{
-			name:     "zero needs are not satisfied by a schedule",
-			provided: WatchOptions{Detail: WatchDetailFullObject, Trigger: WatchTriggerSchedule},
+			name:     "zero needs are not satisfied by a re-list, which does not deliver each change",
+			provided: reList,
 			want:     false,
 		},
 		{
 			name:     "an identity need is satisfied by whole objects",
 			needs:    WatchOptions{Detail: WatchDetailIdentity},
-			provided: WatchOptions{Detail: WatchDetailFullObject, Trigger: WatchTriggerChange},
+			provided: apiWatch,
 			want:     true,
 		},
 		{
-			name:     "a schedule need is satisfied by a delivery per change",
-			needs:    WatchOptions{Trigger: WatchTriggerSchedule},
-			provided: WatchOptions{Detail: WatchDetailFullObject, Trigger: WatchTriggerChange},
-			want:     true,
-		},
-		{
-			name:     "a re-list serves a kind needing whole objects on a schedule",
-			needs:    WatchOptions{Detail: WatchDetailFullObject, Trigger: WatchTriggerSchedule},
-			provided: WatchOptions{Detail: WatchDetailFullObject, Trigger: WatchTriggerSchedule},
-			want:     true,
-		},
-		{
-			name:     "a re-list does not serve a kind needing whole objects per change",
-			needs:    WatchOptions{Detail: WatchDetailFullObject, Trigger: WatchTriggerChange},
-			provided: WatchOptions{Detail: WatchDetailFullObject, Trigger: WatchTriggerSchedule},
+			name:     "needing a sweep as well is not satisfied by a watch which does not resync",
+			needs:    needsSweepToo,
+			provided: apiWatch,
 			want:     false,
 		},
 		{
-			name:     "an identity bus does not serve a kind needing whole objects on a schedule",
-			needs:    WatchOptions{Detail: WatchDetailFullObject, Trigger: WatchTriggerSchedule},
-			provided: WatchOptions{Detail: WatchDetailIdentity, Trigger: WatchTriggerChange},
-			want:     false,
-		},
-		{
-			name:     "unrecognized values are needed in full and not assumed to be short",
-			needs:    WatchOptions{Detail: WatchDetail("other"), Trigger: WatchTrigger("other")},
-			provided: WatchOptions{Detail: WatchDetail("other"), Trigger: WatchTrigger("other")},
+			name:     "needing a sweep as well is satisfied by a resyncing watch",
+			needs:    needsSweepToo,
+			provided: resyncingWatch,
 			want:     true,
 		},
 		{
-			name:     "an unrecognized need is not satisfied by identities on a schedule",
-			needs:    WatchOptions{Detail: WatchDetail("other"), Trigger: WatchTrigger("other")},
-			provided: WatchOptions{Detail: WatchDetailIdentity, Trigger: WatchTriggerSchedule},
+			name:     "needing a sweep as well is not satisfied by a re-list alone",
+			needs:    needsSweepToo,
+			provided: reList,
+			want:     false,
+		},
+		{
+			name:     "needing only a sweep is satisfied by a re-list",
+			needs:    needsSweepAlone,
+			provided: reList,
+			want:     true,
+		},
+		{
+			name:     "needing only a sweep is satisfied by a resyncing watch",
+			needs:    needsSweepAlone,
+			provided: resyncingWatch,
+			want:     true,
+		},
+		{
+			name:     "needing only a sweep is not satisfied by a watch which does not resync",
+			needs:    needsSweepAlone,
+			provided: apiWatch,
+			want:     false,
+		},
+		{
+			name:     "needing only a sweep of identities is satisfied by an identity bus which re-lists",
+			needs:    WatchOptions{Detail: WatchDetailIdentity, Triggers: WatchTriggerSchedule},
+			provided: identityBus,
+			want:     true,
+		},
+		{
+			name:     "an unrecognized detail is needed in full",
+			needs:    WatchOptions{Detail: WatchDetail("other")},
+			provided: identityBus,
 			want:     false,
 		},
 	}
@@ -80,20 +102,28 @@ func TestWatchOptions_SatisfiedBy(t *testing.T) {
 }
 
 func TestWatchOptions_String(t *testing.T) {
-	assert.Equal(t, "detail=full-object trigger=change", WatchOptions{}.String())
-	assert.Equal(t, "detail=identity trigger=schedule",
-		WatchOptions{Detail: WatchDetailIdentity, Trigger: WatchTriggerSchedule}.String())
+	assert.Equal(t, "detail=full-object triggers=change", WatchOptions{}.String())
+	assert.Equal(t, "detail=identity triggers=change+schedule", WatchOptions{
+		Detail:   WatchDetailIdentity,
+		Triggers: WatchTriggerChange | WatchTriggerSchedule,
+	}.String())
+	assert.Equal(t, "detail=full-object triggers=schedule", WatchOptions{
+		Triggers: WatchTriggerSchedule,
+	}.String())
 }
 
 func TestInformerWatchOptions(t *testing.T) {
-	t.Run("an informer which says nothing carries whole objects per change", func(t *testing.T) {
-		want := WatchOptions{Detail: WatchDetailFullObject, Trigger: WatchTriggerChange}
-		assert.Equal(t, want, InformerWatchOptions(&mockInformer{}))
+	t.Run("an informer which says nothing states no options", func(t *testing.T) {
+		options, stated := InformerWatchOptions(&mockInformer{})
+		assert.False(t, stated)
+		assert.Equal(t, WatchOptions{}, options)
 	})
 
-	t.Run("an informer which says so provides its own options", func(t *testing.T) {
-		want := WatchOptions{Detail: WatchDetailFullObject, Trigger: WatchTriggerSchedule}
-		assert.Equal(t, want, InformerWatchOptions(&optionedInformer{options: want}))
+	t.Run("an informer which says so states its own options", func(t *testing.T) {
+		want := WatchOptions{Detail: WatchDetailFullObject, Triggers: WatchTriggerSchedule}
+		options, stated := InformerWatchOptions(&optionedInformer{options: want})
+		assert.True(t, stated)
+		assert.Equal(t, want, options)
 	})
 }
 
@@ -106,20 +136,26 @@ func (o *optionedInformer) WatchOptions() WatchOptions {
 	return o.options
 }
 
-func TestConcurrentInformer_WatchOptions(t *testing.T) {
-	t.Run("forwards what the wrapped informer provides", func(t *testing.T) {
-		provided := WatchOptions{Detail: WatchDetailIdentity, Trigger: WatchTriggerSchedule}
-		ci, err := NewConcurrentInformer(&optionedInformer{options: provided}, ConcurrentInformerOptions{})
+var _ InformerWrapper = (*ConcurrentInformer)(nil)
+
+// Wrapping must neither turn a mechanism's statement into silence nor make silence read as the default, since the
+// two are checked differently.
+func TestInformerWatchOptions_ThroughAWrapper(t *testing.T) {
+	t.Run("reads through to what the wrapped informer states", func(t *testing.T) {
+		want := WatchOptions{Detail: WatchDetailIdentity, Triggers: WatchTriggerSchedule}
+		ci, err := NewConcurrentInformer(&optionedInformer{options: want}, ConcurrentInformerOptions{})
 		require.NoError(t, err)
 
-		assert.Equal(t, provided, InformerWatchOptions(ci))
+		options, stated := InformerWatchOptions(ci)
+		assert.True(t, stated)
+		assert.Equal(t, want, options)
 	})
 
-	t.Run("wrapping an informer which says nothing still carries the object per change", func(t *testing.T) {
+	t.Run("wrapping an informer which says nothing still states nothing", func(t *testing.T) {
 		ci, err := NewConcurrentInformer(&mockInformer{}, ConcurrentInformerOptions{})
 		require.NoError(t, err)
 
-		assert.Equal(t, WatchOptions{Detail: WatchDetailFullObject, Trigger: WatchTriggerChange},
-			InformerWatchOptions(ci))
+		_, stated := InformerWatchOptions(ci)
+		assert.False(t, stated)
 	})
 }

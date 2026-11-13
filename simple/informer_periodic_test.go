@@ -60,9 +60,11 @@ func TestPeriodicInformerSupplier_ProvidesScheduledFullObjects(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.IsType(t, &operator.ConcurrentInformer{}, inf, "handlers run on per-key workers, as under the other suppliers")
+	provided, stated := operator.InformerWatchOptions(inf)
+	require.True(t, stated, "the wrapper must not hide what the periodic informer states")
 	assert.Equal(t,
-		operator.WatchOptions{Detail: operator.WatchDetailFullObject, Trigger: operator.WatchTriggerSchedule},
-		operator.InformerWatchOptions(inf), "the wrapper must not hide what the periodic informer provides")
+		operator.WatchOptions{Detail: operator.WatchDetailFullObject, Triggers: operator.WatchTriggerSchedule},
+		provided)
 }
 
 // Unlike a mechanism with a live stream, the list is the informer's only source, so selectors reach the server and
@@ -170,12 +172,12 @@ func TestPeriodicInformerSupplier_AsACadenceOffer(t *testing.T) {
 		return err
 	}
 
-	scheduled := operator.WatchOptions{Detail: operator.WatchDetailFullObject, Trigger: operator.WatchTriggerSchedule}
+	scheduled := operator.WatchOptions{Detail: operator.WatchDetailFullObject, Triggers: operator.WatchTriggerSchedule}
 	assert.NoError(t, appWith(scheduled, scheduled))
 
-	perChange := operator.WatchOptions{Detail: operator.WatchDetailIdentity, Trigger: operator.WatchTriggerChange}
+	perChange := operator.WatchOptions{Detail: operator.WatchDetailIdentity, Triggers: operator.WatchTriggerChange}
 	err := appWith(perChange, perChange)
 	require.Error(t, err, "an offer against a trigger the periodic informer cannot deliver on is refused")
 	assert.Contains(t, err.Error(),
-		"provides detail=full-object trigger=schedule, but its reconciler or watcher needs detail=identity trigger=change")
+		"provides detail=full-object triggers=schedule, but its reconciler or watcher needs detail=identity triggers=change")
 }

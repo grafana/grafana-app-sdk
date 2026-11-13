@@ -175,19 +175,27 @@ its order of preference, and the app gives each kind the first mechanism which s
 
 `ReconcileOptions.WatchOptions` has one axis per thing a mechanism can fall short on:
 
-| Axis | Values | Zero value |
+| Axis | | Zero value |
 | --- | --- | --- |
-| `Detail` — the least a delivery must carry | `WatchDetailFullObject`, `WatchDetailIdentity` | the full object |
-| `Trigger` — what must cause a delivery | `WatchTriggerChange`, `WatchTriggerSchedule` | each change |
+| `Detail` — the least a delivery must carry | `WatchDetailFullObject`, or `WatchDetailIdentity` when your handlers re-read the object they act on | the full object |
+| `Triggers` — the **set** of things which must cause a delivery | `WatchTriggerChange` for each change as it happens, `WatchTriggerSchedule` for every object on a schedule, or both | each change |
 
-Declare `WatchDetailIdentity` when your handlers re-read the object they act on, so the delivery only has to say
-which object changed. Declare `WatchTriggerSchedule` when they re-evaluate every object on each pass, as age-based
-cleanup does, so an individual change need not be announced at all.
+The axes are independent, and `Triggers` is a set rather than a choice, because real mechanisms do not line up on one
+scale:
 
-The axes are independent, which is the point of having a section rather than a single option: a re-list delivers
-**whole objects from the API**, it just delivers them on a schedule rather than per change — `{Detail: full object,
-Trigger: schedule}` — so a kind needing objects per change is not served by it, while a kind needing objects on a
-schedule is. An axis added later, such as which replica receives a delivery, is declared here too.
+| Mechanism | Detail | Triggers |
+| --- | --- | --- |
+| API watch, no cache resync | full object | change |
+| API watch, `InformerOptions.CacheResyncInterval` set | full object | change + schedule |
+| event bus carrying identities, with its re-list | identity | change + schedule |
+| event bus hydrating each change, with its re-list | full object | change + schedule |
+| re-list only | full object | schedule |
+
+A re-list delivers **whole objects read from the API** — it falls short only on the trigger. The API watch sweeps too
+when a cache resync is configured, so "periodic" does not separate the two either; what differs is that a resync
+re-delivers from the cache, costing nothing and discovering nothing the stream missed, while a re-list reads the API
+and so both re-evaluates and recovers. A kind which needs the sweep only to re-evaluate state it already has is
+served by either.
 
 A need is about the delivery, not the mechanism behind it: whether an informer caches the kind decides its memory,
 but no handler reads that cache through `operator.Informer`, so it is not something a kind can declare.
@@ -203,8 +211,8 @@ simple.AppConfig{
         InformerSupplierDecider: simple.NewInformerSupplierDecider(
             simple.InformerSupplierOffer{
                 Provides: operator.WatchOptions{
-                    Detail:  operator.WatchDetailFullObject,
-                    Trigger: operator.WatchTriggerSchedule,
+                    Detail:   operator.WatchDetailFullObject,
+                    Triggers: operator.WatchTriggerSchedule,
                 },
                 Supplier: simple.PeriodicInformerSupplier(simple.PeriodicInformerConfig{
                     ResyncInterval: time.Hour,
@@ -212,8 +220,8 @@ simple.AppConfig{
             },
             simple.InformerSupplierOffer{
                 Provides: operator.WatchOptions{
-                    Detail:  operator.WatchDetailIdentity,
-                    Trigger: operator.WatchTriggerChange,
+                    Detail:   operator.WatchDetailIdentity,
+                    Triggers: operator.WatchTriggerChange | operator.WatchTriggerSchedule,
                 },
                 Supplier: myEventBusInformerSupplier,
             },
@@ -232,24 +240,23 @@ simple.AppConfig{
 
 Each offer states what it `Provides` in the same shape a kind states what it needs, and each kind gets the first
 offer which satisfies it — so **order is what "best" means**. Above, the kind needing identities per change takes the
-event bus, since the re-list is offered first but does not deliver per change. A kind needing nothing per change
-takes the re-list. Cheapest-first is the usual order, not a rule the SDK imposes: offer the bus first and every kind
-both could serve takes the bus.
+event bus, since the re-list is offered first but delivers no individual change. A kind needing only a sweep takes
+the re-list. Cheapest-first is the usual order, not a rule the SDK imposes: offer the bus first and every kind both
+could serve takes the bus.
 
 `InformerSupplier` — the API watch — serves anything no offer satisfies, including every kind in an app which lists
 nothing. So a mechanism the deployment does not have is listed with a `nil` `Supplier` rather than substituting
-another of its own accord, and a kind falls back to being told strictly more at more cost: an identity need in a
-deployment running no bus is watched.
+another of its own accord, and a kind falls back to being told more at more cost: an identity need in a deployment
+running no bus is watched.
 
 Two things bypass the selection: your own `InformerSupplierDecider` replaces the rule for the whole app, and
 `ReconcileOptions.InformerSupplier` sets the mechanism for one kind outright.
 
 ### The periodic informer
 
-`simple.PeriodicInformerSupplier` is the cadence mechanism the SDK ships: `operator.PeriodicInformer` has no watch
-and no subscription, keeps no cache, and on each pass lists the kind and delivers every listed object to its
-watchers as an add — unchanged objects included, which is what re-triggers the work. Its deliveries carry whole
-objects and are caused by the schedule, so it serves the kinds which need `WatchTriggerSchedule` and no others.
+`simple.PeriodicInformerSupplier` is the re-list-only mechanism in that table: `operator.PeriodicInformer` has no
+watch and no subscription, keeps no cache, and on each pass lists the kind and delivers every listed object to its
+watchers as an add — unchanged objects included, which is what re-triggers the work.
 
 ```go
 simple.PeriodicInformerSupplier(simple.PeriodicInformerConfig{
@@ -259,8 +266,8 @@ simple.PeriodicInformerSupplier(simple.PeriodicInformerConfig{
 ```
 
 Only `Add` is ever called, because without a snapshot the informer cannot tell an update or a delete from a
-re-delivery — so the handlers it serves re-evaluate an object from the object, and treat a kind which has gone away
-as nothing to do. The initial list is retried on its own shorter interval, and the cadence is jittered so that
+re-delivery — so the handlers it serves re-evaluate an object from the object, and treat one which has gone away as
+nothing to do. The initial list is retried on its own shorter interval, and the cadence is jittered so that
 informers which started together do not list together for the rest of the process's life.
 
 `Namespace`, `LabelFilters` and `FieldSelectors` reach the list request, where the server applies them: the list is
@@ -271,10 +278,16 @@ tokens to the end of the set.
 
 ### Checks
 
-A mechanism states what it provides by implementing `operator.WatchOptionsInformer`; one which implements nothing
-delivers each change and carries the full object. The app checks the informer it built against the kind's needs, so a
-mechanism listed or set against a need it cannot serve fails when the app is constructed, rather than losing what a
-reconcile reads.
+A mechanism says what it provides by implementing `operator.WatchOptionsInformer`. The app checks any informer which
+does against its kind's needs, so a mechanism listed or set against a need it cannot serve fails when the app is
+constructed, rather than losing what a reconcile reads. An informer which says nothing is not checked — there is
+nothing to read off it, and every informer the SDK ships delivers each change carrying the whole object. The one need
+it may silently miss is the scheduled sweep, so the app warns when a kind needs one, its informer says nothing, and
+no cache resync is configured.
+
+A wrapper which says nothing of its own is read through to what it wraps, so the per-key worker wrapper the SDK's
+suppliers add neither hides a mechanism's statement nor turns silence into one; implement `operator.InformerWrapper`
+on a wrapper of your own for the same.
 
 The `Opinionated` variants read the deletion timestamp and the finalizer list off the object on the event, so they
 need `WatchDetailFullObject` whatever the kind declares; set `UsePlain` (or `UseOpinionated: false`) to be served by
@@ -282,3 +295,4 @@ identities and handle deletion in your own reconcile. A `Watcher` also reads the
 a mechanism keeping no object body cannot hand it — prefer a `Reconciler` for a kind declaring identities.
 
 `WatchOptions.SatisfiedBy` is the whole comparison, for an operator which selects its informers without `simple.App`.
+

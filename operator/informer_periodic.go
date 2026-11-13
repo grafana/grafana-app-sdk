@@ -41,9 +41,9 @@ type PeriodicInformerOptions struct {
 // PeriodicInformer is a re-list-only informer: it has no watch and no subscription, and keeps no cache. On each
 // pass it lists the kind and delivers every listed object to its watchers as an add.
 //
-// Its deliveries carry whole objects and are caused by the schedule, so it serves kinds whose handlers re-evaluate
-// every object on each pass regardless of whether it changed — age-based cleanup, for instance. For anything which
-// should react to a change promptly, use a watch-backed informer instead.
+// Its deliveries carry whole objects and are caused by the schedule alone, so it serves kinds whose handlers
+// re-evaluate every object on each pass regardless of whether it changed — age-based cleanup, for instance. For
+// anything which should react to a change, use a watch-backed informer instead.
 //
 // Experimental: this API may change in a minor release.
 type PeriodicInformer struct {
@@ -88,9 +88,9 @@ func NewPeriodicInformer(kind resource.Kind, lister ResourceLister, opts Periodi
 }
 
 // WatchOptions reports what this informer gives a kind's handlers: whole objects, read from the API, delivered on
-// the schedule rather than when any one of them changes.
+// the schedule and never for an individual change.
 func (*PeriodicInformer) WatchOptions() WatchOptions {
-	return WatchOptions{Detail: WatchDetailFullObject, Trigger: WatchTriggerSchedule}
+	return WatchOptions{Detail: WatchDetailFullObject, Triggers: WatchTriggerSchedule}
 }
 
 // AddEventHandler adds a ResourceWatcher as an event handler. Only Add is ever called: the informer keeps no

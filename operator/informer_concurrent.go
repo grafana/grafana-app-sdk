@@ -155,10 +155,10 @@ func (ci *ConcurrentInformer) WaitForSync(ctx context.Context) error {
 	return ci.informer.WaitForSync(ctx)
 }
 
-// WatchOptions forwards what the wrapped informer provides, so that wrapping does not hide a mechanism which tells
-// a handler less than the default from the check comparing it against a kind's needs.
-func (ci *ConcurrentInformer) WatchOptions() WatchOptions {
-	return InformerWatchOptions(ci.informer)
+// Unwrap returns the informer this one runs its watchers for, so that wrapping does not hide what that informer
+// says it provides from the check comparing it against a kind's needs.
+func (ci *ConcurrentInformer) Unwrap() Informer {
+	return ci.informer
 }
 
 // PrometheusCollectors implements metrics.Provider.

@@ -582,10 +582,10 @@ func TestApp_WatchOptions(t *testing.T) {
 	)
 
 	provisions := map[string]operator.WatchOptions{
-		apiWatch:     {Detail: operator.WatchDetailFullObject, Trigger: operator.WatchTriggerChange},
-		eventBus:     {Detail: operator.WatchDetailIdentity, Trigger: operator.WatchTriggerChange},
-		hydratingBus: {Detail: operator.WatchDetailFullObject, Trigger: operator.WatchTriggerChange},
-		reList:       {Detail: operator.WatchDetailFullObject, Trigger: operator.WatchTriggerSchedule},
+		apiWatch:     {Detail: operator.WatchDetailFullObject, Triggers: operator.WatchTriggerChange},
+		eventBus:     {Detail: operator.WatchDetailIdentity, Triggers: operator.WatchTriggerChange | operator.WatchTriggerSchedule},
+		hydratingBus: {Detail: operator.WatchDetailFullObject, Triggers: operator.WatchTriggerChange | operator.WatchTriggerSchedule},
+		reList:       {Detail: operator.WatchDetailFullObject, Triggers: operator.WatchTriggerSchedule},
 	}
 
 	supplierOf := func(mechanism string, called *string) InformerSupplier {
@@ -625,24 +625,31 @@ func TestApp_WatchOptions(t *testing.T) {
 		},
 		{
 			name:   "a kind needing whole objects on a schedule takes the re-list",
-			needs:  operator.WatchOptions{Trigger: operator.WatchTriggerSchedule},
+			needs:  operator.WatchOptions{Triggers: operator.WatchTriggerSchedule},
 			offers: []string{reList, eventBus},
 			plain:  true,
 			want:   reList,
 		},
 		{
 			name:   "a kind needing whole objects on a schedule passes over an identity bus offered first",
-			needs:  operator.WatchOptions{Trigger: operator.WatchTriggerSchedule},
+			needs:  operator.WatchOptions{Triggers: operator.WatchTriggerSchedule},
 			offers: []string{eventBus, reList},
 			plain:  true,
 			want:   reList,
 		},
 		{
-			name:   "a kind needing only an identity takes whichever is offered first",
-			needs:  operator.WatchOptions{Detail: operator.WatchDetailIdentity, Trigger: operator.WatchTriggerSchedule},
+			name:   "a kind needing only a sweep of identities takes whichever is offered first",
+			needs:  operator.WatchOptions{Detail: operator.WatchDetailIdentity, Triggers: operator.WatchTriggerSchedule},
 			offers: []string{reList, eventBus},
 			plain:  true,
 			want:   reList,
+		},
+		{
+			name:   "a kind needing each change and a sweep passes over the re-list and the API watch",
+			needs:  operator.WatchOptions{Triggers: operator.WatchTriggerChange | operator.WatchTriggerSchedule},
+			offers: []string{reList, hydratingBus},
+			plain:  true,
+			want:   hydratingBus,
 		},
 		{
 			name:   "an identity need with no bus offered falls back to the API watch",
@@ -751,8 +758,8 @@ func TestApp_WatchOptions(t *testing.T) {
 		})
 		assert.Equal(t, testKind().GroupVersionKind().String(), decidedFor)
 		assert.Equal(t, operator.WatchOptions{
-			Detail:  operator.WatchDetailIdentity,
-			Trigger: operator.WatchTriggerChange,
+			Detail:   operator.WatchDetailIdentity,
+			Triggers: operator.WatchTriggerChange,
 		}, decidedNeeds)
 	})
 
@@ -798,6 +805,22 @@ func TestApp_WatchOptions(t *testing.T) {
 		assert.False(t, deciderCalled, "InformerSupplierDecider was called")
 	})
 
+	t.Run("an informer which says nothing about what it provides is not checked", func(t *testing.T) {
+		createTestApp(t, AppConfig{
+			ManagedKinds: []AppManagedKind{{
+				Kind:       testKind(),
+				Reconciler: &Reconciler{},
+				ReconcileOptions: BasicReconcileOptions{
+					WatchOptions: operator.WatchOptions{Triggers: operator.WatchTriggerSchedule},
+					UsePlain:     true,
+					InformerSupplier: func(resource.Kind, resource.ClientGenerator, operator.InformerOptions) (operator.Informer, error) {
+						return &mockInformer{}, nil
+					},
+				},
+			}},
+		})
+	})
+
 	t.Run("an informer which provides less than the kind needs is refused", func(t *testing.T) {
 		_, err := NewApp(AppConfig{
 			InformerConfig: AppInformerConfig{
@@ -815,7 +838,7 @@ func TestApp_WatchOptions(t *testing.T) {
 		})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(),
-			"provides detail=full-object trigger=schedule, but its reconciler or watcher needs detail=full-object trigger=change")
+			"provides detail=full-object triggers=schedule, but its reconciler or watcher needs detail=full-object triggers=change")
 	})
 
 	t.Run("an opinionated handler refuses an informer which provides only identities", func(t *testing.T) {
