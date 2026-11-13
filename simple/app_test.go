@@ -571,6 +571,270 @@ func TestApp_ManageKind(t *testing.T) {
 	})
 }
 
+func TestApp_WatchOptions(t *testing.T) {
+	// Each mechanism is labelled so a kind served by the API watch is told apart from one served by an offer which
+	// provides the same options.
+	const (
+		apiWatch     = "api-watch"
+		eventBus     = "event-bus"
+		hydratingBus = "hydrating-bus"
+		reList       = "re-list"
+	)
+
+	provisions := map[string]operator.WatchOptions{
+		apiWatch:     {Detail: operator.WatchDetailFullObject, Trigger: operator.WatchTriggerChange},
+		eventBus:     {Detail: operator.WatchDetailIdentity, Trigger: operator.WatchTriggerChange},
+		hydratingBus: {Detail: operator.WatchDetailFullObject, Trigger: operator.WatchTriggerChange},
+		reList:       {Detail: operator.WatchDetailFullObject, Trigger: operator.WatchTriggerSchedule},
+	}
+
+	supplierOf := func(mechanism string, called *string) InformerSupplier {
+		return func(resource.Kind, resource.ClientGenerator, operator.InformerOptions) (operator.Informer, error) {
+			if called != nil {
+				*called = mechanism
+			}
+			return &optionedInformer{options: provisions[mechanism]}, nil
+		}
+	}
+
+	tests := []struct {
+		name   string
+		needs  operator.WatchOptions
+		offers []string
+		plain  bool
+		want   string
+	}{
+		{
+			name:   "an unset need is served by the API watch",
+			offers: []string{reList, eventBus},
+			plain:  true,
+			want:   apiWatch,
+		},
+		{
+			name:   "an identity need takes the event bus",
+			needs:  operator.WatchOptions{Detail: operator.WatchDetailIdentity},
+			offers: []string{reList, eventBus},
+			plain:  true,
+			want:   eventBus,
+		},
+		{
+			name:   "a kind needing whole objects per change takes the hydrating bus over the API watch",
+			offers: []string{reList, eventBus, hydratingBus},
+			plain:  true,
+			want:   hydratingBus,
+		},
+		{
+			name:   "a kind needing whole objects on a schedule takes the re-list",
+			needs:  operator.WatchOptions{Trigger: operator.WatchTriggerSchedule},
+			offers: []string{reList, eventBus},
+			plain:  true,
+			want:   reList,
+		},
+		{
+			name:   "a kind needing whole objects on a schedule passes over an identity bus offered first",
+			needs:  operator.WatchOptions{Trigger: operator.WatchTriggerSchedule},
+			offers: []string{eventBus, reList},
+			plain:  true,
+			want:   reList,
+		},
+		{
+			name:   "a kind needing only an identity takes whichever is offered first",
+			needs:  operator.WatchOptions{Detail: operator.WatchDetailIdentity, Trigger: operator.WatchTriggerSchedule},
+			offers: []string{reList, eventBus},
+			plain:  true,
+			want:   reList,
+		},
+		{
+			name:   "an identity need with no bus offered falls back to the API watch",
+			needs:  operator.WatchOptions{Detail: operator.WatchDetailIdentity},
+			offers: []string{reList},
+			plain:  true,
+			want:   apiWatch,
+		},
+		{
+			name:   "an opinionated handler needs whole objects, so an identity bus is passed over",
+			needs:  operator.WatchOptions{Detail: operator.WatchDetailIdentity},
+			offers: []string{eventBus, hydratingBus},
+			want:   hydratingBus,
+		},
+	}
+
+	for _, tt := range tests {
+		informerConfig := func(called *string) AppInformerConfig {
+			offers := make([]InformerSupplierOffer, 0, len(tt.offers))
+			for _, mechanism := range tt.offers {
+				offers = append(offers, InformerSupplierOffer{
+					Provides: provisions[mechanism],
+					Supplier: supplierOf(mechanism, called),
+				})
+			}
+			return AppInformerConfig{
+				InformerSupplier:        supplierOf(apiWatch, called),
+				InformerSupplierDecider: NewInformerSupplierDecider(offers...),
+			}
+		}
+
+		t.Run("managed kind: "+tt.name, func(t *testing.T) {
+			var called string
+			createTestApp(t, AppConfig{
+				InformerConfig: informerConfig(&called),
+				ManagedKinds: []AppManagedKind{{
+					Kind:       testKind(),
+					Reconciler: &Reconciler{},
+					ReconcileOptions: BasicReconcileOptions{
+						WatchOptions: tt.needs,
+						UsePlain:     tt.plain,
+					},
+				}},
+			})
+			assert.Equal(t, tt.want, called)
+		})
+
+		t.Run("unmanaged kind: "+tt.name, func(t *testing.T) {
+			var called string
+			createTestApp(t, AppConfig{
+				InformerConfig: informerConfig(&called),
+				UnmanagedKinds: []AppUnmanagedKind{{
+					Kind:       testKind(),
+					Reconciler: &Reconciler{},
+					ReconcileOptions: UnmanagedKindReconcileOptions{
+						WatchOptions:   tt.needs,
+						UseOpinionated: !tt.plain,
+					},
+				}},
+			})
+			assert.Equal(t, tt.want, called)
+		})
+	}
+
+	t.Run("an offer with no supplier is passed over", func(t *testing.T) {
+		var called string
+		createTestApp(t, AppConfig{
+			InformerConfig: AppInformerConfig{
+				InformerSupplier: supplierOf(apiWatch, &called),
+				InformerSupplierDecider: NewInformerSupplierDecider(
+					InformerSupplierOffer{Provides: provisions[eventBus]},
+					InformerSupplierOffer{Provides: provisions[hydratingBus], Supplier: supplierOf(hydratingBus, &called)},
+				),
+			},
+			ManagedKinds: []AppManagedKind{{
+				Kind:       testKind(),
+				Reconciler: &Reconciler{},
+				ReconcileOptions: BasicReconcileOptions{
+					WatchOptions: operator.WatchOptions{Detail: operator.WatchDetailIdentity},
+					UsePlain:     true,
+				},
+			}},
+		})
+		assert.Equal(t, hydratingBus, called)
+	})
+
+	t.Run("the decider is given the kind and what it needs", func(t *testing.T) {
+		var decidedFor string
+		var decidedNeeds operator.WatchOptions
+		createTestApp(t, AppConfig{
+			InformerConfig: AppInformerConfig{
+				InformerSupplierDecider: func(kind resource.Kind, needs operator.WatchOptions) InformerSupplier {
+					decidedFor = kind.GroupVersionKind().String()
+					decidedNeeds = needs
+					return nil
+				},
+			},
+			ManagedKinds: []AppManagedKind{{
+				Kind:       testKind(),
+				Reconciler: &Reconciler{},
+				ReconcileOptions: BasicReconcileOptions{
+					WatchOptions: operator.WatchOptions{Detail: operator.WatchDetailIdentity},
+					UsePlain:     true,
+				},
+			}},
+		})
+		assert.Equal(t, testKind().GroupVersionKind().String(), decidedFor)
+		assert.Equal(t, operator.WatchOptions{
+			Detail:  operator.WatchDetailIdentity,
+			Trigger: operator.WatchTriggerChange,
+		}, decidedNeeds)
+	})
+
+	t.Run("a decider which picks nothing leaves the kind to the API watch", func(t *testing.T) {
+		var called string
+		createTestApp(t, AppConfig{
+			InformerConfig: AppInformerConfig{
+				InformerSupplier: supplierOf(apiWatch, &called),
+				InformerSupplierDecider: func(resource.Kind, operator.WatchOptions) InformerSupplier {
+					return nil
+				},
+			},
+			ManagedKinds: []AppManagedKind{{
+				Kind:             testKind(),
+				Reconciler:       &Reconciler{},
+				ReconcileOptions: BasicReconcileOptions{UsePlain: true},
+			}},
+		})
+		assert.Equal(t, apiWatch, called)
+	})
+
+	t.Run("the per-kind supplier is used in place of the decision", func(t *testing.T) {
+		deciderCalled := false
+		var called string
+		createTestApp(t, AppConfig{
+			InformerConfig: AppInformerConfig{
+				InformerSupplierDecider: func(resource.Kind, operator.WatchOptions) InformerSupplier {
+					deciderCalled = true
+					return nil
+				},
+			},
+			ManagedKinds: []AppManagedKind{{
+				Kind:       testKind(),
+				Reconciler: &Reconciler{},
+				ReconcileOptions: BasicReconcileOptions{
+					WatchOptions:     operator.WatchOptions{Detail: operator.WatchDetailIdentity},
+					UsePlain:         true,
+					InformerSupplier: supplierOf(eventBus, &called),
+				},
+			}},
+		})
+		assert.Equal(t, eventBus, called)
+		assert.False(t, deciderCalled, "InformerSupplierDecider was called")
+	})
+
+	t.Run("an informer which provides less than the kind needs is refused", func(t *testing.T) {
+		_, err := NewApp(AppConfig{
+			InformerConfig: AppInformerConfig{
+				// Offered as the hydrating bus, but its informer says it only re-lists.
+				InformerSupplierDecider: NewInformerSupplierDecider(InformerSupplierOffer{
+					Provides: provisions[hydratingBus],
+					Supplier: supplierOf(reList, nil),
+				}),
+			},
+			ManagedKinds: []AppManagedKind{{
+				Kind:             testKind(),
+				Reconciler:       &Reconciler{},
+				ReconcileOptions: BasicReconcileOptions{UsePlain: true},
+			}},
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(),
+			"provides detail=full-object trigger=schedule, but its reconciler or watcher needs detail=full-object trigger=change")
+	})
+
+	t.Run("an opinionated handler refuses an informer which provides only identities", func(t *testing.T) {
+		_, err := NewApp(AppConfig{
+			UnmanagedKinds: []AppUnmanagedKind{{
+				Kind:       testKind(),
+				Reconciler: &Reconciler{},
+				ReconcileOptions: UnmanagedKindReconcileOptions{
+					WatchOptions:     operator.WatchOptions{Detail: operator.WatchDetailIdentity},
+					UseOpinionated:   true,
+					InformerSupplier: supplierOf(eventBus, nil),
+				},
+			}},
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "but its opinionated reconciler or watcher needs detail=full-object")
+	})
+}
+
 func TestApp_Runner(t *testing.T) {
 	// TODO
 }
@@ -623,4 +887,13 @@ func (m mockInformer) AddEventHandler(handler operator.ResourceWatcher) error {
 
 func (m mockInformer) WaitForSync(ctx context.Context) error {
 	return nil
+}
+
+type optionedInformer struct {
+	mockInformer
+	options operator.WatchOptions
+}
+
+func (o *optionedInformer) WatchOptions() operator.WatchOptions {
+	return o.options
 }
