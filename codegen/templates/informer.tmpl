@@ -14,9 +14,11 @@ import (
 var {{.KindName}}Watch = simple.KindWatchDeclaration{ {{ if .Needs }}
 	Needs: app.WatchNeeds{{.Needs}},{{ end }}{{ if .Announces }}
 	AnnouncedMetadata: operator.AnnouncedMetadata{ {{ if .AnnouncedLabels }}
-		Labels: []string{ {{ range .AnnouncedLabels }}"{{.}}", {{ end }}},{{ end }}{{ if .AnnouncedFinalizers }}
+		Labels: []string{ {{ range .AnnouncedLabels }}"{{.}}", {{ end }}},{{ end }}{{ if .AnnouncedAnnotations }}
+		Annotations: []string{ {{ range .AnnouncedAnnotations }}"{{.}}", {{ end }}},{{ end }}{{ if .AnnouncedFinalizers }}
 		Finalizers: true,{{ end }}{{ if .AnnouncedGeneration }}
-		Generation: true,{{ end }}{{ if .AnnouncedDeletionTimestamp }}
+		Generation: true,{{ end }}{{ if .AnnouncedCreationTimestamp }}
+		CreationTimestamp: true,{{ end }}{{ if .AnnouncedDeletionTimestamp }}
 		DeletionTimestamp: true,{{ end }}
 	},{{ end }}
 }

@@ -22,8 +22,10 @@ testKind2: {
 				needs: "signal"
 				metadata: {
 					labels: ["app"]
+					annotations: ["testapp.ext.grafana.app/paused"]
 					finalizers: ["testapp.ext.grafana.app/finalizer"]
 					generation: true
+					creationTimestamp: true
 					deletionTimestamp: true
 				}
 			}

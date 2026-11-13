@@ -15,8 +15,10 @@ var TestKind2Watch = simple.KindWatchDeclaration{
 	Needs: app.WatchNeedsSignal,
 	AnnouncedMetadata: operator.AnnouncedMetadata{
 		Labels:            []string{"app"},
+		Annotations:       []string{"testapp.ext.grafana.app/paused"},
 		Finalizers:        true,
 		Generation:        true,
+		CreationTimestamp: true,
 		DeletionTimestamp: true,
 	},
 }

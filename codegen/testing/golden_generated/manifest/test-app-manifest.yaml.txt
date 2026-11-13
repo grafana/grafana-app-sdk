@@ -208,6 +208,9 @@ spec:
       userReadable: false
       watch:
         metadata:
+          annotations:
+          - testapp.ext.grafana.app/paused
+          creationTimestamp: true
           deletionTimestamp: true
           finalizers:
           - testapp.ext.grafana.app/finalizer

@@ -659,14 +659,17 @@ type GoInformerMetadata struct {
 	// Needs is the exported suffix of the app.WatchNeeds constant the kind declared, empty where it declared none.
 	Needs                      string
 	AnnouncedLabels            []string
+	AnnouncedAnnotations       []string
 	AnnouncedFinalizers        bool
 	AnnouncedGeneration        bool
+	AnnouncedCreationTimestamp bool
 	AnnouncedDeletionTimestamp bool
 }
 
 // Announces reports whether the kind declares any announced metadata, so the generated literal omits an empty one.
 func (m GoInformerMetadata) Announces() bool {
-	return len(m.AnnouncedLabels) > 0 || m.AnnouncedFinalizers || m.AnnouncedGeneration || m.AnnouncedDeletionTimestamp
+	return len(m.AnnouncedLabels) > 0 || len(m.AnnouncedAnnotations) > 0 ||
+		m.AnnouncedFinalizers || m.AnnouncedGeneration || m.AnnouncedCreationTimestamp || m.AnnouncedDeletionTimestamp
 }
 
 func WriteGoInformer(metadata GoInformerMetadata, out io.Writer) error {

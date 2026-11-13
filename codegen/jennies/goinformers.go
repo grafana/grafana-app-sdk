@@ -89,7 +89,9 @@ func applyWatchMetadata(md *templates.GoInformerMetadata, watch *codegen.WatchMe
 		return
 	}
 	md.AnnouncedLabels = watch.Labels
+	md.AnnouncedAnnotations = watch.Annotations
 	md.AnnouncedFinalizers = len(watch.Finalizers) > 0
 	md.AnnouncedGeneration = watch.Generation
+	md.AnnouncedCreationTimestamp = watch.CreationTimestamp
 	md.AnnouncedDeletionTimestamp = watch.DeletionTimestamp
 }
