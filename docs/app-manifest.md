@@ -156,7 +156,7 @@ The `webhooks` paths are only emitted for the webhook types your kinds actually 
 
 > **Experimental.** The `watch` section and `app.ManifestData.WatchMetadata()` may change in a minor release. Nothing in the SDK consumes the section yet.
 
-`watch` declares, per version, which parts of an object's metadata the platform should put into this kind's change notifications:
+`watch` is the allowlist of object metadata announced with changes to your kind. You own the kind, so you set the list: the default is nothing, and each key you add grows every notification the kind publishes. Keep it to what your handlers actually read.
 
 ```cue
 versions: {
@@ -173,9 +173,9 @@ versions: {
 }
 ```
 
-This is the producing side of the change stream. A platform that announces changes out of band of the watch reads this allowlist from the stored manifest and copies those keys into every notification it publishes for the kind, so a handler can act on a change without first reading the object. What consumes those notifications — informers, suppliers, watchers — is app wiring, configured in Go rather than declared here.
+This is the producing side of the change stream. A platform that announces changes out of band of the watch reads the list from the stored manifest and copies those keys into every notification for the kind, so a handler can act on a change without first reading the object. Announcing the whole object would defeat the point, which is why there is a list at all. What consumes the notifications — informers, suppliers, watchers — is app wiring, configured in Go rather than declared here.
 
-Every field is opt-in, and **an absent field means unknown, not empty**. A consumer cannot tell "this label is not set" from "this label was not announced", so declare every key your handlers read. The section is a request, not a guarantee: a platform that announces no metadata ignores it. Declare it only for kinds your app owns, since asking for a key asks that kind's publisher to change what it publishes.
+**An absent field means unknown, not empty.** A consumer cannot tell "this label is not set" from "this label was not announced", so a key your handlers read has to be on the list — that is the one cost of keeping it short. The list is a request, not a guarantee: a platform that announces no metadata ignores it.
 
 `ManifestData.WatchMetadata()` returns the declaration for that registration, keyed by `schema.GroupResource`. It unions a kind's versions rather than requiring them to agree: a key no version reads only costs payload size, while a key a version does read and nobody announced is a correctness bug.
 

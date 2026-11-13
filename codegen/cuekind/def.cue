@@ -326,8 +326,8 @@ SchemaWithOperatorState: Schema & {
 // #Watch declares what a kind's change notifications should carry.
 // Experimental: this section may change in a minor release.
 #Watch: {
-	// metadata declares the object metadata this kind's change notifications should carry. Announcing a key lets a
-	// consumer decide what to do without reading the object.
+	// metadata is the allowlist of object metadata announced with this kind's changes. Every key costs payload size
+	// on every notification, so it names what the handlers read rather than the whole object.
 	metadata?: #WatchMetadata
 }
 

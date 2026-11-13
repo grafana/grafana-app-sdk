@@ -682,12 +682,11 @@ type ManifestVersionKindWatch struct {
 	Metadata *ManifestVersionKindWatchMetadata `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 }
 
-// ManifestVersionKindWatchMetadata declares which parts of an object's metadata a kind's change notifications should
-// carry, for a platform which can announce changes out of band of the watch. Announcing a key lets a consumer decide
-// what to do without reading the object; announcing everything would make every notification carry the object, so
-// each one is named.
+// ManifestVersionKindWatchMetadata is the allowlist of object metadata announced with a kind's changes, for a platform
+// which can announce changes out of band of the watch. The kind's owner sets it: the default is nothing, and every key
+// costs payload size on every notification, so it names what the handlers read rather than the whole object.
 //
-// It is a declaration, not a guarantee: a platform which does not announce metadata ignores it.
+// It is a request, not a guarantee: a platform which announces no metadata ignores it.
 type ManifestVersionKindWatchMetadata struct {
 	// Labels are the metadata.labels keys to announce.
 	Labels []string `json:"labels,omitempty" yaml:"labels,omitempty"`
