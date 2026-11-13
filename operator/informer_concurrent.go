@@ -32,6 +32,12 @@ type ConcurrentInformer struct {
 	mtx sync.RWMutex
 }
 
+// Unwrap returns the informer this one runs handlers for, so that what it provides can be read through the wrapper:
+// running handlers concurrently changes nothing about what a delivery carries. See InformerWatchOptions.
+func (ci *ConcurrentInformer) Unwrap() Informer {
+	return ci.informer
+}
+
 // ConcurrentInformerOptions are options for the ConcurrentInformer.
 type ConcurrentInformerOptions struct {
 	// ErrorHandler is a user-specified error handling function. If left nil, DefaultErrorHandler will be used.

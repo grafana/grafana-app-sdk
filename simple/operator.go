@@ -30,6 +30,12 @@ type OperatorConfig struct {
 	// the finalizer name MUST be 63 chars or fewer, and should be unique to the operator
 	FinalizerGenerator          func(kind resource.Schema) string
 	InformerCacheResyncInterval time.Duration
+	// InformerSupplier builds the informers for the kinds this operator watches. If left unset,
+	// DefaultInformerSupplier is used. It is given each kind's needs as InformerOptions.WatchNeeds, so
+	// NewSelectingInformerSupplier can be used here to select a mechanism per kind, as an App does.
+	//
+	// Experimental: this API may change in a minor release.
+	InformerSupplier InformerSupplier
 	// DiscoveryRefreshInterval is the interval at which the API discovery cache should be refreshed.
 	// This is primarily used by the DynamicPatcher in the OpinionatedWatcher/OpinionatedReconciler
 	// for sending finalizer add/remove patches to the latest version of the kind.
@@ -154,6 +160,7 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 		admission:           ws,
 		metricsExporter:     me,
 		cacheResyncInterval: cfg.InformerCacheResyncInterval,
+		informerSupplier:    cfg.InformerSupplier,
 		patcher:             patcher,
 		metricsServer:       metricsServer,
 	}
@@ -182,6 +189,7 @@ type Operator struct {
 	metricsServer       *operator.MetricsServer
 	metricsExporter     *metrics.Exporter
 	cacheResyncInterval time.Duration
+	informerSupplier    InformerSupplier
 	patcher             *k8s.DynamicPatcher
 }
 
@@ -225,22 +233,57 @@ func (o *Operator) RegisterMetricsCollectors(collectors ...prometheus.Collector)
 	return o.metricsExporter.RegisterCollectors(collectors...)
 }
 
-// WatchKind will watch the specified kind (schema) with opinionated logic, passing the relevant events on to the SyncWatcher.
-// You can configure the query used for watching the kind using ListWatchOptions.
-func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options operator.ListWatchOptions) error {
-	client, err := o.clientGen.ClientFor(kind)
-	if err != nil {
-		return err
+// KindWatchOption configures how one kind is watched, beyond the query ListWatchOptions describes.
+//
+// Experimental: this API may change in a minor release.
+type KindWatchOption func(*kindWatchSettings)
+
+type kindWatchSettings struct {
+	watchOptions operator.WatchOptions
+}
+
+// WithWatchOptions states what a kind's handlers need of the changes they are watched by, which the operator passes
+// to its InformerSupplier so that a selecting one can pick the mechanism which satisfies them, and whichever
+// mechanism is built can configure itself from them. See operator.WatchOptions.
+//
+// Experimental: this API may change in a minor release.
+func WithWatchOptions(options operator.WatchOptions) KindWatchOption {
+	return func(s *kindWatchSettings) {
+		s.watchOptions = options
 	}
-	inf, err := operator.NewKubernetesBasedInformer(kind, client, operator.InformerOptions{
-		ListWatchOptions: operator.ListWatchOptions{
-			Namespace:      options.Namespace,
-			LabelFilters:   options.LabelFilters,
-			FieldSelectors: options.FieldSelectors,
+}
+
+func (o *Operator) informerForKind(
+	kind resource.Kind, options operator.ListWatchOptions, opts []KindWatchOption,
+) (operator.Informer, error) {
+	var settings kindWatchSettings
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&settings)
+		}
+	}
+	return buildInformer(informerRequest{
+		kind:      kind,
+		declared:  settings.watchOptions,
+		listWatch: options,
+		options: operator.InformerOptions{
+			CacheResyncInterval: o.cacheResyncInterval,
+			ErrorHandler:        o.ErrorHandler,
 		},
-		CacheResyncInterval: o.cacheResyncInterval,
-		ErrorHandler:        o.ErrorHandler,
+		supplier: o.informerSupplier,
+		clients:  o.clientGen,
+		// WatchKind and ReconcileKind both wrap their handler in its Opinionated variant.
+		opinionated: true,
 	})
+}
+
+// WatchKind will watch the specified kind (schema) with opinionated logic, passing the relevant events on to the SyncWatcher.
+// You can configure the query used for watching the kind using ListWatchOptions, and what the watcher needs of the
+// changes it is watched by with WithWatchOptions.
+func (o *Operator) WatchKind(
+	kind resource.Kind, watcher SyncWatcher, options operator.ListWatchOptions, opts ...KindWatchOption,
+) error {
+	inf, err := o.informerForKind(kind, options, opts)
 	if err != nil {
 		return err
 	}
@@ -275,21 +318,12 @@ func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options op
 }
 
 // ReconcileKind will watch the specified kind (schema) with opinionated logic, passing the events on to the provided Reconciler.
-// You can configure the query used for watching the kind using ListWatchOptions.
-func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconciler, options operator.ListWatchOptions) error {
-	client, err := o.clientGen.ClientFor(kind)
-	if err != nil {
-		return err
-	}
-	inf, err := operator.NewKubernetesBasedInformer(kind, client, operator.InformerOptions{
-		ListWatchOptions: operator.ListWatchOptions{
-			Namespace:      options.Namespace,
-			LabelFilters:   options.LabelFilters,
-			FieldSelectors: options.FieldSelectors,
-		},
-		ErrorHandler:        o.ErrorHandler,
-		CacheResyncInterval: o.cacheResyncInterval,
-	})
+// You can configure the query used for watching the kind using ListWatchOptions, and what the reconciler needs of
+// the changes it is watched by with WithWatchOptions.
+func (o *Operator) ReconcileKind(
+	kind resource.Kind, reconciler operator.Reconciler, options operator.ListWatchOptions, opts ...KindWatchOption,
+) error {
+	inf, err := o.informerForKind(kind, options, opts)
 	if err != nil {
 		return err
 	}
