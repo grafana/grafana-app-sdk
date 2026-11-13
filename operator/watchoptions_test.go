@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestWatchOptions_SatisfiedBy(t *testing.T) {
@@ -103,4 +104,22 @@ type optionedInformer struct {
 
 func (o *optionedInformer) WatchOptions() WatchOptions {
 	return o.options
+}
+
+func TestConcurrentInformer_WatchOptions(t *testing.T) {
+	t.Run("forwards what the wrapped informer provides", func(t *testing.T) {
+		provided := WatchOptions{Detail: WatchDetailIdentity, Trigger: WatchTriggerSchedule}
+		ci, err := NewConcurrentInformer(&optionedInformer{options: provided}, ConcurrentInformerOptions{})
+		require.NoError(t, err)
+
+		assert.Equal(t, provided, InformerWatchOptions(ci))
+	})
+
+	t.Run("wrapping an informer which says nothing still carries the object per change", func(t *testing.T) {
+		ci, err := NewConcurrentInformer(&mockInformer{}, ConcurrentInformerOptions{})
+		require.NoError(t, err)
+
+		assert.Equal(t, WatchOptions{Detail: WatchDetailFullObject, Trigger: WatchTriggerChange},
+			InformerWatchOptions(ci))
+	})
 }

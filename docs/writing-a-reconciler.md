@@ -206,7 +206,9 @@ simple.AppConfig{
                     Detail:  operator.WatchDetailFullObject,
                     Trigger: operator.WatchTriggerSchedule,
                 },
-                Supplier: myReListInformerSupplier,
+                Supplier: simple.PeriodicInformerSupplier(simple.PeriodicInformerConfig{
+                    ResyncInterval: time.Hour,
+                }),
             },
             simple.InformerSupplierOffer{
                 Provides: operator.WatchOptions{
@@ -241,6 +243,31 @@ deployment running no bus is watched.
 
 Two things bypass the selection: your own `InformerSupplierDecider` replaces the rule for the whole app, and
 `ReconcileOptions.InformerSupplier` sets the mechanism for one kind outright.
+
+### The periodic informer
+
+`simple.PeriodicInformerSupplier` is the cadence mechanism the SDK ships: `operator.PeriodicInformer` has no watch
+and no subscription, keeps no cache, and on each pass lists the kind and delivers every listed object to its
+watchers as an add — unchanged objects included, which is what re-triggers the work. Its deliveries carry whole
+objects and are caused by the schedule, so it serves the kinds which need `WatchTriggerSchedule` and no others.
+
+```go
+simple.PeriodicInformerSupplier(simple.PeriodicInformerConfig{
+    ResyncInterval: time.Hour,
+    PageSize:       500,
+})
+```
+
+Only `Add` is ever called, because without a snapshot the informer cannot tell an update or a delete from a
+re-delivery — so the handlers it serves re-evaluate an object from the object, and treat a kind which has gone away
+as nothing to do. The initial list is retried on its own shorter interval, and the cadence is jittered so that
+informers which started together do not list together for the rest of the process's life.
+
+`Namespace`, `LabelFilters` and `FieldSelectors` reach the list request, where the server applies them: the list is
+the informer's only source, so nothing else has to honour them. A server which can list the kind some other way —
+projecting less than whole objects, say — is reached through `ListerFactory`, which returns an
+`operator.ResourceLister` for the kind; the default is a paginated list over the kind's client, following continue
+tokens to the end of the set.
 
 ### Checks
 
