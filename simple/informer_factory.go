@@ -56,8 +56,14 @@ func unionAnnouncedMetadata(announced operator.AnnouncedMetadata, md app.Manifes
 			announced.Labels = append(announced.Labels, label)
 		}
 	}
+	for _, annotation := range declared.Annotations {
+		if !slices.Contains(announced.Annotations, annotation) {
+			announced.Annotations = append(announced.Annotations, annotation)
+		}
+	}
 	announced.Finalizers = announced.Finalizers || declared.Finalizers
 	announced.Generation = announced.Generation || declared.Generation
+	announced.CreationTimestamp = announced.CreationTimestamp || declared.CreationTimestamp
 	announced.DeletionTimestamp = announced.DeletionTimestamp || declared.DeletionTimestamp
 	return announced
 }

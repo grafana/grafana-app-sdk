@@ -550,6 +550,24 @@ func TestAnnouncedMetadataFromManifest(t *testing.T) {
 		assert.False(t, got.Finalizers)
 	})
 
+	// The manifest accepts an annotation declaration and a creation timestamp, so the resolution must carry them:
+	// dropping them silently would leave a handler reading metadata nothing recorded as promised.
+	t.Run("annotations and the creation timestamp are carried", func(t *testing.T) {
+		got := AnnouncedMetadataFromManifest(manifest(kind(&app.ManifestVersionKindWatchMetadata{
+			Annotations:       []string{"g/paused"},
+			CreationTimestamp: true,
+		})))
+		assert.Equal(t, []string{"g/paused"}, got.Annotations)
+		assert.True(t, got.CreationTimestamp)
+	})
+
+	t.Run("annotation keys intersect across declaring kinds", func(t *testing.T) {
+		shared := otherKind(&app.ManifestVersionKindWatchMetadata{Annotations: []string{"g/paused", "g/other"}})
+		got := AnnouncedMetadataFromManifest(manifest(
+			kind(&app.ManifestVersionKindWatchMetadata{Annotations: []string{"g/paused", "g/tier"}}), shared))
+		assert.Equal(t, []string{"g/paused"}, got.Annotations)
+	})
+
 	// A filter is evaluated against whichever kind the informer serves, so only a key every declaring kind
 	// announces can be relied on.
 	t.Run("label keys intersect across declaring kinds", func(t *testing.T) {

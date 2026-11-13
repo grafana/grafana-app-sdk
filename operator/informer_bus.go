@@ -82,6 +82,12 @@ type AnnouncedMetadata struct {
 	// Labels are the label keys announced. A label filter on an identity payload needs every key it reads to be
 	// listed here, because an announced field which is absent means unknown rather than empty.
 	Labels []string
+	// Annotations are the annotation keys announced. Nothing in the SDK gates a decision on one — a selector
+	// cannot match an annotation — so this records what a handler may read off an identity payload rather than
+	// unlocking anything.
+	Annotations []string
+	// CreationTimestamp is announced, so an object's age is known without reading it.
+	CreationTimestamp bool
 	// DeletionTimestamp is announced, so a delete in progress is visible without reading the object.
 	DeletionTimestamp bool
 	// Finalizers are announced, and include the app's own, so a watcher can tell whether its finalizer is attached.
@@ -92,7 +98,8 @@ type AnnouncedMetadata struct {
 
 // IsZero reports whether nothing is declared announced.
 func (a AnnouncedMetadata) IsZero() bool {
-	return len(a.Labels) == 0 && !a.DeletionTimestamp && !a.Finalizers && !a.Generation
+	return len(a.Labels) == 0 && len(a.Annotations) == 0 &&
+		!a.CreationTimestamp && !a.DeletionTimestamp && !a.Finalizers && !a.Generation
 }
 
 // SupportsOpinionated reports whether every field an opinionated reconciler or watcher reads is announced.

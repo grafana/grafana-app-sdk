@@ -599,6 +599,12 @@ func TestWatchMetadataRoundTrips(t *testing.T) {
 	require.NotNil(t, spec.Versions[0].Kinds[0].Watch)
 	require.NotNil(t, spec.Versions[0].Kinds[0].Watch.Metadata)
 	assert.Equal(t, []string{"app"}, spec.Versions[0].Kinds[0].Watch.Metadata.Labels)
+	assert.Equal(t, []string{"watchapp.grafana.app/paused"}, spec.Versions[0].Kinds[0].Watch.Metadata.Annotations)
+	assert.Equal(t, []string{"watchapp.grafana.app/finalizer"}, spec.Versions[0].Kinds[0].Watch.Metadata.Finalizers)
+	require.NotNil(t, spec.Versions[0].Kinds[0].Watch.Metadata.Generation)
+	assert.True(t, *spec.Versions[0].Kinds[0].Watch.Metadata.Generation)
+	require.NotNil(t, spec.Versions[0].Kinds[0].Watch.Metadata.DeletionTimestamp)
+	assert.True(t, *spec.Versions[0].Kinds[0].Watch.Metadata.DeletionTimestamp)
 	require.NotNil(t, spec.Versions[0].Kinds[0].Watch.Needs)
 	assert.Equal(t, "signal", *spec.Versions[0].Kinds[0].Watch.Needs)
 

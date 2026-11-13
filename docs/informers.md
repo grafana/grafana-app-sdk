@@ -113,6 +113,12 @@ dropped.
 reaches one replica rather than all of them. That cuts live volume per replica without cutting correctness. A zero
 `Group` — the default — delivers every event to every replica.
 
+A group shares the live stream and nothing else: every member still re-lists the whole kind on its own cadence. That
+is the same fact as the paragraph above, read from the other side — coverage comes from the list, which is why
+sharing live delivery costs no correctness, and equally why it saves no list work. So a group reduces the events a
+replica handles, not the API load the kind costs: that scales with the number of replicas, and `ResyncInterval` is
+what bounds it.
+
 `Group.Delivery` says how the bus should share events among the members. Leaving it empty takes whatever the bus
 does; `resourcebus.GroupDeliveryRoundRobin` asks for each event to go to one member in turn, with no affinity between
 an object and the member handling its events. A `Subscriber` which cannot provide the delivery asked for fails the

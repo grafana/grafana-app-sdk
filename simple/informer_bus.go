@@ -236,12 +236,14 @@ func AnnouncedMetadataFromManifest(data app.ManifestData) operator.AnnouncedMeta
 			announced = kind
 			continue
 		}
+		announced.CreationTimestamp = announced.CreationTimestamp && kind.CreationTimestamp
 		announced.DeletionTimestamp = announced.DeletionTimestamp && kind.DeletionTimestamp
 		announced.Generation = announced.Generation && kind.Generation
 		announced.Finalizers = announced.Finalizers && kind.Finalizers
-		// Label keys intersect for the same reason the flags do: a filter is evaluated against whatever kind the
-		// informer serves, so only a key every declaring kind announces can be relied on.
+		// Label and annotation keys intersect for the same reason the flags do: a filter is evaluated against
+		// whatever kind the informer serves, so only a key every declaring kind announces can be relied on.
 		announced.Labels = intersectStrings(announced.Labels, kind.Labels)
+		announced.Annotations = intersectStrings(announced.Annotations, kind.Annotations)
 	}
 	return announced
 }
@@ -251,8 +253,10 @@ func AnnouncedMetadataFromManifest(data app.ManifestData) operator.AnnouncedMeta
 func announcedMetadataFrom(md app.ManifestVersionKindWatchMetadata) operator.AnnouncedMetadata {
 	return operator.AnnouncedMetadata{
 		Labels:            md.Labels,
+		Annotations:       md.Annotations,
 		Finalizers:        len(md.Finalizers) > 0,
 		Generation:        md.Generation,
+		CreationTimestamp: md.CreationTimestamp,
 		DeletionTimestamp: md.DeletionTimestamp,
 	}
 }
