@@ -227,3 +227,38 @@ A need is about the deliveries, not the informer behind them. Whether that infor
 its memory, which is most of the reason a deployment wants a cheaper mechanism, but no handler reads that cache
 through `operator.Informer` — a handler which needs objects other than the one its event is about reads them through
 the API, whatever serves it.
+
+### Serving a Sweep With a Re-List (experimental)
+
+A deployment lists the mechanisms it has, best first, and `simple.PeriodicInformerMechanism` is the re-list among
+them: `operator.PeriodicInformer` has no watch and no subscription, keeps no cache, and on each pass lists the kind
+and delivers every listed object as an add — unchanged objects included, which is what re-triggers the work.
+
+```go
+simple.AppConfig{
+    InformerConfig: simple.AppInformerConfig{
+        InformerSupplier: simple.NewSelectingInformerSupplier(nil,
+            myEventBusMechanism,
+            simple.PeriodicInformerMechanism(simple.PeriodicInformerConfig{}),
+        ),
+    },
+}
+```
+
+It states for itself that it provides a sweep carrying whole objects to every instance and no live channel, so the
+kinds which declared `Sweep` and no `Live` take it and nothing else does. A kind needing the live channel is passed
+over here and falls back to the API watch; one handed this mechanism anyway fails when the app is constructed rather
+than reconciling a cadence late.
+
+The config above is empty because each kind sweeps at the cadence and page size it asked for in `Sweep.Every` and
+`Sweep.PageSize`; `SweepInterval` and `PageSize` are the defaults for kinds which state neither. Only `Add` is ever
+called, because without a snapshot the informer cannot tell an update or a delete from a re-delivery — so the
+handlers it serves re-evaluate an object from the object, and treat one which has gone away as nothing to do. The
+initial list is retried on its own shorter interval, and each cadence is jittered so that informers which started
+together do not list together for the rest of the process's life.
+
+`Namespace`, `LabelFilters` and `FieldSelectors` reach the list request, where the server applies them: the list is
+the informer's only source, so nothing else has to honour them. A server which can list the kind some other way —
+projecting less than whole objects, say — is reached through `ListerFactory`, which returns an
+`operator.ResourceLister` for the kind; the default is a paginated list over the kind's client, following continue
+tokens to the end of the set.
