@@ -92,6 +92,26 @@ type CustomCacheInformer struct {
 	runContext     context.Context
 }
 
+// WatchOptions is what this informer gives a kind's handlers: each change as it happens, carrying the whole object,
+// to every instance of the app, since a watch is neither shared nor sharded. It sweeps as well when a cache resync
+// interval is configured, re-delivering what its store holds rather than reading the API.
+//
+// Experimental: this API may change in a minor release.
+func (c *CustomCacheInformer) WatchOptions() WatchOptions {
+	options := WatchOptions{Live: &WatchLiveOptions{
+		Detail:       WatchDetailFullObject,
+		Distribution: WatchDistributionAll,
+	}}
+	if c.opts.CacheResyncInterval > 0 {
+		options.Sweep = &WatchSweepOptions{
+			Detail:       WatchDetailFullObject,
+			Distribution: WatchDistributionAll,
+			Every:        c.opts.CacheResyncInterval,
+		}
+	}
+	return options
+}
+
 // NewCustomCacheInformer returns a new CustomCacheInformer using the provided cache.Store and cache.ListerWatcher.
 // To use ListWatchOptions, use NewListerWatcher to get a cache.ListerWatcher.
 func NewCustomCacheInformer(

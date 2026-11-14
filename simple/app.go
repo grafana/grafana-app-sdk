@@ -236,7 +236,12 @@ type AppInformerConfig struct {
 	// By default, this is "<app name>-wip"
 	InProgressFinalizerSupplier operator.FinalizerSupplier
 	// InformerSupplier can be set to specify a function for creating informers for kinds.
-	// If left unset, DefaultInformerSupplier will be used.
+	// If left unset, DefaultInformerSupplier will be used, which builds the API watch.
+	//
+	// It is given each kind's declared needs as InformerOptions.WatchNeeds, so a supplier can both configure the
+	// informer it builds from them and choose what to build. NewSelectingInformerSupplier is one which chooses:
+	// it gives each kind the cheapest of the mechanisms a deployment has which satisfies that kind, and falls back
+	// to the API watch, which satisfies every need.
 	InformerSupplier InformerSupplier
 	// RetryProcessorConfig enables the concurrent retry processor when non-nil.
 	// When set, a RetryProcessor is created and its Prometheus metrics are included in PrometheusCollectors().
@@ -292,6 +297,14 @@ type UnmanagedKindReconcileOptions struct {
 	// If true, the app must have permission to add finalizers to the unmanaged Kind, and if
 	// the AppUnmanagedKind is ever removed from the app, the finalizers added should be cleaned up.
 	UseOpinionated bool
+	// WatchOptions is what the Reconciler or Watcher needs of the changes it is watched by, which the App passes to
+	// AppInformerConfig.InformerSupplierDecider, and checks against any informer which says what it provides. Its
+	// zero value needs live deliveries carrying the whole object, every instance receiving all of them, which is
+	// what the API watch gives a kind today. WatchOptions.Sweep.Every and .PageSize are passed to the mechanism
+	// rather than compared, so two kinds served by the same one can sweep at different rates and page sizes.
+	//
+	// Experimental: this API may change in a minor release.
+	WatchOptions operator.WatchOptions
 }
 
 // BasicReconcileOptions are settings for the ListWatch and informer setup for a reconciliation loop
@@ -304,6 +317,12 @@ type BasicReconcileOptions struct {
 	FieldSelectors []string
 	// UsePlain can be set to true to avoid wrapping the Reconciler or Watcher in its Opinionated variant.
 	UsePlain bool
+	// WatchOptions is what the Reconciler or Watcher needs of the changes it is watched by, which the App passes to
+	// AppInformerConfig.InformerSupplierDecider and checks the informer it builds against. Its zero value needs
+	// operator.WatchStreamObject, which is what an informer provides unless it says otherwise.
+	//
+	// Experimental: this API may change in a minor release.
+	WatchOptions operator.WatchOptions
 }
 
 type AppCustomRouteMethod string
@@ -591,6 +610,7 @@ func (a *App) manageKind(kind AppManagedKind) error {
 				LabelFilters:   kind.ReconcileOptions.LabelFilters,
 				FieldSelectors: kind.ReconcileOptions.FieldSelectors,
 				UseOpinionated: !kind.ReconcileOptions.UsePlain,
+				WatchOptions:   kind.ReconcileOptions.WatchOptions,
 			},
 		})
 	}
@@ -605,22 +625,7 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		return errors.New("please provide either Watcher or Reconciler, not both")
 	}
 	if kind.Reconciler != nil || kind.Watcher != nil {
-		infSupplier := a.cfg.InformerConfig.InformerSupplier
-		if infSupplier == nil {
-			infSupplier = DefaultInformerSupplier
-		}
-
-		opts := a.cfg.InformerConfig.InformerOptions
-		opts.ListWatchOptions = operator.ListWatchOptions{
-			Namespace:      kind.ReconcileOptions.Namespace,
-			LabelFilters:   kind.ReconcileOptions.LabelFilters,
-			FieldSelectors: kind.ReconcileOptions.FieldSelectors,
-		}
-		if opts.MetricsConfig == (metrics.Config{}) {
-			opts.MetricsConfig = a.cfg.InformerConfig.MetricsConfig
-		}
-
-		inf, err := infSupplier(kind.Kind, a.clientGenerator, opts)
+		inf, err := a.informerFor(kind)
 		if err != nil {
 			return err
 		}
