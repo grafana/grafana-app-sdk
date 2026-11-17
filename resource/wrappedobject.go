@@ -261,8 +261,8 @@ func (o *WrappedObject[T]) GetCommonMetadata() CommonMetadata {
 				// HMMMM
 			}
 		}
-		createdBy = annotations[AnnotationCreatedBy]
-		updatedBy = annotations[AnnotationUpdatedBy]
+		createdBy = GetAnnotationFirst(annotations, AnnotationPrefixGrafanaApp+"createdBy", AnnotationCreatedBy)
+		updatedBy = GetAnnotationFirst(annotations, AnnotationPrefixGrafanaApp+"updatedBy", AnnotationUpdatedBy)
 	}
 	return CommonMetadata{
 		UID:               string(o.Object.GetUID()),

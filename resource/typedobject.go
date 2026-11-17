@@ -72,8 +72,8 @@ func (t *TypedSpecObject[T]) GetCommonMetadata() CommonMetadata {
 				// HMMMM
 			}
 		}
-		createdBy = t.Annotations[AnnotationCreatedBy]
-		updatedBy = t.Annotations[AnnotationUpdatedBy]
+		createdBy = GetAnnotationFirst(t.Annotations, AnnotationPrefixGrafanaApp+"createdBy", AnnotationCreatedBy)
+		updatedBy = GetAnnotationFirst(t.Annotations, AnnotationPrefixGrafanaApp+"updatedBy", AnnotationUpdatedBy)
 	}
 	return CommonMetadata{
 		UID:               string(t.UID),
@@ -217,8 +217,8 @@ func (t *TypedSpecStatusObject[T, S]) GetCommonMetadata() CommonMetadata {
 				// HMMMM
 			}
 		}
-		createdBy = t.Annotations[AnnotationCreatedBy]
-		updatedBy = t.Annotations[AnnotationUpdatedBy]
+		createdBy = GetAnnotationFirst(t.Annotations, AnnotationPrefixGrafanaApp+"createdBy", AnnotationCreatedBy)
+		updatedBy = GetAnnotationFirst(t.Annotations, AnnotationPrefixGrafanaApp+"updatedBy", AnnotationUpdatedBy)
 	}
 	return CommonMetadata{
 		UID:               string(t.UID),
@@ -382,8 +382,8 @@ func (t *TypedObject[Spec, Sub]) GetCommonMetadata() CommonMetadata {
 				// HMMMM
 			}
 		}
-		createdBy = t.Annotations[AnnotationCreatedBy]
-		updatedBy = t.Annotations[AnnotationUpdatedBy]
+		createdBy = GetAnnotationFirst(t.Annotations, AnnotationPrefixGrafanaApp+"createdBy", AnnotationCreatedBy)
+		updatedBy = GetAnnotationFirst(t.Annotations, AnnotationPrefixGrafanaApp+"updatedBy", AnnotationUpdatedBy)
 	}
 	return CommonMetadata{
 		UID:               string(t.UID),
