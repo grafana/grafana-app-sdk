@@ -176,8 +176,7 @@ func (o *RouteBackend) GetCreatedBy() string {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
-
-	return o.ObjectMeta.Annotations["grafana.com/createdBy"]
+	return resource.GetAnnotationFirst(o.ObjectMeta.Annotations, "grafana.app/createdBy", "grafana.com/createdBy")
 }
 
 func (o *RouteBackend) SetCreatedBy(createdBy string) {
@@ -209,8 +208,7 @@ func (o *RouteBackend) GetUpdatedBy() string {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
-
-	return o.ObjectMeta.Annotations["grafana.com/updatedBy"]
+	return resource.GetAnnotationFirst(o.ObjectMeta.Annotations, "grafana.app/updatedBy", "grafana.com/updatedBy")
 }
 
 func (o *RouteBackend) SetUpdatedBy(updatedBy string) {
