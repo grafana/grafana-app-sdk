@@ -24,7 +24,7 @@ require (
 	github.com/grafana/codejen v0.0.4
 	github.com/grafana/cog v0.2.4
 	github.com/grafana/grafana-app-sdk/logging v0.0.0 // placeholder: rewritten to the release version on the tagged commit by scripts/release.sh
-	github.com/grafana/grafana-plugin-sdk-go v0.299.0
+	github.com/grafana/grafana-plugin-sdk-go v0.300.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-plugin v1.8.0
 	github.com/prometheus/client_golang v1.25.0
@@ -163,7 +163,7 @@ require (
 	golang.org/x/oauth2 v0.38.0 // indirect
 	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/term v0.47.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
+	golang.org/x/text v0.44.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
 	gomodules.xyz/orderedmap v0.1.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20261026165753-2ffab32bce7e // indirect
