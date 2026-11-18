@@ -34,7 +34,6 @@ Let's consider an example reconciler for a kind defined by the CUE:
 ```cue
 {
 	kind: "MyKind"
-	current: "v1"
 	versions: {
 		"v1": {
 			schema: {

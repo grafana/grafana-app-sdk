@@ -97,7 +97,6 @@ testKind: {
 	validation: operations: ["create","update"]
 	conversion: true
 	conversionWebhookProps: url: "http://foo.bar/convert"
-	current: "v1"
 	versions: {
 		"v1": {
 			embed: fields: [{name: "details", path: "spec.stringField"}]
