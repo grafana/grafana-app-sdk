@@ -3,7 +3,6 @@ package testing
 testKind2: {
 	kind: "TestKind2"
 	plural: "testkind2s"
-	current: "v1"
 	codegen: ts: enabled: false
 	listKeys: false
 	fixedNames: ["current"]
