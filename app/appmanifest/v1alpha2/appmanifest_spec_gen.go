@@ -96,6 +96,8 @@ type AppManifestManifestVersionKind struct {
 	Search *AppManifestManifestVersionKindSearch `json:"search,omitempty"`
 	// embed defines the embedding document independently of search fields.
 	Embed *AppManifestManifestVersionKindEmbed `json:"embed,omitempty"`
+	// watch declares what the platform should announce alongside each change to this kind.
+	Watch *AppManifestManifestVersionKindWatch `json:"watch,omitempty"`
 	// extensions declares how other Grafana features, such as provisioning, treat this kind.
 	Extensions *AppManifestManifestVersionKindExtensions `json:"extensions,omitempty"`
 	// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
@@ -409,6 +411,52 @@ func NewAppManifestManifestVersionKindEmbedField() *AppManifestManifestVersionKi
 // OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindEmbedField.
 func (AppManifestManifestVersionKindEmbedField) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindEmbedField"
+}
+
+// #ManifestVersionKindWatch declares what a kind's change notifications should carry.
+// Experimental: this section may change in a minor release.
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindWatch struct {
+	// metadata declares the object metadata this kind's change notifications should carry.
+	Metadata *AppManifestManifestVersionKindWatchMetadata `json:"metadata,omitempty"`
+}
+
+// NewAppManifestManifestVersionKindWatch creates a new AppManifestManifestVersionKindWatch object.
+func NewAppManifestManifestVersionKindWatch() *AppManifestManifestVersionKindWatch {
+	return &AppManifestManifestVersionKindWatch{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindWatch.
+func (AppManifestManifestVersionKindWatch) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindWatch"
+}
+
+// #ManifestVersionKindWatchMetadata declares which parts of an object's metadata a kind's change
+// notifications should carry, for a platform which can announce changes out of band of the watch.
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindWatchMetadata struct {
+	// labels are the metadata.labels keys to announce.
+	Labels []string `json:"labels,omitempty"`
+	// annotations are the metadata.annotations keys to announce.
+	Annotations []string `json:"annotations,omitempty"`
+	// finalizers are the metadata.finalizers values to announce.
+	Finalizers []string `json:"finalizers,omitempty"`
+	// generation announces metadata.generation.
+	Generation *bool `json:"generation,omitempty"`
+	// creationTimestamp announces metadata.creationTimestamp.
+	CreationTimestamp *bool `json:"creationTimestamp,omitempty"`
+	// deletionTimestamp announces metadata.deletionTimestamp.
+	DeletionTimestamp *bool `json:"deletionTimestamp,omitempty"`
+}
+
+// NewAppManifestManifestVersionKindWatchMetadata creates a new AppManifestManifestVersionKindWatchMetadata object.
+func NewAppManifestManifestVersionKindWatchMetadata() *AppManifestManifestVersionKindWatchMetadata {
+	return &AppManifestManifestVersionKindWatchMetadata{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindWatchMetadata.
+func (AppManifestManifestVersionKindWatchMetadata) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindWatchMetadata"
 }
 
 // TODO: allow untyped keys for app-defined extensions, such as "kgatlas.ext.grafana.app", next to the typed ones.

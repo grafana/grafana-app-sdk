@@ -119,6 +119,8 @@ appManifestv1alpha2: appManifestKind & {
 			search?: #ManifestVersionKindSearch
 			// embed defines the embedding document independently of search fields.
 			embed?: #ManifestVersionKindEmbed
+			// watch declares what the platform should announce alongside each change to this kind.
+			watch?: #ManifestVersionKindWatch
 			// extensions declares how other Grafana features, such as provisioning, treat this kind.
 			extensions?: #ManifestVersionKindExtensions
 			// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
@@ -133,6 +135,28 @@ appManifestv1alpha2: appManifestKind & {
 			routes?: {
 				[string]: _
 			}
+		}
+		// #ManifestVersionKindWatch declares what a kind's change notifications should carry.
+		// Experimental: this section may change in a minor release.
+		#ManifestVersionKindWatch: {
+			// metadata declares the object metadata this kind's change notifications should carry.
+			metadata?: #ManifestVersionKindWatchMetadata
+		}
+		// #ManifestVersionKindWatchMetadata declares which parts of an object's metadata a kind's change
+		// notifications should carry, for a platform which can announce changes out of band of the watch.
+		#ManifestVersionKindWatchMetadata: {
+			// labels are the metadata.labels keys to announce.
+			labels?: [...string]
+			// annotations are the metadata.annotations keys to announce.
+			annotations?: [...string]
+			// finalizers are the metadata.finalizers values to announce.
+			finalizers?: [...string]
+			// generation announces metadata.generation.
+			generation?: bool
+			// creationTimestamp announces metadata.creationTimestamp.
+			creationTimestamp?: bool
+			// deletionTimestamp announces metadata.deletionTimestamp.
+			deletionTimestamp?: bool
 		}
 		// #ManifestVersionKindNamingStrategy declares what the name of an object of a kind means.
 		#ManifestVersionKindNamingStrategy: {

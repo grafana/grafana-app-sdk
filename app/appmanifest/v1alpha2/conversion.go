@@ -54,6 +54,19 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				k.UserReadable = *kind.UserReadable
 			}
 			k.FolderScoped = kind.FolderScoped
+			if kind.Watch != nil {
+				k.Watch = &app.ManifestVersionKindWatch{}
+				if md := kind.Watch.Metadata; md != nil {
+					k.Watch.Metadata = &app.ManifestVersionKindWatchMetadata{
+						Labels:            md.Labels,
+						Annotations:       md.Annotations,
+						Finalizers:        md.Finalizers,
+						Generation:        md.Generation != nil && *md.Generation,
+						CreationTimestamp: md.CreationTimestamp != nil && *md.CreationTimestamp,
+						DeletionTimestamp: md.DeletionTimestamp != nil && *md.DeletionTimestamp,
+					}
+				}
+			}
 			if kind.Storage != nil {
 				k.Storage = &app.ManifestVersionKindStorage{ListKeys: kind.Storage.ListKeys}
 			}
@@ -406,6 +419,26 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				Conversion:       &kind.Conversion,
 				UserReadable:     &kind.UserReadable,
 				FolderScoped:     kind.FolderScoped,
+			}
+			if kind.Watch != nil {
+				k.Watch = &AppManifestManifestVersionKindWatch{}
+				if md := kind.Watch.Metadata; md != nil {
+					k.Watch.Metadata = &AppManifestManifestVersionKindWatchMetadata{
+						Labels:      md.Labels,
+						Annotations: md.Annotations,
+						Finalizers:  md.Finalizers,
+					}
+					// Written only when set, so a manifest which asked for nothing does not read as opting out.
+					if md.Generation {
+						k.Watch.Metadata.Generation = &md.Generation
+					}
+					if md.CreationTimestamp {
+						k.Watch.Metadata.CreationTimestamp = &md.CreationTimestamp
+					}
+					if md.DeletionTimestamp {
+						k.Watch.Metadata.DeletionTimestamp = &md.DeletionTimestamp
+					}
+				}
 			}
 			if kind.Storage != nil {
 				k.Storage = &AppManifestManifestVersionKindStorage{ListKeys: kind.Storage.ListKeys}
