@@ -183,6 +183,12 @@ func ManifestGoGenerator(cfg ManifestGoGeneratorConfig) *codejen.JennyList[codeg
 			SkipImportsProcess: cfg.SkipImportsProcess,
 			ProjectRepo:        cfg.ProjectRepo,
 			GoGenPath:          cfg.GoGenPath,
+		},
+		&jennies.InformerJenny{
+			GroupByKind:        !cfg.GroupKinds,
+			ProjectRepo:        cfg.ProjectRepo,
+			CodegenPath:        cfg.GoGenPath,
+			SkipImportsProcess: cfg.SkipImportsProcess,
 		})
 	return g
 }

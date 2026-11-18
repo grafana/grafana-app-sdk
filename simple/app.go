@@ -292,6 +292,9 @@ type UnmanagedKindReconcileOptions struct {
 	// If true, the app must have permission to add finalizers to the unmanaged Kind, and if
 	// the AppUnmanagedKind is ever removed from the app, the finalizers added should be cleaned up.
 	UseOpinionated bool
+	// InformerSupplier can be set to use a different informer for this Kind than the rest of the app.
+	// If left unset, the app-level AppInformerConfig.InformerSupplier is used.
+	InformerSupplier InformerSupplier
 }
 
 // BasicReconcileOptions are settings for the ListWatch and informer setup for a reconciliation loop
@@ -304,6 +307,9 @@ type BasicReconcileOptions struct {
 	FieldSelectors []string
 	// UsePlain can be set to true to avoid wrapping the Reconciler or Watcher in its Opinionated variant.
 	UsePlain bool
+	// InformerSupplier can be set to use a different informer for this Kind than the rest of the app.
+	// If left unset, the app-level AppInformerConfig.InformerSupplier is used.
+	InformerSupplier InformerSupplier
 }
 
 type AppCustomRouteMethod string
@@ -587,10 +593,11 @@ func (a *App) manageKind(kind AppManagedKind) error {
 			Reconciler: kind.Reconciler,
 			Watcher:    kind.Watcher,
 			ReconcileOptions: UnmanagedKindReconcileOptions{
-				Namespace:      kind.ReconcileOptions.Namespace,
-				LabelFilters:   kind.ReconcileOptions.LabelFilters,
-				FieldSelectors: kind.ReconcileOptions.FieldSelectors,
-				UseOpinionated: !kind.ReconcileOptions.UsePlain,
+				Namespace:        kind.ReconcileOptions.Namespace,
+				LabelFilters:     kind.ReconcileOptions.LabelFilters,
+				FieldSelectors:   kind.ReconcileOptions.FieldSelectors,
+				UseOpinionated:   !kind.ReconcileOptions.UsePlain,
+				InformerSupplier: kind.ReconcileOptions.InformerSupplier,
 			},
 		})
 	}
@@ -605,7 +612,10 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		return errors.New("please provide either Watcher or Reconciler, not both")
 	}
 	if kind.Reconciler != nil || kind.Watcher != nil {
-		infSupplier := a.cfg.InformerConfig.InformerSupplier
+		infSupplier := kind.ReconcileOptions.InformerSupplier
+		if infSupplier == nil {
+			infSupplier = a.cfg.InformerConfig.InformerSupplier
+		}
 		if infSupplier == nil {
 			infSupplier = DefaultInformerSupplier
 		}
@@ -623,6 +633,14 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		inf, err := infSupplier(kind.Kind, a.clientGenerator, opts)
 		if err != nil {
 			return err
+		}
+		// An opinionated reconciler or watcher reads the deletion timestamp, the finalizer list and the generation
+		// off the delivered object. An identity payload carries them only where the bus announces them, and where
+		// it does not a tombstoning object looks like a fresh add and an attached finalizer looks absent; failing
+		// here beats failing at the first tombstone.
+		if identity, ok := inf.(identityPayloadInformer); ok && kind.ReconcileOptions.UseOpinionated &&
+			identity.IdentityPayload() && !identity.DeliversOpinionatedMetadata() {
+			return fmt.Errorf("kind '%s' cannot use an identity-payload informer with an opinionated reconciler or watcher unless the bus announces the deletion timestamp, finalizers and generation", kind.Kind.GroupVersionKind().String())
 		}
 		err = a.informerController.AddInformer(inf, kind.Kind.GroupVersionKind().String())
 		if err != nil {
