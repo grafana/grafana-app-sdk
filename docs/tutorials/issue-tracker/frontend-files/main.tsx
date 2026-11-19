@@ -2,7 +2,7 @@ import React, { useState, useEffect }  from 'react';
 import { useForm } from 'react-hook-form';
 import {  Button, IconButton, Field, Input, Card, TagList } from '@grafana/ui';
 import { IssueClient } from '../api/issue_client';
-import { Issue } from '../generated/issue/v1/issue_object_gen';
+import { Issue } from '../generated/issue/v1alpha1/issue_object_gen';
 import { PluginPage } from '@grafana/runtime';
 
 // This is used for the create new issue form
