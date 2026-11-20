@@ -10,12 +10,13 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/grafana/grafana-app-sdk/app"
-	"github.com/grafana/grafana-app-sdk/plugin"
-	"github.com/grafana/grafana-app-sdk/simple"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+
+	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/plugin"
+	"github.com/grafana/grafana-app-sdk/simple"
 )
 
 const id = "example-live-app"
