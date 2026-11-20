@@ -124,6 +124,46 @@ grafana-app-sdk generate --crdencoding=yaml
 ```
 A manifest isn't all that useful in most scenarios without at least one kind that your app exposes, so be sure you're familiar with [custom kinds](./custom-kinds/README.md) and [writing custom kinds](./custom-kinds/writing-kinds.md).
 
+## Plugin proxy routes
+
+Custom routes can declare plugin proxy options in `extensions."x-grafana-proxy"`:
+
+```cue
+manifest: {
+	appName: "example-app"
+	versions: v1: routes: namespaced: "/proxy": GET: {
+		operationId: "getProxy"
+		extensions: "x-grafana-proxy": {
+			url: "{{.URL}}/api"
+			reqRole: "Viewer"
+			headers: [{
+				name: "Authorization"
+				content: "Bearer {{.SecureJsonData.token | orEmpty}}"
+			}]
+		}
+	}
+}
+```
+
+The extension contains `url`, `reqRole`, `reqAction`, `headers`, `urlParams`, `authType`,
+`tokenAuth`, `jwtTokenAuth`, and `body`. All are optional; an omitted URL uses the data
+source URL. The path and HTTP method come from the route's OpenAPI operation.
+Headers and URL parameters contain `name` and `content` strings. Token configurations
+contain an optional `url`, a list of string `scopes`, and string-valued `params`.
+`body` can be any JSON value.
+
+Manifest generation validates these options for CUE custom routes and imported or inline
+OpenAPI operations, including unknown fields, field types, basic roles (`None`, `Viewer`,
+`Editor`, `Admin`), and authentication types. `azure` requires `tokenAuth`; `gce` and `jwt`
+require `jwtTokenAuth`. An omitted authentication type uses the configured token options.
+Template syntax is checked during generation, including the proxy's `orEmpty` function.
+Templates are only executed at runtime, when settings and secrets are available.
+
+Go consumers can use `app.OpenAPIExtensionProxy` (also exposed as `routes.ExtensionProxy`),
+`routes.ProxyTarget`, and `routes.ProxyTargetFromOperation`. The extension is retained in
+the manifest; servers must remove it from publicly served OpenAPI because it contains
+upstream URLs and settings templates.
+
 ## Operator and webhook paths
 
 If your app deploys an operator that serves admission (validation, mutation) or conversion webhooks, describe it with the `operator` block. The `url` is used by the platform to route webhook requests, and the `webhooks` paths are appended to that URL when constructing the webhook configurations:

@@ -39,6 +39,10 @@ const (
 	// is served even when no object is stored under the name in its path.
 	ExtensionAllowMissingParent = app.OpenAPIExtensionAllowMissingParent
 
+	// ExtensionProxy declares a ProxyTarget on an operation. It contains settings
+	// templates and must be removed from the publicly served OpenAPI document.
+	ExtensionProxy = app.OpenAPIExtensionProxy
+
 	// NamespacedPrefix is the version-relative path namespaced routes mount
 	// under.
 	NamespacedPrefix = "namespaces/{" + NamespaceParameter + "}"
@@ -185,7 +189,7 @@ func Parse(version app.ManifestVersion, opts Options) ([]Route, []Problem) {
 			report(full, http.MethodGet, "it would also answer HEAD, which is not served")
 			ops.Get = nil
 		}
-		authz := authzChecks(&ops, func(method, reason string) {
+		authz := operationChecks(&ops, func(method, reason string) {
 			report(full, method, reason)
 		})
 		if len(Operations(&ops)) == 0 {
@@ -241,14 +245,15 @@ var authzVerbs = []string{
 	"get_permissions", "set_permissions",
 }
 
-// authzChecks reads the access check each operation declares. An operation
-// whose declaration cannot be read is removed and reported, rather than served
-// without the check it asked for.
-func authzChecks(props *spec3.PathProps, drop func(method, reason string)) map[string]authlib.CheckRequest {
+// operationChecks removes operations with invalid extensions so they cannot be
+// served without their declared access check or proxy configuration.
+func operationChecks(props *spec3.PathProps, drop func(method, reason string)) map[string]authlib.CheckRequest {
 	var checks map[string]authlib.CheckRequest
 	ops := Operations(props)
 	for _, method := range slices.Sorted(maps.Keys(ops)) {
 		check, declared, err := authzCheck(method, ops[method])
+		_, _, proxyErr := ProxyTargetFromOperation(ops[method])
+		err = errors.Join(err, proxyErr)
 		if err != nil {
 			drop(method, err.Error())
 			*props = withoutMethods(*props, []string{method}, func(string) {})
@@ -265,7 +270,7 @@ func authzChecks(props *spec3.PathProps, drop func(method, reason string)) map[s
 	// A ServeMux GET pattern also matches HEAD, so with the HEAD operation gone
 	// its requests would reach the GET operation and its check instead.
 	if ops[http.MethodHead] != nil && props.Head == nil && props.Get != nil {
-		drop(http.MethodGet, "it would also answer HEAD, whose access declaration cannot be read")
+		drop(http.MethodGet, "it would also answer HEAD, whose extensions are invalid")
 		*props = withoutMethods(*props, []string{http.MethodGet}, func(string) {})
 		delete(checks, http.MethodGet)
 	}

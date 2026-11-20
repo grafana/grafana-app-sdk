@@ -468,7 +468,7 @@ func TestParseMalformedHeadCheckDropsGet(t *testing.T) {
 	require.Equal(t, spec3.PathProps{Post: post}, routes[0].Operations)
 	require.Equal(t, map[string]string{
 		"HEAD /report": "an authz subresource or verb needs x-grafana-declared-authz-resource",
-		"GET /report":  "it would also answer HEAD, whose access declaration cannot be read",
+		"GET /report":  "it would also answer HEAD, whose extensions are invalid",
 	}, reasons(problems))
 }
 
