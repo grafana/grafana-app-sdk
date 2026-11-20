@@ -1,6 +1,7 @@
 package cuekind
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -87,8 +88,16 @@ func (p *Parser) loadManifestOpenAPI(manifest *codegen.SimpleManifest) error {
 
 func parseOpenAPIRoutes(data []byte, group, version string) (app.ManifestVersionRoutes, error) { //nolint:staticcheck // ManifestVersionRoutes is deprecated; imported routes still use it until manifests read openapi
 	routes := app.ManifestVersionRoutes{} //nolint:staticcheck // ManifestVersionRoutes is deprecated; imported routes still use it until manifests read openapi
+	// Decode numbers as json.Number so large integers (e.g. in proxy bodies)
+	// are not rounded through float64.
+	jsonData, err := yaml.YAMLToJSONStrict(data)
+	if err != nil {
+		return routes, fmt.Errorf("error converting YAML to JSON: %w", err)
+	}
 	var raw map[string]any
-	if err := yaml.UnmarshalStrict(data, &raw); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(jsonData))
+	decoder.UseNumber()
+	if err := decoder.Decode(&raw); err != nil {
 		return routes, err
 	}
 	apiVersion, ok := raw["openapi"].(string)
@@ -120,6 +129,9 @@ func parseOpenAPIRoutes(data []byte, group, version string) (app.ManifestVersion
 	}
 	var doc spec3.OpenAPI
 	if err := json.Unmarshal(data, &doc); err != nil {
+		return routes, err
+	}
+	if err := restoreProxyExtensions(&doc, expanded); err != nil {
 		return routes, err
 	}
 	if doc.Components != nil {
@@ -340,4 +352,50 @@ func expandOpenAPIRefs(value any, root map[string]any, stack []string, context o
 	default:
 		return value, nil
 	}
+}
+
+// restoreProxyExtensions replaces the proxy extension of each operation in doc
+// with the raw JSON from the source document. spec3 decodes extensions through
+// float64, which would round large integers in proxy bodies.
+func restoreProxyExtensions(doc *spec3.OpenAPI, source any) error {
+	root, ok := source.(map[string]any)
+	if !ok || doc.Paths == nil {
+		return nil
+	}
+	paths, ok := root["paths"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	for name, rawItem := range paths {
+		path := doc.Paths.Paths[name]
+		item, ok := rawItem.(map[string]any)
+		if path == nil || !ok {
+			continue
+		}
+		operations := map[string]*spec3.Operation{
+			"get": path.Get, "put": path.Put, "post": path.Post, "delete": path.Delete,
+			"options": path.Options, "head": path.Head, "patch": path.Patch, "trace": path.Trace,
+		}
+		for method, op := range operations {
+			sourceOp, ok := item[method].(map[string]any)
+			if op == nil || !ok {
+				continue
+			}
+			value, ok := sourceOp[app.OpenAPIExtensionProxy]
+			if !ok {
+				continue
+			}
+			var buf bytes.Buffer
+			encoder := json.NewEncoder(&buf)
+			encoder.SetEscapeHTML(false)
+			if err := encoder.Encode(value); err != nil {
+				return err
+			}
+			if op.Extensions == nil {
+				op.Extensions = spec.Extensions{}
+			}
+			op.Extensions[app.OpenAPIExtensionProxy] = json.RawMessage(bytes.TrimSpace(buf.Bytes()))
+		}
+	}
+	return nil
 }
