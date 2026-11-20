@@ -109,3 +109,34 @@ func TestManifestGenerator_Proxy(t *testing.T) {
 	}
 	require.Equal(t, app.OpenAPIExtensionProxy, routes.ExtensionProxy)
 }
+
+func TestParseOpenAPIRoutesPreservesLargeProxyIntegers(t *testing.T) {
+	doc := `openapi: 3.0.3
+paths:
+  /things:
+    get:
+      x-grafana-proxy:
+        body: {id: 9007199254740993, t: "{{if eq .X ` + "`<`" + `}}y{{end}}"}
+      responses: {"200": {description: ok}}
+`
+	routes, err := parseOpenAPIRoutes([]byte(doc), "g.ext", "v1")
+	require.NoError(t, err)
+	var found bool
+	for _, p := range routes.Namespaced {
+		if p.Get != nil {
+			raw, err := json.Marshal(p.Get.Extensions["x-grafana-proxy"])
+			require.NoError(t, err)
+			require.Contains(t, string(raw), "9007199254740993")
+			found = true
+		}
+	}
+	for _, p := range routes.Cluster {
+		if p.Get != nil {
+			raw, err := json.Marshal(p.Get.Extensions["x-grafana-proxy"])
+			require.NoError(t, err)
+			require.Contains(t, string(raw), "9007199254740993")
+			found = true
+		}
+	}
+	require.True(t, found)
+}

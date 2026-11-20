@@ -220,3 +220,19 @@ func TestProxyTargetRawJSON(t *testing.T) {
 		})
 	}
 }
+
+func TestProxyTargetNormalizesRoleAndEscapes(t *testing.T) {
+	op := &spec3.Operation{OperationProps: spec3.OperationProps{}}
+	op.Extensions = spec.Extensions{}
+	op.Extensions[ExtensionProxy] = ProxyTarget{ReqRole: "editor"}
+	target, _, err := ProxyTargetFromOperation(op)
+	require.NoError(t, err)
+	require.Equal(t, types.RoleEditor, target.ReqRole)
+
+	// json.Marshal-style HTML escapes are undone, but an escaped backslash is not.
+	op.Extensions[ExtensionProxy] = json.RawMessage(`{"body":{"a":"{{if eq .X ` + "`\\u003c`" + `}}&{{end}}","b":"\\u003c","n":9007199254740993}}`)
+	target, _, err = ProxyTargetFromOperation(op)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"a":"{{if eq .X `+"`<`"+`}}&{{end}}","b":"\\u003c","n":9007199254740993}`, string(target.Body))
+	require.Contains(t, string(target.Body), "`<`")
+}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"text/template"
 
 	"github.com/grafana/authlib/types"
@@ -69,6 +70,9 @@ func ProxyTargetFromOperation(op *spec3.Operation) (*ProxyTarget, bool, error) {
 		return nil, false, nil
 	}
 	target, err := decodeProxyTarget(raw)
+	if err == nil {
+		err = target.normalize()
+	}
 	if err == nil {
 		err = target.validate()
 	}
@@ -141,6 +145,48 @@ func decodeProxyTarget(raw any) (*ProxyTarget, error) {
 		}
 	}
 	return target, nil
+}
+
+// normalize canonicalizes the role (so typed targets accept the same lowercase
+// roles as JSON ones) and undoes HTML escaping in the body. json.Marshal escapes
+// <, > and & inside RawMessage values, which would change what a body template
+// compares against. The replacement is textual, so number precision is kept.
+func (p *ProxyTarget) normalize() error {
+	if p.ReqRole != "" {
+		role := p.ReqRole
+		if err := role.UnmarshalText([]byte(role)); err != nil {
+			return fmt.Errorf("invalid reqRole %q", p.ReqRole)
+		}
+		p.ReqRole = role
+	}
+	p.Body = unescapeHTMLJSON(p.Body)
+	return nil
+}
+
+var htmlEscapes = map[string]byte{`\u003c`: '<', `\u003e`: '>', `\u0026`: '&'}
+
+func unescapeHTMLJSON(data json.RawMessage) json.RawMessage {
+	if len(data) == 0 || !bytes.Contains(data, []byte(`\u00`)) {
+		return data
+	}
+	out := make([]byte, 0, len(data))
+	for i := 0; i < len(data); i++ {
+		if data[i] == '\\' && i+1 < len(data) {
+			if i+6 <= len(data) {
+				if c, ok := htmlEscapes[strings.ToLower(string(data[i:i+6]))]; ok {
+					out = append(out, c)
+					i += 5
+					continue
+				}
+			}
+			// Copy any other escape pair verbatim so `\\u003c` stays escaped.
+			out = append(out, data[i], data[i+1])
+			i++
+			continue
+		}
+		out = append(out, data[i])
+	}
+	return out
 }
 
 func rejectProxyNulls(value any, path string) error {
