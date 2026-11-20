@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -54,4 +55,27 @@ func TestChannelRouteAndStream(t *testing.T) {
 	denied, err := e.PublishStream(ctx, &backend.PublishStreamRequest{Path: path})
 	require.NoError(t, err)
 	require.Equal(t, backend.PublishStreamStatusPermissionDenied, denied.Status)
+}
+
+func TestLatencySubscription(t *testing.T) {
+	e := events{}
+	pc := backend.PluginContext{User: &backend.User{Login: "viewer"}}
+	req := &backend.SubscribeStreamRequest{Path: metrics, PluginContext: pc}
+	sub, err := e.SubscribeStream(t.Context(), req)
+	require.NoError(t, err)
+	require.Equal(t, backend.SubscribeStreamStatusOK, sub.Status)
+	require.NotNil(t, sub.InitialData)
+	var frame struct{ Data struct{ Values [][]float64 } }
+	require.NoError(t, json.Unmarshal(sub.InitialData.Data(), &frame))
+	require.Len(t, frame.Data.Values, 3)
+	for _, values := range frame.Data.Values {
+		require.Len(t, values, 120)
+	}
+	for i := 1; i < len(frame.Data.Values[0]); i++ {
+		require.Equal(t, float64(sampleInterval.Milliseconds()), frame.Data.Values[0][i]-frame.Data.Values[0][i-1])
+		require.Greater(t, frame.Data.Values[2][i], frame.Data.Values[1][i])
+	}
+	pub, err := e.PublishStream(t.Context(), &backend.PublishStreamRequest{Path: metrics, PluginContext: pc})
+	require.NoError(t, err)
+	require.Equal(t, backend.PublishStreamStatusPermissionDenied, pub.Status)
 }

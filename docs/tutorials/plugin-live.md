@@ -71,3 +71,9 @@ const onUnmount = () => subscription.unsubscribe();
 Check the Live service type in your target Grafana release for the socket publish option. Remote hosting requires an operator that forwards the v2 Stream service as well as the v3 services. The Cloud operator configuration gives gRPC connections a five-minute maximum age and a thirty-second grace period. Grafana can restart `RunStream` after rotation or shutdown. Release resources on cancellation and design for gaps across reconnects.
 
 With multiple replicas, subscribe, run and publish may reach different processes. Keep handlers stateless or store shared state outside the plugin process. A single replica with autoscaling disabled can support process-local state during a trial, but a restart still loses that state.
+
+### Plot a Live channel in a time series panel
+
+The example also serves a read-only `plugin/example-live-app/latency` channel. Choose Grafana as the panel data source, select the Live Measurements query, and enter that channel. The backend supplies a synthetic thirty-second initial frame and streams timestamped median and 95th-percentile latency samples four times per second. Set the unit to milliseconds.
+
+A streaming **data source plugin** can instead return a frame with `Meta.Channel` set to `ds/<datasource-uid>/<path>` from QueryData. Grafana then subscribes to that instance through Live. That path uses the data source backend and its access controls. The app operator opt-in described above applies to the app backend.
