@@ -282,11 +282,78 @@ spec:
               additionalProperties: false
               properties:
                 apiKey:
-                  allOf:
-                  - $ref: '#/components/schemas/com.github.grafana.grafana-app-sdk.resource.InlineSecureValue'
+                  additionalProperties: false
                   description: note this only exists in the v2 schema!
+                  not:
+                    not:
+                      required:
+                      - create
+                    required:
+                    - description
+                  oneOf:
+                  - required:
+                    - create
+                  - required:
+                    - name
+                  - required:
+                    - remove
+                  properties:
+                    create:
+                      description: Plaintext value to create in the secret service.
+                        Used only in create or update requests.
+                      maxLength: 24576
+                      minLength: 1
+                      type: string
+                    description:
+                      description: Optional description for a newly created secret.
+                        Only valid when create is set.
+                      type: string
+                    name:
+                      description: Reference to an existing value in the secret service.
+                      maxLength: 253
+                      minLength: 1
+                      type: string
+                    remove:
+                      description: Remove this entry from the secure value map, deleting
+                        the secret if it is owned by this resource.
+                      type: boolean
+                  type: object
                 token:
-                  $ref: '#/components/schemas/com.github.grafana.grafana-app-sdk.resource.InlineSecureValue'
+                  additionalProperties: false
+                  not:
+                    not:
+                      required:
+                      - create
+                    required:
+                    - description
+                  oneOf:
+                  - required:
+                    - create
+                  - required:
+                    - name
+                  - required:
+                    - remove
+                  properties:
+                    create:
+                      description: Plaintext value to create in the secret service.
+                        Used only in create or update requests.
+                      maxLength: 24576
+                      minLength: 1
+                      type: string
+                    description:
+                      description: Optional description for a newly created secret.
+                        Only valid when create is set.
+                      type: string
+                    name:
+                      description: Reference to an existing value in the secret service.
+                      maxLength: 253
+                      minLength: 1
+                      type: string
+                    remove:
+                      description: Remove this entry from the secure value map, deleting
+                        the secret if it is owned by this resource.
+                      type: boolean
+                  type: object
               type: object
             spec:
               $ref: '#/components/schemas/spec'
@@ -294,42 +361,6 @@ spec:
               $ref: '#/components/schemas/status'
           required:
           - spec
-        com.github.grafana.grafana-app-sdk.resource.InlineSecureValue:
-          additionalProperties: false
-          not:
-            not:
-              required:
-              - create
-            required:
-            - description
-          oneOf:
-          - required:
-            - create
-          - required:
-            - name
-          - required:
-            - remove
-          properties:
-            create:
-              description: Plaintext value to create in the secret service. Used only
-                in create or update requests.
-              maxLength: 24576
-              minLength: 1
-              type: string
-            description:
-              description: Optional description for a newly created secret. Only valid
-                when create is set.
-              type: string
-            name:
-              description: Reference to an existing value in the secret service.
-              maxLength: 253
-              minLength: 1
-              type: string
-            remove:
-              description: Remove this entry from the secure value map, deleting the
-                secret if it is owned by this resource.
-              type: boolean
-          type: object
         spec:
           additionalProperties: false
           properties:

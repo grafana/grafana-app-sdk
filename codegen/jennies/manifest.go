@@ -25,7 +25,6 @@ import (
 	"github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha2"
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
-	"github.com/grafana/grafana-app-sdk/resource"
 	sdkroutes "github.com/grafana/grafana-app-sdk/routes"
 )
 
@@ -811,10 +810,9 @@ func kindOpenAPISchemas(vk codegen.VersionedKind, schemas map[string]any) error 
 		}
 	}
 	if len(vk.SecureValues) > 0 {
-		value := resource.InlineSecureValue{}
-		name := value.OpenAPIModelName()
-		schemas[name] = value.OpenAPIDefinition().Schema
-		props["secure"] = app.SecureValuesOpenAPISchemaWithReference(vk.SecureValues, spec.MustCreateRef("#/components/schemas/"+name))
+		// Inlined rather than referenced: a description beside a $ref needs an allOf wrapper,
+		// which is not a structural schema once the reference is expanded.
+		props["secure"] = app.SecureValuesOpenAPISchema(vk.SecureValues)
 	}
 	schemas[vk.Kind] = map[string]any{
 		"properties": props,

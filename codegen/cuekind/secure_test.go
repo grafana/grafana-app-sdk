@@ -14,10 +14,13 @@ import (
 	"k8s.io/apiextensions-apiserver/pkg/apiserver/schema/pruning"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 	"k8s.io/kube-openapi/pkg/validation/strfmt"
 	"k8s.io/kube-openapi/pkg/validation/validate"
 
+	"github.com/grafana/grafana-app-sdk/app"
 	v1alpha2 "github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha2"
 	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -53,17 +56,18 @@ func TestSecureValuesGeneration(t *testing.T) {
 	converted := data.Versions[0].Kinds[0]
 	openAPI, err := converted.Schema.AsOpenAPI3()
 	require.NoError(t, err)
-	sharedName := resource.InlineSecureValue{}.OpenAPIModelName()
-	require.Contains(t, openAPI.Schemas, sharedName)
-	assert.Len(t, openAPI.Schemas[sharedName].Value.OneOf, 3)
+	assert.NotContains(t, openAPI.Schemas, resource.InlineSecureValue{}.OpenAPIModelName())
 	secureProperties := openAPI.Schemas["Connection"].Value.Properties["secure"].Value.Properties
-	assert.Equal(t, "#/components/schemas/"+sharedName, secureProperties["token"].Ref)
-	apiKey := secureProperties["apiKey"].Value
-	assert.Equal(t, "API key from the service", apiKey.Description)
-	require.Len(t, apiKey.AllOf, 1)
-	assert.Equal(t, "#/components/schemas/"+sharedName, apiKey.AllOf[0].Ref)
-	assert.Empty(t, apiKey.Properties)
-	assert.Empty(t, apiKey.OneOf)
+	for _, key := range []string{"apiKey", "token"} {
+		value := secureProperties[key]
+		assert.Empty(t, value.Ref)
+		assert.True(t, value.Value.Type.Is("object"))
+		assert.Contains(t, value.Value.Properties, "create")
+		assert.Len(t, value.Value.OneOf, 3)
+		assert.Empty(t, value.Value.AllOf)
+	}
+	assert.Equal(t, "API key from the service", secureProperties["apiKey"].Value.Description)
+	assertManifestSchemaStructural(t, data.Group, converted)
 	assert.Equal(t, kind.SecureValues, converted.SecureValues)
 	assert.NotContains(t, converted.Subresources(), "secure")
 	definitions, err := converted.Schema.AsKubeOpenAPI(schema.GroupVersionKind{Group: data.Group, Version: "v1", Kind: "Connection"}, spec.MustCreateRef, "example", converted.SecureValues...)
@@ -136,12 +140,11 @@ func TestSecureValuesGeneration(t *testing.T) {
 	require.Len(t, secureSchema.Properties, 2)
 	secureValue := secureSchema.Properties["apiKey"]
 	assert.Equal(t, "API key from the service", secureValue.Description)
-	require.Len(t, secureValue.AllOf, 1)
-	constraints := secureValue.AllOf[0]
-	require.NotNil(t, constraints.Not)
-	assert.Equal(t, []string{"description"}, constraints.Not.Required)
-	require.NotNil(t, constraints.Not.Not)
-	assert.Equal(t, []string{"create"}, constraints.Not.Not.Required)
+	assert.Empty(t, secureValue.AllOf)
+	require.NotNil(t, secureValue.Not)
+	assert.Equal(t, []string{"description"}, secureValue.Not.Required)
+	require.NotNil(t, secureValue.Not.Not)
+	assert.Equal(t, []string{"create"}, secureValue.Not.Not.Required)
 	// A structurally valid schema must also accept valid secure operations.
 	valueJSON, err := json.Marshal(secureValue)
 	require.NoError(t, err)
@@ -232,13 +235,13 @@ func TestWildcardSecureValuesGeneration(t *testing.T) {
 			converted := data.Versions[0].Kinds[0]
 			openAPI, err := converted.Schema.AsOpenAPI3()
 			require.NoError(t, err)
-			sharedName := resource.InlineSecureValue{}.OpenAPIModelName()
-			require.Contains(t, openAPI.Schemas, sharedName)
+			assert.NotContains(t, openAPI.Schemas, resource.InlineSecureValue{}.OpenAPIModelName())
 			wildcard := openAPI.Schemas["Connection"].Value.Properties["secure"].Value.AdditionalProperties.Schema.Value
 			assert.Equal(t, "Any credential", wildcard.Description)
-			require.Len(t, wildcard.AllOf, 1)
-			assert.Equal(t, "#/components/schemas/"+sharedName, wildcard.AllOf[0].Ref)
-			assert.Empty(t, wildcard.Properties)
+			assert.True(t, wildcard.Type.Is("object"))
+			assert.Empty(t, wildcard.AllOf)
+			assert.Contains(t, wildcard.Properties, "create")
+			assertManifestSchemaStructural(t, data.Group, converted)
 			assert.Equal(t, kind.SecureValues, converted.SecureValues)
 			definitions, err := converted.Schema.AsKubeOpenAPI(schema.GroupVersionKind{Group: data.Group, Version: "v1", Kind: "Connection"}, spec.MustCreateRef, "example", converted.SecureValues...)
 			require.NoError(t, err)
@@ -306,4 +309,68 @@ func TestWildcardSecureValuesGeneration(t *testing.T) {
 			}
 		})
 	}
+}
+
+// assertManifestSchemaStructural serves the kind's manifest schema the way an API server does:
+// it converts the schema without manifest secure values, expands every $ref in place, and
+// requires the result to be a Kubernetes structural schema.
+func assertManifestSchemaStructural(t *testing.T, group string, kind app.ManifestVersionKind) {
+	t.Helper()
+	gvk := schema.GroupVersionKind{Group: group, Version: "v1", Kind: kind.Kind}
+	definitions, err := kind.Schema.AsKubeOpenAPI(gvk, func(path string) spec.Ref { return spec.MustCreateRef(path) }, "example")
+	require.NoError(t, err)
+	root := definitions["example."+kind.Kind].Schema
+	delete(root.Properties, "metadata")
+	encoded, err := json.Marshal(expandRefs(root, definitions, map[string]bool{}))
+	require.NoError(t, err)
+	var external apiextv1.JSONSchemaProps
+	require.NoError(t, json.Unmarshal(encoded, &external))
+	var internal apiext.JSONSchemaProps
+	require.NoError(t, apiextv1.Convert_v1_JSONSchemaProps_To_apiextensions_JSONSchemaProps(&external, &internal, nil))
+	structural, err := structuralschema.NewStructural(&internal)
+	require.NoError(t, err)
+	assert.Empty(t, structuralschema.ValidateStructural(field.NewPath(""), structural))
+}
+
+func expandRefs(s spec.Schema, definitions map[string]common.OpenAPIDefinition, expanding map[string]bool) spec.Schema {
+	if ref := s.Ref.String(); ref != "" {
+		definition, ok := definitions[ref]
+		if !ok || expanding[ref] {
+			return spec.Schema{}
+		}
+		expanding[ref] = true
+		defer delete(expanding, ref)
+		return expandRefs(definition.Schema, definitions, expanding)
+	}
+	out := s
+	if len(s.Properties) > 0 {
+		out.Properties = make(map[string]spec.Schema, len(s.Properties))
+		for k, v := range s.Properties {
+			out.Properties[k] = expandRefs(v, definitions, expanding)
+		}
+	}
+	if s.AdditionalProperties != nil && s.AdditionalProperties.Schema != nil {
+		additional := *s.AdditionalProperties
+		expanded := expandRefs(*additional.Schema, definitions, expanding)
+		additional.Schema = &expanded
+		out.AdditionalProperties = &additional
+	}
+	if s.Items != nil && s.Items.Schema != nil {
+		items := *s.Items
+		expanded := expandRefs(*items.Schema, definitions, expanding)
+		items.Schema = &expanded
+		out.Items = &items
+	}
+	for _, group := range []*[]spec.Schema{&out.AllOf, &out.AnyOf, &out.OneOf} {
+		expanded := make([]spec.Schema, len(*group))
+		for i, v := range *group {
+			expanded[i] = expandRefs(v, definitions, expanding)
+		}
+		*group = expanded
+	}
+	if s.Not != nil {
+		expanded := expandRefs(*s.Not, definitions, expanding)
+		out.Not = &expanded
+	}
+	return out
 }
