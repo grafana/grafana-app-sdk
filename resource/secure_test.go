@@ -105,3 +105,33 @@ func TestInlineSecureValueSchema(t *testing.T) {
 		})
 	}
 }
+
+func TestInlineSecureValueDeepCopy(t *testing.T) {
+	t.Run("nil receiver", func(t *testing.T) {
+		var v *InlineSecureValue
+		assert.Nil(t, v.DeepCopy())
+	})
+
+	t.Run("copies fields without sharing description", func(t *testing.T) {
+		description := "original"
+		v := InlineSecureValue{Create: NewSecretValue("secret"), Description: &description, Name: "name"}
+
+		cpy := v.DeepCopy()
+		require.NotNil(t, cpy)
+		assert.Equal(t, v, *cpy)
+		require.NotSame(t, v.Description, cpy.Description)
+
+		*cpy.Description = "changed"
+		assert.Equal(t, "original", *v.Description)
+	})
+
+	t.Run("copy secure values does not share descriptions", func(t *testing.T) {
+		description := "original"
+		values := InlineSecureValues{"token": {Create: NewSecretValue("secret"), Description: &description}}
+
+		cpy := CopySecureValues(values)
+		*cpy["token"].Description = "changed"
+		assert.Equal(t, "original", *values["token"].Description)
+		assert.Equal(t, values["token"].Create, cpy["token"].Create)
+	})
+}
