@@ -20,6 +20,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/simple"
 )
 
+// The remote operator integration test uses this plugin ID, API group and ready/ack events.
 const id = "example-live-app"
 const path = "events"
 
