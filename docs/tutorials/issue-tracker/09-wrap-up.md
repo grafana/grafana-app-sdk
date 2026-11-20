@@ -7,6 +7,8 @@ With that, we have a functioning app that we can easily extend to do more. There
 
 Another bit we didn't cover is that you can have your operator consume events for some other application's kinds and react to their changes--maybe when someone creates something in a different app, you want to make an Issue correlated to it. You can test if such a resource kind exists (basically, is the app installed?), and then create an informer controller to handle those events. Likewise, a different app might consume Issue events. 
 
+The optional [Knowledge Graph chapter](08-knowledge-graph.md) shows one way to mirror Issues into another system from a watcher.
+
 This tutorial may also be periodically updated to add extra optional sections on implementing other bits of functionality.
 
-### Prev: [Adding Admission Control](07-adding-admission-control.md)
+### Prev: [Syncing Issues to the Knowledge Graph](08-knowledge-graph.md)

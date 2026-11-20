@@ -31,4 +31,5 @@ OK, with all that out of the way, let's jump in with [Initializing Our Project](
 5. [Writing Our Front-End](05-frontend.md)
 6. [Adding Operator Code](06-operator-watcher.md)
 7. [Adding Admission Control](07-adding-admission-control.md)
-8. [Wrap-Up and Further Reading](08-wrap-up.md)
+8. [Syncing Issues to the Knowledge Graph (optional)](08-knowledge-graph.md)
+9. [Wrap-Up and Further Reading](09-wrap-up.md)
