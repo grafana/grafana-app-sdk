@@ -12,7 +12,7 @@ err := plugin.Run(provider,
 Here `plugin` is `github.com/grafana/grafana-app-sdk/plugin`. The provider handles the manifest's v3 routes. The instance returned by the factory implements the Go plugin SDK's `backend.StreamHandler`. Grafana calls its three methods:
 
 - `SubscribeStream` checks whether this caller may receive the channel, including when another subscriber has already opened it.
-- `RunStream` sends frames as they become available and releases upstream resources when its context ends.
+- `RunStream` sends frames for all subscribers to a channel. Grafana starts the stream using the initiating subscriber’s context. Use a separately authorized channel for private output and release upstream resources on cancellation.
 - `PublishStream` authorizes each input and returns the data that Grafana may publish back to subscribers. Return only data intended for those subscribers.
 
 The [working backend](testdata/live-plugin/main.go) exposes a namespaced `GET /channel` route that returns the same relative address in each namespace. Grafana scopes Live channels to the caller’s organization. Run `go test ./docs/tutorials/testdata/live-plugin` to exercise route discovery, stream output, acknowledgement, and cancellation.
@@ -39,14 +39,14 @@ dev_mode = true
 serve_live = true
 ```
 
-In the calling Grafana instance, install the plugin metadata and configure its remote backend. Substitute the operator address reachable from Grafana:
+**Direct local comparison.** Installing the plugin metadata and setting the following address sends its entire v2 backend to the operator, including resource and health calls:
 
 ```ini
 [plugin.example-live-app]
 remote_server_addr = <operator-host>:<grpc-port>
 ```
 
-Use this setup for isolated local development. Shared deployments require a connection that authenticates Grafana and binds it to the permitted stack.
+The direct comparison exercises Live forwarding. On Enterprise 13.3.0 that configuration alone returned HTTP 503 on the v3 channel lookup. For a combined App Platform and Live migration, keep v3 discovery on the App Platform router and route only the configured app’s Live calls to it. The proposed router integration uses `[live.plugin_router] plugin_ids`, a stack-bound client certificate, an installed manifest group and an authenticated router-to-operator connection. Hosted deployment awaits compatible releases and credential provisioning. [Router contribution](https://github.com/grafana/grafana/pull/138494)
 
 For channel `plugin/example-live-app/events`, use the same address for receiving and sending:
 
