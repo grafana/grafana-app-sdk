@@ -21,7 +21,7 @@ The major difference between a `Reconciler` and a `Watcher` is that a `Reconcile
 When writing a reconciler, it's important to take a few things into consideration:
 * If you make an update to the object you're doing the reconcile (or watch) event for, this will trigger _another_ reconcile (or watch) event. Generally, favor only updating subresources (specifically `status`) and some metadata in your reconcile (or watch) events, as a `status` update should not trigger the `metadata.generation` value to increase (only `metadata.resourceVersion`), which will allow you to filter events out. Using the `operator.OpinionatedWatcher` will filter these events for you, but you will need to track this yourself in a Reconciler; if you prefer not to use OpinionatedWatcher or want to do your own event filtering, keep in mind how updates within your reconcile loop will be received.
 * The reconciler is taking action on _every_ consumed event. Finding ways to escape from a reconcile or watcher event early will help your overall program logic.
-* All objects for the kind(s) you are watching are cached to memory by default. This can be customized by using a different informer implementation, such as `operator.CustomCacheInformer`. Custom informers can be used in `simple.App` with `AppConfig.InformerConfig.InformerSupplier`, or by using your own custom `app.App` implementation.
+* All objects for the kind(s) you are watching are cached to memory by default. This can be customized by using a different informer implementation, such as `operator.CustomCacheInformer`. Custom informers can be used in `simple.App` with `AppConfig.InformerConfig.InformerSupplier`, or by using your own custom `app.App` implementation. See [Declaring What a Reconciler Needs From a Watch](#declaring-what-a-reconciler-needs-from-a-watch-experimental) for having the app choose the most optimal watch mechanism available for each kind.
 * Don't rely on retries to track operator state; use the `status` subresource to track operator success/failure, so that your operator can work out state from a fresh start (a restart will remove all pending retries, which are stored purely in-memory). This also allows a user to track operator status by viewing the `status` subresource.
 * If your reconcile process makes requests for other resources, consider caching, as high-traffic objects may cause your application to have to make these requests extremely frequently.
 * If your operator has a watcher or reconciler that updates the resource in a deterministic way (such as adding a label based on the spec), consider adding mutation for the kind on your App instead, as it makes that process synchronous and will never leave the object in an intermediate state (and reduces API calls from your operator). Mutation can be added for a kind in `simple.App` with `AppConfig.ManagedKinds[].Mutator`, or by implementing the behavior in `Mutate` if you're using a custom `app.App` implementation (don't forget to add mutation in your manifest as well).
@@ -160,3 +160,93 @@ func NewMyKindReconciler(infoClient InfoClient, store *resource.TypedStore[*v1.M
 	}   
 }
 ```
+
+## Declaring What a Reconciler Needs From a Watch (experimental)
+
+> [!WARNING]
+> `WatchOptions` and everything which reads it are experimental, and may change in a minor release.
+
+By default a kind is watched by the API server and your handlers are delivered each change, carrying the whole
+object, to every instance of the app. That is more than some reconcilers use, and the cheaper ways of watching — an
+event bus, a periodic re-list — are not something an app can assume its deployment has.
+
+So a kind declares the least it needs in `ReconcileOptions.WatchOptions`, and the app gives it the most optimal
+mechanism available to it: the deployment lists what it has, best first, and a kind takes the first which satisfies
+it. A kind none of them satisfies falls back to the API watch, which is checked like any other mechanism — so a
+declaration nothing can serve, such as a divided channel where no mechanism divides one, fails when the app is
+constructed rather than being served by less than it asked for. Declaring nothing keeps exactly what a kind has
+today.
+
+```go
+simple.AppConfig{
+    InformerConfig: simple.AppInformerConfig{
+        // The deployment's half: this supplier chooses what to build from each kind's needs, taking the first
+        // mechanism in the list which satisfies them.
+        InformerSupplier: simple.NewSelectingInformerSupplier(
+            simple.DefaultInformerSupplier, // the API watch, for anything the mechanisms cannot serve
+            myEventBusMechanism,
+            myReListMechanism,
+        ),
+    },
+    ManagedKinds: []simple.AppManagedKind{{
+        // The kind's half: nothing needed as changes happen, because this reconciler re-evaluates every object
+        // hourly. The event bus is listed first but has no bearing here unless its re-list can serve the resync;
+        // whatever is selected is handed this declaration and resyncs this kind hourly, in 5000-object pages.
+        Kind:       myCleanupKind.Kind(),
+        Reconciler: &myCleanupReconciler,
+        ReconcileOptions: simple.BasicReconcileOptions{
+            WatchOptions: operator.WatchOptions{
+                Resync: &operator.WatchResyncOptions{Interval: time.Hour, PageSize: 5000},
+            },
+            UsePlain: true,
+        },
+    }},
+}
+```
+
+A deployment which lists nothing sets no `InformerSupplier` at all and every kind is watched by the API server, which
+is why declaring needs is safe before any mechanism exists to serve them. `simple.NewInformerMechanism(provides,
+supplier)` wraps a plain supplier whose provision is fixed, for a mechanism which cannot answer for itself.
+
+`WatchOptions` has a section per channel a watch can deliver on. Setting one is what says you need it; leaving it nil
+says you need nothing of it.
+
+| Field | | Zero value |
+| --- | --- | --- |
+| `Live` | what the handlers need of deliveries made as changes happen | the live channel, with the defaults below |
+| `Resync` | what they need of every object being re-delivered on a schedule | no resync |
+| `*.Detail` | `WatchDetailIdentity` when the handlers re-read the object they act on, so a delivery only has to say which object changed | the full object |
+| `*.Distribution` | `WatchDistributionShared` when one instance acting is enough, or `WatchDistributionSharded` when it must also always be the same instance per object | all instances get all of it |
+| `Resync.Interval` | how often the handlers need the resync | the mechanism's own cadence |
+| `Resync.PageSize` | how large a page its listing should read at a time | the mechanism's own page size |
+
+Declare `Resync` and no `Live` when what makes an object actionable is the passage of time rather than a change —
+age-based cleanup — since a live stream never fires for an object nobody touched. Declare both when the handlers act
+on changes promptly *and* re-evaluate on a cadence. Allowing less is always safe: it only ever widens what can serve
+the kind.
+
+**`Interval` and `PageSize` are requests, not requirements.** Unlike everything else here they take no part in
+choosing the mechanism, so the one a kind is given may ignore them. `Interval` is usually honored — the API watch
+takes it as its cache resync interval, where it is otherwise one app-wide setting — but `PageSize` only means
+anything to a mechanism which lists, and the API watch re-delivers its cache without listing at all.
+
+That is also what a resync *is* on the API watch: a replay of the informer's cache, which re-evaluates every object
+but discovers nothing the live stream missed. A mechanism which resyncs by listing the API, such as a re-list, both
+re-evaluates and recovers.
+
+Two things to know:
+
+* The `Opinionated` variants read the deletion timestamp and the finalizer list off the object on the event, so
+  declaring `WatchDetailIdentity` alongside one is a contradiction and the app refuses it when it is constructed. The
+  same check covers a mechanism which carries identities on a channel the kind did not ask for, since those
+  deliveries still reach the wrapper. Set `UsePlain` (or `UseOpinionated: false` for an unmanaged kind) to be served
+  by identities, and handle deletion in your own reconcile after reading the object.
+* A `Watcher` also reads the previous object on an update, which a mechanism keeping no object body cannot hand it.
+  Prefer a `Reconciler` for a kind declaring identities.
+
+A need is about the deliveries, not the informer behind them. Whether that informer keeps a cache of the kind decides
+its memory, which is most of the reason a deployment offers another mechanism at all, but no handler reads that cache
+through `operator.Informer` — a handler which needs objects other than the one its event is about reads them through
+the API, whatever serves it.
+
+`simple.Operator` takes the same declaration, with `simple.WithWatchOptions` on `WatchKind`/`ReconcileKind`.
