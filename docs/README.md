@@ -33,6 +33,7 @@ An important component of the SDK is the use of the operator pattern. Using the 
 
 Finally, the experimental `plugin` package runs an `app.App` inside a grafana app plugin's backend.
 Frontends should call the platform API directly, and use custom routes if they need non-standard endpoints.
+See [Serve Grafana Live alongside App SDK routes](tutorials/plugin-live.md) for plugins with streaming backends.
 
 ## Documentation Improvements
 

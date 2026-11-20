@@ -1,0 +1,14 @@
+{
+  "appName": "liveexample",
+  "group": "liveexample.ext.grafana.app",
+  "versions": [{
+    "name": "v1alpha1",
+    "served": true,
+    "kinds": [],
+    "openapi": {"paths": {"/namespaces/{namespace}/channel": {"get": {
+      "operationId": "getChannel",
+      "responses": {"200": {"description": "Live channel address", "content": {"application/json": {"schema": {"type": "string"}}}}}
+    }}}}
+  }],
+  "preferredVersion": "v1alpha1"
+}
