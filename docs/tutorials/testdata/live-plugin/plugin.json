@@ -1,0 +1,27 @@
+{
+  "type": "app",
+  "name": "Live example",
+  "id": "example-live-app",
+  "backend": true,
+  "streaming": true,
+  "executable": "live_example",
+  "info": {
+    "author": {
+      "name": "Grafana"
+    },
+    "description": "App SDK example with a shared Grafana Live channel",
+    "keywords": [
+      "streaming"
+    ],
+    "version": "0.0.1",
+    "updated": "2026-11-20",
+    "logos": {
+      "small": "img/logo.svg",
+      "large": "img/logo.svg"
+    }
+  },
+  "dependencies": {
+    "grafanaDependency": ">=13.2.6",
+    "plugins": []
+  }
+}
