@@ -45,6 +45,26 @@ type InlineSecureValue struct {
 
 func (v InlineSecureValue) IsZero() bool { return v.Create.IsZero() && v.Name == "" && !v.Remove }
 
+// DeepCopyInto copies the receiver into out, including its own copy of Description.
+// It lets deepcopy-gen output for types that embed InlineSecureValue compile and stay deep.
+func (v *InlineSecureValue) DeepCopyInto(out *InlineSecureValue) {
+	*out = *v
+	if v.Description != nil {
+		description := *v.Description
+		out.Description = &description
+	}
+}
+
+// DeepCopy returns a new InlineSecureValue that does not share Description with the receiver.
+func (v *InlineSecureValue) DeepCopy() *InlineSecureValue {
+	if v == nil {
+		return nil
+	}
+	out := new(InlineSecureValue)
+	v.DeepCopyInto(out)
+	return out
+}
+
 // OpenAPIModelName identifies the shared value type in generated OpenAPI definitions.
 func (InlineSecureValue) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.resource.InlineSecureValue"
@@ -102,11 +122,7 @@ func CopySecureValues(values InlineSecureValues) InlineSecureValues {
 	}
 	result := make(InlineSecureValues, len(values))
 	for key, value := range values {
-		if value.Description != nil {
-			description := *value.Description
-			value.Description = &description
-		}
-		result[key] = value
+		result[key] = *value.DeepCopy()
 	}
 	return result
 }
