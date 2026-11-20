@@ -9,25 +9,23 @@ import (
 	"slices"
 	"text/template"
 
+	"github.com/grafana/authlib/types"
 	"golang.org/x/net/http/httpguts"
 	"k8s.io/kube-openapi/pkg/spec3"
-)
-
-const (
-	ProxyAuthTypeAzure = "azure"
-	ProxyAuthTypeGCE   = "gce"
-	ProxyAuthTypeJWT   = "jwt"
+	strictjson "sigs.k8s.io/json"
 )
 
 // ProxyTarget contains the plugin proxy options of an OpenAPI operation. Its
 // path and method are supplied by the operation. Template values are resolved
-// against plugin settings at runtime.
+// against the parent resource at runtime.
 type ProxyTarget struct {
-	ReqRole      string          `json:"reqRole,omitempty"`
-	ReqAction    string          `json:"reqAction,omitempty"`
-	URL          string          `json:"url,omitempty"`
-	URLParams    []ProxyURLParam `json:"urlParams,omitempty"`
-	Headers      []ProxyHeader   `json:"headers,omitempty"`
+	ReqRole   types.RoleType  `json:"reqRole,omitempty"`
+	ReqAction string          `json:"reqAction,omitempty"`
+	URL       string          `json:"url,omitempty"`
+	URLParams []ProxyURLParam `json:"urlParams,omitempty"`
+	Headers   []ProxyHeader   `json:"headers,omitempty"`
+	// AuthType selects the upstream token provider. When empty, TokenAuth takes
+	// precedence over JwtTokenAuth; neither means no token is added.
 	AuthType     string          `json:"authType,omitempty"`
 	TokenAuth    *ProxyTokenAuth `json:"tokenAuth,omitempty"`
 	JwtTokenAuth *ProxyTokenAuth `json:"jwtTokenAuth,omitempty"`
@@ -50,6 +48,15 @@ type ProxyTokenAuth struct {
 	Params map[string]string `json:"params,omitempty"`
 }
 
+const (
+	// ProxyAuthTypeAzure uses TokenAuth with Azure managed identity or client-secret credentials.
+	ProxyAuthTypeAzure = "azure"
+	// ProxyAuthTypeGCE uses Google application default credentials and JwtTokenAuth's scopes.
+	ProxyAuthTypeGCE = "gce"
+	// ProxyAuthTypeJWT uses Google service-account credentials from JwtTokenAuth.
+	ProxyAuthTypeJWT = "jwt"
+)
+
 // ProxyTargetFromOperation decodes and validates ExtensionProxy, if present.
 // Validation parses templates without executing them, since settings and secrets
 // are only available to the server handling the request.
@@ -62,6 +69,9 @@ func ProxyTargetFromOperation(op *spec3.Operation) (*ProxyTarget, bool, error) {
 		return nil, false, nil
 	}
 	target, err := decodeProxyTarget(raw)
+	if err == nil {
+		err = target.validate()
+	}
 	if err != nil {
 		return nil, true, fmt.Errorf("invalid %s: %w", ExtensionProxy, err)
 	}
@@ -69,15 +79,36 @@ func ProxyTargetFromOperation(op *spec3.Operation) (*ProxyTarget, bool, error) {
 }
 
 func decodeProxyTarget(raw any) (*ProxyTarget, error) {
-	data, err := json.Marshal(raw)
+	var data []byte
+	switch value := raw.(type) {
+	case ProxyTarget:
+		// Re-encoding a body can escape characters inside template expressions,
+		// changing comparisons and other template behavior.
+		return &value, nil
+	case *ProxyTarget:
+		if value == nil {
+			return nil, errors.New("must be an object")
+		}
+		target := *value
+		return &target, nil
+	case json.RawMessage:
+		data = value
+	default:
+		var buf bytes.Buffer
+		encoder := json.NewEncoder(&buf)
+		encoder.SetEscapeHTML(false)
+		if err := encoder.Encode(raw); err != nil {
+			return nil, err
+		}
+		data = buf.Bytes()
+	}
+	var target *ProxyTarget
+	strictErrors, err := strictjson.UnmarshalStrict(data, &target)
 	if err != nil {
 		return nil, err
 	}
-	var target *ProxyTarget
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&target); err != nil {
-		return nil, err
+	if len(strictErrors) > 0 {
+		return nil, errors.Join(strictErrors...)
 	}
 	if target == nil {
 		return nil, errors.New("must be an object")
@@ -85,7 +116,9 @@ func decodeProxyTarget(raw any) (*ProxyTarget, error) {
 	// JSON decoding accepts null for strings and list entries as zero values.
 	// Reject those declarations instead of silently dropping an access check.
 	var fields map[string]any
-	if err := json.Unmarshal(data, &fields); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if err := decoder.Decode(&fields); err != nil {
 		return nil, err
 	}
 	delete(fields, "body") // A body can be any JSON value, including null.
@@ -106,9 +139,6 @@ func decodeProxyTarget(raw any) (*ProxyTarget, error) {
 				return nil, fmt.Errorf("%s[%d].content is required", field, i)
 			}
 		}
-	}
-	if err := target.validate(); err != nil {
-		return nil, err
 	}
 	return target, nil
 }
@@ -140,10 +170,11 @@ func rejectProxyNulls(value any, path string) error {
 }
 
 func (p ProxyTarget) validate() error {
-	switch p.ReqRole {
-	case "", "None", "Viewer", "Editor", "Admin":
-	default:
-		return errors.New("reqRole must be None, Viewer, Editor, or Admin")
+	if len(p.Body) > 0 && !json.Valid(p.Body) {
+		return errors.New("body must be valid JSON")
+	}
+	if p.ReqRole != "" && !p.ReqRole.IsValid() {
+		return fmt.Errorf("invalid reqRole %q", p.ReqRole)
 	}
 	switch p.AuthType {
 	case "":

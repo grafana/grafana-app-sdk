@@ -6,6 +6,8 @@ import (
 	"testing"
 	"testing/fstest"
 
+	cueerrors "cuelang.org/go/cue/errors"
+	"github.com/grafana/authlib/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/grafana-app-sdk/app"
@@ -29,8 +31,13 @@ func TestManifestGenerator_Proxy(t *testing.T) {
 				name, value, wantErr string
 			}{
 				{"valid", `{url: "{{.URL}}/api", reqRole: "Editor", headers: [{name: "Authorization", content: "Bearer {{.SecureJsonData.token | orEmpty}}"}], body: {id: "{{.JsonData.id}}"}}`, ""},
-				{"invalid role", `{reqRole: "SuperAdmin"}`, "reqRole"},
+				{"lowercase role", `{url: "{{.URL}}/api", reqRole: "editor", headers: [{name: "Authorization", content: "Bearer {{.SecureJsonData.token | orEmpty}}"}], body: {id: "{{.JsonData.id}}"}}`, ""},
+				{"invalid role", `{reqRole: "SuperAdmin"}`, "SuperAdmin"},
 				{"unknown field", `{reqRol: "Admin"}`, "reqRol"},
+				{"incorrect field case", `{ReqRole: "Admin"}`, "ReqRole"},
+				{"incorrect nested case", `{tokenAuth: {URL: "https://example.com"}}`, "URL"},
+				{"null role", `{reqRole: null}`, "reqRole"},
+				{"missing header content", `{headers: [{name: "Authorization"}]}`, "content"},
 				{"wrong type", `{url: 123}`, "url"},
 				{"invalid auth", `{authType: "unknown"}`, "authType"},
 				{"missing token", `{authType: "azure"}`, "requires tokenAuth"},
@@ -57,7 +64,7 @@ func TestManifestGenerator_Proxy(t *testing.T) {
 					manifest, err := parser.ParseManifest("manifest")
 					if err != nil {
 						require.NotEmpty(t, tc.wantErr)
-						require.ErrorContains(t, err, tc.wantErr)
+						require.Contains(t, cueerrors.Details(err, nil), tc.wantErr)
 						return
 					}
 					versions := []string{jennies.VersionV1Alpha1, jennies.VersionV1Alpha2}
@@ -85,6 +92,7 @@ func TestManifestGenerator_Proxy(t *testing.T) {
 							target, declared, err := routes.ProxyTargetFromOperation(op)
 							require.NoError(t, err)
 							require.True(t, declared)
+							require.Equal(t, types.RoleEditor, target.ReqRole)
 							require.Equal(t, "{{.URL}}/api", target.URL)
 							require.Equal(t, "Bearer {{.SecureJsonData.token | orEmpty}}", target.Headers[0].Content)
 						}

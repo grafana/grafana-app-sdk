@@ -215,7 +215,7 @@ SchemaWithOperatorState: Schema & {
 }
 #ProxyTarget: {
 	// The path and method come from the operation, not the proxy target.
-	reqRole?: "" | "None" | "Viewer" | "Editor" | "Admin"
+	reqRole?: "" | "None" | "Viewer" | "Editor" | "Admin" | "none" | "viewer" | "editor" | "admin"
 	reqAction?: string
 	// An omitted URL uses the data source URL. Templates are evaluated at runtime.
 	url?: string

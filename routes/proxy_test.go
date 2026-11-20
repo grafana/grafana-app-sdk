@@ -1,9 +1,12 @@
 package routes
 
 import (
+	"bytes"
 	"encoding/json"
 	"testing"
+	"text/template"
 
+	"github.com/grafana/authlib/types"
 	"github.com/stretchr/testify/require"
 	"k8s.io/kube-openapi/pkg/spec3"
 	"k8s.io/kube-openapi/pkg/validation/spec"
@@ -31,10 +34,13 @@ func TestProxyTargetFromOperation(t *testing.T) {
 		{name: "scalar", value: `true`, wantErr: "cannot unmarshal"},
 		{name: "array", value: `[]`, wantErr: "cannot unmarshal"},
 		{name: "unknown option", value: `{"reqRol":"Admin"}`, wantErr: `unknown field "reqRol"`},
+		{name: "incorrect field case", value: `{"ReqRole":"Admin"}`, wantErr: `unknown field "ReqRole"`},
+		{name: "incorrect headers case", value: `{"Headers":[{"name":"X-Test"}]}`, wantErr: `unknown field "Headers"`},
+		{name: "incorrect nested case", value: `{"tokenAuth":{"URL":"https://example.com"}}`, wantErr: "tokenAuth.URL"},
 		{name: "path", value: `{"path":"/x"}`, wantErr: `unknown field "path"`},
 		{name: "method", value: `{"method":"GET"}`, wantErr: `unknown field "method"`},
 		{name: "URL type", value: `{"url":42}`, wantErr: "cannot unmarshal"},
-		{name: "role", value: `{"reqRole":"admin"}`, wantErr: "reqRole must be"},
+		{name: "role", value: `{"reqRole":"SuperAdmin"}`, wantErr: "invalid role value"},
 		{name: "null role", value: `{"reqRole":null}`, wantErr: "reqRole must not be null"},
 		{name: "action type", value: `{"reqAction":true}`, wantErr: "cannot unmarshal"},
 		{name: "auth type", value: `{"authType":"oauth"}`, wantErr: "authType must be"},
@@ -46,13 +52,13 @@ func TestProxyTargetFromOperation(t *testing.T) {
 		{name: "missing header name", value: `{"headers":[{"content":"x"}]}`, wantErr: "headers[0].name"},
 		{name: "missing header content", value: `{"headers":[{"name":"X-Test"}]}`, wantErr: "headers[0].content is required"},
 		{name: "null header", value: `{"headers":[null]}`, wantErr: "headers[0] must not be null"},
-		{name: "header typo", value: `{"headers":[{"name":"X-Test","contents":"x"}]}`, wantErr: `unknown field "contents"`},
+		{name: "header typo", value: `{"headers":[{"name":"X-Test","contents":"x"}]}`, wantErr: `unknown field "headers[0].contents"`},
 		{name: "missing param name", value: `{"urlParams":[{"content":"x"}]}`, wantErr: "urlParams[0].name"},
 		{name: "missing param content", value: `{"urlParams":[{"name":"x"}]}`, wantErr: "urlParams[0].content is required"},
 		{name: "token type", value: `{"tokenAuth":true}`, wantErr: "cannot unmarshal"},
 		{name: "scope type", value: `{"jwtTokenAuth":{"scopes":[1]}}`, wantErr: "cannot unmarshal"},
 		{name: "param type", value: `{"tokenAuth":{"params":{"key":1}}}`, wantErr: "cannot unmarshal"},
-		{name: "token typo", value: `{"tokenAuth":{"uri":"https://example.com"}}`, wantErr: `unknown field "uri"`},
+		{name: "token typo", value: `{"tokenAuth":{"uri":"https://example.com"}}`, wantErr: `unknown field "tokenAuth.uri"`},
 		{name: "URL template", value: `{"url":"{{"}`, wantErr: "url:"},
 		{name: "header template", value: `{"headers":[{"name":"X-Test","content":"{{unknown}}"}]}`, wantErr: "headers[0].content:"},
 		{name: "param name template", value: `{"urlParams":[{"name":"{{","content":"x"}]}`, wantErr: "urlParams[0].name:"},
@@ -89,14 +95,49 @@ func TestProxyTargetTypedAndAbsent(t *testing.T) {
 		require.False(t, declared)
 		require.Nil(t, target)
 	}
-	want := ProxyTarget{URL: "{{.URL}}", Body: json.RawMessage(`{ "key" : "{{.JsonData.key}}" }`)}
+	want := ProxyTarget{ReqRole: types.RoleEditor, URL: "{{.URL}}", Body: json.RawMessage(`{ "key" : "{{.JsonData.key}}" }`)}
 	op := &spec3.Operation{}
 	op.AddExtension(ExtensionProxy, want)
 	target, declared, err := ProxyTargetFromOperation(op)
 	require.NoError(t, err)
 	require.True(t, declared)
+	require.Equal(t, types.RoleEditor, target.ReqRole)
 	require.Equal(t, want.URL, target.URL)
 	require.JSONEq(t, string(want.Body), string(target.Body))
+}
+
+func TestProxyTargetRoleType(t *testing.T) {
+	for _, tt := range []struct {
+		name, input string
+		want        types.RoleType
+		wantErr     bool
+	}{
+		{name: "omitted", input: `{}`},
+		{name: "empty defaults to viewer", input: `{"reqRole":""}`, want: types.RoleViewer},
+		{name: "none", input: `{"reqRole":"None"}`, want: types.RoleNone},
+		{name: "viewer", input: `{"reqRole":"Viewer"}`, want: types.RoleViewer},
+		{name: "editor", input: `{"reqRole":"Editor"}`, want: types.RoleEditor},
+		{name: "admin", input: `{"reqRole":"Admin"}`, want: types.RoleAdmin},
+		{name: "lowercase none", input: `{"reqRole":"none"}`, want: types.RoleNone},
+		{name: "lowercase viewer", input: `{"reqRole":"viewer"}`, want: types.RoleViewer},
+		{name: "lowercase editor", input: `{"reqRole":"editor"}`, want: types.RoleEditor},
+		{name: "lowercase admin", input: `{"reqRole":"admin"}`, want: types.RoleAdmin},
+		{name: "uppercase", input: `{"reqRole":"ADMIN"}`, wantErr: true},
+		{name: "whitespace", input: `{"reqRole":" Admin "}`, wantErr: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			op := &spec3.Operation{}
+			op.AddExtension(ExtensionProxy, json.RawMessage(tt.input))
+			target, declared, err := ProxyTargetFromOperation(op)
+			require.True(t, declared)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, target.ReqRole)
+		})
+	}
 }
 
 func TestParseRejectsInvalidProxyOperations(t *testing.T) {
@@ -113,4 +154,69 @@ func TestParseRejectsInvalidProxyOperations(t *testing.T) {
 	require.Contains(t, reasons(problems)["HEAD /proxy"], ExtensionProxy)
 	require.Contains(t, reasons(problems)["GET /proxy"], "would also answer HEAD")
 	require.NotNil(t, version.OpenAPI.Paths["/proxy"].Get, "parsing must not change the manifest")
+}
+
+func TestProxyTargetPreservesBodyTemplate(t *testing.T) {
+	body := json.RawMessage("{ \"match\": \"{{if eq .value `<`}}yes{{else}}no{{end}}\" }")
+	want := ProxyTarget{Body: body}
+	for _, value := range []any{want, &want, json.RawMessage(`{"body":` + string(body) + `}`)} {
+		op := &spec3.Operation{}
+		op.AddExtension(ExtensionProxy, value)
+		target, declared, err := ProxyTargetFromOperation(op)
+		require.NoError(t, err)
+		require.True(t, declared)
+		require.Equal(t, body, target.Body)
+		tmpl, err := template.New("body").Parse(string(target.Body))
+		require.NoError(t, err)
+		var rendered bytes.Buffer
+		require.NoError(t, tmpl.Execute(&rendered, map[string]string{"value": "<"}))
+		require.JSONEq(t, `{"match":"yes"}`, rendered.String())
+	}
+	var decoded any
+	require.NoError(t, json.Unmarshal([]byte(`{"body":`+string(body)+`}`), &decoded))
+	op := &spec3.Operation{}
+	op.AddExtension(ExtensionProxy, decoded)
+	target, _, err := ProxyTargetFromOperation(op)
+	require.NoError(t, err)
+	require.Contains(t, string(target.Body), "`<`", "decoded extensions must not HTML-escape template expressions")
+}
+
+func TestProxyTargetTypedValidation(t *testing.T) {
+	for _, value := range []any{
+		(*ProxyTarget)(nil),
+		ProxyTarget{Body: json.RawMessage(`{"invalid":`)},
+		&ProxyTarget{ReqRole: "SuperAdmin"},
+		ProxyTarget{AuthType: ProxyAuthTypeAzure},
+		ProxyTarget{URL: "{{"},
+	} {
+		op := &spec3.Operation{}
+		op.AddExtension(ExtensionProxy, value)
+		target, declared, err := ProxyTargetFromOperation(op)
+		require.ErrorContains(t, err, "invalid "+ExtensionProxy)
+		require.True(t, declared)
+		require.Nil(t, target)
+	}
+}
+
+func TestProxyTargetRawJSON(t *testing.T) {
+	for _, tt := range []struct {
+		name, value, wantErr string
+	}{
+		{name: "large body number", value: `{"body":1e1000}`},
+		{name: "duplicate field", value: `{"reqRole":"Admin","reqRole":"Viewer"}`, wantErr: "duplicate field"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			op := &spec3.Operation{}
+			op.AddExtension(ExtensionProxy, json.RawMessage(tt.value))
+			target, declared, err := ProxyTargetFromOperation(op)
+			require.True(t, declared)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				require.Nil(t, target)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, json.RawMessage(`1e1000`), target.Body)
+		})
+	}
 }

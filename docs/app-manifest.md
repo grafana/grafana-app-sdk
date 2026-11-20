@@ -152,12 +152,32 @@ Headers and URL parameters contain `name` and `content` strings. Token configura
 contain an optional `url`, a list of string `scopes`, and string-valued `params`.
 `body` can be any JSON value.
 
+`reqRole` uses authlib's `types.RoleType`. Canonical names and their lowercase forms
+are accepted. An explicitly empty string decodes as `Viewer`; omitting `reqRole`
+leaves it unset.
+
 Manifest generation validates these options for CUE custom routes and imported or inline
 OpenAPI operations, including unknown fields, field types, basic roles (`None`, `Viewer`,
 `Editor`, `Admin`), and authentication types. `azure` requires `tokenAuth`; `gce` and `jwt`
 require `jwtTokenAuth`. An omitted authentication type uses the configured token options.
 Template syntax is checked during generation, including the proxy's `orEmpty` function.
 Templates are only executed at runtime, when settings and secrets are available.
+
+`authType` selects the upstream token provider; `reqRole` and `reqAction` control access
+to the route itself. The data source proxy supports these providers:
+
+| `authType` | Provider | Configuration |
+| --- | --- | --- |
+| Omitted or `""` | Generic token authentication when `tokenAuth` is present; otherwise Google service-account authentication when `jwtTokenAuth` is present; otherwise no token is added. | Generic authentication POSTs `tokenAuth.params` as form data to `tokenAuth.url`. |
+| `"azure"` | Azure managed identity or client-secret authentication. | `tokenAuth.scopes` and Azure credential parameters such as `azure_auth_type`, `tenant_id`, `client_id`, and `client_secret`. |
+| `"gce"` | Google application default credentials, such as the environment's service account. | `jwtTokenAuth.scopes`; a private key is not required. |
+| `"jwt"` | Google service-account authentication. | `jwtTokenAuth.params` containing `client_email`, `private_key`, and `token_uri`, plus `jwtTokenAuth.scopes`. |
+
+There is no `"oauth"` value: leave `authType` unset for generic token authentication.
+The data source's nonempty `jsonData.authenticationType` overrides the route's `authType`
+at runtime, so its configuration must also supply the options required by that provider.
+The compiler checks the declared provider and template syntax; credential availability,
+token endpoint responses, and substituted values are checked at runtime.
 
 Go consumers can use `app.OpenAPIExtensionProxy` (also exposed as `routes.ExtensionProxy`),
 `routes.ProxyTarget`, and `routes.ProxyTargetFromOperation`. The extension is retained in
