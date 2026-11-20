@@ -189,9 +189,13 @@ func ({{.ObjectShortName}} *{{.TypeName}}) SetCommonMetadata(metadata resource.C
 	if {{$root.ObjectShortName}}.ObjectMeta.Annotations == nil {
 		{{$root.ObjectShortName}}.ObjectMeta.Annotations = make(map[string]string)
 	}
+	{{ if or (eq .JSONName "createdBy") (eq .JSONName "updatedBy") -}}
+	return resource.GetAnnotationFirst({{$root.ObjectShortName}}.ObjectMeta.Annotations, "grafana.app/{{.JSONName}}", "grafana.com/{{.JSONName}}")
+	{{- else -}}
 	{{ $var := (printf "%v.ObjectMeta.Annotations[\"grafana.com/%v\"]" $root.ObjectShortName .JSONName) }}
 	{{ $ret := (call .GoType.GetFuncTemplate $var) }}
 	{{ $ret }}
+	{{- end }}
 }
 
 func ({{$root.ObjectShortName}} *{{$root.TypeName}}) Set{{.FieldName}}({{.JSONName}} {{.GoType.GoType}}) {

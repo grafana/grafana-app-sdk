@@ -13,7 +13,22 @@ import (
 const (
 	// AnnotationPrefix is the prefix used for grafana app platform metadata keys in annotations
 	AnnotationPrefix = "grafana.com/"
+	// AnnotationPrefixGrafanaApp is the prefix Grafana itself uses for server-managed metadata annotations,
+	// such as grafana.app/createdBy and grafana.app/updatedBy.
+	AnnotationPrefixGrafanaApp = "grafana.app/"
 )
+
+// GetAnnotationFirst returns the value of the first key in keys which is present in annotations,
+// or an empty string if none are. It is used to read metadata which may be stored under
+// more than one annotation key (for example, the Grafana-managed key and the legacy SDK key).
+func GetAnnotationFirst(annotations map[string]string, keys ...string) string {
+	for _, k := range keys {
+		if v, ok := annotations[k]; ok {
+			return v
+		}
+	}
+	return ""
+}
 
 // ErrAnnotationMissing indicates that the provided annotation key is missing from the annotation map
 var ErrAnnotationMissing = errors.New("annotation is not in annotations map")
