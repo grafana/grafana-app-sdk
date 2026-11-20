@@ -15,6 +15,7 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	manifestv1alpha2 "github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha2"
 	"github.com/grafana/grafana-app-sdk/plugin"
 	"github.com/grafana/grafana-app-sdk/simple"
 )
@@ -22,7 +23,7 @@ import (
 const id = "example-live-app"
 const path = "events"
 
-//go:embed manifest.json
+//go:embed app-sdk-manifest.json
 var manifestJSON []byte
 
 type events struct{}
@@ -57,8 +58,12 @@ func (events) RunStream(ctx context.Context, req *backend.RunStreamRequest, send
 	return ctx.Err()
 }
 func provider() (app.Provider, error) {
-	var data app.ManifestData
-	if err := json.Unmarshal(manifestJSON, &data); err != nil {
+	var cr manifestv1alpha2.AppManifest
+	if err := json.Unmarshal(manifestJSON, &cr); err != nil {
+		return nil, err
+	}
+	data, err := cr.Spec.ToManifestData()
+	if err != nil {
 		return nil, err
 	}
 	manifest := app.Manifest{Location: app.ManifestLocation{Type: app.ManifestLocationEmbedded}, ManifestData: &data}

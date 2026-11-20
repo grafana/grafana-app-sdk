@@ -17,6 +17,18 @@ Here `plugin` is `github.com/grafana/grafana-app-sdk/plugin`. The provider handl
 
 The [working backend](live-plugin/main.go) exposes a namespaced `GET /channel` route and a shared demonstration channel. Run `go test ./docs/tutorials/live-plugin` to exercise route discovery, stream output, acknowledgement, and cancellation.
 
+To build a backend bundle for a local plugin operator, run the following from the SDK repository root. The operator loads the plugin metadata and the versioned AppManifest from the bundle directory. The backend embeds the same AppManifest for its route handler.
+
+```sh
+bundle=$(mktemp -d)/example-live-app
+mkdir -p "$bundle"
+cp docs/tutorials/live-plugin/plugin.json docs/tutorials/live-plugin/app-sdk-manifest.json "$bundle/"
+cp -R docs/tutorials/live-plugin/img "$bundle/"
+go build -o "$bundle/live_example_$(go env GOOS)_$(go env GOARCH)" ./docs/tutorials/live-plugin
+```
+
+Point a local development operator's plugins path at the parent of that directory and enable Live for `example-live-app`. Build for the operator's OS and architecture when they differ from your workstation.
+
 For channel `plugin/example-live-app/events`, use the same address for receiving and sending:
 
 ```ts
