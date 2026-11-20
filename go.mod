@@ -19,8 +19,8 @@ require (
 	github.com/emicklei/go-restful/v3 v3.14.0
 	github.com/getkin/kin-openapi v0.153.0
 	github.com/go-jose/go-jose/v4 v4.1.9
-	github.com/grafana/authlib v0.0.0-20261108003752-80ed9e737add
-	github.com/grafana/authlib/types v0.0.0-20261120075155-ea94d588d718
+	github.com/grafana/authlib v0.0.0-20261120111730-66556158dfb3
+	github.com/grafana/authlib/types v0.0.0-20261120111730-66556158dfb3
 	github.com/grafana/codejen v0.0.4
 	github.com/grafana/cog v0.2.4
 	github.com/grafana/grafana-app-sdk/logging v0.0.0 // placeholder: rewritten to the release version on the tagged commit by scripts/release.sh
