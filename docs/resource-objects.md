@@ -4,7 +4,7 @@ The core kernel of working with the SDK's libraries is the `resource.Object` int
 (henceforth referred to as `Object` for simplicity) represents an instance of a [Kind](./custom-kinds/README.md), 
 and is typically populated with data for that instance. An `Object` implementation is composed of three main components:
 1. Spec - this is the main body of the object, and where all user-editable data is stored. Read more about `spec` in [Kinds](./custom-kinds/README.md).
-2. Subresources - these are additional sub-objects which are typically only mutated by operators. The clearest example of this is the `status` subresource, typically used to track operator state when handling the object. Currently, when using CRDs with a [frontend-only](./application-design/README.md#frontend-only-applications) or [operator-based](./application-design/README.md#operator-based-applications), only `status` and `scale` subresources are supported.
+2. Subresources - these are additional sub-objects which are typically only mutated by operators. The clearest example of this is the `status` subresource, typically used to track operator state when handling the object.
 3. Metadata - these are fields that always exist for all objects, such as `name` or `labels`. Metadata can be accessed on a per-field basis, or in SDK-specific groupings:
     * Static Metadata - metadata which is immutable upon creation of the object and can be used to uniquely identify the resource
     * Common Metadata - a subset of general metadata that _also_ includes non-kubernetes, app-platform specific metadata, such as `updateTimestamp` and `createdBy`. These additional metadata fields are normally encoded in `annotations` in the kubernetes metadata.

@@ -180,11 +180,11 @@ func CopyObjectInto[T any](out T, in T) error {
 	srcType := reflect.TypeOf(in)
 	dstType := reflect.TypeOf(out)
 	// T must be a pointer to a struct
-	if dstType.Kind() != reflect.Ptr {
+	if dstType.Kind() != reflect.Pointer {
 		return errors.New("out must be a pointer to a struct")
 	}
 	// srcType.NumField() panics on a nil type
-	if srcType.Kind() == reflect.Ptr && srcVal.IsNil() {
+	if srcType.Kind() == reflect.Pointer && srcVal.IsNil() {
 		return errors.New("in must not be nil")
 	}
 	// Trying to set values on a nil panics
@@ -192,11 +192,11 @@ func CopyObjectInto[T any](out T, in T) error {
 		return errors.New("out must not be nil")
 	}
 	// Before we can work with in and out, we actually need the values the T pointers are referencing
-	for dstType.Kind() == reflect.Ptr {
+	for dstType.Kind() == reflect.Pointer {
 		dstType = dstType.Elem()
 		dstVal = dstVal.Elem()
 	}
-	for srcType.Kind() == reflect.Ptr {
+	for srcType.Kind() == reflect.Pointer {
 		srcType = srcType.Elem()
 		srcVal = srcVal.Elem()
 	}
@@ -218,7 +218,7 @@ func CopyObjectInto[T any](out T, in T) error {
 }
 
 var errCannotSetValue = errors.New("cannot set value")
-var reflectTypeTime = reflect.TypeOf(time.Time{})
+var reflectTypeTime = reflect.TypeFor[time.Time]()
 
 // nolint:gocognit,gocritic,funlen
 func copyReflectValueInto(dst reflect.Value, src reflect.Value) error {
@@ -228,7 +228,7 @@ func copyReflectValueInto(dst reflect.Value, src reflect.Value) error {
 	}
 
 	switch src.Type().Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		// If the pointer is nil, just make a new one for the copy
 		if src.IsNil() {
 			if !dst.IsNil() {
@@ -289,29 +289,8 @@ func copyReflectValueInto(dst reflect.Value, src reflect.Value) error {
 		for _, key := range src.MapKeys() {
 			srcKeyVal := src.MapIndex(key)
 			dstKeyVal := reflect.New(srcKeyVal.Type()).Elem()
-			if srcKeyVal.Kind() == reflect.Ptr && srcKeyVal.Elem().Kind() == reflect.Struct {
-				// Copy using CopyObjectInto
-				if srcKeyVal.IsNil() {
-					dstKeyVal = reflect.New(srcKeyVal.Elem().Type())
-				} else {
-					// find the type of the pointer, then copy that
-					typ := srcKeyVal.Type().Elem()
-					dstPtr := reflect.New(typ).Interface()
-					err := CopyObjectInto(dstPtr, srcKeyVal.Interface())
-					if err != nil {
-						return err
-					}
-					dstKeyVal = reflect.ValueOf(dstPtr)
-				}
-			} else if srcKeyVal.Kind() == reflect.Struct {
-				// Copy using CopyObjectInto
-				dst := reflect.New(srcKeyVal.Type()).Interface()
-				if err := CopyObjectInto(dst, srcKeyVal.Interface()); err != nil {
-					return err
-				}
-				dstKeyVal = reflect.ValueOf(dst).Elem()
-			} else {
-				dstKeyVal.Set(srcKeyVal)
+			if err := copyReflectValueInto(dstKeyVal, srcKeyVal); err != nil {
+				return err
 			}
 			dstMap.SetMapIndex(key, dstKeyVal)
 		}
@@ -323,10 +302,24 @@ func copyReflectValueInto(dst reflect.Value, src reflect.Value) error {
 			}
 			return nil
 		}
-		// Copy slice elements
+		// Copy each element recursively: a new slice alone still shares nested maps, slices, and pointers.
 		dstSlice := reflect.MakeSlice(src.Type(), src.Len(), src.Cap())
-		reflect.Copy(dstSlice, src)
+		for i := 0; i < src.Len(); i++ {
+			if err := copyReflectValueInto(dstSlice.Index(i), src.Index(i)); err != nil {
+				return err
+			}
+		}
 		dst.Set(dstSlice)
+	case reflect.Interface:
+		if src.IsNil() {
+			dst.SetZero()
+			return nil
+		}
+		dstValue := reflect.New(src.Elem().Type()).Elem()
+		if err := copyReflectValueInto(dstValue, src.Elem()); err != nil {
+			return err
+		}
+		dst.Set(dstValue)
 	default:
 		// Just copy the value over
 		dst.Set(src)

@@ -82,15 +82,16 @@ func (k Kind) GroupVersionKind() schema.GroupVersionKind {
 	}
 }
 
-// GroupVersionResource is a convenience method that assembles a schema.GroupVersionResource from Group(), Version(), and Plural()
+// GroupVersionResource is a convenience method that assembles a schema.GroupVersionResource from Group(), Version(), and Resource()
 func (k Kind) GroupVersionResource() schema.GroupVersionResource {
 	if k.Schema == nil {
 		return schema.GroupVersionResource{}
 	}
+
 	return schema.GroupVersionResource{
 		Group:    k.Group(),
 		Version:  k.Version(),
-		Resource: k.Plural(),
+		Resource: k.Resource(),
 	}
 }
 
@@ -110,6 +111,7 @@ func (*JSONCodec) Read(in io.Reader, out Object) error {
 }
 
 // Write marshals the provided Object into kubernetes-formatted JSON bytes.
+// Secure create values are written as plaintext without consuming them.
 func (*JSONCodec) Write(out io.Writer, in Object) error {
 	m := make(map[string]any)
 	m["apiVersion"], m["kind"] = in.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()
@@ -117,7 +119,7 @@ func (*JSONCodec) Write(out io.Writer, in Object) error {
 		Name:                       in.GetName(),
 		GenerateName:               in.GetGenerateName(),
 		Namespace:                  in.GetNamespace(),
-		SelfLink:                   in.GetSelfLink(),
+		SelfLink:                   in.GetSelfLink(), // nolint: staticcheck
 		UID:                        in.GetUID(),
 		ResourceVersion:            in.GetResourceVersion(),
 		Generation:                 in.GetGeneration(),
@@ -132,6 +134,24 @@ func (*JSONCodec) Write(out io.Writer, in Object) error {
 	}
 	m["spec"] = in.GetSpec()
 	maps.Copy(m, in.GetSubresources())
+	if secure, ok := in.(ObjectWithSecureValues); ok && len(secure.GetSecureValues()) > 0 {
+		// Use a string for create to bypass RawSecureValue's redacting marshaler.
+		type inlineSecureValueJSON struct {
+			Create      string  `json:"create,omitempty"`
+			Description *string `json:"description,omitempty"`
+			Name        string  `json:"name,omitempty"`
+			Remove      bool    `json:"remove,omitempty"`
+		}
+		values := secure.GetSecureValues()
+		encoded := make(map[string]inlineSecureValueJSON, len(values))
+		for key, value := range values {
+			encoded[key] = inlineSecureValueJSON{
+				Create: string(value.Create), Description: value.Description,
+				Name: value.Name, Remove: value.Remove,
+			}
+		}
+		m["secure"] = encoded
+	}
 	return json.NewEncoder(out).Encode(m)
 }
 

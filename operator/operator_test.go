@@ -57,8 +57,7 @@ func TestOperator_Run(t *testing.T) {
 			},
 		})
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 
 		err := o.Run(ctx)
 		assert.Equal(t, expectedErr, err)
@@ -79,8 +78,7 @@ func TestOperator_Run(t *testing.T) {
 			},
 		})
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 
 		err := o.Run(ctx)
 		assert.Equal(t, expectedErr, err)

@@ -21,7 +21,7 @@ func (*TestKindJSONCodec) Read(reader io.Reader, into resource.Object) error {
 
 // Write writes JSON-encoded bytes into `writer` marshaled from `from`
 func (*TestKindJSONCodec) Write(writer io.Writer, from resource.Object) error {
-	return json.NewEncoder(writer).Encode(from)
+	return resource.NewJSONCodec().Write(writer, from)
 }
 
 // Interface compliance checks

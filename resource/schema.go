@@ -26,6 +26,11 @@ type Schema interface {
 	Kind() string
 	// Plural returns the plural name of the Schema kind
 	Plural() string
+	// Resource returns the lowercase resource name used in the Kubernetes API path
+	// (e.g. /apis/<group>/<version>/namespaces/<ns>/<resource>) and in the GroupVersionResource.
+	// It defaults to the lowercased Plural(), but can differ from it, as Plural() may use a
+	// machine-friendly form (e.g. "foo_bars") while the API serves "foo-bars".
+	Resource() string
 	// ZeroValue returns the "zero-value", "default", or "empty" version of an Object of this Schema
 	ZeroValue() Object
 	// ZeroListValue returns a ListObject implementation which represents an empty (or appropriately "zero-value")
@@ -49,6 +54,7 @@ type SelectableField struct {
 
 // SchemaGroup represents a group of Schemas. The interface does not require commonality between Schemas,
 // but an implementation may require a relationship.
+//
 // Deprecated: Kinds are now favored over Schemas for usage.
 type SchemaGroup interface {
 	Schemas() []Schema
@@ -62,6 +68,7 @@ type SimpleSchema struct {
 	version          string
 	kind             string
 	plural           string
+	resource         string
 	scope            SchemaScope
 	selectableFields []SelectableField
 	zero             Object
@@ -88,6 +95,18 @@ func (s *SimpleSchema) Plural() string {
 	return s.plural
 }
 
+// Resource returns the SimpleSchema's Resource if set with WithResource.
+// Otherwise it returns the lowercased Plural, or the lowercased Kind plus "s" if there is no Plural.
+func (s *SimpleSchema) Resource() string {
+	if s.resource != "" {
+		return s.resource
+	}
+	if s.plural != "" {
+		return strings.ToLower(s.plural)
+	}
+	return strings.ToLower(s.kind) + "s"
+}
+
 // Scope returns the SimpleSchema's Scope
 func (s *SimpleSchema) Scope() SchemaScope {
 	return s.scope
@@ -112,6 +131,7 @@ func (s *SimpleSchema) SelectableFields() []SelectableField {
 }
 
 // SimpleSchemaGroup collects schemas with the same group and version
+//
 // Deprecated: Kinds are now favored over Schemas for usage. Use KindGroup instead.
 type SimpleSchemaGroup struct {
 	group   string
@@ -139,6 +159,14 @@ type SimpleSchemaOption func(*SimpleSchema)
 func WithPlural(plural string) func(*SimpleSchema) {
 	return func(s *SimpleSchema) {
 		s.plural = plural
+	}
+}
+
+// WithResource returns a SimpleSchemaOption that sets the SimpleSchema's Resource to the provided string.
+// It only needs to be set when the resource served by the API differs from the lowercased Plural.
+func WithResource(resource string) func(*SimpleSchema) {
+	return func(s *SimpleSchema) {
+		s.resource = resource
 	}
 }
 
@@ -193,6 +221,7 @@ func NewSimpleSchema(group, version string, zeroVal Object, zeroList ListObject,
 }
 
 // NewSimpleSchemaGroup returns a new SimpleSchemaGroup
+//
 // Deprecated: Kinds are now favored over Schemas for usage. Use KindGroup instead.
 func NewSimpleSchemaGroup(group, version string) *SimpleSchemaGroup {
 	return &SimpleSchemaGroup{

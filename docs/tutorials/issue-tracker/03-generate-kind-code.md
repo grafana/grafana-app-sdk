@@ -13,7 +13,7 @@ manifest: {
 	// and to generate the group used by your app in the app platform API.
 	appName: "issue-tracker-project"
 	// groupOverride can be used to specify a non-appName-based API group.
-	// By default, an app's API group is LOWER(REPLACE(appName, '-', '')).ext.grafana.com,
+	// By default, an app's API group is LOWER(REPLACE(appName, '-', '')).ext.grafana.app,
 	// but there are cases where this needs to be changed.
 	// Keep in mind that changing this after an app is deployed can cause problems with clients and/or kind data.
 	// groupOverride: foo.ext.grafana.app
@@ -102,7 +102,7 @@ $ make generate
  * Writing file plugin/src/generated/issue/v1alpha1/types.metadata.gen.ts
  * Writing file plugin/src/generated/issue/v1alpha1/types.spec.gen.ts
  * Writing file plugin/src/generated/issue/v1alpha1/types.status.gen.ts
- * Writing file definitions/issue.issuetrackerproject.ext.grafana.com.json
+ * Writing file definitions/issue.issuetrackerproject.ext.grafana.app.json
  * Writing file definitions/issue-tracker-project-manifest.json
  * Writing file pkg/generated/manifestdata/issuetrackerproject_manifest.go
 ```
@@ -114,7 +114,7 @@ $ tree .
 │   └── operator
 ├── definitions
 │   ├── issue-tracker-project-manifest.json
-│   └── issue.issuetrackerproject.ext.grafana.com.json
+│   └── issue.issuetrackerproject.ext.grafana.app.json
 ├── go.mod
 ├── go.sum
 ├── kinds
@@ -193,11 +193,11 @@ In addition to the types generated from our kind's schema, we have `issue_object
 `issue_object_gen.go` defines the complete object (with `spec`, `status`, and metadata) in a way that satisfies the `resource.Object` interface, so that it can be used with the SDK. 
 Likewise, `issue_schema_gen.go` defines a `resource.Schema` for this specific version of the kind which can be used in your project, 
 in addition to a `resource.Kind` for the kind. Finally, `issue_codec_gen.go` contains code for a kubernetes-JSON-bytes<->Issue `Object` codec, 
-which is used by the `Kind` for marshaling and unmarshaling our Object when interacting with the API server.
+which is used by the `Kind` for marshaling and unmarshaling our Object when interacting with the API.
 
 Finally, we have `issuetrackerproject_manifest.go` in the `pkg/generated/manifestdata` directory. This contains an in-code version of our manifest. 
 As we'll see a bit later, the manifest is also used in code to communicate app capabilities, so we have this in-code representation, 
-as well as an API server one.
+as well as a JSON/YAML one.
 
 ## Generated TypeScript Code
 
@@ -220,19 +220,16 @@ The generated TypeScript contains an interface built from our schema.
 Similarly to our go code, there are types for `Spec` and `Status` (and a legacy `Metadata` type), 
 and an `Object` type which pulls them all together. TypeScript code is only generated for kinds where `frontend: true`.
 
-### Generated Custom Resource Definitions
+### Generated Definitions
 
-Finally, we have the custom resource definition file that describes our `issue` kind as a CRD, which lives in `definitions` by default. 
-Note that this is a CRD of the kind, not just the schema, so the CRD will contain all schema versions in the kind. 
-This can be used to set up kubernetes as our storage layer for our project.
-
-We also have a manifest here, which will be used by the grafana API server in the future to register the app.
+Finally, the `definitions` directory holds our app manifest, which is used to register the app and its kinds with the platform, 
+and a custom resource definition (CRD) file for our `issue` kind, which our local development environment uses.
 
 ```shell
 $ tree definitions
 definitions
 ├── issue-tracker-project-manifest.json
-└── issue.issuetrackerproject.ext.grafana.com.json
+└── issue.issuetrackerproject.ext.grafana.app.json
 
 1 directory, 2 files
 ```

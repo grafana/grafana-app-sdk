@@ -1,12 +1,15 @@
 package codegen
 
 import (
+	"cmp"
+
 	"cuelang.org/go/cue"
 )
 
 // Kind is a common interface declaration for code generation.
 // Any type parser should be able to parse a kind into this definition to supply
 // to various common Jennies in the codegen package.
+//
 // Deprecated: use AppManifest instead
 type Kind interface {
 	Name() string
@@ -29,10 +32,14 @@ type KindProperties struct {
 	PluralMachineName string `json:"pluralMachineName"`
 	// PluralName is the plural of the Kind
 	PluralName string `json:"pluralName"`
+	// Resource is the lowercase API resource name the Kind is served under
+	Resource string `json:"resource"`
 	// Current is the version string of the version considered to be "current".
 	// This does not have to be the latest, but determines preference when generating code.
 	Current                string                      `json:"current"`
 	Scope                  string                      `json:"scope"`
+	UserReadable           bool                        `json:"userReadable"`
+	FolderScoped           bool                        `json:"folderScoped"`
 	Validation             KindAdmissionCapability     `json:"validation"`
 	Mutation               KindAdmissionCapability     `json:"mutation"`
 	Conversion             bool                        `json:"conversion"`
@@ -61,13 +68,18 @@ type KindAdmissionCapability struct {
 
 // KindCodegenProperties contains code generation directives for a Kind or KindVersion
 type KindCodegenProperties struct {
-	TS KindCodegenLanguageProperties[KindCodegenTSConfig] `json:"ts"`
-	Go KindCodegenLanguageProperties[KindCodegenGoConfig] `json:"go"`
+	TS KindCodegenTSProperties `json:"ts"`
+	Go KindCodegenGoProperties `json:"go"`
 }
 
-type KindCodegenLanguageProperties[T any] struct {
-	Enabled bool `json:"enabled"`
-	Config  T    `json:"config"`
+type KindCodegenTSProperties struct {
+	Enabled bool                `json:"enabled"`
+	Config  KindCodegenTSConfig `json:"config"`
+}
+
+type KindCodegenGoProperties struct {
+	Enabled bool           `json:"enabled"`
+	Config  map[string]any `json:"config"`
 }
 
 // KindCodegenTSConfig is the TypeScript configuration options for codegen,
@@ -75,11 +87,6 @@ type KindCodegenLanguageProperties[T any] struct {
 type KindCodegenTSConfig struct {
 	ImportsMap        map[string]string `json:"importsMap"`
 	EnumsAsUnionTypes bool              `json:"enumsAsUnionTypes"`
-}
-
-// KindCodegenGoConfig is the Go configuration options for codegen,
-// modeled after the cog Go codegen options.
-type KindCodegenGoConfig struct {
 }
 
 type AdditionalPrinterColumn struct {
@@ -91,17 +98,91 @@ type AdditionalPrinterColumn struct {
 	JSONPath    string  `json:"jsonPath"`
 }
 
+type SearchField struct {
+	Name             string   `json:"name"`
+	Path             string   `json:"path,omitempty"`
+	Type             string   `json:"type"`
+	Array            bool     `json:"array,omitempty"`
+	Capabilities     []string `json:"capabilities"`
+	EmitZeroIfAbsent bool     `json:"emitZeroIfAbsent,omitempty"`
+	Description      string   `json:"description,omitempty"`
+}
+
+// KindSearch controls which search endpoints are served for a kind.
+type KindSearch struct {
+	// Endpoint controls whether the kind serves the /search endpoint.
+	Endpoint bool `json:"endpoint"`
+	// Trash controls whether the kind serves the /trash endpoint.
+	Trash bool `json:"trash"`
+	// Hybrid controls whether the kind serves the /search/hybrid endpoint.
+	// Unlike the other two it is off unless the kind opts in.
+	Hybrid bool `json:"hybrid"`
+	// Global controls whether the kind is included in the namespace-wide search index.
+	// Off unless the kind opts in.
+	Global bool `json:"global"`
+}
+
+// KindExtensions declares how other Grafana features treat a kind.
+// TODO: keep untyped keys for app-defined extensions, such as "kgatlas.ext.grafana.app".
+type KindExtensions struct {
+	Provisioning *KindProvisioning `json:"provisioning,omitempty"`
+}
+
+// KindProvisioning declares whether provisioning (Git Sync) manages a kind.
+type KindProvisioning struct {
+	Enabled bool `json:"enabled"`
+}
+
+// KindEmbed defines the embedding document independently of search fields.
+// Kinds with a custom embedding builder omit this configuration.
+type KindEmbed struct {
+	// Fields supplies inputs, in declaration order, used only to generate the text to be embedded.
+	// Declaring an embedding field does not enable filtering embeddings by that field.
+	Fields []EmbedField `json:"fields"`
+}
+
+// EmbedField supplies text for the embedding document without exposing a search field.
+type EmbedField struct {
+	Name string `json:"name"`
+	// Path supplies a string or string array from the resource and must not be empty.
+	Path string `json:"path"`
+}
+
 // CustomRouteRequest represents the request part of a custom route definition.
 type CustomRouteRequest struct {
+	// Parameters are the parameters of the route, as OpenAPI describes them: each says where it is.
+	Parameters []CustomRouteParam `json:"parameters,omitempty"`
+	// Query is the schema of the route's query parameters, whose fields are the parameters.
+	//
+	// Deprecated: declare the parameters with In "query" instead, and read them with QuerySchema.
 	Query cue.Value `json:"query,omitempty"`
 	Body  cue.Value `json:"body,omitempty"`
 }
 
-// CustomRouteResponse represents the response part of a custom route definition.
-type CustomRouteResponse struct {
-	Schema   cue.Value                   `json:"schema,omitempty"`
-	Metadata CustomRouteResponseMetadata `json:"metadata,omitempty"`
+// CustomRouteParam is one parameter of a custom route, described as OpenAPI's parameter object
+// describes it.
+type CustomRouteParam struct {
+	// Name is the name of the parameter. A path parameter's is a parameter in the route's path.
+	Name string `json:"name"`
+	// In is where the parameter is: "path", "query", "header" or "cookie".
+	In          string `json:"in"`
+	Description string `json:"description,omitempty"`
+	// Required is whether the request has to carry the parameter. A path parameter always does, and
+	// the others default to not.
+	Required   *bool `json:"required,omitempty"`
+	Deprecated bool  `json:"deprecated,omitempty"`
+	// Example is an example value, which has to satisfy Schema.
+	Example any `json:"example,omitempty"`
+	// Schema is the type of the parameter, which is a string when it is not declared.
+	Schema cue.Value `json:"schema,omitempty"`
 }
+
+const (
+	CustomRouteParamInPath   = "path"
+	CustomRouteParamInQuery  = "query"
+	CustomRouteParamInHeader = "header"
+	CustomRouteParamInCookie = "cookie"
+)
 
 type CustomRouteResponseMetadata struct {
 	TypeMeta   bool `json:"typeMeta"`
@@ -109,12 +190,44 @@ type CustomRouteResponseMetadata struct {
 	ObjectMeta bool `json:"objectMeta"`
 }
 
+// CustomRouteAuthz represents the declared authorization attributes of a custom route.
+// Each set field is emitted as an openAPI extension on the generated route.
+type CustomRouteAuthz struct {
+	// Resource is the resource the authz check is performed against.
+	Resource string `json:"resource"`
+	// Subresource is the subresource the authz check is performed against, if applicable.
+	Subresource *string `json:"subresource,omitempty"`
+	// Verb is the verb the authz check is performed with, if it differs from the one implied by the route's method.
+	Verb *string `json:"verb,omitempty"`
+}
+
 // CustomRoute represents a single custom route definition for a specific HTTP method.
 type CustomRoute struct {
-	Name       string              `json:"name"`
-	Request    CustomRouteRequest  `json:"request"`
-	Response   CustomRouteResponse `json:"response"`
-	Extensions map[string]any      `json:"extensions,omitempty"`
+	// Name is the deprecated spelling of OperationID. Once the manifest is parsed it holds the
+	// route's identifier, whichever of the two the route declared.
+	Name string `json:"name"`
+	// OperationID identifies the route: it is the operationId of the generated OpenAPI operation,
+	// and names the generated Go types and client method.
+	OperationID string             `json:"operationId,omitempty"`
+	Summary     string             `json:"summary,omitempty"`
+	Description string             `json:"description,omitempty"`
+	Request     CustomRouteRequest `json:"request"`
+	Response    cue.Value          `json:"response"`
+	// ResponseKind is the name of a kind in the same version whose resource the route returns. The
+	// route then declares no Response: it references the kind's schema, and generates no response type.
+	ResponseKind     string                      `json:"responseKind,omitempty"`
+	ResponseMetadata CustomRouteResponseMetadata `json:"responseMetadata"`
+	Extensions       map[string]any              `json:"extensions,omitempty"`
+	// Authz is the optional declared authorization information for the route. If nil,
+	// no authz openAPI extensions are added to the generated route.
+	Authz *CustomRouteAuthz `json:"authz,omitempty"`
+	// AllowMissingParent serves the route of an object even when no object is stored under its name.
+	AllowMissingParent bool `json:"allowMissingParent,omitempty"`
+}
+
+// ID is the identifier of the route: its operationId, or else its deprecated name.
+func (r CustomRoute) ID() string {
+	return cmp.Or(r.OperationID, r.Name)
 }
 
 type KindVersion struct {
@@ -128,7 +241,8 @@ type KindVersion struct {
 	Validation               KindAdmissionCapability           `json:"validation"`
 	Mutation                 KindAdmissionCapability           `json:"mutation"`
 	AdditionalPrinterColumns []AdditionalPrinterColumn         `json:"additionalPrinterColumns"`
-	Routes                   map[string]map[string]CustomRoute `json:"routes"`
+	SearchFields             []SearchField                     `json:"searchFields,omitempty"`
+	Routes                   map[string]map[string]CustomRoute `json:"routes,omitempty"`
 }
 
 // AnyKind is a simple implementation of Kind

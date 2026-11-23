@@ -3,14 +3,53 @@
 package v2
 
 import (
+	bytes "bytes"
+	json "encoding/json"
+	errors "errors"
 	time "time"
 )
+
+// +k8s:openapi-gen=true
+type TestKindDef struct {
+	Str string `json:"str"`
+	I   int64  `json:"i"`
+}
+
+// NewTestKindDef creates a new TestKindDef object.
+func NewTestKindDef() *TestKindDef {
+	return &TestKindDef{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for TestKindDef.
+func (TestKindDef) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v2.TestKindDef"
+}
+
+// +k8s:openapi-gen=true
+type TestKindDef2 struct {
+	Str string `json:"str"`
+	B   bool   `json:"b"`
+}
+
+// NewTestKindDef2 creates a new TestKindDef2 object.
+func NewTestKindDef2() *TestKindDef2 {
+	return &TestKindDef2{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for TestKindDef2.
+func (TestKindDef2) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v2.TestKindDef2"
+}
 
 // +k8s:openapi-gen=true
 type TestKindSpec struct {
 	StringField string    `json:"stringField"`
 	IntField    int64     `json:"intField"`
 	TimeField   time.Time `json:"timeField"`
+	// This generates a normal go pointer field, but needs to be handled correctly as a selectable field, as the schema logic registers it as a disjunction
+	UnionNull *TestKindDef `json:"unionNull,omitempty"`
+	// null variant should be ignore in disjunction when generating the selectable field
+	UnionNull2 *TestKindDefOrDef2OrNull `json:"unionNull2,omitempty"`
 }
 
 // NewTestKindSpec creates a new TestKindSpec object.
@@ -21,4 +60,67 @@ func NewTestKindSpec() *TestKindSpec {
 // OpenAPIModelName returns the OpenAPI model name for TestKindSpec.
 func (TestKindSpec) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.testapp.v2.TestKindSpec"
+}
+
+// +k8s:openapi-gen=true
+type TestKindDefOrDef2OrNull struct {
+	Def  *TestKindDef  `json:"Def,omitempty"`
+	Def2 *TestKindDef2 `json:"Def2,omitempty"`
+}
+
+// NewTestKindDefOrDef2OrNull creates a new TestKindDefOrDef2OrNull object.
+func NewTestKindDefOrDef2OrNull() *TestKindDefOrDef2OrNull {
+	return &TestKindDefOrDef2OrNull{}
+}
+
+// MarshalJSON implements a custom JSON marshalling logic to encode `TestKindDefOrDef2OrNull` as JSON.
+func (resource TestKindDefOrDef2OrNull) MarshalJSON() ([]byte, error) {
+	if resource.Def != nil {
+		return json.Marshal(resource.Def)
+	}
+	if resource.Def2 != nil {
+		return json.Marshal(resource.Def2)
+	}
+
+	return []byte("null"), nil
+}
+
+// UnmarshalJSON implements a custom JSON unmarshalling logic to decode `TestKindDefOrDef2OrNull` from JSON.
+func (resource *TestKindDefOrDef2OrNull) UnmarshalJSON(raw []byte) error {
+	if raw == nil {
+		return nil
+	}
+
+	var errList []error
+
+	// Def
+	var Def TestKindDef
+	defdec := json.NewDecoder(bytes.NewReader(raw))
+	defdec.DisallowUnknownFields()
+	if err := defdec.Decode(&Def); err != nil {
+		errList = append(errList, err)
+		resource.Def = nil
+	} else {
+		resource.Def = &Def
+		return nil
+	}
+
+	// Def2
+	var Def2 TestKindDef2
+	def2dec := json.NewDecoder(bytes.NewReader(raw))
+	def2dec.DisallowUnknownFields()
+	if err := def2dec.Decode(&Def2); err != nil {
+		errList = append(errList, err)
+		resource.Def2 = nil
+	} else {
+		resource.Def2 = &Def2
+		return nil
+	}
+
+	return errors.Join(errList...)
+}
+
+// OpenAPIModelName returns the OpenAPI model name for TestKindDefOrDef2OrNull.
+func (TestKindDefOrDef2OrNull) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v2.TestKindDefOrDef2OrNull"
 }

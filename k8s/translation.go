@@ -95,9 +95,9 @@ func marshalJSONPatch(patch resource.PatchRequest) ([]byte, error) {
 
 func getV1ObjectMetaFields() map[string]struct{} {
 	fields := make(map[string]struct{})
-	typ := reflect.TypeOf(metav1.ObjectMeta{})
-	for i := 0; i < typ.NumField(); i++ {
-		jsonTag := typ.Field(i).Tag.Get("json")
+	typ := reflect.TypeFor[metav1.ObjectMeta]()
+	for field := range typ.Fields() {
+		jsonTag := field.Tag.Get("json")
 		if len(jsonTag) == 0 || jsonTag[0] == '-' || jsonTag[0] == ',' {
 			continue
 		}

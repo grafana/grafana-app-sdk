@@ -1,16 +1,19 @@
 package v1alpha2
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"maps"
 	"reflect"
+	"slices"
 	"strings"
 
 	"k8s.io/kube-openapi/pkg/spec3"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 // ToManifestData is a function which converts this specific version of the AppManifestSpec (v1alpha2)
@@ -22,6 +25,12 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 		AppDisplayName: s.AppDisplayName,
 		Group:          s.Group,
 		Versions:       make([]app.ManifestVersion, len(s.Versions)),
+	}
+	if s.Embed != nil {
+		data.Embed = make(map[string]app.ManifestResourceEmbed, len(s.Embed))
+		for r, embed := range s.Embed {
+			data.Embed[r] = app.ManifestResourceEmbed{ReembedVersion: int(embed.ReembedVersion)}
+		}
 	}
 	// Versions
 	for idx, version := range s.Versions {
@@ -37,12 +46,26 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 		for kidx, kind := range version.Kinds {
 			k := app.ManifestVersionKind{
 				Kind:             kind.Kind,
-				Plural:           strings.ToLower(kind.Kind) + "s",
+				Plural:           kind.Kind + "s",
+				Resource:         strings.ToLower(kind.Kind) + "s",
 				SelectableFields: kind.SelectableFields,
 				Scope:            string(kind.Scope),
 			}
+			if kind.UserReadable != nil {
+				k.UserReadable = *kind.UserReadable
+			}
+			k.FolderScoped = kind.FolderScoped
+			if kind.Storage != nil {
+				k.Storage = &app.ManifestVersionKindStorage{ListKeys: kind.Storage.ListKeys}
+			}
+			k.FixedNames = slices.Clone(kind.FixedNames)
+			k.NamingStrategy = namingStrategyToManifestData(kind.NamingStrategy)
 			if kind.Plural != nil {
-				k.Plural = strings.ToLower(*kind.Plural)
+				k.Plural = capitalize(*kind.Plural)
+				k.Resource = strings.ToLower(*kind.Plural)
+			}
+			if kind.Resource != nil {
+				k.Resource = *kind.Resource
 			}
 			if kind.Conversion != nil {
 				k.Conversion = *kind.Conversion
@@ -90,6 +113,65 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 					k.AdditionalPrinterColumns[i] = translated
 				}
 			}
+			for _, value := range kind.Secure {
+				entry := app.ManifestVersionKindSecureValue{Key: value.Key}
+				if value.Description != nil {
+					entry.Description = *value.Description
+				}
+				k.SecureValues = append(k.SecureValues, entry)
+			}
+			// SearchFields
+			if len(kind.SearchFields) > 0 {
+				k.SearchFields = make([]app.ManifestVersionKindSearchField, len(kind.SearchFields))
+				for i, sf := range kind.SearchFields {
+					translated := app.ManifestVersionKindSearchField{
+						Name:         sf.Name,
+						Type:         string(sf.Type),
+						Capabilities: make([]string, len(sf.Capabilities)),
+					}
+					for ci, c := range sf.Capabilities {
+						translated.Capabilities[ci] = string(c)
+					}
+					if sf.Path != nil {
+						translated.Path = *sf.Path
+					}
+					if sf.Array != nil {
+						translated.Array = *sf.Array
+					}
+					if sf.EmitZeroIfAbsent != nil {
+						translated.EmitZeroIfAbsent = *sf.EmitZeroIfAbsent
+					}
+					if sf.Description != nil {
+						translated.Description = *sf.Description
+					}
+					k.SearchFields[i] = translated
+				}
+			}
+			// Search endpoints
+			if kind.Search != nil {
+				k.Search = &app.ManifestVersionKindSearch{
+					Endpoint: kind.Search.Endpoint,
+					Trash:    kind.Search.Trash,
+					Hybrid:   kind.Search.Hybrid,
+					Global:   kind.Search.Global,
+				}
+			}
+			if kind.Embed != nil {
+				k.Embed = &app.ManifestVersionKindEmbed{}
+				if kind.Embed.Fields != nil {
+					k.Embed.Fields = make([]app.ManifestVersionKindEmbedField, len(kind.Embed.Fields))
+					for i, field := range kind.Embed.Fields {
+						k.Embed.Fields[i].Name = field.Name
+						k.Embed.Fields[i].Path = field.Path
+					}
+				}
+			}
+			if kind.Extensions != nil {
+				k.Extensions = &app.ManifestVersionKindExtensions{}
+				if kind.Extensions.Provisioning != nil {
+					k.Extensions.Provisioning = &app.ManifestVersionKindProvisioning{Enabled: kind.Extensions.Provisioning.Enabled}
+				}
+			}
 			// Schema
 			if kind.Schemas != nil {
 				toParse := make(map[string]any)
@@ -121,41 +203,55 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 
 		// Routes
 		if version.Routes != nil {
+			routes := &v.Routes //nolint:staticcheck // Routes is deprecated but still populated for existing consumers
 			if len(version.Routes.Namespaced) > 0 {
-				v.Routes.Namespaced = make(map[string]spec3.PathProps)
+				routes.Namespaced = make(map[string]spec3.PathProps)
 				marshaled, err := json.Marshal(version.Routes.Namespaced)
 				if err != nil {
 					return app.ManifestData{}, err
 				}
-				err = json.Unmarshal(marshaled, &v.Routes.Namespaced)
+				err = json.Unmarshal(marshaled, &routes.Namespaced)
 				if err != nil {
 					return app.ManifestData{}, err
 				}
 			}
 			if len(version.Routes.Cluster) > 0 {
-				v.Routes.Cluster = make(map[string]spec3.PathProps)
+				routes.Cluster = make(map[string]spec3.PathProps)
 				marshaled, err := json.Marshal(version.Routes.Cluster)
 				if err != nil {
 					return app.ManifestData{}, err
 				}
-				err = json.Unmarshal(marshaled, &v.Routes.Cluster)
+				err = json.Unmarshal(marshaled, &routes.Cluster)
 				if err != nil {
 					return app.ManifestData{}, err
 				}
 			}
 			if len(version.Routes.Schemas) > 0 {
-				v.Routes.Schemas = make(map[string]spec.Schema)
+				routes.Schemas = make(map[string]spec.Schema)
 				marshaled, err := json.Marshal(version.Routes.Schemas)
 				if err != nil {
 					return app.ManifestData{}, err
 				}
-				err = json.Unmarshal(marshaled, &v.Routes.Schemas)
+				err = json.Unmarshal(marshaled, &routes.Schemas)
 				if err != nil {
 					return app.ManifestData{}, err
 				}
 			}
 		}
 
+		if version.Openapi != nil {
+			raw, err := json.Marshal(version.Openapi)
+			if err != nil {
+				return app.ManifestData{}, err
+			}
+			if err := json.Unmarshal(raw, &v.OpenAPI); err != nil {
+				return app.ManifestData{}, err
+			}
+			// paths is always serialized (it is required), so normalize an empty map back to nil
+			if len(v.OpenAPI.Paths) == 0 {
+				v.OpenAPI.Paths = nil
+			}
+		}
 		data.Versions[idx] = v
 	}
 	if s.PreferredVersion != nil {
@@ -287,6 +383,12 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 		Group:          data.Group,
 		Versions:       make([]AppManifestManifestVersion, 0),
 	}
+	if data.Embed != nil {
+		manifestSpec.Embed = make(map[string]AppManifestResourceEmbed, len(data.Embed))
+		for r, embed := range data.Embed {
+			manifestSpec.Embed[r] = AppManifestResourceEmbed{ReembedVersion: int64(embed.ReembedVersion)}
+		}
+	}
 	if data.PreferredVersion != "" {
 		manifestSpec.PreferredVersion = &data.PreferredVersion
 	}
@@ -303,12 +405,22 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				Scope:            AppManifestManifestVersionKindScope(kind.Scope),
 				SelectableFields: kind.SelectableFields,
 				Conversion:       &kind.Conversion,
+				UserReadable:     &kind.UserReadable,
+				FolderScoped:     kind.FolderScoped,
 			}
+			if kind.Storage != nil {
+				k.Storage = &AppManifestManifestVersionKindStorage{ListKeys: kind.Storage.ListKeys}
+			}
+			k.FixedNames = slices.Clone(kind.FixedNames)
+			k.NamingStrategy = namingStrategyFromManifestData(kind.NamingStrategy)
 			if kind.Schema != nil {
 				k.Schemas = kind.Schema.AsOpenAPI3SchemasMap()
 			}
 			if kind.Plural != "" {
 				k.Plural = &kind.Plural
+			}
+			if kind.Resource != "" {
+				k.Resource = &kind.Resource
 			}
 			if kind.Admission != nil {
 				k.Admission = &AppManifestAdmissionCapabilities{}
@@ -342,6 +454,64 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 					}
 				}
 			}
+			for _, value := range kind.SecureValues {
+				entry := AppManifestSecureValue{Key: value.Key}
+				if value.Description != "" {
+					description := value.Description
+					entry.Description = &description
+				}
+				k.Secure = append(k.Secure, entry)
+			}
+			if len(kind.SearchFields) > 0 {
+				k.SearchFields = make([]AppManifestSearchField, len(kind.SearchFields))
+				for i, sf := range kind.SearchFields {
+					translated := AppManifestSearchField{
+						Name:         sf.Name,
+						Type:         AppManifestSearchFieldType(sf.Type),
+						Capabilities: make([]AppManifestSearchFieldCapabilities, len(sf.Capabilities)),
+					}
+					for ci, c := range sf.Capabilities {
+						translated.Capabilities[ci] = AppManifestSearchFieldCapabilities(c)
+					}
+					if sf.Path != "" {
+						translated.Path = &sf.Path
+					}
+					if sf.Array {
+						translated.Array = &sf.Array
+					}
+					if sf.EmitZeroIfAbsent {
+						translated.EmitZeroIfAbsent = &sf.EmitZeroIfAbsent
+					}
+					if sf.Description != "" {
+						translated.Description = &sf.Description
+					}
+					k.SearchFields[i] = translated
+				}
+			}
+			if kind.Search != nil {
+				k.Search = &AppManifestManifestVersionKindSearch{
+					Endpoint: kind.Search.Endpoint,
+					Trash:    kind.Search.Trash,
+					Hybrid:   kind.Search.Hybrid,
+					Global:   kind.Search.Global,
+				}
+			}
+			if kind.Embed != nil {
+				k.Embed = NewAppManifestManifestVersionKindEmbed()
+				if kind.Embed.Fields != nil {
+					k.Embed.Fields = make([]AppManifestManifestVersionKindEmbedField, len(kind.Embed.Fields))
+					for i, field := range kind.Embed.Fields {
+						k.Embed.Fields[i].Name = field.Name
+						k.Embed.Fields[i].Path = field.Path
+					}
+				}
+			}
+			if kind.Extensions != nil {
+				k.Extensions = &AppManifestManifestVersionKindExtensions{}
+				if kind.Extensions.Provisioning != nil {
+					k.Extensions.Provisioning = &AppManifestManifestVersionKindProvisioning{Enabled: kind.Extensions.Provisioning.Enabled}
+				}
+			}
 			// Routes
 			if kind.Routes != nil {
 				k.Routes = make(map[string]any)
@@ -351,25 +521,43 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 			}
 			ver.Kinds = append(ver.Kinds, k)
 		}
+		if !version.OpenAPI.IsZero() {
+			raw, err := json.Marshal(version.OpenAPI)
+			if err != nil {
+				return nil, err
+			}
+			// Preserve large integers instead of rounding them through float64.
+			decoder := json.NewDecoder(bytes.NewReader(raw))
+			decoder.UseNumber()
+			if err := decoder.Decode(&ver.Openapi); err != nil {
+				return nil, err
+			}
+			// paths is required by the schema, so never serialize it as null
+			if ver.Openapi.Paths == nil {
+				ver.Openapi.Paths = map[string]any{}
+			}
+		}
+
 		// Routes
-		if len(version.Routes.Namespaced) > 0 || len(version.Routes.Cluster) > 0 {
+		routes := version.Routes //nolint:staticcheck // Routes is deprecated but still serialized for existing manifests
+		if len(routes.Namespaced) > 0 || len(routes.Cluster) > 0 || len(routes.Schemas) > 0 {
 			ver.Routes = NewAppManifestManifestVersionRoutes()
-			if len(version.Routes.Namespaced) > 0 {
+			if len(routes.Namespaced) > 0 {
 				ver.Routes.Namespaced = make(map[string]any)
-				for path := range version.Routes.Namespaced {
-					ver.Routes.Namespaced[path] = version.Routes.Namespaced[path]
+				for path := range routes.Namespaced {
+					ver.Routes.Namespaced[path] = routes.Namespaced[path]
 				}
 			}
-			if len(version.Routes.Cluster) > 0 {
+			if len(routes.Cluster) > 0 {
 				ver.Routes.Cluster = make(map[string]any)
-				for path := range version.Routes.Cluster {
-					ver.Routes.Cluster[path] = version.Routes.Cluster[path]
+				for path := range routes.Cluster {
+					ver.Routes.Cluster[path] = routes.Cluster[path]
 				}
 			}
-			if len(version.Routes.Schemas) > 0 {
+			if len(routes.Schemas) > 0 {
 				ver.Routes.Schemas = make(map[string]any)
-				for path := range version.Routes.Schemas {
-					ver.Routes.Schemas[path] = version.Routes.Schemas[path]
+				for path := range routes.Schemas {
+					ver.Routes.Schemas[path] = routes.Schemas[path]
 				}
 			}
 		}
@@ -444,4 +632,48 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 	}
 
 	return &manifestSpec, nil
+}
+
+// capitalize upper-cases the first letter of s, as Plural is the capitalized form of the resource name
+func capitalize(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+func namingStrategyToManifestData(in *AppManifestManifestVersionKindNamingStrategy) *app.ManifestKindNamingStrategy {
+	if in == nil {
+		return nil
+	}
+	out := &app.ManifestKindNamingStrategy{Mode: in.Mode}
+	if in.Owner != nil {
+		out.Owner = &app.ManifestKindNamingStrategyOwner{
+			Owners:        make([]resource.Owner, 0, len(in.Owner.Owners)),
+			AllowOrgAdmin: in.Owner.AllowOrgAdmin != nil && *in.Owner.AllowOrgAdmin,
+		}
+		for _, owner := range in.Owner.Owners {
+			out.Owner.Owners = append(out.Owner.Owners, resource.Owner(owner))
+		}
+	}
+	return out
+}
+
+func namingStrategyFromManifestData(in *app.ManifestKindNamingStrategy) *AppManifestManifestVersionKindNamingStrategy {
+	if in == nil {
+		return nil
+	}
+	out := &AppManifestManifestVersionKindNamingStrategy{Mode: in.Mode}
+	if in.Owner != nil {
+		out.Owner = &AppManifestManifestVersionKindNamingStrategyOwner{
+			Owners: make([]AppManifestManifestVersionKindNamingStrategyOwnerOwners, 0, len(in.Owner.Owners)),
+		}
+		for _, owner := range in.Owner.Owners {
+			out.Owner.Owners = append(out.Owner.Owners, AppManifestManifestVersionKindNamingStrategyOwnerOwners(owner))
+		}
+		if in.Owner.AllowOrgAdmin {
+			out.Owner.AllowOrgAdmin = new(true)
+		}
+	}
+	return out
 }

@@ -3,6 +3,7 @@ package jennies
 import (
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 )
@@ -17,9 +18,10 @@ func ToPackageName(input string) string {
 // generated code should be grouped by kind or by GroupVersion.
 // When groupByKind is true, the path will be <kind>/<version>.
 // When groupByKind is false, the path will be <group>/<version>.
+//
 // Deprecated: Use GetGeneratedGoTypePath instead.
 //
-//nolint:revive
+//nolint:revive,staticcheck
 func GetGeneratedPath(groupByKind bool, kind codegen.Kind, version string) string {
 	if groupByKind {
 		return filepath.Join(ToPackageName(kind.Properties().MachineName), ToPackageName(version))
@@ -54,6 +56,15 @@ func GetGeneratedGoTypePath(groupByKind bool, shortGroup string, version string,
 	return filepath.Join(ToPackageName(shortGroup), ToPackageName(version))
 }
 
+// kindResource returns the API resource name for the kind, which comes from the kind's definition.
+// It falls back to the lowercased PluralName for a VersionedKind which was not built from a definition.
+func kindResource(kind codegen.VersionedKind) string {
+	if kind.Resource != "" {
+		return kind.Resource
+	}
+	return strings.ToLower(kind.PluralName)
+}
+
 func versionedKindToKindProperties(kind codegen.VersionedKind, appManifest codegen.AppManifest) codegen.KindProperties {
 	return codegen.KindProperties{
 		Kind:                   kind.Kind,
@@ -62,8 +73,11 @@ func versionedKindToKindProperties(kind codegen.VersionedKind, appManifest codeg
 		MachineName:            kind.MachineName,
 		PluralMachineName:      kind.PluralMachineName,
 		PluralName:             kind.PluralName,
+		Resource:               kind.Resource,
 		Current:                appManifest.Properties().PreferredVersion,
 		Scope:                  kind.Scope,
+		UserReadable:           kind.UserReadable,
+		FolderScoped:           kind.FolderScoped,
 		Validation:             kind.Validation,
 		Mutation:               kind.Mutation,
 		Conversion:             kind.Conversion,

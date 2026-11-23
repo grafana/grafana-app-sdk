@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/k8s"
+	"github.com/grafana/grafana-app-sdk/logging"
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -55,9 +58,7 @@ func NewAppProvider(manifest app.Manifest, cfg app.SpecificConfig, newAppFunc fu
 	}
 }
 
-var (
-	_ app.App = &App{}
-)
+var _ app.App = &App{}
 
 // KindMutator is an interface which describes an object which can mutate a kind, used in AppManagedKind
 type KindMutator interface {
@@ -109,6 +110,22 @@ type App struct {
 	customRoutes       map[string]AppCustomRouteHandler
 	patcher            *k8s.DynamicPatcher
 	collectors         []prometheus.Collector
+	handler            http.Handler
+
+	// Admission metrics (validate/mutate)
+	admissionLatency  *prometheus.HistogramVec
+	admissionTotal    *prometheus.CounterVec
+	admissionInflight *prometheus.GaugeVec
+
+	// Conversion metrics
+	conversionLatency  *prometheus.HistogramVec
+	conversionTotal    *prometheus.CounterVec
+	conversionInflight *prometheus.GaugeVec
+
+	// Custom route metrics
+	customRouteLatency  *prometheus.HistogramVec
+	customRouteTotal    *prometheus.CounterVec
+	customRouteInflight *prometheus.GaugeVec
 }
 
 // AppConfig is the configuration used by App
@@ -122,6 +139,9 @@ type AppConfig struct {
 	ManagedKinds    []AppManagedKind
 	UnmanagedKinds  []AppUnmanagedKind
 	Converters      map[schema.GroupKind]Converter
+	// Handler serves custom routes through the plugin adapter using full API paths.
+	// When nil, the adapter uses CallCustomRoute.
+	Handler http.Handler
 	// VersionedCustomRoutes is a map of version string => custom route handlers for
 	// custom routes attached at the version level rather than attached to a specific kind.
 	// Custom route paths for each version should not conflict with plural names of kinds for the version.
@@ -131,6 +151,9 @@ type AppConfig struct {
 	// for sending finalizer add/remove patches to the latest version of the kind.
 	// This defaults to 10 minutes.
 	DiscoveryRefreshInterval time.Duration
+	// MetricsConfig is the configuration for prometheus metrics emitted by the App's admission chain
+	// (validate, mutate, convert, custom route). If not provided, a default config with an empty namespace will be used.
+	MetricsConfig metrics.Config
 }
 
 // InformerSupplier is a function which creates an operator.Informer for a kind, given a ClientGenerator and ListWatchOptions
@@ -147,6 +170,10 @@ var DefaultInformerSupplier = func(
 	client, err := clients.ClientFor(kind)
 	if err != nil {
 		return nil, err
+	}
+
+	if options.ResourceKind == "" {
+		options.ResourceKind = kind.GroupVersionKind().String()
 	}
 
 	inf, err := operator.NewKubernetesBasedInformer(kind, client, options)
@@ -180,6 +207,10 @@ var OptimizedInformerSupplier = func(
 		return nil, err
 	}
 
+	if options.ResourceKind == "" {
+		options.ResourceKind = kind.GroupVersionKind().String()
+	}
+
 	store := cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc)
 	lw := operator.NewListerWatcher(client, kind, options.ListWatchOptions)
 
@@ -207,6 +238,12 @@ type AppInformerConfig struct {
 	// InformerSupplier can be set to specify a function for creating informers for kinds.
 	// If left unset, DefaultInformerSupplier will be used.
 	InformerSupplier InformerSupplier
+	// RetryProcessorConfig enables the concurrent retry processor when non-nil.
+	// When set, a RetryProcessor is created and its Prometheus metrics are included in PrometheusCollectors().
+	RetryProcessorConfig *operator.RetryProcessorConfig
+	// MetricsConfig controls the namespace and histogram settings for Prometheus metrics.
+	// Metrics are always created; an empty Namespace produces unprefixed metric names.
+	MetricsConfig metrics.Config
 }
 
 // AppManagedKind is a Kind and associated functionality used by an App.
@@ -303,13 +340,20 @@ type AppVersionRouteHandlers map[AppVersionRoute]AppCustomRouteHandler
 // NewApp creates a new instance of App, managing the kinds provided in AppConfig.ManagedKinds.
 // AppConfig MUST contain a valid KubeConfig to be valid.
 // Watcher/Reconciler error handling, retry, and dequeue logic can be managed with AppConfig.InformerConfig.
+//
+//nolint:funlen
 func NewApp(config AppConfig) (*App, error) {
 	clients := config.ClientGenerator
 	if clients == nil {
 		clients = k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig())
 	}
+	controllerCfg := operator.DefaultInformerControllerConfig()
+	if config.InformerConfig.RetryProcessorConfig != nil {
+		controllerCfg.RetryProcessorConfig = config.InformerConfig.RetryProcessorConfig
+	}
+	controllerCfg.MetricsConfig = config.InformerConfig.MetricsConfig
 	a := &App{
-		informerController: operator.NewInformerController(operator.DefaultInformerControllerConfig()),
+		informerController: operator.NewInformerController(controllerCfg),
 		runner:             app.NewMultiRunner(),
 		clientGenerator:    clients,
 		kinds:              make(map[string]AppManagedKind),
@@ -319,7 +363,85 @@ func NewApp(config AppConfig) (*App, error) {
 		customRoutes:       make(map[string]AppCustomRouteHandler),
 		cfg:                config,
 		collectors:         make([]prometheus.Collector, 0),
+		handler:            config.Handler,
 	}
+	if provider, ok := clients.(metrics.Provider); ok {
+		a.collectors = append(a.collectors, provider.PrometheusCollectors()...)
+	}
+	// Create admission chain metrics
+	mcfg := config.MetricsConfig
+	a.admissionLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace:                       mcfg.Namespace,
+		Subsystem:                       "admission",
+		Name:                            "request_duration_seconds",
+		Help:                            "Time (in seconds) spent processing admission requests.",
+		Buckets:                         metrics.LatencyBuckets,
+		NativeHistogramBucketFactor:     mcfg.NativeHistogramBucketFactor,
+		NativeHistogramMaxBucketNumber:  mcfg.NativeHistogramMaxBucketNumber,
+		NativeHistogramMinResetDuration: time.Hour,
+	}, []string{"operation", "group", "kind", "version", "action", "status"})
+	a.admissionTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: mcfg.Namespace,
+		Subsystem: "admission",
+		Name:      "requests_total",
+		Help:      "Total number of admission requests.",
+	}, []string{"operation", "group", "kind", "version", "action", "status"})
+	a.admissionInflight = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: mcfg.Namespace,
+		Subsystem: "admission",
+		Name:      "inflight_requests",
+		Help:      "Current number of in-flight admission requests.",
+	}, []string{"operation", "group", "kind", "version"})
+	a.conversionLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace:                       mcfg.Namespace,
+		Subsystem:                       "conversion",
+		Name:                            "request_duration_seconds",
+		Help:                            "Time (in seconds) spent processing conversion requests.",
+		Buckets:                         metrics.LatencyBuckets,
+		NativeHistogramBucketFactor:     mcfg.NativeHistogramBucketFactor,
+		NativeHistogramMaxBucketNumber:  mcfg.NativeHistogramMaxBucketNumber,
+		NativeHistogramMinResetDuration: time.Hour,
+	}, []string{"group", "kind", "source_version", "target_version", "status"})
+	a.conversionTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: mcfg.Namespace,
+		Subsystem: "conversion",
+		Name:      "requests_total",
+		Help:      "Total number of conversion requests.",
+	}, []string{"group", "kind", "source_version", "target_version", "status"})
+	a.conversionInflight = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: mcfg.Namespace,
+		Subsystem: "conversion",
+		Name:      "inflight_requests",
+		Help:      "Current number of in-flight conversion requests.",
+	}, []string{"group", "kind", "source_version", "target_version"})
+	a.customRouteLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace:                       mcfg.Namespace,
+		Subsystem:                       "custom_route",
+		Name:                            "request_duration_seconds",
+		Help:                            "Time (in seconds) spent processing custom route requests.",
+		Buckets:                         metrics.LatencyBuckets,
+		NativeHistogramBucketFactor:     mcfg.NativeHistogramBucketFactor,
+		NativeHistogramMaxBucketNumber:  mcfg.NativeHistogramMaxBucketNumber,
+		NativeHistogramMinResetDuration: time.Hour,
+	}, []string{"group", "method", "path", "kind", "status"})
+	a.customRouteTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: mcfg.Namespace,
+		Subsystem: "custom_route",
+		Name:      "requests_total",
+		Help:      "Total number of custom route requests.",
+	}, []string{"group", "method", "path", "kind", "status"})
+	a.customRouteInflight = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: mcfg.Namespace,
+		Subsystem: "custom_route",
+		Name:      "inflight_requests",
+		Help:      "Current number of in-flight custom route requests.",
+	}, []string{"group", "method", "path", "kind"})
+	a.collectors = append(a.collectors,
+		a.admissionLatency, a.admissionTotal, a.admissionInflight,
+		a.conversionLatency, a.conversionTotal, a.conversionInflight,
+		a.customRouteLatency, a.customRouteTotal, a.customRouteInflight,
+	)
+
 	if config.InformerConfig.InformerOptions.ErrorHandler != nil {
 		a.informerController.ErrorHandler = config.InformerConfig.InformerOptions.ErrorHandler
 	}
@@ -333,7 +455,7 @@ func NewApp(config AppConfig) (*App, error) {
 	if discoveryRefresh == 0 {
 		discoveryRefresh = time.Minute * 10
 	}
-	p, err := k8s.NewDynamicPatcher(&config.KubeConfig, discoveryRefresh)
+	p, err := k8s.NewDynamicPatcher(clients, discoveryRefresh)
 	if err != nil {
 		return nil, err
 	}
@@ -408,16 +530,23 @@ func (a *App) ValidateManifest(manifest app.ManifestData) error {
 
 // ManagedKinds returns a slice of all Kinds managed by this App
 func (a *App) ManagedKinds() []resource.Kind {
-	kinds := make([]resource.Kind, 0)
+	kinds := make([]resource.Kind, 0, len(a.kinds))
 	for _, k := range a.kinds {
 		kinds = append(kinds, k.Kind)
 	}
 	return kinds
 }
 
+// ProvideRouteHandler returns the optional custom route handler from AppConfig.
+func (a *App) ProvideRouteHandler() (http.Handler, error) {
+	return a.handler, nil
+}
+
 // Runner returns a resource.Runnable() that runs the underlying operator.InformerController and all custom runners
 // added via AddRunnable. The returned resource.Runnable also implements metrics.Provider, allowing the caller
 // to gather prometheus.Collector objects used by all underlying runners.
+// PrometheusCollectors returns all Collectors from this Runner, and only one or the other should be used
+// to avoid duplicate metric registration.
 func (a *App) Runner() app.Runnable {
 	return a.runner
 }
@@ -433,7 +562,7 @@ func (a *App) manageKind(kind AppManagedKind) error {
 	if kind.Kind.Schema == nil {
 		return errors.New("cannot manage an empty kind")
 	}
-	a.gvrToGVK[gvr(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Plural())] = gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())
+	a.gvrToGVK[gvr(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Resource())] = gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())
 	a.kinds[gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())] = kind
 	// If there are custom routes, validate them
 	for route, handler := range kind.CustomRoutes {
@@ -486,6 +615,9 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 			Namespace:      kind.ReconcileOptions.Namespace,
 			LabelFilters:   kind.ReconcileOptions.LabelFilters,
 			FieldSelectors: kind.ReconcileOptions.FieldSelectors,
+		}
+		if opts.MetricsConfig == (metrics.Config{}) {
+			opts.MetricsConfig = a.cfg.InformerConfig.MetricsConfig
 		}
 
 		inf, err := infSupplier(kind.Kind, a.clientGenerator, opts)
@@ -544,12 +676,15 @@ func (a *App) RegisterKindConverter(groupKind schema.GroupKind, converter k8s.Co
 }
 
 // PrometheusCollectors implements metrics.Provider and returns prometheus collectors used by the app for exposing metrics
+// as well as all collectors that are part of all underlying runner logic, such as the runner returned by Runner().
+// Attempting to register the Collectors returned by Runner().PrometheusCollectors in addition to the Collectors
+// returned by this function will result in duplicate metrics.
 func (a *App) PrometheusCollectors() []prometheus.Collector {
-	return a.collectors
+	return append(a.collectors, a.runner.PrometheusCollectors()...)
 }
 
 func (a *App) HealthChecks() []health.Check {
-	checks := make([]health.Check, 0)
+	checks := make([]health.Check, 0) //nolint:prealloc
 
 	checks = append(checks, a.runner.HealthChecks()...)
 	checks = append(checks, a.informerController.HealthChecks()...)
@@ -561,7 +696,11 @@ func (a *App) HealthChecks() []health.Check {
 // by any Runnables the app will run as part of Runner(). These additional prometheus collectors are exposed
 // as a part of the list returned by PrometheusCollectors().
 func (a *App) RegisterMetricsCollectors(collectors ...prometheus.Collector) {
-	a.collectors = append(a.collectors, collectors...)
+	for _, c := range collectors {
+		if !slices.Contains(a.collectors, c) {
+			a.collectors = append(a.collectors, c)
+		}
+	}
 }
 
 // Validate implements app.App and handles Validating Admission Requests
@@ -574,7 +713,38 @@ func (a *App) Validate(ctx context.Context, req *app.AdmissionRequest) error {
 	if k.Validator == nil {
 		return app.ErrNotImplemented
 	}
-	return k.Validator.Validate(ctx, req)
+	logger := admissionLoggerFromContext(ctx, req).With("action", "validate")
+	ctx = logging.Context(ctx, logger)
+	inflightLabels := prometheus.Labels{
+		"operation": "validate",
+		"group":     req.Group,
+		"kind":      req.Kind,
+		"version":   req.Version,
+	}
+	a.admissionInflight.With(inflightLabels).Inc()
+	start := time.Now()
+	err := k.Validator.Validate(ctx, req)
+	a.admissionInflight.With(inflightLabels).Dec()
+	status := "success" //nolint:goconst
+	if err != nil {
+		status = "error" //nolint:goconst
+	}
+	labels := prometheus.Labels{
+		"operation": "validate",
+		"group":     req.Group,
+		"kind":      req.Kind,
+		"version":   req.Version,
+		"action":    string(req.Action),
+		"status":    status,
+	}
+	a.admissionLatency.With(labels).Observe(time.Since(start).Seconds())
+	a.admissionTotal.With(labels).Inc()
+	if err != nil {
+		logger.With("error", err).Error("validation failed")
+		return err
+	}
+	logger.Info("validation succeeded")
+	return nil
 }
 
 // Mutate implements app.App and handles Mutating Admission Requests
@@ -587,16 +757,56 @@ func (a *App) Mutate(ctx context.Context, req *app.AdmissionRequest) (*app.Mutat
 	if k.Mutator == nil {
 		return nil, app.ErrNotImplemented
 	}
-	return k.Mutator.Mutate(ctx, req)
+	logger := admissionLoggerFromContext(ctx, req).With("action", "mutate")
+	ctx = logging.Context(ctx, logger)
+	inflightLabels := prometheus.Labels{
+		"operation": "mutate",
+		"group":     req.Group,
+		"kind":      req.Kind,
+		"version":   req.Version,
+	}
+	a.admissionInflight.With(inflightLabels).Inc()
+	start := time.Now()
+	resp, err := k.Mutator.Mutate(ctx, req)
+	a.admissionInflight.With(inflightLabels).Dec()
+	status := "success" //nolint:goconst
+	if err != nil {
+		status = "error" //nolint:goconst
+	}
+	labels := prometheus.Labels{
+		"operation": "mutate",
+		"group":     req.Group,
+		"kind":      req.Kind,
+		"version":   req.Version,
+		"action":    string(req.Action),
+		"status":    status,
+	}
+	a.admissionLatency.With(labels).Observe(time.Since(start).Seconds())
+	a.admissionTotal.With(labels).Inc()
+	if err != nil {
+		logger.With("error", err).Error("mutation failed")
+		return nil, err
+	}
+	logger.Info("mutation succeeded")
+	return resp, nil
 }
 
 // Convert implements app.App and handles resource conversion requests
-func (a *App) Convert(_ context.Context, req app.ConversionRequest) (*app.RawObject, error) {
+func (a *App) Convert(ctx context.Context, req app.ConversionRequest) (*app.RawObject, error) {
 	converter, ok := a.converters[req.SourceGVK.GroupKind().String()]
 	if !ok {
 		// Default conversion?
 		return nil, app.ErrNotImplemented
 	}
+	logger := conversionLoggerFromContext(ctx, req)
+	inflightLabels := prometheus.Labels{
+		"group":          req.SourceGVK.Group,
+		"kind":           req.SourceGVK.Kind,
+		"source_version": req.SourceGVK.Version,
+		"target_version": req.TargetGVK.Version,
+	}
+	a.conversionInflight.With(inflightLabels).Inc()
+	start := time.Now()
 	srcAPIVersion, _ := req.SourceGVK.ToAPIVersionAndKind()
 	dstAPIVersion, _ := req.TargetGVK.ToAPIVersionAndKind()
 	converted, err := converter.Convert(k8s.RawKind{
@@ -606,9 +816,28 @@ func (a *App) Convert(_ context.Context, req app.ConversionRequest) (*app.RawObj
 		Version:    req.SourceGVK.Version,
 		Raw:        req.Raw.Raw,
 	}, dstAPIVersion)
+	a.conversionInflight.With(inflightLabels).Dec()
+	status := "success" //nolint:goconst
+	if err != nil {
+		status = "error" //nolint:goconst
+	}
+	labels := prometheus.Labels{
+		"group":          req.SourceGVK.Group,
+		"kind":           req.SourceGVK.Kind,
+		"source_version": req.SourceGVK.Version,
+		"target_version": req.TargetGVK.Version,
+		"status":         status,
+	}
+	a.conversionLatency.With(labels).Observe(time.Since(start).Seconds())
+	a.conversionTotal.With(labels).Inc()
+	if err != nil {
+		logger.With("error", err).Error("conversion failed")
+		return nil, err
+	}
+	logger.Info("conversion succeeded")
 	return &app.RawObject{
 		Raw: converted,
-	}, err
+	}, nil
 }
 
 // CallCustomRoute implements app.App and handles custom resource route requests
@@ -618,10 +847,15 @@ func (a *App) CallCustomRoute(ctx context.Context, writer app.CustomRouteRespons
 		if req.ResourceIdentifier.Namespace == "" {
 			scope = resource.ClusterScope
 		}
-		if handler, ok := a.customRoutes[a.customRouteHandlerKey(schema.GroupVersionKind{
-			Version: req.ResourceIdentifier.Version,
-		}, req.Method, req.Path, scope)]; ok {
-			return handler(ctx, writer, req)
+		key := a.customRouteHandlerKey(schema.GroupVersionKind{Version: req.ResourceIdentifier.Version}, req.Method, req.Path, scope)
+		if handler, ok := a.customRoutes[key]; ok {
+			inflightLabels := a.customRouteInflightLabels(req)
+			a.customRouteInflight.With(inflightLabels).Inc()
+			start := time.Now()
+			err := handleCustomRouteWithLogging(ctx, handler, writer, req)
+			a.customRouteInflight.With(inflightLabels).Dec()
+			a.observeCustomRoute(start, req, err)
+			return err
 		}
 	}
 	key := gvk(req.ResourceIdentifier.Group, req.ResourceIdentifier.Version, req.ResourceIdentifier.Kind)
@@ -634,9 +868,35 @@ func (a *App) CallCustomRoute(ctx context.Context, writer app.CustomRouteRespons
 		return app.ErrCustomRouteNotFound
 	}
 	if handler, ok := a.customRoutes[a.customRouteHandlerKey(k.Kind.GroupVersionKind(), req.Method, req.Path, k.Kind.Scope())]; ok {
-		return handler(ctx, writer, req)
+		inflightLabels := a.customRouteInflightLabels(req)
+		a.customRouteInflight.With(inflightLabels).Inc()
+		start := time.Now()
+		err := handleCustomRouteWithLogging(ctx, handler, writer, req)
+		a.customRouteInflight.With(inflightLabels).Dec()
+		a.observeCustomRoute(start, req, err)
+		return err
 	}
 	return app.ErrCustomRouteNotFound
+}
+
+func (*App) customRouteInflightLabels(req *app.CustomRouteRequest) prometheus.Labels {
+	return prometheus.Labels{
+		"group":  req.ResourceIdentifier.Group,
+		"method": req.Method,
+		"path":   req.Path,
+		"kind":   req.ResourceIdentifier.Kind,
+	}
+}
+
+func (a *App) observeCustomRoute(start time.Time, req *app.CustomRouteRequest, err error) {
+	status := "success"
+	if err != nil {
+		status = "error"
+	}
+	labels := a.customRouteInflightLabels(req)
+	labels["status"] = status
+	a.customRouteLatency.With(labels).Observe(time.Since(start).Seconds())
+	a.customRouteTotal.With(labels).Inc()
 }
 
 func (a *App) getFinalizer(sch resource.Schema) string {

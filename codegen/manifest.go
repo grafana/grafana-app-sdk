@@ -1,9 +1,16 @@
 package codegen
 
 import (
+	"fmt"
 	"iter"
+	"maps"
+	"slices"
+	"strings"
 
 	"cuelang.org/go/cue"
+
+	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 type AppManifest interface {
@@ -14,15 +21,41 @@ type AppManifest interface {
 }
 
 type AppManifestProperties struct {
+	// Embed configures declarative embeddings by resource name (the lowercase plural) within this app's group.
+	// Custom embedding builders omit their entry and define their content version in Go.
+	Embed            map[string]ResourceEmbed              `json:"embed,omitempty"`
 	AppName          string                                `json:"appName"`
 	AppDisplayName   string                                `json:"appDisplayName"`
 	Group            string                                `json:"group"`
 	FullGroup        string                                `json:"fullGroup"`
 	ExtraPermissions AppManifestPropertiesExtraPermissions `json:"extraPermissions"`
-	OperatorURL      *string                               `json:"operatorURL,omitempty"`
-	PreferredVersion string                                `json:"preferredVersion"`
-	Roles            map[string]AppManifestPropertiesRole  `json:"roles"`
-	RoleBindings     *AppManifestPropertiesRoleBindings    `json:"roleBindings"`
+	// OperatorURL is the HTTPS URL of the app's operator.
+	//
+	// Deprecated: use Operator.URL instead. If both are set, they must have the same value.
+	OperatorURL      *string                              `json:"operatorURL,omitempty"`
+	Operator         *AppManifestPropertiesOperatorInfo   `json:"operator,omitempty"`
+	PreferredVersion string                               `json:"preferredVersion"`
+	Roles            map[string]AppManifestPropertiesRole `json:"roles"`
+	RoleBindings     *AppManifestPropertiesRoleBindings   `json:"roleBindings"`
+}
+
+// ResourceEmbed configures declarative embeddings across all API versions of a resource.
+type ResourceEmbed struct {
+	ReembedVersion int `json:"reembedVersion"`
+}
+
+// AppManifestPropertiesOperatorInfo contains information about the app's operator deployment,
+// used to construct webhook configurations.
+type AppManifestPropertiesOperatorInfo struct {
+	URL      *string                                         `json:"url,omitempty"`
+	Webhooks *AppManifestPropertiesOperatorWebhookProperties `json:"webhooks,omitempty"`
+}
+
+// AppManifestPropertiesOperatorWebhookProperties contains the paths the operator serves webhooks on.
+type AppManifestPropertiesOperatorWebhookProperties struct {
+	ConversionPath string `json:"conversionPath"`
+	ValidationPath string `json:"validationPath"`
+	MutationPath   string `json:"mutationPath"`
 }
 
 type AppManifestPropertiesExtraPermissions struct {
@@ -64,16 +97,16 @@ type AppManifestPropertiesRoleBindings struct {
 }
 
 type SimpleManifest struct {
-	Props       AppManifestProperties
-	AllVersions []Version
+	AppManifestProperties
+	AllVersions map[string]*SimpleVersion `json:"versions"`
 }
 
 func (m *SimpleManifest) Name() string {
-	return m.Props.AppName
+	return m.AppName
 }
 
 func (m *SimpleManifest) Properties() AppManifestProperties {
-	return m.Props
+	return m.AppManifestProperties
 }
 
 func (m *SimpleManifest) Kinds() []Kind {
@@ -85,13 +118,16 @@ func (m *SimpleManifest) Kinds() []Kind {
 				k = &AnyKind{
 					Props: KindProperties{
 						Kind:                   kind.Kind,
-						Group:                  m.Props.FullGroup,
-						ManifestGroup:          m.Props.Group,
+						Group:                  m.FullGroup,
+						ManifestGroup:          m.Group,
 						MachineName:            kind.MachineName,
 						PluralMachineName:      kind.PluralMachineName,
 						PluralName:             kind.PluralName,
-						Current:                m.Props.PreferredVersion,
+						Resource:               kind.Resource,
+						Current:                m.PreferredVersion,
 						Scope:                  kind.Scope,
+						UserReadable:           kind.UserReadable,
+						FolderScoped:           kind.FolderScoped,
 						Validation:             kind.Validation,
 						Mutation:               kind.Mutation,
 						Conversion:             kind.Conversion,
@@ -110,6 +146,7 @@ func (m *SimpleManifest) Kinds() []Kind {
 				Validation:               kind.Validation,
 				Mutation:                 kind.Mutation,
 				AdditionalPrinterColumns: kind.AdditionalPrinterColumns,
+				SearchFields:             kind.SearchFields,
 				Routes:                   kind.Routes,
 			})
 			kinds[kind.Kind] = k
@@ -123,13 +160,26 @@ func (m *SimpleManifest) Kinds() []Kind {
 }
 
 func (m *SimpleManifest) Versions() []Version {
-	return m.AllVersions
+	versions := make([]Version, 0, len(m.AllVersions))
+	for _, v := range m.AllVersions {
+		versions = append(versions, v)
+	}
+	slices.SortFunc(versions, func(a, b Version) int {
+		return strings.Compare(a.Name(), b.Name())
+	})
+	return versions
 }
 
 type VersionProperties struct {
 	Name    string                `json:"name"`
 	Served  bool                  `json:"served"`
 	Codegen KindCodegenProperties `json:"codegen"`
+
+	// ImportOpenAPIFile is an optional OpenAPI document path relative to the CUE source directory.
+	ImportOpenAPIFile string `json:"importOpenAPIFile,omitempty"`
+
+	// InlineOpenAPI supplies version-relative paths and components in CUE.
+	InlineOpenAPI map[string]any `json:"openapi,omitempty"`
 }
 
 type VersionCustomRoutes struct {
@@ -145,17 +195,24 @@ type Version interface {
 }
 
 type SimpleVersion struct {
-	Props        VersionProperties
-	AllKinds     []VersionedKind
-	CustomRoutes VersionCustomRoutes
+	VersionProperties
+	AllKinds     []VersionedKind      `json:"kinds"`
+	CustomRoutes *VersionCustomRoutes `json:"routes,omitempty"`
+	// ImportedRoutes contribute to manifests only, not source code generation.
+	ImportedRoutes app.ManifestVersionRoutes `json:"-"` //nolint:staticcheck // ManifestVersionRoutes is deprecated; imported routes still use it until manifests read openapi
+}
+
+// ExternalRoutes returns routes and schemas loaded from a saved OpenAPI document.
+func (v *SimpleVersion) ExternalRoutes() app.ManifestVersionRoutes { //nolint:staticcheck // ManifestVersionRoutes is deprecated; imported routes still use it until manifests read openapi
+	return v.ImportedRoutes
 }
 
 func (v *SimpleVersion) Name() string {
-	return v.Props.Name
+	return v.VersionProperties.Name
 }
 
 func (v *SimpleVersion) Properties() VersionProperties {
-	return v.Props
+	return v.VersionProperties
 }
 
 func (v *SimpleVersion) Kinds() []VersionedKind {
@@ -163,12 +220,28 @@ func (v *SimpleVersion) Kinds() []VersionedKind {
 }
 
 func (v *SimpleVersion) Routes() VersionCustomRoutes {
-	return v.CustomRoutes
+	if v.CustomRoutes == nil {
+		return VersionCustomRoutes{}
+	}
+	return *v.CustomRoutes
+}
+
+type KindNamingStrategy struct {
+	Mode  string          `json:"mode"`
+	Owner *KindOwnerNames `json:"owner,omitempty"`
+}
+
+// KindOwnerNames is the naming strategy of a kind whose objects are named for their owner.
+type KindOwnerNames struct {
+	Owners        []resource.Owner `json:"owners"`
+	AllowOrgAdmin bool             `json:"allowOrgAdmin"`
 }
 
 type VersionedKind struct {
 	// Kind is the unique-within-the-group name of the kind
 	Kind string `json:"kind"`
+	// Resource is the lowercase API resource name where the kinds are served.
+	Resource string `json:"resource"`
 	// MachineName is the machine version of the Kind, which follows the regex: /^[a-z]+[a-z0-9]*$/
 	MachineName string `json:"machineName"`
 	// PluralMachineName is the plural of the MachineName
@@ -176,6 +249,8 @@ type VersionedKind struct {
 	// PluralName is the plural of the Kind
 	PluralName             string                      `json:"pluralName"`
 	Scope                  string                      `json:"scope"`
+	UserReadable           bool                        `json:"userReadable"`
+	FolderScoped           bool                        `json:"folderScoped"`
 	Validation             KindAdmissionCapability     `json:"validation"`
 	Mutation               KindAdmissionCapability     `json:"mutation"`
 	Conversion             bool                        `json:"conversion"`
@@ -185,10 +260,18 @@ type VersionedKind struct {
 	Served                   bool                      `json:"served"`
 	SelectableFields         []string                  `json:"selectableFields"`
 	AdditionalPrinterColumns []AdditionalPrinterColumn `json:"additionalPrinterColumns"`
+	SearchFields             []SearchField             `json:"searchFields,omitempty"`
+	ListKeys                 *bool                     `json:"listKeys"`
+	FixedNames               []string                  `json:"fixedNames,omitempty"`
+	NamingStrategy           *KindNamingStrategy       `json:"namingStrategy,omitempty"`
+	Search                   KindSearch                `json:"search"`
+	Embed                    *KindEmbed                `json:"embed,omitempty"`
+	Extensions               *KindExtensions           `json:"extensions,omitempty"`
 	// Schema is the CUE schema for the version
 	// This should eventually be changed to JSONSchema/OpenAPI(/AST?)
-	Schema cue.Value                         `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
-	Routes map[string]map[string]CustomRoute `json:"routes"`
+	Schema       cue.Value                            `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
+	SecureValues []app.ManifestVersionKindSecureValue `json:"secure,omitempty"`
+	Routes       map[string]map[string]CustomRoute    `json:"routes,omitempty"`
 }
 
 // VersionedKinds returns a sequence of all VersionedKinds in version order.
@@ -236,4 +319,87 @@ func PreferredVersionKinds(manifest AppManifest) iter.Seq2[Version, VersionedKin
 			}
 		}
 	}
+}
+
+// eachRoute visits every custom route of the manifest, on the kinds and on the versions, in a fixed
+// order, and keeps the changes the visit makes to the route.
+func (m *SimpleManifest) eachRoute(visit func(version, scope, path, method string, route *CustomRoute) error) error {
+	each := func(version, scope string, routes map[string]map[string]CustomRoute) error {
+		for _, path := range slices.Sorted(maps.Keys(routes)) {
+			for _, method := range slices.Sorted(maps.Keys(routes[path])) {
+				route := routes[path][method]
+				if err := visit(version, scope, path, strings.ToUpper(method), &route); err != nil {
+					return err
+				}
+				routes[path][method] = route
+			}
+		}
+		return nil
+	}
+	for _, name := range slices.Sorted(maps.Keys(m.AllVersions)) {
+		version := m.AllVersions[name]
+		for i := range version.AllKinds {
+			if err := each(name, "kind "+version.AllKinds[i].Kind, version.AllKinds[i].Routes); err != nil {
+				return err
+			}
+		}
+		if version.CustomRoutes != nil {
+			if err := each(name, "the version (namespaced)", version.CustomRoutes.Namespaced); err != nil {
+				return err
+			}
+			if err := each(name, "the version (cluster)", version.CustomRoutes.Cluster); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// ResolveRouteIDs gives every custom route its identifier, in Name, and checks them. A route
+// declares an operationId, or else the deprecated name, and one must be there. An identifier is the
+// operationId of a generated OpenAPI operation, and OpenAPI does not allow two in a document, so
+// the routes of a version, on its kinds and on the version itself, must each have their own.
+func (m *SimpleManifest) ResolveRouteIDs() error {
+	seen := map[string]string{} // by version and identifier
+	return m.eachRoute(func(version, scope, path, method string, route *CustomRoute) error {
+		at := fmt.Sprintf("%s %s of %s in version %s", method, path, scope, version)
+		id := route.ID()
+		if id == "" {
+			return fmt.Errorf("custom route %s must declare an operationId", at)
+		}
+		if other, ok := seen[version+"/"+id]; ok {
+			return fmt.Errorf("operationId %q is declared by both %s and %s, and must be unique in a version", id, other, at)
+		}
+		seen[version+"/"+id] = at
+		route.Name = id
+		return nil
+	})
+}
+
+// ValidateRouteParams checks the parameters every custom route declares.
+func (m *SimpleManifest) ValidateRouteParams() error {
+	return m.eachRoute(func(version, scope, path, method string, route *CustomRoute) error {
+		if err := ValidateRouteParams(path, route.Request); err != nil {
+			return fmt.Errorf("custom route %s %s of %s in version %s: %w", method, path, scope, version, err)
+		}
+		return nil
+	})
+}
+
+// ValidateRouteResponseKinds checks the kind that a custom route returns, if it declares one with
+// ResponseKind: it has to be a kind of the same version, and the route cannot also declare a response.
+func (m *SimpleManifest) ValidateRouteResponseKinds() error {
+	return m.eachRoute(func(version, scope, path, method string, route *CustomRoute) error {
+		if route.ResponseKind == "" {
+			return nil
+		}
+		at := fmt.Sprintf("custom route %s %s of %s in version %s", method, path, scope, version)
+		if route.Response.Exists() && route.Response.IncompleteKind() != cue.TopKind {
+			return fmt.Errorf("%s declares a response and a responseKind: it declares one or the other", at)
+		}
+		if !slices.ContainsFunc(m.AllVersions[version].AllKinds, func(k VersionedKind) bool { return k.Kind == route.ResponseKind }) {
+			return fmt.Errorf("%s has responseKind %q, which is not a kind of the version", at, route.ResponseKind)
+		}
+		return nil
+	})
 }

@@ -17,8 +17,9 @@ import (
 var overlayFS embed.FS
 
 type Cue struct {
-	Root cue.Value
-	Defs cue.Value
+	Root  cue.Value
+	Defs  cue.Value
+	files fs.FS
 }
 
 func LoadCue(files fs.FS) (*Cue, error) {
@@ -32,7 +33,20 @@ func LoadCue(files fs.FS) (*Cue, error) {
 	}
 
 	return &Cue{
-		Root: root,
+		Root:  root,
+		Defs:  defs,
+		files: files,
+	}, nil
+}
+
+func FromCueValue(value cue.Value) (*Cue, error) {
+	defs, err := loadDefs()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Cue{
+		Root: value,
 		Defs: defs,
 	}, nil
 }

@@ -40,4 +40,4 @@ myKind := resource.Kind{
 
 ## TypeScript
 
-There are no intrinsic interfaces to satisfy with TypeScript, but the grafana-app-sdk will generate some TypeScript interfaces for using with a kubernetes API server based on your kind.
+There are no intrinsic interfaces to satisfy with TypeScript, but the grafana-app-sdk will generate TypeScript interfaces for your kind which match its API representation.

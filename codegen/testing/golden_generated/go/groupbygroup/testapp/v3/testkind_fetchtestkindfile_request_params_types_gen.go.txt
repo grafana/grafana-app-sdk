@@ -1,0 +1,19 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package v3
+
+type FetchTestKindFileRequestParams struct {
+	Download *bool `json:"download,omitempty"`
+}
+
+// NewFetchTestKindFileRequestParams creates a new FetchTestKindFileRequestParams object.
+func NewFetchTestKindFileRequestParams() *FetchTestKindFileRequestParams {
+	return &FetchTestKindFileRequestParams{
+		Download: (func(input bool) *bool { return &input })(false),
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for FetchTestKindFileRequestParams.
+func (FetchTestKindFileRequestParams) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.FetchTestKindFileRequestParams"
+}

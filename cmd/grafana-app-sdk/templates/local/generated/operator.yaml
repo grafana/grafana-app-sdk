@@ -117,12 +117,12 @@ webhooks:
         namespace: default
         path: "/mutate"
       caBundle: {{.WebhookProperties.Base64CA}}
-    rules:{{range .CRDs}}
+    rules:{{range .CRDs}}{{if .MutatingVersions}}
       - operations: ["CREATE","UPDATE"]
         apiGroups: ["{{.Group}}"]
-        apiVersions: {{range .Versions}}
+        apiVersions: {{range .MutatingVersions}}
           - {{.}}{{end}}
-        resources: ["{{.PluralMachineName}}"]{{end}}
+        resources: ["{{.PluralMachineName}}"]{{end}}{{end}}
 {{ end }}
 {{ if ne .WebhookProperties.Validating "" }}
 ---
@@ -140,11 +140,11 @@ webhooks:
         namespace: default
         path: "/validate"
       caBundle: {{.WebhookProperties.Base64CA}}
-    rules:{{range .CRDs}}
+    rules:{{range .CRDs}}{{if .ValidatingVersions}}
     - operations: ["CREATE","UPDATE"]
       apiGroups: ["{{.Group}}"]
-      apiVersions: {{range .Versions}}
+      apiVersions: {{range .ValidatingVersions}}
         - {{.}}{{end}}
-      resources: ["{{.PluralMachineName}}"]{{end}}
+      resources: ["{{.PluralMachineName}}"]{{end}}{{end}}
   {{ end }}
 {{ end }}

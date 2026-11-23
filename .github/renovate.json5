@@ -1,0 +1,29 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: ['config:recommended'],
+  timezone: 'UTC',
+
+  // Regular (non-security) updates: one grouped PR, opened once a week.
+  schedule: ['* 0-5 * * 1'],
+  separateMajorMinor: false,
+  labels: ['type/dependencies'],
+  postUpdateOptions: ['gomodTidy', 'gomodUpdateImportPaths'],
+  packageRules: [
+    {
+      matchPackageNames: ['*'],
+      groupName: 'all dependencies',
+      groupSlug: 'all',
+    },
+  ],
+
+  // Security updates: overrides packageRules above, so each fix gets its own
+  // ungrouped PR and is opened on every Renovate run instead of waiting for the weekly window.
+  osvVulnerabilityAlerts: true,
+  vulnerabilityAlerts: {
+    enabled: true,
+    groupName: null,
+    schedule: ['at any time'],
+    minimumReleaseAge: null,
+    labels: ['type/dependencies', 'type/security'],
+  },
+}

@@ -9,9 +9,155 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/resource"
 )
+
+func TestManifestVersionOpenAPIConversion(t *testing.T) {
+	for _, document := range []string{
+		`{}`,
+		`{"paths":{},"components":{"schemas":{},"responses":{}}}`,
+		`{"paths":{"/test":{"get":{"operationId":"test"}}}}`,
+		`{"components":{"schemas":{"Test":{"type":"string"}}}}`,
+		`{"components":{"responses":{"OK":{"description":"success"}}}}`,
+		`{"components":{"examples":{"Sample":{"value":{"message":"hello"}}}}}`,
+		`{"components":{"examples":{"Alias":{"$ref":"#/components/examples/Sample"},"Sample":{"value":{"$ref":"literal data"}}}}}`,
+	} {
+		t.Run(document, func(t *testing.T) {
+			var openAPI app.ManifestVersionOpenAPI
+			require.NoError(t, json.Unmarshal([]byte(document), &openAPI))
+			data := app.ManifestData{Versions: []app.ManifestVersion{{Name: "v1", OpenAPI: openAPI}}}
+			converted, err := SpecFromManifestData(data)
+			require.NoError(t, err)
+			if openAPI.IsZero() {
+				assert.Nil(t, converted.Versions[0].Openapi)
+				return
+			}
+			require.NotNil(t, converted.Versions[0].Openapi)
+			restored, err := converted.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, openAPI, restored.Versions[0].OpenAPI)
+		})
+	}
+}
+
+//nolint:staticcheck // Legacy route schemas must survive conversion.
+func TestManifestVersionRouteSchemasConversion(t *testing.T) {
+	data := app.ManifestData{Versions: []app.ManifestVersion{{
+		Name: "v1",
+		Routes: app.ManifestVersionRoutes{Schemas: map[string]spec.Schema{
+			"Result": {SchemaProps: spec.SchemaProps{Type: []string{"string"}}},
+		}},
+	}}}
+	converted, err := SpecFromManifestData(data)
+	require.NoError(t, err)
+	require.NotNil(t, converted.Versions[0].Routes)
+	assert.Contains(t, converted.Versions[0].Routes.Schemas, "Result")
+	restored, err := converted.ToManifestData()
+	require.NoError(t, err)
+	assert.Equal(t, data.Versions[0].Routes, restored.Versions[0].Routes)
+}
+
+func TestSearchFieldsConversion(t *testing.T) {
+	ptr := func(s string) *string { return &s }
+	truePtr := func() *bool { b := true; return &b }
+
+	md := app.ManifestData{
+		AppName: "foo",
+		Versions: []app.ManifestVersion{{
+			Name:   "v1",
+			Served: true,
+			Kinds: []app.ManifestVersionKind{{
+				Kind:  "Foo",
+				Scope: "Namespaced",
+				SearchFields: []app.ManifestVersionKindSearchField{
+					{
+						Name:         "email",
+						Path:         "spec.email",
+						Type:         "string",
+						Capabilities: []string{"filter", "text", "retrieve"},
+						Description:  "User email",
+					},
+					{
+						Name:             "labels",
+						Type:             "int64",
+						Array:            true,
+						Capabilities:     []string{"filter", "retrieve"},
+						EmitZeroIfAbsent: true,
+					},
+				},
+			}},
+		}},
+	}
+
+	// manifest -> spec: optional scalars become pointers and only the set ones are
+	// populated; type and capabilities become the generated enum types.
+	spec, err := SpecFromManifestData(md)
+	require.NoError(t, err)
+	require.Len(t, spec.Versions[0].Kinds[0].SearchFields, 2)
+	assert.Equal(t, AppManifestSearchField{
+		Name:         "email",
+		Path:         ptr("spec.email"),
+		Type:         AppManifestSearchFieldTypeString,
+		Capabilities: []AppManifestSearchFieldCapabilities{"filter", "text", "retrieve"},
+		Description:  ptr("User email"),
+	}, spec.Versions[0].Kinds[0].SearchFields[0])
+	assert.Equal(t, AppManifestSearchField{
+		Name:             "labels",
+		Type:             AppManifestSearchFieldTypeInt64,
+		Array:            truePtr(),
+		Capabilities:     []AppManifestSearchFieldCapabilities{"filter", "retrieve"},
+		EmitZeroIfAbsent: truePtr(),
+	}, spec.Versions[0].Kinds[0].SearchFields[1])
+	encoded, err := json.Marshal(spec.Versions[0].Kinds[0].SearchFields)
+	require.NoError(t, err)
+	assert.NotContains(t, string(encoded), `"embed"`)
+
+	// spec -> manifest: the set pointers are dereferenced back, unset ones stay zero.
+	roundTripped, err := spec.ToManifestData()
+	require.NoError(t, err)
+	assert.Equal(t, md.Versions[0].Kinds[0].SearchFields, roundTripped.Versions[0].Kinds[0].SearchFields)
+}
+
+func TestFolderScopedConversion(t *testing.T) {
+	boolPtr := func(b bool) *bool { return &b }
+
+	for _, tc := range []struct {
+		name  string
+		value *bool
+	}{
+		{name: "unset", value: nil},
+		{name: "explicit true", value: boolPtr(true)},
+		{name: "explicit false", value: boolPtr(false)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			md := app.ManifestData{
+				AppName: "foo",
+				Versions: []app.ManifestVersion{{
+					Name:   "v1",
+					Served: true,
+					Kinds: []app.ManifestVersionKind{{
+						Kind:         "Foo",
+						Scope:        "Namespaced",
+						FolderScoped: tc.value,
+					}},
+				}},
+			}
+
+			// manifest -> spec: the pointer is copied verbatim.
+			spec, err := SpecFromManifestData(md)
+			require.NoError(t, err)
+			assert.Equal(t, tc.value, spec.Versions[0].Kinds[0].FolderScoped)
+
+			// spec -> manifest: the pointer is copied back verbatim, preserving unset vs explicit.
+			roundTripped, err := spec.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, tc.value, roundTripped.Versions[0].Kinds[0].FolderScoped)
+		})
+	}
+}
 
 func TestAppManifestSpec_ToManifestData(t *testing.T) {
 	t.Run("successful conversion", func(t *testing.T) {
@@ -43,7 +189,7 @@ func TestAppManifestSpec_ToManifestData(t *testing.T) {
 			Versions: []AppManifestManifestVersion{{
 				Kinds: []AppManifestManifestVersionKind{{
 					Kind: "Foo",
-					Schemas: map[string]interface{}{
+					Schemas: map[string]any{
 						"bar": "foo", // Bad OpenAPI document, conversion will fail when loading the openAPI
 					},
 				}},
@@ -84,6 +230,10 @@ func TestAppManifestSpec_ToManifestData(t *testing.T) {
 		assert.Nil(t, json.Unmarshal(roleKind2Json, &roleKind2Unmarshaled))
 		v1alpha1 := AppManifestSpec{
 			AppName: "foo",
+			Versions: []AppManifestManifestVersion{{
+				Name:  "v1",
+				Kinds: []AppManifestManifestVersionKind{{Kind: "Kind1"}, {Kind: "Kind2"}},
+			}},
 			Roles: map[string]AppManifestRole{
 				"foo": {
 					Title:       "Foo",
@@ -95,23 +245,396 @@ func TestAppManifestSpec_ToManifestData(t *testing.T) {
 		md, err := v1alpha1.ToManifestData()
 		require.NoError(t, err)
 		permSet := string(roleKind1.PermissionSet)
-		assert.Equal(t, app.ManifestData{
-			AppName:  "foo",
-			Versions: []app.ManifestVersion{},
-			Roles: map[string]app.ManifestRole{
-				"foo": {
-					Title:       "Foo",
-					Description: "Bar",
-					Kinds: []app.ManifestRoleKind{{
-						Kind:          roleKind1.Kind,
-						PermissionSet: &permSet,
-					}, {
-						Kind:  roleKind2.Kind,
-						Verbs: roleKind2.Verbs,
+		assert.Equal(t, map[string]app.ManifestRole{
+			"foo": {
+				Title:       "Foo",
+				Description: "Bar",
+				Kinds: []app.ManifestRoleKind{{
+					Kind:          roleKind1.Kind,
+					PermissionSet: &permSet,
+				}, {
+					Kind:  roleKind2.Kind,
+					Verbs: roleKind2.Verbs,
+				}},
+				Routes: []string{},
+			},
+		}, md.Roles)
+	})
+}
+
+func TestSearchEndpointsConversion(t *testing.T) {
+	boolPtr := func(b bool) *bool { return &b }
+
+	for _, tc := range []struct {
+		name   string
+		search *app.ManifestVersionKindSearch
+	}{
+		{name: "unset", search: nil},
+		{name: "empty", search: &app.ManifestVersionKindSearch{}},
+		{name: "search opt-out", search: &app.ManifestVersionKindSearch{Endpoint: boolPtr(false)}},
+		{name: "trash opt-out", search: &app.ManifestVersionKindSearch{Trash: boolPtr(false)}},
+		{name: "explicit true", search: &app.ManifestVersionKindSearch{Endpoint: boolPtr(true), Trash: boolPtr(true)}},
+		{name: "hybrid opt-in", search: &app.ManifestVersionKindSearch{Hybrid: boolPtr(true)}},
+		{name: "hybrid explicit false", search: &app.ManifestVersionKindSearch{Hybrid: boolPtr(false)}},
+		{name: "hybrid opt-in with search opt-out", search: &app.ManifestVersionKindSearch{Endpoint: boolPtr(false), Hybrid: boolPtr(true)}},
+		{name: "global opt-in", search: &app.ManifestVersionKindSearch{Global: boolPtr(true)}},
+		{name: "global explicit false", search: &app.ManifestVersionKindSearch{Global: boolPtr(false)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			md := app.ManifestData{
+				AppName: "foo",
+				Versions: []app.ManifestVersion{{
+					Name:   "v1",
+					Served: true,
+					Kinds: []app.ManifestVersionKind{{
+						Kind:   "Foo",
+						Scope:  "Namespaced",
+						Search: tc.search,
 					}},
-					Routes: []string{},
+				}},
+			}
+
+			spec, err := SpecFromManifestData(md)
+			require.NoError(t, err)
+
+			// spec -> manifest: unset vs explicit is preserved in both directions.
+			roundTripped, err := spec.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, tc.search, roundTripped.Versions[0].Kinds[0].Search)
+		})
+	}
+}
+
+func TestExtensionsConversion(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		extensions *app.ManifestVersionKindExtensions
+	}{
+		{name: "unset"},
+		{name: "empty", extensions: &app.ManifestVersionKindExtensions{}},
+		{
+			name: "empty blocks",
+			extensions: &app.ManifestVersionKindExtensions{
+				Provisioning: &app.ManifestVersionKindProvisioning{},
+			},
+		},
+		{
+			name: "provisioning disabled",
+			extensions: &app.ManifestVersionKindExtensions{
+				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(false)},
+			},
+		},
+		{
+			name: "provisioning enabled",
+			extensions: &app.ManifestVersionKindExtensions{
+				Provisioning: &app.ManifestVersionKindProvisioning{Enabled: new(true)},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			md := app.ManifestData{
+				AppName: "foo",
+				Versions: []app.ManifestVersion{{
+					Name:   "v1",
+					Served: true,
+					Kinds: []app.ManifestVersionKind{{
+						Kind:       "Foo",
+						Scope:      "Namespaced",
+						Extensions: tc.extensions,
+					}},
+				}},
+			}
+
+			spec, err := SpecFromManifestData(md)
+			require.NoError(t, err)
+
+			roundTripped, err := spec.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, tc.extensions, roundTripped.Versions[0].Kinds[0].Extensions)
+		})
+	}
+}
+
+func TestEmbedConversion(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		reembedVersion int
+		embed          *app.ManifestVersionKindEmbed
+		wantJSON       string
+		wantRoundTrip  *app.ManifestVersionKindEmbed
+	}{
+		{name: "custom builder omits embedding declarations"},
+		{
+			name:           "initial re-embedding version",
+			reembedVersion: 1,
+			embed: &app.ManifestVersionKindEmbed{
+				Fields: []app.ManifestVersionKindEmbedField{
+					{Name: "title", Path: "spec.title"},
 				},
 			},
-		}, md)
-	})
+			wantJSON: `{"fields":[{"name":"title","path":"spec.title"}]}`,
+		},
+		{
+			name:           "increased re-embedding version with multiple fields",
+			reembedVersion: 3,
+			embed: &app.ManifestVersionKindEmbed{
+				Fields: []app.ManifestVersionKindEmbedField{
+					{Name: "title", Path: "spec.title"},
+					{Name: "tags", Path: "spec.tags"},
+				},
+			},
+			wantJSON: `{"fields":[{"name":"title","path":"spec.title"},{"name":"tags","path":"spec.tags"}]}`,
+		},
+		{
+			name:           "empty fields",
+			reembedVersion: 1,
+			embed: &app.ManifestVersionKindEmbed{
+				Fields: []app.ManifestVersionKindEmbedField{},
+			},
+			wantJSON: `{"fields":[]}`,
+		},
+		{
+			name:           "zero-value embedding declaration",
+			reembedVersion: 1,
+			embed:          &app.ManifestVersionKindEmbed{},
+			wantJSON:       `{"fields":[]}`,
+			wantRoundTrip: &app.ManifestVersionKindEmbed{
+				Fields: []app.ManifestVersionKindEmbedField{},
+			},
+		},
+		{
+			name:           "resource revision without versioned fields",
+			reembedVersion: 2,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			md := app.ManifestData{
+				AppName: "foo",
+				Versions: []app.ManifestVersion{{
+					Name:   "v1",
+					Served: true,
+					Kinds: []app.ManifestVersionKind{{
+						Kind:     "Foo",
+						Plural:   "Foos",
+						Resource: "foos",
+						Scope:    "Namespaced",
+						Embed:    tc.embed,
+						SearchFields: []app.ManifestVersionKindSearchField{{
+							Name:         "category",
+							Path:         "spec.category",
+							Type:         "string",
+							Capabilities: []string{"filter"},
+						}},
+					}},
+				}},
+			}
+			if tc.reembedVersion != 0 {
+				md.Embed = map[string]app.ManifestResourceEmbed{
+					"foos": {ReembedVersion: tc.reembedVersion},
+				}
+			}
+
+			require.NoError(t, md.Validate())
+			spec, err := SpecFromManifestData(md)
+			require.NoError(t, err)
+			kindJSON, err := json.Marshal(spec.Versions[0].Kinds[0])
+			require.NoError(t, err)
+			var kindFields map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal(kindJSON, &kindFields))
+			if tc.embed == nil {
+				assert.NotContains(t, kindFields, "embed")
+			} else {
+				assert.JSONEq(t, tc.wantJSON, string(kindFields["embed"]))
+			}
+			assert.NotContains(t, string(kindFields["searchFields"]), `"embed"`)
+			encoded, err := json.Marshal(spec)
+			require.NoError(t, err)
+			var specFields map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal(encoded, &specFields))
+			if tc.reembedVersion == 0 {
+				assert.NotContains(t, specFields, "embed")
+			} else {
+				wantEmbedJSON, err := json.Marshal(md.Embed)
+				require.NoError(t, err)
+				assert.JSONEq(t, string(wantEmbedJSON), string(specFields["embed"]))
+			}
+			var decoded AppManifestSpec
+			require.NoError(t, json.Unmarshal(encoded, &decoded))
+			roundTripped, err := decoded.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, md.Embed, roundTripped.Embed)
+			wantRoundTrip := tc.wantRoundTrip
+			if wantRoundTrip == nil {
+				wantRoundTrip = tc.embed
+			}
+			assert.Equal(t, wantRoundTrip, roundTripped.Versions[0].Kinds[0].Embed)
+			assert.Equal(t, md.Versions[0].Kinds[0].SearchFields, roundTripped.Versions[0].Kinds[0].SearchFields)
+		})
+	}
+}
+
+func TestEmbedConversion_SharedReembedVersion(t *testing.T) {
+	md := app.ManifestData{
+		AppName: "testapp",
+		Group:   "testapp.grafana.app",
+		Embed: map[string]app.ManifestResourceEmbed{
+			"foos":     {ReembedVersion: 3},
+			"children": {ReembedVersion: 7},
+		},
+		Versions: []app.ManifestVersion{
+			{
+				Name:   "v1",
+				Served: true,
+				Kinds: []app.ManifestVersionKind{
+					{
+						Kind:  "Foo",
+						Scope: "Namespaced",
+						Embed: &app.ManifestVersionKindEmbed{Fields: []app.ManifestVersionKindEmbedField{
+							{Name: "title", Path: "spec.title"},
+						}},
+					},
+					{
+						Kind:   "Child",
+						Plural: "children", Resource: "children",
+						Scope: "Namespaced",
+					},
+				},
+			},
+			{
+				Name:   "v2",
+				Served: true,
+				Kinds: []app.ManifestVersionKind{
+					{
+						Kind:  "Foo",
+						Scope: "Namespaced",
+						Embed: &app.ManifestVersionKindEmbed{Fields: []app.ManifestVersionKindEmbedField{
+							{Name: "title", Path: "spec.details.title"},
+						}},
+					},
+					{
+						Kind:   "Child",
+						Plural: "children", Resource: "children",
+						Scope: "Namespaced",
+					},
+				},
+			},
+		},
+	}
+
+	spec, err := SpecFromManifestData(md)
+	require.NoError(t, err)
+	encoded, err := json.Marshal(spec)
+	require.NoError(t, err)
+	var specFields map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(encoded, &specFields))
+	assert.JSONEq(t, `{"foos":{"reembedVersion":3},"children":{"reembedVersion":7}}`, string(specFields["embed"]))
+	assert.NotContains(t, string(specFields["versions"]), `"reembedVersion"`)
+
+	var decoded AppManifestSpec
+	require.NoError(t, json.Unmarshal(encoded, &decoded))
+	roundTripped, err := decoded.ToManifestData()
+	require.NoError(t, err)
+	assert.Equal(t, md.Embed, roundTripped.Embed)
+	for vi, version := range md.Versions {
+		for ki, kind := range version.Kinds {
+			assert.Equal(t, kind.Embed, roundTripped.Versions[vi].Kinds[ki].Embed)
+		}
+	}
+}
+
+func TestListKeysConversion(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		value *bool
+	}{
+		{name: "omitted"},
+		{name: "enabled", value: new(true)},
+		{name: "disabled", value: new(false)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := app.ManifestData{AppName: "foo", Versions: []app.ManifestVersion{{
+				Name: "v1", Served: true, Kinds: []app.ManifestVersionKind{{
+					Kind: "Foo", Scope: "Namespaced",
+				}},
+			}}}
+			if tc.value != nil {
+				data.Versions[0].Kinds[0].Storage = &app.ManifestVersionKindStorage{ListKeys: tc.value}
+			}
+			spec, err := SpecFromManifestData(data)
+			require.NoError(t, err)
+			encoded, err := json.Marshal(spec)
+			require.NoError(t, err)
+			var decoded AppManifestSpec
+			require.NoError(t, json.Unmarshal(encoded, &decoded))
+			roundTrip, err := decoded.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, data.Versions[0].Kinds[0].Storage, roundTrip.Versions[0].Kinds[0].Storage)
+		})
+	}
+}
+
+func TestFixedNamesConversion(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		fixed []string
+	}{
+		{name: "omitted"},
+		{name: "one", fixed: []string{"current"}},
+		{name: "several", fixed: []string{"a", "b"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := app.ManifestData{AppName: "foo", Versions: []app.ManifestVersion{{
+				Name: "v1", Served: true, Kinds: []app.ManifestVersionKind{{
+					Kind: "Foo", Scope: "Namespaced", FixedNames: tc.fixed,
+				}},
+			}}}
+			spec, err := SpecFromManifestData(data)
+			require.NoError(t, err)
+			encoded, err := json.Marshal(spec)
+			require.NoError(t, err)
+			var decoded AppManifestSpec
+			require.NoError(t, json.Unmarshal(encoded, &decoded))
+			roundTrip, err := decoded.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, tc.fixed, roundTrip.Versions[0].Kinds[0].FixedNames)
+		})
+	}
+}
+
+func TestNamingStrategyConversion(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		strategy *app.ManifestKindNamingStrategy
+	}{
+		{name: "omitted"},
+		{name: "mode only", strategy: &app.ManifestKindNamingStrategy{Mode: app.NamingStrategyModeOwner}},
+		{name: "owners only", strategy: &app.ManifestKindNamingStrategy{
+			Mode:  app.NamingStrategyModeOwner,
+			Owner: &app.ManifestKindNamingStrategyOwner{Owners: []resource.Owner{resource.UserResourceOwner}},
+		}},
+		{name: "everything", strategy: &app.ManifestKindNamingStrategy{
+			Mode: app.NamingStrategyModeOwner,
+			Owner: &app.ManifestKindNamingStrategyOwner{
+				Owners:        []resource.Owner{resource.NamespaceResourceOwner, resource.UserResourceOwner, resource.TeamResourceOwner},
+				AllowOrgAdmin: true,
+			},
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := app.ManifestData{AppName: "foo", Versions: []app.ManifestVersion{{
+				Name: "v1", Served: true, Kinds: []app.ManifestVersionKind{{
+					Kind: "Foo", Scope: "Namespaced", NamingStrategy: tc.strategy,
+				}},
+			}}}
+			spec, err := SpecFromManifestData(data)
+			require.NoError(t, err)
+			encoded, err := json.Marshal(spec)
+			require.NoError(t, err)
+			var decoded AppManifestSpec
+			require.NoError(t, json.Unmarshal(encoded, &decoded))
+			roundTrip, err := decoded.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, tc.strategy, roundTrip.Versions[0].Kinds[0].NamingStrategy)
+		})
+	}
 }

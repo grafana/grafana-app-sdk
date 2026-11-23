@@ -2,16 +2,17 @@ package testing
 
 configA: {
 	kinds: {
-		grouping:       "group"
-		perKindVersion: true
+		grouping: "group"
 	}
 	definitions: {
-		manifestSchemas: false
-		encoding:        "yaml"
-		path:            "custom/defs"
-		manifestVersion: "v1alpha1"
+		manifestSchemas:  false
+		encoding:         "yaml"
+		path:             "custom/defs"
+		manifestVersion:  "v1alpha1"
+		manifestFileName: "custom-manifest.yaml"
 	}
 	codegen: {
+		goEnabled:                      false
 		goModule:                       "github.com/example/module"
 		goModGenPath:                   "internal/mod"
 		goGenPath:                      "alt/pkg/"

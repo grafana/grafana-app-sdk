@@ -17,6 +17,68 @@ import (
 	"k8s.io/kube-openapi/pkg/validation/spec"
 )
 
+func TestManifestVersionOpenAPI_OmitZero(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		doc  ManifestVersionOpenAPI
+		want string
+	}{
+		{name: "zero", want: `{}`},
+		{
+			name: "empty maps",
+			doc: ManifestVersionOpenAPI{
+				Paths: map[string]spec3.PathProps{},
+				Components: ManifestVersionOpenAPIComponents{
+					Schemas: map[string]spec.Schema{}, Responses: map[string]*spec3.Response{},
+				},
+			},
+			want: `{}`,
+		},
+		{
+			name: "paths only",
+			doc:  ManifestVersionOpenAPI{Paths: map[string]spec3.PathProps{"/test": {}}},
+			want: `{"openapi":{"paths":{"/test":{}}}}`,
+		},
+		{
+			name: "schemas only",
+			doc: ManifestVersionOpenAPI{Components: ManifestVersionOpenAPIComponents{
+				Schemas: map[string]spec.Schema{"Test": {}},
+			}},
+			want: `{"openapi":{"components":{"schemas":{"Test":{}}}}}`,
+		},
+		{
+			name: "responses only",
+			doc: ManifestVersionOpenAPI{Components: ManifestVersionOpenAPIComponents{
+				Responses: map[string]*spec3.Response{"OK": {ResponseProps: spec3.ResponseProps{Description: "success"}}},
+			}},
+			want: `{"openapi":{"components":{"responses":{"OK":{"description":"success"}}}}}`,
+		},
+		{
+			name: "response reference",
+			doc: ManifestVersionOpenAPI{Components: ManifestVersionOpenAPIComponents{
+				Responses: map[string]*spec3.Response{"OK": {Refable: spec.Refable{Ref: spec.MustCreateRef("#/components/responses/Success")}}},
+			}},
+			want: `{"openapi":{"components":{"responses":{"OK":{"$ref":"#/components/responses/Success"}}}}}`,
+		},
+		{
+			name: "examples only",
+			doc: ManifestVersionOpenAPI{Components: ManifestVersionOpenAPIComponents{
+				Examples: map[string]*spec3.Example{"Example": {ExampleProps: spec3.ExampleProps{Value: "sample"}}},
+			}},
+			want: `{"openapi":{"components":{"examples":{"Example":{"value":"sample"}}}}}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			value := struct {
+				OpenAPI ManifestVersionOpenAPI `json:"openapi,omitzero"`
+			}{OpenAPI: tc.doc}
+			data, err := json.Marshal(value)
+			require.NoError(t, err)
+			assert.JSONEq(t, tc.want, string(data))
+		})
+	}
+}
+
 func TestManifestData_Validate(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -26,36 +88,88 @@ func TestManifestData_Validate(t *testing.T) {
 		name: "valid (empty manifest)",
 		data: ManifestData{},
 	}, {
+		name: "valid without preferred version",
+		data: ManifestData{Versions: []ManifestVersion{{Name: "v1"}}},
+	}, {
+		name: "valid preferred version",
+		data: ManifestData{
+			Versions:         []ManifestVersion{{Name: "v1"}, {Name: "v2"}},
+			PreferredVersion: "v2",
+		},
+	}, {
+		name: "unknown preferred version",
+		data: ManifestData{
+			Versions:         []ManifestVersion{{Name: "v1"}},
+			PreferredVersion: "v2",
+		},
+		expectedErr: multierror.Append(nil, errors.New(`unknown preferred version: "v2"`)),
+	}, {
+		name:        "preferred version without versions",
+		data:        ManifestData{PreferredVersion: "v1"},
+		expectedErr: multierror.Append(nil, errors.New(`unknown preferred version: "v1"`)),
+	}, {
+		name: "preferred version must match exactly",
+		data: ManifestData{
+			Versions:         []ManifestVersion{{Name: "v1"}},
+			PreferredVersion: "V1",
+		},
+		expectedErr: multierror.Append(nil, errors.New(`unknown preferred version: "V1"`)),
+	}, {
 		name: "plural mismatch",
 		data: ManifestData{
 			Versions: []ManifestVersion{{
 				Name: "v1",
 				Kinds: []ManifestVersionKind{{
 					Kind:   "Foo",
-					Plural: "foos",
+					Plural: "foos", Resource: "foos",
 				}},
 			}, {
 				Name: "v2",
 				Kinds: []ManifestVersionKind{{
 					Kind:   "Foo",
-					Plural: "bars",
+					Plural: "bars", Resource: "bars",
 				}},
 			}},
 		},
-		expectedErr: multierror.Append(nil, errors.New("kind 'Foo' has a different plural in versions 'v1' and 'v2'")),
+		expectedErr: multierror.Append(nil,
+			errors.New("kind 'Foo' has a different plural in versions 'v1' and 'v2'"),
+			errors.New("kind 'Foo' has a different resource in versions 'v1' and 'v2'")),
+	}, {
+		name: "missing plural and resource",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name:  "v1",
+				Kinds: []ManifestVersionKind{{Kind: "Foo"}},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("kind 'Foo' in version 'v1' has no plural"),
+			errors.New("kind 'Foo' in version 'v1' has no resource")),
+	}, {
+		name: "invalid resource name",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name:  "v1",
+				Kinds: []ManifestVersionKind{{Kind: "Foo", Plural: "Foos", Resource: "Foos"}},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("kind 'Foo' in version 'v1' has an invalid resource 'Foos': a lowercase RFC 1123 label must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?')")),
 	}, {
 		name: "scope mismatch",
 		data: ManifestData{
 			Versions: []ManifestVersion{{
 				Name: "v1",
 				Kinds: []ManifestVersionKind{{
-					Kind:  "Foo",
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
 					Scope: "Namespaced",
 				}},
 			}, {
 				Name: "v2",
 				Kinds: []ManifestVersionKind{{
-					Kind:  "Foo",
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
 					Scope: "Cluster",
 				}},
 			}},
@@ -67,34 +181,73 @@ func TestManifestData_Validate(t *testing.T) {
 			Versions: []ManifestVersion{{
 				Name: "v1",
 				Kinds: []ManifestVersionKind{{
-					Kind:       "Foo",
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
 					Conversion: true,
 				}},
 			}, {
 				Name: "v2",
 				Kinds: []ManifestVersionKind{{
-					Kind:       "Foo",
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
 					Conversion: false,
 				}},
 			}},
 		},
 		expectedErr: multierror.Append(nil, errors.New("kind 'Foo' conversion does not match in versions 'v1' and 'v2'")),
 	}, {
+		name: "folderScoped mismatch (unset vs explicit false)",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
+				}},
+			}, {
+				Name: "v2",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
+					FolderScoped: new(false),
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil, errors.New("kind 'Foo' has a different folderScoped in versions 'v1' and 'v2'")),
+	}, {
+		name: "folderScoped consistent (unset vs explicit true)",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
+				}},
+			}, {
+				Name: "v2",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
+					FolderScoped: new(true),
+				}},
+			}},
+		},
+	}, {
 		name: "plural, scope, and conversion mismatch",
 		data: ManifestData{
 			Versions: []ManifestVersion{{
 				Name: "v1",
 				Kinds: []ManifestVersionKind{{
-					Kind:       "Foo",
-					Plural:     "foos",
+					Kind:   "Foo",
+					Plural: "foos", Resource: "foos",
 					Scope:      "Namespaced",
 					Conversion: true,
 				}},
 			}, {
 				Name: "v2",
 				Kinds: []ManifestVersionKind{{
-					Kind:       "Foo",
-					Plural:     "bars",
+					Kind:   "Foo",
+					Plural: "bars", Resource: "bars",
 					Scope:      "Cluster",
 					Conversion: false,
 				}},
@@ -102,6 +255,7 @@ func TestManifestData_Validate(t *testing.T) {
 		},
 		expectedErr: multierror.Append(nil,
 			errors.New("kind 'Foo' has a different plural in versions 'v1' and 'v2'"),
+			errors.New("kind 'Foo' has a different resource in versions 'v1' and 'v2'"),
 			errors.New("kind 'Foo' has a different scope in versions 'v1' and 'v2'"),
 			errors.New("kind 'Foo' conversion does not match in versions 'v1' and 'v2'")),
 	}, {
@@ -111,16 +265,16 @@ func TestManifestData_Validate(t *testing.T) {
 				Name: "v1",
 				Kinds: []ManifestVersionKind{{
 					Kind:   "Foo",
-					Plural: "foos",
-					Scope:  "Namespaced",
+					Plural: "foos", Resource: "foos",
+					Scope: "Namespaced",
 				}, {
 					Kind:   "Bar",
-					Plural: "bars",
-					Scope:  "Cluster",
+					Plural: "bars", Resource: "bars",
+					Scope: "Cluster",
 				}, {
 					Kind:   "Foobar",
-					Plural: "foobars",
-					Scope:  "Cluster",
+					Plural: "foobars", Resource: "foobars",
+					Scope: "Cluster",
 				}},
 				Routes: ManifestVersionRoutes{
 					Namespaced: map[string]spec3.PathProps{
@@ -136,6 +290,41 @@ func TestManifestData_Validate(t *testing.T) {
 		expectedErr: multierror.Append(nil,
 			errors.New("namespaced custom route '/foos' conflicts with already-registered kind 'foos'"),
 			errors.New("cluster-scoped custom route '/foobars' conflicts with already-registered kind 'foobars'")),
+	}, {
+		name: "search and trash routes remain reserved after opt-out",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "foos", Resource: "foos",
+					Scope: "Namespaced",
+					Search: &ManifestVersionKindSearch{
+						Endpoint: new(false),
+					},
+				}, {
+					Kind:   "Bar",
+					Plural: "bars", Resource: "bars",
+					Scope: "Cluster",
+					Search: &ManifestVersionKindSearch{
+						Trash: new(false),
+					},
+				}},
+				Routes: ManifestVersionRoutes{
+					Namespaced: map[string]spec3.PathProps{
+						"/foos/search": {},
+						"/bars/search": {},
+					},
+					Cluster: map[string]spec3.PathProps{
+						"/BARS/TRASH/": {},
+						"/foos/trash":  {},
+					},
+				},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("namespaced custom route '/foos/search' conflicts with reserved 'search' route for kind 'foos'"),
+			errors.New("cluster-scoped custom route '/BARS/TRASH/' conflicts with reserved 'trash' route for kind 'bars'")),
 	}, {
 		name: "rolebindings for missing roles (no roles in manifest)",
 		data: ManifestData{
@@ -158,6 +347,10 @@ func TestManifestData_Validate(t *testing.T) {
 		name: "rolebindings for missing roles (no matching role)",
 		data: ManifestData{
 			AppName: "myapp",
+			Versions: []ManifestVersion{{
+				Name:  "v1",
+				Kinds: []ManifestVersionKind{{Kind: "Foo", Plural: "Foos", Resource: "foos"}},
+			}},
 			Roles: map[string]ManifestRole{
 				"viewer-role": {
 					Title: "Viewer Role",
@@ -202,11 +395,334 @@ func TestManifestData_Validate(t *testing.T) {
 			errors.New("editor: cannot bind role 'other-editor-role' as it is not present in manifest roles"),
 			errors.New("admin: cannot bind role 'other-admin-role' as it is not present in manifest roles"),
 			errors.New("extra: cannot bind role 'other-extra-role' as it is not present in manifest roles")),
+	}, {
+		name: "role kinds must be kinds or their custom routes",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
+					Routes: map[string]spec3.PathProps{
+						"/render": {Get: &spec3.Operation{}},
+						"/approve-request": {Post: &spec3.Operation{VendorExtensible: spec.VendorExtensible{Extensions: spec.Extensions{
+							OpenAPIExtensionAuthzResource:    "foos",
+							OpenAPIExtensionAuthzSubresource: "approve",
+						}}}},
+					},
+				}, {
+					Kind:   "Bar",
+					Plural: "Bars", Resource: "bars",
+					Scope: "Cluster",
+				}},
+				Routes: ManifestVersionRoutes{
+					Namespaced: map[string]spec3.PathProps{
+						"/foos/bulk": {Post: &spec3.Operation{VendorExtensible: spec.VendorExtensible{Extensions: spec.Extensions{
+							OpenAPIExtensionAuthzResource:    "foos",
+							OpenAPIExtensionAuthzSubresource: "bulk",
+						}}}},
+					},
+				},
+				OpenAPI: ManifestVersionOpenAPI{Paths: map[string]spec3.PathProps{
+					"/namespaces/{namespace}/foos/{name}/preview/{id}": {Get: &spec3.Operation{}},
+					"bars/{name}/count": {Get: &spec3.Operation{}},
+				}},
+			}},
+			Roles: map[string]ManifestRole{
+				"a-role": {
+					Kinds: []ManifestRoleKind{{Kind: "Foo"}, {Kind: "foo"}, {Kind: "Foo/render"}, {Kind: "Foo/preview"}, {Kind: "Foo/approve"}, {Kind: "Foo/bulk"}, {Kind: "Bar/count"}},
+				},
+				"b-role": {
+					Kinds: []ManifestRoleKind{{Kind: "Foo/status"}, {Kind: "Foo/Scale"}, {Kind: "Foo/missing"}, {Kind: "Foo/render/x"}, {Kind: "Foo/Render"}, {Kind: "Baz"}},
+				},
+			},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New(`invalid role b-role: kind "Foo/status" names the built-in "status" subresource, which is not grantable`),
+			errors.New(`invalid role b-role: kind "Foo/Scale" names the built-in "scale" subresource, which is not grantable`),
+			errors.New(`invalid role b-role: kind "Foo/missing" names "missing", which is not a custom route of Foo`),
+			errors.New(`invalid role b-role: kind "Foo/render/x" names "render/x", which is not a custom route of Foo`),
+			errors.New(`invalid role b-role: kind "Foo/Render" names "Render", which is not a custom route of Foo`),
+			errors.New(`invalid role b-role: kind "Baz" does not exist in manifest`)),
+	}, {
+		name: "declared authz resource and subresource cannot contain a slash",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
+					Routes: map[string]spec3.PathProps{
+						"/render": {Get: &spec3.Operation{VendorExtensible: spec.VendorExtensible{Extensions: spec.Extensions{
+							OpenAPIExtensionAuthzResource: "foos/render",
+						}}}},
+					},
+				}},
+				OpenAPI: ManifestVersionOpenAPI{Paths: map[string]spec3.PathProps{
+					"/namespaces/{namespace}/foos/{name}/preview": {Get: &spec3.Operation{VendorExtensible: spec.VendorExtensible{Extensions: spec.Extensions{
+						OpenAPIExtensionAuthzResource:    "foos",
+						OpenAPIExtensionAuthzSubresource: "preview/large",
+					}}}},
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New(`kind "Foo" version "v1" route "/render": x-grafana-declared-authz-resource must be a resource name, not "foos/render"; declare the subresource in x-grafana-declared-authz-subresource`),
+			errors.New(`version "v1" route "/namespaces/{namespace}/foos/{name}/preview": x-grafana-declared-authz-subresource must be a single path segment, not "preview/large"`)),
+	}, {
+		name: "kind routes conflicting with built-in subresources",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "Foos", Resource: "foos",
+					Routes: map[string]spec3.PathProps{
+						"/status":       {},
+						"status":        {},
+						"/status/foo":   {},
+						"/SCALE":        {},
+						"/statusreport": {},
+					},
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New(`kind "Foo" version "v1": custom route "/SCALE" conflicts with the built-in "scale" subresource`),
+			errors.New(`kind "Foo" version "v1": custom route "/status" conflicts with the built-in "status" subresource`),
+			errors.New(`kind "Foo" version "v1": custom route "/status/foo" conflicts with the built-in "status" subresource`),
+			errors.New(`kind "Foo" version "v1": custom route "status" conflicts with the built-in "status" subresource`)),
+	}, {
+		name: "status and scale version routes are reserved",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "foos", Resource: "foos",
+					Scope: "Namespaced",
+				}, {
+					Kind:   "Bar",
+					Plural: "bars", Resource: "bars",
+					Scope: "Cluster",
+				}},
+				Routes: ManifestVersionRoutes{
+					Namespaced: map[string]spec3.PathProps{
+						"/foos/status": {},
+					},
+					Cluster: map[string]spec3.PathProps{
+						"bars/scale": {},
+					},
+				},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("namespaced custom route '/foos/status' conflicts with reserved 'status' route for kind 'foos'"),
+			errors.New("cluster-scoped custom route 'bars/scale' conflicts with reserved 'scale' route for kind 'bars'")),
 	}}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			assert.Equal(t, test.expectedErr, test.data.Validate())
+		})
+	}
+}
+
+func TestManifestData_ValidateHybridRoutes(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		search *ManifestVersionKindSearch
+	}{
+		{name: "unset"},
+		{name: "disabled", search: &ManifestVersionKindSearch{Hybrid: new(false)}},
+		{name: "enabled", search: &ManifestVersionKindSearch{Hybrid: new(true)}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := ManifestData{
+				Versions: []ManifestVersion{{
+					Name: "v1",
+					Kinds: []ManifestVersionKind{{
+						Kind:   "Foo",
+						Plural: "Foos", Resource: "foos",
+						Scope:  "Namespaced",
+						Search: tt.search,
+					}, {
+						Kind:   "Bar",
+						Plural: "Bars", Resource: "bars",
+						Scope:  "Cluster",
+						Search: tt.search,
+					}},
+					Routes: ManifestVersionRoutes{
+						Namespaced: map[string]spec3.PathProps{
+							"/foos/search/hybrid":       {},
+							"/bars/search/hybrid":       {},
+							"/foos/search/hybrid/stats": {},
+						},
+						Cluster: map[string]spec3.PathProps{
+							"/BARS/SEARCH/HYBRID/":      {},
+							"/foos/search/hybrid":       {},
+							"/other/search/hybrid":      {},
+							"/bars/search/hybrid/stats": {},
+						},
+					},
+				}},
+			}
+			expectedErr := multierror.Append(nil,
+				errors.New("namespaced custom route '/foos/search/hybrid' conflicts with reserved 'search/hybrid' route for kind 'foos'"),
+				errors.New("cluster-scoped custom route '/BARS/SEARCH/HYBRID/' conflicts with reserved 'search/hybrid' route for kind 'bars'"))
+			assert.Equal(t, expectedErr, manifest.Validate())
+		})
+	}
+}
+
+func TestManifestData_ValidateEmbed(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		embed        map[string]ManifestResourceEmbed
+		kindVersions []ManifestVersionKind
+		wantErr      string
+	}{
+		{
+			name:         "custom builder omits embedding declarations",
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Resource: "foos"}},
+		},
+		{
+			name:         "empty configuration remains optional",
+			embed:        map[string]ManifestResourceEmbed{},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Resource: "foos"}},
+		},
+		{
+			name:  "positive revision with versioned fields",
+			embed: map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{
+				Kind:   "Foo",
+				Plural: "foos", Resource: "foos",
+				Embed: &ManifestVersionKindEmbed{
+					Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
+				},
+			}},
+		},
+		{
+			name:  "declared field requires a path",
+			embed: map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{
+				Kind:   "Foo",
+				Plural: "Foos", Resource: "foos",
+				Embed: &ManifestVersionKindEmbed{
+					Fields: []ManifestVersionKindEmbedField{{Name: "title"}},
+				},
+			}},
+			wantErr: "embed field \"title\" requires a path",
+		},
+		{
+			name:         "resource revision without versioned fields",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 2}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Resource: "foos"}},
+		},
+		{
+			name:         "zero revision",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 0}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Resource: "foos"}},
+			wantErr:      "reembedVersion",
+		},
+		{
+			name:         "negative revision",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: -1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Resource: "foos"}},
+			wantErr:      "reembedVersion",
+		},
+		{
+			name:         "unknown resource",
+			embed:        map[string]ManifestResourceEmbed{"missing": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Resource: "foos"}},
+			wantErr:      "missing",
+		},
+		{
+			name: "versioned fields require a resource revision",
+			kindVersions: []ManifestVersionKind{{
+				Kind:   "Foo",
+				Plural: "foos", Resource: "foos",
+				Embed: &ManifestVersionKindEmbed{
+					Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
+				},
+			}},
+			wantErr: "foos",
+		},
+		{
+			name:         "empty versioned embed still requires a resource revision",
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Resource: "foos", Embed: &ManifestVersionKindEmbed{}}},
+			wantErr:      "foos",
+		},
+		{
+			name:         "resource key uses lowercase plural",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "Foos", Resource: "foos"}},
+		},
+		{
+			name:         "resource key cannot use kind name",
+			embed:        map[string]ManifestResourceEmbed{"Foo": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Resource: "foos"}},
+			wantErr:      "Foo",
+		},
+		{
+			name:         "resource key uses inferred plural",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "Foos", Resource: "foos"}},
+		},
+		{
+			name:         "resource key supports explicit irregular plural",
+			embed:        map[string]ManifestResourceEmbed{"people": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Person", Plural: "people", Resource: "people"}},
+		},
+		{
+			name:  "only some API versions declare fields",
+			embed: map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{
+				{Kind: "Foo", Plural: "foos", Resource: "foos"},
+				{
+					Kind:   "Foo",
+					Plural: "foos", Resource: "foos",
+					Embed: &ManifestVersionKindEmbed{
+						Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
+					},
+				},
+			},
+		},
+		{
+			name:  "versioned fields can differ with one resource revision",
+			embed: map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 3}},
+			kindVersions: []ManifestVersionKind{
+				{
+					Kind:   "Foo",
+					Plural: "foos", Resource: "foos",
+					Embed: &ManifestVersionKindEmbed{
+						Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
+					},
+				},
+				{
+					Kind:   "Foo",
+					Plural: "foos", Resource: "foos",
+					Embed: &ManifestVersionKindEmbed{
+						Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.displayName"}},
+					},
+				},
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := ManifestData{Embed: tt.embed}
+			for i, kind := range tt.kindVersions {
+				manifest.Versions = append(manifest.Versions, ManifestVersion{
+					Name:  fmt.Sprintf("v%d", i+1),
+					Kinds: []ManifestVersionKind{kind},
+				})
+			}
+			err := manifest.Validate()
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
 		})
 	}
 }
@@ -225,7 +741,8 @@ func TestManifestVersionKind_Subresources(t *testing.T) {
 	}, {
 		name: "empty schema",
 		kind: ManifestVersionKind{
-			Kind: "Foo",
+			Kind:   "Foo",
+			Plural: "Foos", Resource: "foos",
 			Schema: &VersionSchema{
 				raw: map[string]any{},
 			},
@@ -234,7 +751,8 @@ func TestManifestVersionKind_Subresources(t *testing.T) {
 	}, {
 		name: "invalid schema",
 		kind: ManifestVersionKind{
-			Kind: "Foo",
+			Kind:   "Foo",
+			Plural: "Foos", Resource: "foos",
 			Schema: &VersionSchema{
 				raw: jsonToMap([]byte(`{"spec":{"properties":{"foo":{"type":"string"}}}}`)),
 			},
@@ -244,6 +762,7 @@ func TestManifestVersionKind_Subresources(t *testing.T) {
 		name: "no subresources",
 		kind: ManifestVersionKind{
 			Kind:   "Foo",
+			Plural: "Foos", Resource: "foos",
 			Schema: sch1,
 		},
 		expected: []string{},
@@ -251,6 +770,7 @@ func TestManifestVersionKind_Subresources(t *testing.T) {
 		name: "status subresource",
 		kind: ManifestVersionKind{
 			Kind:   "Foo",
+			Plural: "Foos", Resource: "foos",
 			Schema: sch2,
 		},
 		expected: []string{"status"},
@@ -569,6 +1089,7 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 				"spec": {
 					Type: spec.StringOrArray{"object"},
 					AdditionalProperties: &spec.SchemaOrBool{
+						Allows: true,
 						Schema: &spec.Schema{
 							SchemaProps: spec.SchemaProps{
 								Type: spec.StringOrArray{"object"},
@@ -596,6 +1117,7 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 				"spec": {
 					Type: spec.StringOrArray{"object"},
 					AdditionalProperties: &spec.SchemaOrBool{
+						Allows: true,
 						Schema: &spec.Schema{
 							SchemaProps: spec.SchemaProps{
 								Type: spec.StringOrArray{"object"},
@@ -811,8 +1333,8 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 							"int": {
 								SchemaProps: spec.SchemaProps{
 									Type:    []string{"number"},
-									Minimum: ptr(float64(5)),
-									Maximum: ptr(float64(10)),
+									Minimum: new(float64(5)),
+									Maximum: new(float64(10)),
 									Format:  "integer",
 								},
 							},
@@ -830,8 +1352,8 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 							"float": {
 								SchemaProps: spec.SchemaProps{
 									Type:    []string{"number"},
-									Minimum: ptr(float64(-0.5)),
-									Maximum: ptr(float64(0.5)),
+									Minimum: new(float64(-0.5)),
+									Maximum: new(float64(0.5)),
 									Format:  "decimal",
 								},
 							},
@@ -863,6 +1385,85 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 				assert.Equal(t, test.want, res)
 			}
 		})
+	}
+}
+
+func TestVersionSchema_AsKubeOpenAPI_SecureValues(t *testing.T) {
+	gvk := schema.GroupVersionKind{Group: "test.grafana.app", Version: "v1", Kind: "Foo"}
+	ref := func(path string) spec.Ref { return spec.MustCreateRef(path) }
+	vs, err := VersionSchemaFromMap(map[string]any{
+		"spec": map[string]any{"type": "object"},
+	}, gvk.Kind)
+	require.NoError(t, err)
+	for _, test := range []struct {
+		name   string
+		values []ManifestVersionKindSecureValue
+	}{
+		{name: "multiple keys", values: []ManifestVersionKindSecureValue{
+			{Key: "apiKey", Description: "API key supplied by the service."},
+			{Key: "token"},
+		}},
+		{name: "nil"},
+		{name: "empty", values: []ManifestVersionKindSecureValue{}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			definitions, err := vs.AsKubeOpenAPI(gvk, ref, "test.grafana.app/v1", test.values...)
+			require.NoError(t, err)
+			kind := definitions["test.grafana.app/v1.Foo"].Schema
+			secure, exists := kind.Properties["secure"]
+			if len(test.values) == 0 {
+				assert.False(t, exists)
+				return
+			}
+			require.True(t, exists)
+			assert.Equal(t, spec.StringOrArray{"object"}, secure.Type)
+			require.Len(t, secure.Properties, 2)
+			assert.Equal(t, spec.StringOrArray{"object"}, secure.Properties["apiKey"].Type)
+			assert.Equal(t, "API key supplied by the service.", secure.Properties["apiKey"].Description)
+			assert.Equal(t, spec.StringOrArray{"object"}, secure.Properties["token"].Type)
+			assert.Empty(t, secure.Properties["token"].Description)
+			assert.Empty(t, secure.Required)
+			assert.NotContains(t, kind.Required, "secure")
+		})
+	}
+}
+
+func TestVersionSchema_AsKubeOpenAPI_ExactKindBeforeQualifiedDefinition(t *testing.T) {
+	gvk := schema.GroupVersionKind{Group: "test.grafana.app", Version: "v1", Kind: "InlineSecureValue"}
+	vs, err := VersionSchemaFromMap(map[string]any{
+		"components": map[string]any{"schemas": map[string]any{
+			"InlineSecureValue": map[string]any{
+				"type":       "object",
+				"properties": map[string]any{"spec": map[string]any{"type": "object"}},
+			},
+			"com.github.grafana.grafana-app-sdk.resource.InlineSecureValue": map[string]any{
+				"type": "object",
+				"oneOf": []any{
+					map[string]any{"required": []string{"create"}},
+					map[string]any{"required": []string{"name"}},
+				},
+			},
+		}},
+	}, gvk.Kind)
+	require.NoError(t, err)
+	// Map iteration must never select a qualified definition before the exact kind.
+	for range 100 {
+		definitions, err := vs.AsKubeOpenAPI(gvk, spec.MustCreateRef, "example")
+		require.NoError(t, err)
+		require.Contains(t, definitions["example.InlineSecureValue"].Schema.Properties, "spec")
+	}
+}
+
+func TestSecureValuesOpenAPISchema_IndependentValues(t *testing.T) {
+	schema := SecureValuesOpenAPISchema([]ManifestVersionKindSecureValue{
+		{Key: "apiKey"}, {Key: "token"}, {Key: "*"},
+	})
+	apiKey := schema.Properties["apiKey"]
+	delete(apiKey.Properties, "create")
+	apiKey.OneOf[0].Required[0] = "changed"
+	for _, other := range []spec.Schema{schema.Properties["token"], *schema.AdditionalProperties.Schema} {
+		assert.Contains(t, other.Properties, "create")
+		assert.Equal(t, []string{"create"}, other.OneOf[0].Required)
 	}
 }
 
@@ -923,6 +1524,26 @@ func TestGetCRDOpenAPISchema(t *testing.T) {
 		schemaName: "foo",
 		jsonData:   []byte(`{"components":{"schemas":{"foo":{"allOf":[{"type":"object","properties":{"foo":{"type":"string"}},"required":["foo"]},{"properties":{"bar":{"type":"string"}},"required":["bar"]}]}}}}`),
 		outputJSON: []byte(`{"type":"object","properties":{"foo":{"type":"string"},"bar":{"type":"string"}},"allOf":[{"required":["foo"]},{"required":["bar"]}]}`),
+	}, {
+		// A field which references another type and also has a default is expressed as an allOf with a
+		// single $ref, because in OpenAPI 3.0 a $ref cannot have any siblings.
+		name:       "allOf with single ref keeps enum",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"routingType":{"type":"string","enum":["a","b"]},"foo":{"type":"object","properties":{"routing":{"allOf":[{"$ref":"#/components/schemas/routingType"}],"default":"a"}}}}}}`),
+		outputJSON: []byte(`{"type":"object","properties":{"routing":{"type":"string","enum":["a","b"],"default":"a"}}}`),
+	}, {
+		name:       "allOf with single ref keeps other constraints",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"duration":{"type":"string","pattern":"^[0-9]+s$","minLength":2,"description":"a duration"},"foo":{"type":"object","properties":{"interval":{"allOf":[{"$ref":"#/components/schemas/duration"}],"default":"30s"}}}}}}`),
+		outputJSON: []byte(`{"type":"object","properties":{"interval":{"type":"string","pattern":"^[0-9]+s$","minLength":2,"description":"a duration","default":"30s"}}}`),
+	}, {
+		name:       "allOf with shared ref keeps nested validation",
+		schemaName: "foo",
+		jsonData: []byte(`{"components":{"schemas":{
+			"choice":{"type":"object","properties":{"a":{"type":"string"},"b":{"type":"string"}},"anyOf":[{"required":["a"]},{"required":["b"]}],"not":{"required":["a","b"]}},
+			"foo":{"allOf":[{"$ref":"#/components/schemas/choice"}],"description":"Choose one"}
+		}}}`),
+		outputJSON: []byte(`{"type":"object","description":"Choose one","properties":{"a":{"type":"string"},"b":{"type":"string"}},"allOf":[{"anyOf":[{"required":["a"]},{"required":["b"]}],"not":{"required":["a","b"]}}]}`),
 	}}
 
 	for _, test := range tests {
@@ -968,7 +1589,7 @@ func kubeOpenAPIKindWithProps(gvk schema.GroupVersionKind, ref common.ReferenceC
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Default: map[string]interface{}{},
+							Default: map[string]any{},
 							Ref:     ref("io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"),
 						},
 					},
@@ -1018,7 +1639,7 @@ func kubeOpenAPIList(gvk schema.GroupVersionKind, ref common.ReferenceCallback) 
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Default: map[string]interface{}{},
+							Default: map[string]any{},
 							Ref:     ref("io.k8s.apimachinery.pkg.apis.meta.v1.ListMeta"),
 						},
 					},
@@ -1028,7 +1649,7 @@ func kubeOpenAPIList(gvk schema.GroupVersionKind, ref common.ReferenceCallback) 
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
+										Default: map[string]any{},
 										Ref:     ref(fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, gvk.Kind)),
 									},
 								},
@@ -1044,6 +1665,136 @@ func kubeOpenAPIList(gvk schema.GroupVersionKind, ref common.ReferenceCallback) 
 	}
 }
 
-func ptr[T any](in T) *T {
-	return &in
+func TestManifestVersionKind_SearchEndpoints(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		search         *ManifestVersionKindSearch
+		expectedSearch bool
+		expectedTrash  bool
+		expectedHybrid bool
+		expectedGlobal bool
+	}{
+		// search and trash are served unless the kind opts out. hybrid and global
+		// are the reverse: off unless the kind opts in.
+		{name: "unset", search: nil, expectedSearch: true, expectedTrash: true, expectedHybrid: false},
+		{name: "empty block", search: &ManifestVersionKindSearch{}, expectedSearch: true, expectedTrash: true, expectedHybrid: false},
+		{name: "search opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false)}, expectedSearch: false, expectedTrash: true, expectedHybrid: false},
+		{name: "trash opt-out", search: &ManifestVersionKindSearch{Trash: new(false)}, expectedSearch: true, expectedTrash: false, expectedHybrid: false},
+		{name: "both opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false), Trash: new(false)}, expectedSearch: false, expectedTrash: false, expectedHybrid: false},
+		{name: "hybrid opt-in", search: &ManifestVersionKindSearch{Hybrid: new(true)}, expectedSearch: true, expectedTrash: true, expectedHybrid: true},
+		{name: "hybrid explicit false", search: &ManifestVersionKindSearch{Hybrid: new(false)}, expectedSearch: true, expectedTrash: true, expectedHybrid: false},
+		{name: "hybrid opt-in with search opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false), Hybrid: new(true)}, expectedSearch: false, expectedTrash: true, expectedHybrid: true},
+		{name: "global opt-in", search: &ManifestVersionKindSearch{Global: new(true)}, expectedSearch: true, expectedTrash: true, expectedGlobal: true},
+		{name: "global explicit false", search: &ManifestVersionKindSearch{Global: new(false)}, expectedSearch: true, expectedTrash: true, expectedGlobal: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			kind := ManifestVersionKind{Kind: "Foo", Search: tc.search}
+			assert.Equal(t, tc.expectedSearch, kind.HasSearchEndpoint())
+			assert.Equal(t, tc.expectedTrash, kind.HasTrashEndpoint())
+			assert.Equal(t, tc.expectedHybrid, kind.HasHybridEndpoint())
+			assert.Equal(t, tc.expectedGlobal, kind.InGlobalSearchIndex())
+		})
+	}
+}
+
+func TestManifestVersionKind_IsProvisionable(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		extensions *ManifestVersionKindExtensions
+		want       bool
+	}{
+		{name: "omitted"},
+		{name: "no provisioning", extensions: &ManifestVersionKindExtensions{}},
+		{name: "empty block", extensions: &ManifestVersionKindExtensions{Provisioning: &ManifestVersionKindProvisioning{}}},
+		{name: "disabled", extensions: &ManifestVersionKindExtensions{Provisioning: &ManifestVersionKindProvisioning{Enabled: new(false)}}},
+		{name: "enabled", extensions: &ManifestVersionKindExtensions{Provisioning: &ManifestVersionKindProvisioning{Enabled: new(true)}}, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			kind := ManifestVersionKind{Kind: "Foo", Extensions: tc.extensions}
+			assert.Equal(t, tc.want, kind.IsProvisionable())
+		})
+	}
+}
+
+func TestManifestVersionKind_ListKeysEndpoint(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		storage *ManifestVersionKindStorage
+		want    bool
+	}{
+		{name: "omitted", want: true},
+		{name: "empty storage", storage: &ManifestVersionKindStorage{}, want: true},
+		{name: "enabled", storage: &ManifestVersionKindStorage{ListKeys: new(true)}, want: true},
+		{name: "disabled", storage: &ManifestVersionKindStorage{ListKeys: new(false)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			kind := ManifestVersionKind{Storage: tc.storage}
+			assert.Equal(t, tc.want, kind.HasListKeysEndpoint())
+			data, err := json.Marshal(kind)
+			require.NoError(t, err)
+			var decoded ManifestVersionKind
+			require.NoError(t, json.Unmarshal(data, &decoded))
+			assert.Equal(t, kind.Storage, decoded.Storage)
+			assert.Equal(t, tc.want, decoded.HasListKeysEndpoint())
+		})
+	}
+}
+
+func TestManifestVersionKind_FixedNames(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		fixed []string
+		has   map[string]bool
+	}{
+		{name: "omitted", has: map[string]bool{"current": false}},
+		{name: "one", fixed: []string{"current"}, has: map[string]bool{"current": true, "other": false}},
+		{name: "several", fixed: []string{"a", "b"}, has: map[string]bool{"a": true, "b": true, "c": false}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			kind := ManifestVersionKind{FixedNames: tc.fixed}
+			for name, want := range tc.has {
+				assert.Equal(t, want, kind.HasFixedName(name), name)
+			}
+			data, err := json.Marshal(kind)
+			require.NoError(t, err)
+			var decoded ManifestVersionKind
+			require.NoError(t, json.Unmarshal(data, &decoded))
+			assert.Equal(t, kind.FixedNames, decoded.FixedNames)
+		})
+	}
+}
+
+func TestManifestVersionKind_UnmarshalJSON_DefaultsResource(t *testing.T) {
+	t.Run("defaults to lowercased plural", func(t *testing.T) {
+		var k ManifestVersionKind
+		require.NoError(t, json.Unmarshal([]byte(`{"kind":"Foo","plural":"Foos","scope":"Namespaced"}`), &k))
+		assert.Equal(t, "foos", k.Resource)
+		assert.Equal(t, "Foos", k.Plural)
+	})
+	t.Run("keeps explicit resource", func(t *testing.T) {
+		var k ManifestVersionKind
+		require.NoError(t, json.Unmarshal([]byte(`{"kind":"Foo","plural":"Foos","resource":"fooz"}`), &k))
+		assert.Equal(t, "fooz", k.Resource)
+	})
+	t.Run("nested in ManifestData", func(t *testing.T) {
+		var m ManifestData
+		require.NoError(t, json.Unmarshal([]byte(`{"appName":"a","group":"g.example.com","preferredVersion":"v1","versions":[{"name":"v1","served":true,"kinds":[{"kind":"Foo","plural":"Foos","scope":"Namespaced"}]}]}`), &m))
+		assert.Equal(t, "foos", m.Versions[0].Kinds[0].Resource)
+	})
+	t.Run("empty plural stays empty and fails validation", func(t *testing.T) {
+		var k ManifestVersionKind
+		require.NoError(t, json.Unmarshal([]byte(`{"kind":"Foo"}`), &k))
+		assert.Empty(t, k.Resource)
+	})
+}
+
+func TestNewEmbeddedManifest_DefaultsResource(t *testing.T) {
+	in := ManifestData{Versions: []ManifestVersion{{Name: "v1", Kinds: []ManifestVersionKind{
+		{Kind: "Foo", Plural: "Foos"},
+		{Kind: "Bar", Plural: "Bars", Resource: "barz"},
+	}}}}
+	m := NewEmbeddedManifest(in)
+	assert.Equal(t, "foos", m.ManifestData.Versions[0].Kinds[0].Resource)
+	assert.Equal(t, "barz", m.ManifestData.Versions[0].Kinds[1].Resource)
+	assert.Empty(t, in.Versions[0].Kinds[0].Resource, "caller's data must not be mutated")
 }

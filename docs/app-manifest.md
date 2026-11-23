@@ -14,7 +14,7 @@ metadata:
   name: issue-tracker-project
 spec:
   appName: example
-  group: example.ext.grafana.com
+  group: example.ext.grafana.app
   versions:
     - name: v1alpha1
       served: true
@@ -50,7 +50,7 @@ spec:
           - watch
   preferredVersion: "v1alpha1"
 ```
-This manifest describes an app which is called `example` (each appName must be unique), with the API group `example.ext.grafana.com`. 
+This manifest describes an app which is called `example` (each appName must be unique), with the API group `example.ext.grafana.app`. 
 This app has a kind it manages called `Foo`, which is has the capability to **validate** and **mutate**. 
 Finally, it requires permissions to get, list, and watch `playlists` from the `playlist.grafana.app` group.
 
@@ -109,7 +109,7 @@ different values for each version of the kind).
 
 The default preferred API version for clients to use is whichever is highest, but can be manually specified with the manifest's
 `preferredVersion` field.
-This manifest uses the API group `exampleapp.ext.grafana.com`, as the default group is automatically determined from the app name. 
+This manifest uses the API group `exampleapp.ext.grafana.app`, as the default group is automatically determined from the app name. 
 If you are working from an app written in a much older version of the app-sdk, or otherwise need to change the group, 
 you can add a `groupOverride` field with a fully-qualified group name to keep your current group. 
 This manifest also requires the same extra permissions for playlists as the YAML example manifest above.
@@ -123,6 +123,98 @@ For yaml, you can use the `--crdencoding` flag:
 grafana-app-sdk generate --crdencoding=yaml
 ```
 A manifest isn't all that useful in most scenarios without at least one kind that your app exposes, so be sure you're familiar with [custom kinds](./custom-kinds/README.md) and [writing custom kinds](./custom-kinds/writing-kinds.md).
+
+## Plugin proxy routes
+
+Custom routes can declare plugin proxy options in `extensions."x-grafana-proxy"`:
+
+```cue
+manifest: {
+	appName: "example-app"
+	versions: v1: routes: namespaced: "/proxy": GET: {
+		operationId: "getProxy"
+		extensions: "x-grafana-proxy": {
+			url: "{{.URL}}/api"
+			reqRole: "Viewer"
+			headers: [{
+				name: "Authorization"
+				content: "Bearer {{.SecureJsonData.token | orEmpty}}"
+			}]
+		}
+	}
+}
+```
+
+The extension contains `url`, `reqRole`, `reqAction`, `headers`, `urlParams`, `authType`,
+`tokenAuth`, `jwtTokenAuth`, and `body`. All are optional; an omitted URL uses the data
+source URL. The path and HTTP method come from the route's OpenAPI operation.
+Headers and URL parameters contain `name` and `content` strings. Token configurations
+contain an optional `url`, a list of string `scopes`, and string-valued `params`.
+`body` can be any JSON value.
+
+`reqRole` uses authlib's `types.RoleType`. Canonical names and their lowercase forms
+are accepted. An explicitly empty string decodes as `Viewer`; omitting `reqRole`
+leaves it unset.
+
+Manifest generation validates these options for CUE custom routes and imported or inline
+OpenAPI operations, including unknown fields, field types, basic roles (`None`, `Viewer`,
+`Editor`, `Admin`), and authentication types. `azure` requires `tokenAuth`; `gce` and `jwt`
+require `jwtTokenAuth`. An omitted authentication type uses the configured token options.
+Template syntax is checked during generation, including the proxy's `orEmpty` function.
+Templates are only executed at runtime, when settings and secrets are available.
+
+`authType` selects the upstream token provider; `reqRole` and `reqAction` control access
+to the route itself. The data source proxy supports these providers:
+
+| `authType` | Provider | Configuration |
+| --- | --- | --- |
+| Omitted or `""` | Generic token authentication when `tokenAuth` is present; otherwise Google service-account authentication when `jwtTokenAuth` is present; otherwise no token is added. | Generic authentication POSTs `tokenAuth.params` as form data to `tokenAuth.url`. |
+| `"azure"` | Azure managed identity or client-secret authentication. | `tokenAuth.scopes` and Azure credential parameters such as `azure_auth_type`, `tenant_id`, `client_id`, and `client_secret`. |
+| `"gce"` | Google application default credentials, such as the environment's service account. | `jwtTokenAuth.scopes`; a private key is not required. |
+| `"jwt"` | Google service-account authentication. | `jwtTokenAuth.params` containing `client_email`, `private_key`, and `token_uri`, plus `jwtTokenAuth.scopes`. |
+
+There is no `"oauth"` value: leave `authType` unset for generic token authentication.
+The data source's nonempty `jsonData.authenticationType` overrides the route's `authType`
+at runtime, so its configuration must also supply the options required by that provider.
+The compiler checks the declared provider and template syntax; credential availability,
+token endpoint responses, and substituted values are checked at runtime.
+
+Go consumers can use `app.OpenAPIExtensionProxy` (also exposed as `routes.ExtensionProxy`),
+`routes.ProxyTarget`, and `routes.ProxyTargetFromOperation`. The extension is retained in
+the manifest; servers must remove it from publicly served OpenAPI because it contains
+upstream URLs and settings templates.
+
+## Operator and webhook paths
+
+If your app deploys an operator that serves admission (validation, mutation) or conversion webhooks, describe it with the `operator` block. The `url` is used by the platform to route webhook requests, and the `webhooks` paths are appended to that URL when constructing the webhook configurations:
+
+```cue
+manifest: {
+	appName: "example-app"
+	operator: {
+		// url is the HTTPS URL of your operator, including port if non-standard (443).
+		url: "https://example-app.example-namespace.svc.cluster.local:8443"
+		// webhooks lets you override the paths your operator serves webhooks on.
+		// Omit any path to use the defaults ("/validate", "/mutate", "/convert").
+		webhooks: {
+			validationPath: "/validate/example-app.ext.grafana.app/v1"
+			mutationPath:   "/mutate"
+			conversionPath: "/convert"
+		}
+	}
+	// ...
+}
+```
+
+The `webhooks` paths are only emitted for the webhook types your kinds actually declare (a validation path is only set if some kind has validation, and so on). Override them when your operator serves webhooks on non-default paths (for example, an operator built on controller-runtime that routes by group/version/kind).
+
+> The deprecated top-level `operatorURL` field is still accepted and is equivalent to `operator.url`. If both are set, they must have the same value. Prefer `operator.url` in new manifests.
+
+> These path overrides configure the generated manifest only. The webhook servers the SDK runs for you (`k8s.WebhookHandler`/`k8s.WebhookServer`, and the `simple` App/Operator runners) always serve at the default `/validate`, `/mutate`, and `/convert` paths. Overriding the paths is intended for apps that serve webhooks with their own HTTP routing.
+
+## Roles
+
+`roles` grant users access to your app's kinds, and `roleBindings` assign them to the basic `viewer`, `editor`, and `admin` groups. If you define no roles, a reader, editor, and admin role covering every kind is generated. A role kind is either a kind name, such as `Issue`, or a kind and one of its custom routes, such as `Issue/render`, which grants the access check that route is authorized against: the route's first path segment, or the `subresource` its `authz` declares. The built-in `status` and `scale` subresources are not grantable: `Issue/status` is rejected, as is a kind custom route named `status` or `scale`. `status` is written by your app's own service identity using its permission on the parent resource (for example `issues:update`).
 
 ## Versions
 

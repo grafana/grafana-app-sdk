@@ -1,10 +1,13 @@
-apiVersion: apps.grafana.app/v1alpha1
+apiVersion: apps.grafana.app/v1alpha2
 kind: AppManifest
 metadata:
   name: test-app
 spec:
-  appDisplayName: ""
+  appDisplayName: test-app
   appName: test-app
+  embed:
+    testkinds:
+      reembedVersion: 1
   extraPermissions:
     accessKinds:
     - actions:
@@ -13,13 +16,13 @@ spec:
       - watch
       group: foo.bar
       resource: foos
-  group: testapp.ext.grafana.com
+  group: testapp.ext.grafana.app
   operator:
     url: https://foo.bar:8443
     webhooks:
       conversionPath: /convert
       mutationPath: /mutate
-      validationPath: /validate
+      validationPath: /validate/test-app.ext.grafana.app/v1
   preferredVersion: v1
   roleBindings:
     viewer:
@@ -41,60 +44,141 @@ spec:
           - CREATE
           - UPDATE
       conversion: true
+      embed:
+        fields:
+        - name: details
+          path: spec.stringField
       kind: TestKind
       plural: TestKinds
-      schema:
+      resource: testkinds
+      schemas:
+        OperatorState:
+          additionalProperties: false
+          properties:
+            descriptiveState:
+              description: descriptiveState is an optional more descriptive state
+                field which has no requirements on format
+              type: string
+            details:
+              additionalProperties: true
+              description: details contains any extra information that is operator-specific
+              type: object
+            lastEvaluation:
+              description: lastEvaluation is the ResourceVersion last evaluated
+              type: string
+            state:
+              description: |-
+                state describes the state of the lastEvaluation.
+                It is limited to three possible states for machine evaluation.
+              enum:
+              - success
+              - in_progress
+              - failed
+              type: string
+          required:
+          - lastEvaluation
+          - state
+          type: object
+        TestKind:
+          properties:
+            spec:
+              $ref: '#/components/schemas/spec'
+            status:
+              $ref: '#/components/schemas/status'
+          required:
+          - spec
         spec:
+          additionalProperties: false
           properties:
             stringField:
+              pattern: ^[a-zA-Z_][a-zA-Z0-9_-]*$
               type: string
           required:
           - stringField
           type: object
         status:
+          additionalProperties: false
           properties:
             additionalFields:
+              additionalProperties: true
               description: additionalFields is reserved for future use
               type: object
-              x-kubernetes-preserve-unknown-fields: true
             operatorStates:
               additionalProperties:
-                properties:
-                  descriptiveState:
-                    description: descriptiveState is an optional more descriptive
-                      state field which has no requirements on format
-                    type: string
-                  details:
-                    description: details contains any extra information that is operator-specific
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                  lastEvaluation:
-                    description: lastEvaluation is the ResourceVersion last evaluated
-                    type: string
-                  state:
-                    description: |-
-                      state describes the state of the lastEvaluation.
-                      It is limited to three possible states for machine evaluation.
-                    enum:
-                    - success
-                    - in_progress
-                    - failed
-                    type: string
-                required:
-                - lastEvaluation
-                - state
-                type: object
+                $ref: '#/components/schemas/OperatorState'
               description: |-
                 operatorStates is a map of operator ID to operator state evaluations.
                 Any operator which consumes this kind SHOULD add its state evaluation information to this field.
               type: object
           type: object
       scope: Namespaced
+      searchFields:
+      - capabilities:
+        - filter
+        - text
+        - sort
+        - retrieve
+        description: The string field
+        name: stringField
+        path: spec.stringField
+        type: string
+      selectableFields:
+      - .spec.stringField
+      userReadable: false
     - conversion: false
+      extensions:
+        provisioning:
+          enabled: true
+      fixedNames:
+      - current
       kind: TestKind2
+      namingStrategy:
+        mode: owner
+        owner:
+          allowOrgAdmin: true
+          owners:
+          - namespace
+          - user
       plural: TestKind2s
-      schema:
+      resource: testkind2s
+      schemas:
+        OperatorState:
+          additionalProperties: false
+          properties:
+            descriptiveState:
+              description: descriptiveState is an optional more descriptive state
+                field which has no requirements on format
+              type: string
+            details:
+              additionalProperties: true
+              description: details contains any extra information that is operator-specific
+              type: object
+            lastEvaluation:
+              description: lastEvaluation is the ResourceVersion last evaluated
+              type: string
+            state:
+              description: |-
+                state describes the state of the lastEvaluation.
+                It is limited to three possible states for machine evaluation.
+              enum:
+              - success
+              - in_progress
+              - failed
+              type: string
+          required:
+          - lastEvaluation
+          - state
+          type: object
+        TestKind2:
+          properties:
+            spec:
+              $ref: '#/components/schemas/spec'
+            status:
+              $ref: '#/components/schemas/status'
+          required:
+          - spec
         spec:
+          additionalProperties: false
           properties:
             testField:
               type: string
@@ -102,44 +186,26 @@ spec:
           - testField
           type: object
         status:
+          additionalProperties: false
           properties:
             additionalFields:
+              additionalProperties: true
               description: additionalFields is reserved for future use
               type: object
-              x-kubernetes-preserve-unknown-fields: true
             operatorStates:
               additionalProperties:
-                properties:
-                  descriptiveState:
-                    description: descriptiveState is an optional more descriptive
-                      state field which has no requirements on format
-                    type: string
-                  details:
-                    description: details contains any extra information that is operator-specific
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                  lastEvaluation:
-                    description: lastEvaluation is the ResourceVersion last evaluated
-                    type: string
-                  state:
-                    description: |-
-                      state describes the state of the lastEvaluation.
-                      It is limited to three possible states for machine evaluation.
-                    enum:
-                    - success
-                    - in_progress
-                    - failed
-                    type: string
-                required:
-                - lastEvaluation
-                - state
-                type: object
+                $ref: '#/components/schemas/OperatorState'
               description: |-
                 operatorStates is a map of operator ID to operator state evaluations.
                 Any operator which consumes this kind SHOULD add its state evaluation information to this field.
               type: object
           type: object
       scope: Namespaced
+      search:
+        trash: false
+      storage:
+        listKeys: false
+      userReadable: false
     name: v1
     served: true
   - kinds:
@@ -153,10 +219,119 @@ spec:
           - CREATE
           - UPDATE
       conversion: true
+      embed:
+        fields:
+        - name: details
+          path: spec.unionNull.str
       kind: TestKind
       plural: TestKinds
-      schema:
+      resource: testkinds
+      schemas:
+        Def:
+          additionalProperties: false
+          properties:
+            i:
+              type: integer
+            str:
+              type: string
+          required:
+          - str
+          - i
+          type: object
+        Def2:
+          additionalProperties: false
+          properties:
+            b:
+              type: boolean
+            str:
+              type: string
+          required:
+          - str
+          - b
+          type: object
+        OperatorState:
+          additionalProperties: false
+          properties:
+            descriptiveState:
+              description: descriptiveState is an optional more descriptive state
+                field which has no requirements on format
+              type: string
+            details:
+              additionalProperties: true
+              description: details contains any extra information that is operator-specific
+              type: object
+            lastEvaluation:
+              description: lastEvaluation is the ResourceVersion last evaluated
+              type: string
+            state:
+              description: |-
+                state describes the state of the lastEvaluation.
+                It is limited to three possible states for machine evaluation.
+              enum:
+              - success
+              - in_progress
+              - failed
+              type: string
+          required:
+          - lastEvaluation
+          - state
+          type: object
+        TestKind:
+          properties:
+            secure:
+              additionalProperties: false
+              properties:
+                apiKey:
+                  allOf:
+                  - $ref: '#/components/schemas/com.github.grafana.grafana-app-sdk.resource.InlineSecureValue'
+                  description: note this only exists in the v2 schema!
+                token:
+                  $ref: '#/components/schemas/com.github.grafana.grafana-app-sdk.resource.InlineSecureValue'
+              type: object
+            spec:
+              $ref: '#/components/schemas/spec'
+            status:
+              $ref: '#/components/schemas/status'
+          required:
+          - spec
+        com.github.grafana.grafana-app-sdk.resource.InlineSecureValue:
+          additionalProperties: false
+          not:
+            not:
+              required:
+              - create
+            required:
+            - description
+          oneOf:
+          - required:
+            - create
+          - required:
+            - name
+          - required:
+            - remove
+          properties:
+            create:
+              description: Plaintext value to create in the secret service. Used only
+                in create or update requests.
+              maxLength: 24576
+              minLength: 1
+              type: string
+            description:
+              description: Optional description for a newly created secret. Only valid
+                when create is set.
+              type: string
+            name:
+              description: Reference to an existing value in the secret service.
+              maxLength: 253
+              minLength: 1
+              type: string
+            remove:
+              description: Remove this entry from the secure value map, deleting the
+                secret if it is owned by this resource.
+              type: boolean
+          type: object
         spec:
+          additionalProperties: false
           properties:
             intField:
               type: integer
@@ -165,50 +340,71 @@ spec:
             timeField:
               format: date-time
               type: string
+            unionNull:
+              allOf:
+              - $ref: '#/components/schemas/Def'
+              description: This generates a normal go pointer field, but needs to
+                be handled correctly as a selectable field, as the schema logic registers
+                it as a disjunction
+              nullable: true
+            unionNull2:
+              description: null variant should be ignore in disjunction when generating
+                the selectable field
+              oneOf:
+              - $ref: '#/components/schemas/Def'
+              - $ref: '#/components/schemas/Def2'
+              - type: "null"
           required:
           - stringField
           - intField
           - timeField
           type: object
         status:
+          additionalProperties: false
           properties:
             additionalFields:
+              additionalProperties: true
               description: additionalFields is reserved for future use
               type: object
-              x-kubernetes-preserve-unknown-fields: true
             operatorStates:
               additionalProperties:
-                properties:
-                  descriptiveState:
-                    description: descriptiveState is an optional more descriptive
-                      state field which has no requirements on format
-                    type: string
-                  details:
-                    description: details contains any extra information that is operator-specific
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                  lastEvaluation:
-                    description: lastEvaluation is the ResourceVersion last evaluated
-                    type: string
-                  state:
-                    description: |-
-                      state describes the state of the lastEvaluation.
-                      It is limited to three possible states for machine evaluation.
-                    enum:
-                    - success
-                    - in_progress
-                    - failed
-                    type: string
-                required:
-                - lastEvaluation
-                - state
-                type: object
+                $ref: '#/components/schemas/OperatorState'
               description: |-
                 operatorStates is a map of operator ID to operator state evaluations.
                 Any operator which consumes this kind SHOULD add its state evaluation information to this field.
               type: object
           type: object
       scope: Namespaced
+      search:
+        global: true
+        hybrid: true
+      searchFields:
+      - capabilities:
+        - filter
+        - text
+        - sort
+        - retrieve
+        description: The string field
+        name: stringField
+        path: spec.stringField
+        type: string
+      - capabilities:
+        - filter
+        - retrieve
+        emitZeroIfAbsent: true
+        name: intField
+        path: spec.intField
+        type: int64
+      secure:
+      - description: note this only exists in the v2 schema!
+        key: apiKey
+      - key: token
+      selectableFields:
+      - .spec.stringField
+      - .spec.intField
+      - .spec.unionNull.str
+      - .spec.unionNull2.str
+      userReadable: false
     name: v2
     served: true
   - kinds:
@@ -224,9 +420,91 @@ spec:
       conversion: true
       kind: TestKind
       plural: TestKinds
+      resource: testkinds
       routes:
+        /emptyresp:
+          post:
+            operationId: createEmptyResp
+            responses:
+              default:
+                content:
+                  application/json:
+                    schema:
+                      additionalProperties: {}
+                      properties:
+                        apiVersion:
+                          description: 'APIVersion defines the versioned schema of
+                            this representation of an object. Servers should convert
+                            recognized schemas to the latest internal value, and may
+                            reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                          type: string
+                        kind:
+                          description: 'Kind is a string value representing the REST
+                            resource this object represents. Servers may infer this
+                            from the endpoint the client submits requests to. Cannot
+                            be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                          type: string
+                      required:
+                      - apiVersion
+                      - kind
+                      type: object
+                description: Default OK response
+        /files/{file}:
+          get:
+            operationId: fetchTestKindFile
+            parameters:
+            - description: Name of the file
+              example: report.csv
+              in: path
+              name: file
+              required: true
+              schema:
+                type: string
+            - description: Send the file as an attachment
+              example: true
+              in: query
+              name: download
+              schema:
+                const: false
+                type: boolean
+            - description: Correlates the request in logs
+              example: 7f0c
+              in: header
+              name: X-Request-Id
+              schema:
+                type: string
+            responses:
+              default:
+                content:
+                  application/json:
+                    schema:
+                      additionalProperties: false
+                      properties:
+                        apiVersion:
+                          description: 'APIVersion defines the versioned schema of
+                            this representation of an object. Servers should convert
+                            recognized schemas to the latest internal value, and may
+                            reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                          type: string
+                        content:
+                          type: string
+                        kind:
+                          description: 'Kind is a string value representing the REST
+                            resource this object represents. Servers may infer this
+                            from the endpoint the client submits requests to. Cannot
+                            be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                          type: string
+                      required:
+                      - content
+                      - apiVersion
+                      - kind
+                      type: object
+                description: Default OK response
         /reconcile:
           post:
+            description: |-
+              Triggers a reconcile of the TestKind.
+              Set force to reconcile even if nothing changed.
             operationId: createReconcileRequest
             requestBody:
               content:
@@ -264,6 +542,10 @@ spec:
                       - message
                       type: object
                 description: Default OK response
+            summary: Reconcile a TestKind
+            x-grafana-declared-authz-resource: testkinds
+            x-grafana-declared-authz-subresource: reconcile
+            x-grafana-declared-authz-verb: create
         /search:
           get:
             operationId: getTestKindSearchResult
@@ -335,11 +617,49 @@ spec:
                       - kind
                       type: object
                 description: Default OK response
+            x-grafana-allow-missing-parent: true
+            x-grafana-declared-authz-resource: testkinds
             x-grafana-test: true
             x-grafana-test-value:
               val: "1"
-      schema:
+      schemas:
+        OperatorState:
+          additionalProperties: false
+          properties:
+            descriptiveState:
+              description: descriptiveState is an optional more descriptive state
+                field which has no requirements on format
+              type: string
+            details:
+              additionalProperties: true
+              description: details contains any extra information that is operator-specific
+              type: object
+            lastEvaluation:
+              description: lastEvaluation is the ResourceVersion last evaluated
+              type: string
+            state:
+              description: |-
+                state describes the state of the lastEvaluation.
+                It is limited to three possible states for machine evaluation.
+              enum:
+              - success
+              - in_progress
+              - failed
+              type: string
+          required:
+          - lastEvaluation
+          - state
+          type: object
+        TestKind:
+          properties:
+            spec:
+              $ref: '#/components/schemas/spec'
+            status:
+              $ref: '#/components/schemas/status'
+          required:
+          - spec
         spec:
+          additionalProperties: false
           properties:
             boolField:
               type: boolean
@@ -357,43 +677,900 @@ spec:
           - boolField
           type: object
         status:
+          additionalProperties: false
           properties:
             additionalFields:
+              additionalProperties: true
               description: additionalFields is reserved for future use
               type: object
-              x-kubernetes-preserve-unknown-fields: true
             operatorStates:
               additionalProperties:
-                properties:
-                  descriptiveState:
-                    description: descriptiveState is an optional more descriptive
-                      state field which has no requirements on format
-                    type: string
-                  details:
-                    description: details contains any extra information that is operator-specific
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                  lastEvaluation:
-                    description: lastEvaluation is the ResourceVersion last evaluated
-                    type: string
-                  state:
-                    description: |-
-                      state describes the state of the lastEvaluation.
-                      It is limited to three possible states for machine evaluation.
-                    enum:
-                    - success
-                    - in_progress
-                    - failed
-                    type: string
-                required:
-                - lastEvaluation
-                - state
-                type: object
+                $ref: '#/components/schemas/OperatorState'
               description: |-
                 operatorStates is a map of operator ID to operator state evaluations.
                 Any operator which consumes this kind SHOULD add its state evaluation information to this field.
               type: object
           type: object
       scope: Namespaced
+      searchFields:
+      - capabilities:
+        - filter
+        - text
+        - sort
+        - retrieve
+        description: The string field
+        name: stringField
+        path: spec.stringField
+        type: string
+      - capabilities:
+        - filter
+        - retrieve
+        emitZeroIfAbsent: true
+        name: intField
+        path: spec.intField
+        type: int64
+      - capabilities:
+        - filter
+        - retrieve
+        emitZeroIfAbsent: true
+        name: boolField
+        path: spec.boolField
+        type: boolean
+      selectableFields:
+      - .spec.stringField
+      - .spec.intField
+      - .spec.boolField
+      userReadable: false
     name: v3
+    openapi:
+      components:
+        schemas:
+          TestKind:
+            properties:
+              apiVersion:
+                description: 'APIVersion defines the versioned schema of this representation
+                  of an object. Servers should convert recognized schemas to the latest
+                  internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                type: string
+              kind:
+                description: 'Kind is a string value representing the REST resource
+                  this object represents. Servers may infer this from the endpoint
+                  the client submits requests to. Cannot be updated. In CamelCase.
+                  More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                type: string
+              metadata:
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  creationTimestamp:
+                    format: date-time
+                    type: string
+                  deletionGracePeriodSeconds:
+                    format: int64
+                    type: integer
+                  deletionTimestamp:
+                    format: date-time
+                    type: string
+                  finalizers:
+                    items:
+                      type: string
+                    type: array
+                  generateName:
+                    type: string
+                  generation:
+                    format: int64
+                    type: integer
+                  labels:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  managedFields:
+                    items:
+                      properties:
+                        apiVersion:
+                          type: string
+                        fieldsType:
+                          type: string
+                        fieldsV1:
+                          type: object
+                        manager:
+                          type: string
+                        operation:
+                          type: string
+                        subresource:
+                          type: string
+                        time:
+                          format: date-time
+                          type: string
+                      type: object
+                    type: array
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                  ownerReferences:
+                    items:
+                      properties:
+                        apiVersion:
+                          type: string
+                        blockOwnerDeletion:
+                          type: boolean
+                        controller:
+                          type: boolean
+                        kind:
+                          type: string
+                        name:
+                          type: string
+                        uid:
+                          type: string
+                      required:
+                      - apiVersion
+                      - kind
+                      - name
+                      - uid
+                      type: object
+                    type: array
+                  resourceVersion:
+                    type: string
+                  selfLink:
+                    type: string
+                  uid:
+                    type: string
+                type: object
+                x-grafana-app-uses-kubernetes-object-metadata: true
+              spec:
+                $ref: '#/components/schemas/TestKind.spec'
+              status:
+                $ref: '#/components/schemas/TestKind.status'
+            required:
+            - apiVersion
+            - kind
+            - metadata
+            - spec
+            type: object
+          TestKind.OperatorState:
+            additionalProperties: false
+            properties:
+              descriptiveState:
+                description: descriptiveState is an optional more descriptive state
+                  field which has no requirements on format
+                type: string
+              details:
+                additionalProperties: true
+                description: details contains any extra information that is operator-specific
+                type: object
+              lastEvaluation:
+                description: lastEvaluation is the ResourceVersion last evaluated
+                type: string
+              state:
+                description: |-
+                  state describes the state of the lastEvaluation.
+                  It is limited to three possible states for machine evaluation.
+                enum:
+                - success
+                - in_progress
+                - failed
+                type: string
+            required:
+            - lastEvaluation
+            - state
+            type: object
+          TestKind.spec:
+            additionalProperties: false
+            properties:
+              boolField:
+                type: boolean
+              intField:
+                type: integer
+              stringField:
+                type: string
+              timeField:
+                format: date-time
+                type: string
+            required:
+            - stringField
+            - intField
+            - timeField
+            - boolField
+            type: object
+          TestKind.status:
+            additionalProperties: false
+            properties:
+              additionalFields:
+                additionalProperties: true
+                description: additionalFields is reserved for future use
+                type: object
+              operatorStates:
+                additionalProperties:
+                  $ref: '#/components/schemas/TestKind.OperatorState'
+                description: |-
+                  operatorStates is a map of operator ID to operator state evaluations.
+                  Any operator which consumes this kind SHOULD add its state evaluation information to this field.
+                type: object
+            type: object
+          createFoobarKey:
+            additionalProperties: false
+            description: |-
+              Key identifies a foobar entry.
+              It is referenced by a custom route, so its multi-line
+              description exercises the route schema codegen path.
+            properties:
+              match:
+                type: string
+              name:
+                type: string
+            required:
+            - name
+            type: object
+      paths:
+        /namespaces/{namespace}/foobar:
+          parameters:
+          - in: path
+            name: namespace
+            required: true
+            schema:
+              type: string
+          post:
+            operationId: createFoobar
+            requestBody:
+              content:
+                application/json:
+                  schema:
+                    additionalProperties: false
+                    properties:
+                      keys:
+                        items:
+                          $ref: '#/components/schemas/createFoobarKey'
+                        type: array
+                    required:
+                    - keys
+                    type: object
+              required: true
+            responses:
+              default:
+                content:
+                  application/json:
+                    schema:
+                      additionalProperties: false
+                      properties:
+                        altered:
+                          items:
+                            $ref: '#/components/schemas/createFoobarKey'
+                          type: array
+                        apiVersion:
+                          description: 'APIVersion defines the versioned schema of
+                            this representation of an object. Servers should convert
+                            recognized schemas to the latest internal value, and may
+                            reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                          type: string
+                        kind:
+                          description: 'Kind is a string value representing the REST
+                            resource this object represents. Servers may infer this
+                            from the endpoint the client submits requests to. Cannot
+                            be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                          type: string
+                      required:
+                      - altered
+                      - apiVersion
+                      - kind
+                      type: object
+                description: Default OK response
+        /namespaces/{namespace}/latest:
+          get:
+            operationId: getLatestTestKind
+            responses:
+              default:
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/TestKind'
+                description: Default OK response
+          parameters:
+          - in: path
+            name: namespace
+            required: true
+            schema:
+              type: string
+        /namespaces/{namespace}/testkinds/{name}/emptyresp:
+          parameters:
+          - in: path
+            name: namespace
+            required: true
+            schema:
+              type: string
+          - in: path
+            name: name
+            required: true
+            schema:
+              type: string
+          post:
+            operationId: createEmptyResp
+            responses:
+              default:
+                content:
+                  application/json:
+                    schema:
+                      additionalProperties: {}
+                      properties:
+                        apiVersion:
+                          description: 'APIVersion defines the versioned schema of
+                            this representation of an object. Servers should convert
+                            recognized schemas to the latest internal value, and may
+                            reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                          type: string
+                        kind:
+                          description: 'Kind is a string value representing the REST
+                            resource this object represents. Servers may infer this
+                            from the endpoint the client submits requests to. Cannot
+                            be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                          type: string
+                      required:
+                      - apiVersion
+                      - kind
+                      type: object
+                description: Default OK response
+        /namespaces/{namespace}/testkinds/{name}/files/{file}:
+          get:
+            operationId: fetchTestKindFile
+            parameters:
+            - description: Name of the file
+              example: report.csv
+              in: path
+              name: file
+              required: true
+              schema:
+                type: string
+            - description: Send the file as an attachment
+              example: true
+              in: query
+              name: download
+              schema:
+                const: false
+                type: boolean
+            - description: Correlates the request in logs
+              example: 7f0c
+              in: header
+              name: X-Request-Id
+              schema:
+                type: string
+            responses:
+              default:
+                content:
+                  application/json:
+                    schema:
+                      additionalProperties: false
+                      properties:
+                        apiVersion:
+                          description: 'APIVersion defines the versioned schema of
+                            this representation of an object. Servers should convert
+                            recognized schemas to the latest internal value, and may
+                            reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                          type: string
+                        content:
+                          type: string
+                        kind:
+                          description: 'Kind is a string value representing the REST
+                            resource this object represents. Servers may infer this
+                            from the endpoint the client submits requests to. Cannot
+                            be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                          type: string
+                      required:
+                      - content
+                      - apiVersion
+                      - kind
+                      type: object
+                description: Default OK response
+          parameters:
+          - in: path
+            name: namespace
+            required: true
+            schema:
+              type: string
+          - in: path
+            name: name
+            required: true
+            schema:
+              type: string
+        /namespaces/{namespace}/testkinds/{name}/reconcile:
+          parameters:
+          - in: path
+            name: namespace
+            required: true
+            schema:
+              type: string
+          - in: path
+            name: name
+            required: true
+            schema:
+              type: string
+          post:
+            description: |-
+              Triggers a reconcile of the TestKind.
+              Set force to reconcile even if nothing changed.
+            operationId: createReconcileRequest
+            requestBody:
+              content:
+                application/json:
+                  schema:
+                    additionalProperties: false
+                    properties:
+                      force:
+                        default: false
+                        type: boolean
+                      reason:
+                        type: string
+                    required:
+                    - force
+                    type: object
+              required: true
+            responses:
+              default:
+                content:
+                  application/json:
+                    schema:
+                      additionalProperties: false
+                      properties:
+                        message:
+                          description: A comment containing "quotes" should not break
+                            anything
+                          type: string
+                        status:
+                          enum:
+                          - success
+                          - failure
+                          type: string
+                      required:
+                      - status
+                      - message
+                      type: object
+                description: Default OK response
+            summary: Reconcile a TestKind
+            x-grafana-declared-authz-resource: testkinds
+            x-grafana-declared-authz-subresource: reconcile
+            x-grafana-declared-authz-verb: create
+        /namespaces/{namespace}/testkinds/{name}/search:
+          get:
+            operationId: getTestKindSearchResult
+            parameters:
+            - in: query
+              name: limit
+              schema:
+                default: 10
+                type: integer
+            - in: query
+              name: offset
+              schema:
+                default: 0
+                type: integer
+            - in: query
+              name: q
+              required: true
+              schema:
+                type: string
+            responses:
+              default:
+                content:
+                  application/json:
+                    schema:
+                      additionalProperties: false
+                      properties:
+                        apiVersion:
+                          description: 'APIVersion defines the versioned schema of
+                            this representation of an object. Servers should convert
+                            recognized schemas to the latest internal value, and may
+                            reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                          type: string
+                        items:
+                          items:
+                            additionalProperties: false
+                            properties:
+                              list:
+                                items:
+                                  additionalProperties: false
+                                  properties:
+                                    foo:
+                                      type: string
+                                  required:
+                                  - foo
+                                  type: object
+                                type: array
+                              name:
+                                type: string
+                              score:
+                                type: number
+                            required:
+                            - name
+                            - score
+                            - list
+                            type: object
+                          type: array
+                        kind:
+                          description: 'Kind is a string value representing the REST
+                            resource this object represents. Servers may infer this
+                            from the endpoint the client submits requests to. Cannot
+                            be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                          type: string
+                        total:
+                          type: integer
+                      required:
+                      - items
+                      - total
+                      - apiVersion
+                      - kind
+                      type: object
+                description: Default OK response
+            x-grafana-allow-missing-parent: true
+            x-grafana-declared-authz-resource: testkinds
+            x-grafana-test: true
+            x-grafana-test-value:
+              val: "1"
+          parameters:
+          - in: path
+            name: namespace
+            required: true
+            schema:
+              type: string
+          - in: path
+            name: name
+            required: true
+            schema:
+              type: string
+    routes:
+      namespaced:
+        /foobar:
+          post:
+            operationId: createFoobar
+            requestBody:
+              content:
+                application/json:
+                  schema:
+                    additionalProperties: false
+                    properties:
+                      keys:
+                        items:
+                          $ref: '#/components/schemas/createFoobarKey'
+                        type: array
+                    required:
+                    - keys
+                    type: object
+              required: true
+            responses:
+              default:
+                content:
+                  application/json:
+                    schema:
+                      additionalProperties: false
+                      properties:
+                        altered:
+                          items:
+                            $ref: '#/components/schemas/createFoobarKey'
+                          type: array
+                        apiVersion:
+                          description: 'APIVersion defines the versioned schema of
+                            this representation of an object. Servers should convert
+                            recognized schemas to the latest internal value, and may
+                            reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                          type: string
+                        kind:
+                          description: 'Kind is a string value representing the REST
+                            resource this object represents. Servers may infer this
+                            from the endpoint the client submits requests to. Cannot
+                            be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                          type: string
+                      required:
+                      - altered
+                      - apiVersion
+                      - kind
+                      type: object
+                description: Default OK response
+        /latest:
+          get:
+            operationId: getLatestTestKind
+            responses:
+              default:
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/TestKind'
+                description: Default OK response
+      schemas:
+        TestKind:
+          properties:
+            apiVersion:
+              description: 'APIVersion defines the versioned schema of this representation
+                of an object. Servers should convert recognized schemas to the latest
+                internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+              type: string
+            kind:
+              description: 'Kind is a string value representing the REST resource
+                this object represents. Servers may infer this from the endpoint the
+                client submits requests to. Cannot be updated. In CamelCase. More
+                info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+              type: string
+            metadata:
+              properties:
+                annotations:
+                  additionalProperties:
+                    type: string
+                  type: object
+                creationTimestamp:
+                  format: date-time
+                  type: string
+                deletionGracePeriodSeconds:
+                  format: int64
+                  type: integer
+                deletionTimestamp:
+                  format: date-time
+                  type: string
+                finalizers:
+                  items:
+                    type: string
+                  type: array
+                generateName:
+                  type: string
+                generation:
+                  format: int64
+                  type: integer
+                labels:
+                  additionalProperties:
+                    type: string
+                  type: object
+                managedFields:
+                  items:
+                    properties:
+                      apiVersion:
+                        type: string
+                      fieldsType:
+                        type: string
+                      fieldsV1:
+                        type: object
+                      manager:
+                        type: string
+                      operation:
+                        type: string
+                      subresource:
+                        type: string
+                      time:
+                        format: date-time
+                        type: string
+                    type: object
+                  type: array
+                name:
+                  type: string
+                namespace:
+                  type: string
+                ownerReferences:
+                  items:
+                    properties:
+                      apiVersion:
+                        type: string
+                      blockOwnerDeletion:
+                        type: boolean
+                      controller:
+                        type: boolean
+                      kind:
+                        type: string
+                      name:
+                        type: string
+                      uid:
+                        type: string
+                    required:
+                    - apiVersion
+                    - kind
+                    - name
+                    - uid
+                    type: object
+                  type: array
+                resourceVersion:
+                  type: string
+                selfLink:
+                  type: string
+                uid:
+                  type: string
+              type: object
+              x-grafana-app-uses-kubernetes-object-metadata: true
+            spec:
+              $ref: '#/components/schemas/TestKind.spec'
+            status:
+              $ref: '#/components/schemas/TestKind.status'
+          required:
+          - apiVersion
+          - kind
+          - metadata
+          - spec
+          type: object
+        TestKind.OperatorState:
+          additionalProperties: false
+          properties:
+            descriptiveState:
+              description: descriptiveState is an optional more descriptive state
+                field which has no requirements on format
+              type: string
+            details:
+              additionalProperties: true
+              description: details contains any extra information that is operator-specific
+              type: object
+            lastEvaluation:
+              description: lastEvaluation is the ResourceVersion last evaluated
+              type: string
+            state:
+              description: |-
+                state describes the state of the lastEvaluation.
+                It is limited to three possible states for machine evaluation.
+              enum:
+              - success
+              - in_progress
+              - failed
+              type: string
+          required:
+          - lastEvaluation
+          - state
+          type: object
+        TestKind.spec:
+          additionalProperties: false
+          properties:
+            boolField:
+              type: boolean
+            intField:
+              type: integer
+            stringField:
+              type: string
+            timeField:
+              format: date-time
+              type: string
+          required:
+          - stringField
+          - intField
+          - timeField
+          - boolField
+          type: object
+        TestKind.status:
+          additionalProperties: false
+          properties:
+            additionalFields:
+              additionalProperties: true
+              description: additionalFields is reserved for future use
+              type: object
+            operatorStates:
+              additionalProperties:
+                $ref: '#/components/schemas/TestKind.OperatorState'
+              description: |-
+                operatorStates is a map of operator ID to operator state evaluations.
+                Any operator which consumes this kind SHOULD add its state evaluation information to this field.
+              type: object
+          type: object
+        createFoobarKey:
+          additionalProperties: false
+          description: |-
+            Key identifies a foobar entry.
+            It is referenced by a custom route, so its multi-line
+            description exercises the route schema codegen path.
+          properties:
+            match:
+              type: string
+            name:
+              type: string
+          required:
+          - name
+          type: object
+    served: true
+  - kinds:
+    - admission:
+        validation:
+          operations:
+          - CREATE
+          - UPDATE
+      conversion: true
+      kind: TestKind
+      plural: TestKinds
+      resource: testkinds
+      schemas:
+        OperatorState:
+          additionalProperties: false
+          properties:
+            descriptiveState:
+              description: descriptiveState is an optional more descriptive state
+                field which has no requirements on format
+              type: string
+            details:
+              additionalProperties: true
+              description: details contains any extra information that is operator-specific
+              type: object
+            lastEvaluation:
+              description: lastEvaluation is the ResourceVersion last evaluated
+              type: string
+            state:
+              description: |-
+                state describes the state of the lastEvaluation.
+                It is limited to three possible states for machine evaluation.
+              enum:
+              - success
+              - in_progress
+              - failed
+              type: string
+          required:
+          - lastEvaluation
+          - state
+          type: object
+        TestKind:
+          properties:
+            spec:
+              $ref: '#/components/schemas/spec'
+            status:
+              $ref: '#/components/schemas/status'
+          required:
+          - spec
+        Union:
+          description: |-
+            Supported union variants.
+            The kind field selects the variant's spec.
+          oneOf:
+          - $ref: '#/components/schemas/UnionVariantA'
+          - $ref: '#/components/schemas/UnionVariantB'
+        UnionVariantA:
+          additionalProperties: false
+          properties:
+            kind:
+              const: VariantA
+              type: string
+            spec:
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+              required:
+              - name
+              type: object
+          required:
+          - kind
+          - spec
+          type: object
+        UnionVariantB:
+          additionalProperties: false
+          properties:
+            kind:
+              const: VariantB
+              type: string
+            spec:
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+              required:
+              - name
+              type: object
+          required:
+          - kind
+          - spec
+          type: object
+        spec:
+          additionalProperties: false
+          properties:
+            union:
+              $ref: '#/components/schemas/Union'
+          required:
+          - union
+          type: object
+        status:
+          additionalProperties: false
+          properties:
+            additionalFields:
+              additionalProperties: true
+              description: additionalFields is reserved for future use
+              type: object
+            operatorStates:
+              additionalProperties:
+                $ref: '#/components/schemas/OperatorState'
+              description: |-
+                operatorStates is a map of operator ID to operator state evaluations.
+                Any operator which consumes this kind SHOULD add its state evaluation information to this field.
+              type: object
+          type: object
+      scope: Namespaced
+      selectableFields:
+      - .spec.union.spec.name
+      userReadable: false
+    name: v4
     served: true

@@ -14,8 +14,9 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/grafana/codejen"
 	"github.com/spf13/cobra"
+
+	"github.com/grafana/codejen"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/config"
@@ -87,14 +88,6 @@ func setupProjectCmd() {
 	projectCmd.PersistentFlags().Bool("overwrite", false, "Overwrite existing files instead of prompting")
 	projectCmd.PersistentFlags().Lookup("overwrite").NoOptDefVal = "true"
 
-	projectAddComponentCmd.Flags().String("grouping", config.KindGroupingKind, `Kind go package grouping.
-Allowed values are 'group' and 'kind'. This should match the flag used in the 'generate' command`)
-	_ = projectAddComponentCmd.Flags().MarkDeprecated("grouping", fmt.Sprintf(deprecationMessage, "kinds.grouping"))
-
-	projectLocalGenerateCmd.Flags().Bool("useoldmanifestkinds", false, "Whether to use the legacy manifest style of 'kinds' in the manifest, and 'versions' in each kind. This is a deprecated feature that will be removed in a future release.")
-	projectLocalGenerateCmd.Flags().Lookup("useoldmanifestkinds").NoOptDefVal = "true"
-	_ = projectLocalGenerateCmd.Flags().MarkDeprecated("useoldmanifestkinds", fmt.Sprintf(deprecationMessage, "kinds.perKindVersion"))
-
 	projectCmd.AddCommand(projectInitCmd)
 	projectCmd.AddCommand(projectComponentCmd)
 	projectCmd.AddCommand(projectKindCmd)
@@ -150,7 +143,7 @@ func projectInit(cmd *cobra.Command, args []string) error {
 		cueModName = strings.Join(cueModSegments, "/")
 	}
 	cueModPath := filepath.Join(path, "kinds/cue.mod", "module.cue")
-	cueModContents := []byte(fmt.Sprintf("module: \"%s/kinds\"\nlanguage: version: \"v0.8.2\"\n", cueModName))
+	cueModContents := fmt.Appendf(nil, "module: \"%s/kinds\"\nlanguage: version: \"v0.8.2\"\n", cueModName)
 	if _, err = os.Stat(cueModPath); err == nil && !overwrite {
 		if promptYN(fmt.Sprintf("CUE module already exists at '%s', overwrite?", cueModPath), true) {
 			err = writeFile(cueModPath, cueModContents)
@@ -235,7 +228,10 @@ func projectInit(cmd *cobra.Command, args []string) error {
 func projectWriteGoModule(path, moduleName string, overwrite bool) (string, error) {
 	goModPath := filepath.Join(path, "go.mod")
 	goSumPath := filepath.Join(path, "go.sum")
-	goModContents := []byte(fmt.Sprintf("module %s\n\ngo 1.22\n", moduleName))
+	goModContents := fmt.Appendf(nil, "module %s\n\ngo 1.22\n", moduleName)
+	if v := releaseVersion(); v != "" {
+		goModContents = fmt.Appendf(goModContents, "\nrequire github.com/grafana/grafana-app-sdk %s\n", v)
+	}
 
 	// If we weren't instructed to overwrite without prompting, let's check if the go.mod file already exists
 	if _, err := os.Stat(goModPath); err == nil && !overwrite {
@@ -476,7 +472,7 @@ func projectAddKindCUE(srcPath, manifestFileName, fieldName, kindName, version, 
 	if err != nil {
 		return nil, err
 	}
-	files := make(codejen.Files, 2)
+	files := make(codejen.Files, 2) //nolint:prealloc
 	files[0] = codejen.File{
 		RelativePath: fmt.Sprintf("%s.cue", strings.ToLower(kindName)),
 		Data:         buf.Bytes(),
@@ -504,7 +500,6 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 {
 		fmt.Println(`Usage: grafana-app-sdk project component add [options] <components>
 	where <components> are one or more of:
-		backend
 		frontend
 		operator`)
 		os.Exit(1)
@@ -519,12 +514,6 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 
 	// Path (optional)
 	path, err := cmd.Flags().GetString("path")
-	if err != nil {
-		return err
-	}
-
-	// Selector (optional)
-	selector, err := cmd.Flags().GetString(selectorFlag)
 	if err != nil {
 		return err
 	}
@@ -547,16 +536,6 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	genOperatorState, err := cmd.Flags().GetBool(genOperatorStateFlag)
-	if err != nil {
-		return err
-	}
-
-	kindGrouping, err := cmd.Flags().GetString("grouping")
-	if err != nil {
-		return err
-	}
-
 	var genSrc any
 
 	switch format {
@@ -570,18 +549,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unknown format '%s'", format)
 	}
 
-	// HACK: Load base config from CLI flags which will eventually be removed
-	baseConfig := &config.Config{
-		Kinds: &config.KindsConfig{
-			Grouping: kindGrouping,
-		},
-		Codegen: &config.CodegenConfig{
-			EnableOperatorStatusGeneration: genOperatorState,
-		},
-		ManifestSelectors: []string{selector},
-	}
-
-	cfg, err := config.Load(genSrc, configName, baseConfig)
+	cfg, err := config.Load(genSrc, configName)
 	if err != nil {
 		return err
 	}
@@ -593,7 +561,6 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	case *cuekind.Cue:
 		parser, err := cuekind.NewParser(v,
 			cfg.Codegen.EnableOperatorStatusGeneration,
-			cfg.Kinds.PerKindVersion,
 		)
 		if err != nil {
 			return err
@@ -619,17 +586,6 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	// Allow for multiple components to be added at once
 	for _, component := range args {
 		switch component {
-		case "backend":
-			switch format {
-			case FormatCUE:
-				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.AppManifest]), cfg.ManifestSelectors, manifest.Properties().Group, cfg.Kinds.Grouping == config.KindGroupingGroup)
-			default:
-				return fmt.Errorf("unknown kind format '%s'", format)
-			}
-			if err != nil {
-				fmt.Printf("%s\n", err.Error())
-				os.Exit(1)
-			}
 		case "frontend":
 			err = addComponentFrontend(path, manifest.Properties().Group)
 			if err != nil {
@@ -714,84 +670,6 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 	err = writeFileFunc(filepath.Join(projectRootPath, "cmd", "operator", "Dockerfile"), dockerfile)
 	if err != nil {
 		return err
-	}
-	return nil
-}
-
-//
-// Backend plugin
-//
-
-// Linter doesn't like "Potential file inclusion via variable", which is actually desired here
-//
-//nolint:gosec
-func addComponentBackend[G anyGenerator](projectRootPath string, generator G, selectors []string, manifestGroup string, groupKinds bool) error {
-	// Check plugin ID
-	if manifestGroup == "" {
-		return errors.New("manifest group is required")
-	}
-
-	// Get the repo from the go.mod file
-	repo, err := getGoModule(filepath.Join(projectRootPath, "go.mod"))
-	if err != nil {
-		return err
-	}
-
-	err = projectAddPluginAPI(generator, repo, filepath.Join(projectRootPath, "pkg/generated"), groupKinds, selectors)
-	if err != nil {
-		return err
-	}
-
-	// Magefile
-	mg, _ := templates.ReadFile("templates/Magefile.go.tmpl")
-	err = writeFile(filepath.Join(projectRootPath, "plugin/Magefile.go"), mg)
-	if err != nil {
-		return err
-	}
-
-	// Write or update the plugin.json
-	pluginJSONPath := filepath.Join(projectRootPath, "plugin/src/plugin.json")
-	if _, err = os.Stat(pluginJSONPath); err == nil {
-		// Update plugin.json to include the executable name and backend bool
-		m := make(map[string]any)
-		b, _ := os.ReadFile(pluginJSONPath)
-		err = json.Unmarshal(b, &m)
-		if err != nil {
-			return err
-		}
-		m["executable"] = fmt.Sprintf("gpx_%s-app", manifestGroup)
-		m["backend"] = true
-		b, _ = json.MarshalIndent(m, "", "  ")
-		err = writeFile(pluginJSONPath, b)
-	} else {
-		// New plugin.json
-		err = writePluginJSON(pluginJSONPath,
-			fmt.Sprintf("%s-app", manifestGroup), "NAME", "AUTHOR", manifestGroup, true)
-	}
-	return err
-}
-
-//nolint:revive
-func projectAddPluginAPI[G anyGenerator](generator G, repo, generatedAPIModelsPath string, groupKinds bool, selectors []string) error {
-	var files codejen.Files
-	var err error
-	switch cast := any(generator).(type) {
-	case *codegen.Generator[codegen.AppManifest]:
-		files, err = cast.Generate(cuekind.BackendPluginGenerator(repo, generatedAPIModelsPath, groupKinds), selectors...)
-		if err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("unknown generator type: %T", cast)
-	}
-	if err = checkAndMakePath("pkg"); err != nil {
-		return err
-	}
-	for _, f := range files {
-		err = writeFile(filepath.Join("pkg", f.RelativePath), f.Data)
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -892,19 +770,19 @@ func moveFiles(srcDir, destDir string) error {
 				if err != nil {
 					return err
 				}
-				if err = os.Remove(path); err != nil {
+				if err = os.Remove(path); err != nil { //nolint:gosec
 					return err
 				}
 				return fs.SkipDir
 			}
-			err = os.Rename(path, filepath.Join(destDir, d.Name()))
+			err = os.Rename(path, filepath.Join(destDir, d.Name())) //nolint:gosec
 			if err != nil {
 				return err
 			}
 			return fs.SkipDir
 		}
 
-		return os.Rename(path, filepath.Join(destDir, d.Name()))
+		return os.Rename(path, filepath.Join(destDir, d.Name())) //nolint:gosec
 	})
 }
 

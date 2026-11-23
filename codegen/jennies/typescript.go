@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+
 	"github.com/grafana/codejen"
 	"github.com/grafana/cog"
 
@@ -22,7 +23,7 @@ type TypeScriptResourceTypes struct {
 func (*TypeScriptResourceTypes) JennyName() string { return "TypeScriptResourceTypes" }
 
 func (t *TypeScriptResourceTypes) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	if t.GenerateOnlyCurrent {
 		for _, kind := range codegen.PreferredVersionKinds(appManifest) {
 			if !kind.Codegen.TS.Enabled {
@@ -59,9 +60,10 @@ func (t *TypeScriptResourceTypes) Generate(appManifest codegen.AppManifest) (cod
 
 func (*TypeScriptResourceTypes) generateObjectFile(vk *codegen.VersionedKind, tsTypePrefix string) ([]byte, error) {
 	metadata := templates.ResourceTSTemplateMetadata{
-		TypeName:     exportField(vk.Kind),
-		Subresources: make([]templates.SubresourceMetadata, 0),
-		FilePrefix:   tsTypePrefix,
+		TypeName:        exportField(vk.Kind),
+		HasSecureValues: len(vk.SecureValues) > 0,
+		Subresources:    make([]templates.SubresourceMetadata, 0),
+		FilePrefix:      tsTypePrefix,
 	}
 
 	it, err := vk.Schema.Fields()
@@ -117,7 +119,7 @@ func (TypeScriptTypes) JennyName() string {
 }
 
 func (j TypeScriptTypes) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	if j.GenerateOnlyCurrent {
 		for version, kind := range codegen.PreferredVersionKinds(appManifest) {
 			if !kind.Codegen.TS.Enabled {
@@ -167,8 +169,9 @@ func (j TypeScriptTypes) generateFiles(version string, kind *codegen.VersionedKi
 
 func (j TypeScriptTypes) generateFilesAtDepth(v cue.Value, version string, vk *codegen.VersionedKind, currDepth int, pathPrefix string, prefix string) (codejen.Files, error) {
 	if currDepth == j.Depth {
-		fieldName := make([]string, 0)
-		for _, s := range TrimPathPrefix(v.Path(), vk.Schema.Path()).Selectors() {
+		selectors := TrimPathPrefix(v.Path(), vk.Schema.Path()).Selectors()
+		fieldName := make([]string, 0, len(selectors))
+		for _, s := range selectors {
 			fieldName = append(fieldName, s.String())
 		}
 		tsBytes, err := generateTypescriptBytes(v, ToPackageName(version), exportField(strings.Join(fieldName, "")), cog.TypescriptConfig{
@@ -190,7 +193,7 @@ func (j TypeScriptTypes) generateFilesAtDepth(v cue.Value, version string, vk *c
 		return nil, err
 	}
 
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	for it.Next() {
 		f, err := j.generateFilesAtDepth(it.Value(), version, vk, currDepth+1, pathPrefix, prefix)
 		if err != nil {

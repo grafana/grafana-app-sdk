@@ -1,0 +1,387 @@
+package httpadapter
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
+)
+
+func TestHandlerFunc(t *testing.T) {
+	parent := &pluginv3.RouteResource{}
+	parent.SetResource("widgets")
+	parent.SetName("widget-1")
+
+	grpcClient := &testRouteServiceClient{
+		stream: &testCallRouteResponseReceiver{responses: []*pluginv3.CallRouteResponse{
+			callRouteResponse(http.StatusCreated, map[string][]string{
+				"X-Response": {"one", "two"},
+			}, []byte("hello ")),
+			callRouteResponse(0, nil, []byte("world")),
+		}},
+	}
+	handler := HandlerFunc(grpcClient)
+
+	ctx := WithRouteInfo(context.Background(), RouteInfo{
+		Group:     "example.grafana.app",
+		Version:   "v1alpha1",
+		Namespace: "tenant-1",
+		Path:      "widgets/widget-1/render",
+		Parent:    parent,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/route?query=1", strings.NewReader("request body")).WithContext(ctx)
+	req.Header.Add("X-Request", "one")
+	req.Header.Add("X-Request", "two")
+	// Credentials must not reach the plugin, whatever the header key's case.
+	req.Header.Set("Authorization", "Bearer user-token")
+	req.Header.Set("Cookie", "grafana_session=secret")
+	req.Header.Set("X-Grafana-Id", "user-id-token")
+	req.Header["x-access-token"] = []string{"access-token"}
+	req.Header["proxy-authorization"] = []string{"Basic secret"}
+	req.Header.Set("X-Id-Token", "user-id-token")
+	recorder := httptest.NewRecorder()
+
+	handler(recorder, req)
+
+	require.Same(t, ctx, grpcClient.ctx)
+	require.Equal(t, http.MethodPost, grpcClient.req.GetMethod())
+	require.Equal(t, "example.grafana.app", grpcClient.req.GetGroup())
+	require.Equal(t, "v1alpha1", grpcClient.req.GetVersion())
+	require.Equal(t, "tenant-1", grpcClient.req.GetNamespace())
+	require.Equal(t, "widgets/widget-1/render", grpcClient.req.GetPath())
+	require.Equal(t, "/route?query=1", grpcClient.req.GetUrl())
+	require.Equal(t, []string{"one", "two"}, grpcClient.req.GetHeaders()["X-Request"].GetValues())
+	require.Len(t, grpcClient.req.GetHeaders(), 1, "only non-credential headers are forwarded: %v", grpcClient.req.GetHeaders())
+	require.Equal(t, "request body", string(grpcClient.req.GetBody()))
+	require.Same(t, parent, grpcClient.req.GetParent())
+
+	result := recorder.Result()
+	defer func() { _ = result.Body.Close() }()
+	responseBody, err := io.ReadAll(result.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, result.StatusCode)
+	require.Equal(t, []string{"one", "two"}, result.Header.Values("X-Response"))
+	require.Equal(t, "hello world", string(responseBody))
+	require.True(t, recorder.Flushed)
+}
+
+func TestHandlerFuncUsesURLPathWithoutRouteInfo(t *testing.T) {
+	grpcClient := &testRouteServiceClient{
+		stream: &testCallRouteResponseReceiver{},
+	}
+	recorder := httptest.NewRecorder()
+
+	HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route?query=1", nil))
+
+	require.Equal(t, "/route", grpcClient.req.GetPath())
+	require.Empty(t, grpcClient.req.GetGroup())
+	require.Empty(t, grpcClient.req.GetVersion())
+	require.Empty(t, grpcClient.req.GetNamespace())
+}
+
+func TestHandlerFuncCallError(t *testing.T) {
+	t.Run("Kubernetes API error", func(t *testing.T) {
+		grpcClient := &testRouteServiceClient{err: apierrors.NewBadRequest("invalid route request")}
+		recorder := httptest.NewRecorder()
+
+		HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+		require.Equal(t, http.StatusBadRequest, recorder.Code)
+		require.Equal(t, "application/json", recorder.Header().Get("Content-Type"))
+
+		var status metav1.Status
+		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &status))
+		require.Equal(t, metav1.StatusReasonBadRequest, status.Reason)
+		require.Equal(t, "invalid route request", status.Message)
+	})
+
+	t.Run("gRPC error", func(t *testing.T) {
+		grpcClient := &testRouteServiceClient{err: grpcstatus.Error(codes.Unauthenticated, "invalid access token")}
+		recorder := httptest.NewRecorder()
+
+		HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+		require.Equal(t, http.StatusUnauthorized, recorder.Code)
+		var status metav1.Status
+		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &status))
+		require.Equal(t, metav1.StatusReasonUnauthorized, status.Reason)
+		require.Equal(t, "invalid access token", status.Message)
+	})
+
+	t.Run("generic error", func(t *testing.T) {
+		grpcClient := &testRouteServiceClient{err: errors.New("call failed")}
+		recorder := httptest.NewRecorder()
+
+		HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+		require.Equal(t, http.StatusInternalServerError, recorder.Code)
+		require.Contains(t, recorder.Body.String(), "call failed")
+	})
+}
+
+func TestHandlerFuncErrors(t *testing.T) {
+	t.Run("client is not configured", func(t *testing.T) {
+		recorder := httptest.NewRecorder()
+
+		HandlerFunc(nil)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+		require.Equal(t, http.StatusInternalServerError, recorder.Code)
+		require.Contains(t, recorder.Body.String(), "route service client is not configured")
+	})
+
+	t.Run("request body cannot be read", func(t *testing.T) {
+		grpcClient := &testRouteServiceClient{}
+		recorder := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/route", nil)
+		req.Body = io.NopCloser(&testErrorReader{err: errors.New("read failed")})
+
+		HandlerFunc(grpcClient)(recorder, req)
+
+		require.Equal(t, http.StatusInternalServerError, recorder.Code)
+		require.Contains(t, recorder.Body.String(), "read failed")
+		require.Nil(t, grpcClient.req)
+	})
+
+	t.Run("response cannot be received before headers", func(t *testing.T) {
+		grpcClient := &testRouteServiceClient{
+			stream: &testCallRouteResponseReceiver{err: errors.New("receive failed")},
+		}
+		recorder := httptest.NewRecorder()
+
+		HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+		require.Equal(t, http.StatusInternalServerError, recorder.Code)
+		require.Contains(t, recorder.Body.String(), "receive failed")
+	})
+
+	t.Run("response rejected with gRPC status before headers", func(t *testing.T) {
+		for _, tt := range []struct {
+			code   codes.Code
+			want   int
+			reason metav1.StatusReason
+		}{
+			{codes.PermissionDenied, http.StatusForbidden, metav1.StatusReasonForbidden},
+			{codes.Unauthenticated, http.StatusUnauthorized, metav1.StatusReasonUnauthorized},
+			{codes.InvalidArgument, http.StatusBadRequest, metav1.StatusReasonBadRequest},
+			{codes.NotFound, http.StatusNotFound, metav1.StatusReasonNotFound},
+		} {
+			t.Run(tt.code.String(), func(t *testing.T) {
+				grpcClient := &testRouteServiceClient{
+					stream: &testCallRouteResponseReceiver{err: grpcstatus.Error(tt.code, "access token does not cover the requested namespace")},
+				}
+				recorder := httptest.NewRecorder()
+
+				HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+				require.Equal(t, tt.want, recorder.Code)
+				require.Equal(t, "application/json", recorder.Header().Get("Content-Type"))
+				var status metav1.Status
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &status))
+				require.Equal(t, tt.reason, status.Reason)
+				require.Equal(t, int32(tt.want), status.Code)
+				require.Equal(t, "access token does not cover the requested namespace", status.Message)
+			})
+		}
+	})
+
+	t.Run("plugin failure with gRPC status is a server error", func(t *testing.T) {
+		for _, code := range []codes.Code{codes.Internal, codes.FailedPrecondition, codes.Unknown} {
+			t.Run(code.String(), func(t *testing.T) {
+				grpcClient := &testRouteServiceClient{
+					stream: &testCallRouteResponseReceiver{err: grpcstatus.Error(code, "authentication failed")},
+				}
+				recorder := httptest.NewRecorder()
+
+				HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+				require.Equal(t, http.StatusInternalServerError, recorder.Code)
+				require.Contains(t, recorder.Body.String(), "receive route response: ")
+			})
+		}
+	})
+
+	t.Run("response cannot be received after headers", func(t *testing.T) {
+		grpcClient := &testRouteServiceClient{
+			stream: &testCallRouteResponseReceiver{
+				responses: []*pluginv3.CallRouteResponse{callRouteResponse(http.StatusOK, nil, []byte("partial"))},
+				err:       errors.New("receive failed"),
+			},
+		}
+		recorder := httptest.NewRecorder()
+
+		HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+		require.Equal(t, http.StatusOK, recorder.Code)
+		require.Equal(t, "partial", recorder.Body.String())
+	})
+
+	t.Run("response has invalid status", func(t *testing.T) {
+		grpcClient := &testRouteServiceClient{
+			stream: &testCallRouteResponseReceiver{
+				responses: []*pluginv3.CallRouteResponse{callRouteResponse(1000, nil, nil)},
+			},
+		}
+		recorder := httptest.NewRecorder()
+
+		HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+		require.Equal(t, http.StatusInternalServerError, recorder.Code)
+		require.Contains(t, recorder.Body.String(), "invalid HTTP status code")
+	})
+}
+
+func TestHandlerFuncResponseWriterVariants(t *testing.T) {
+	t.Run("defaults status and supports a writer without flush", func(t *testing.T) {
+		grpcClient := &testRouteServiceClient{
+			stream: &testCallRouteResponseReceiver{
+				responses: []*pluginv3.CallRouteResponse{callRouteResponse(0, nil, []byte("response"))},
+			},
+		}
+		writer := newTestHTTPResponseWriter(nil)
+
+		HandlerFunc(grpcClient)(writer, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+		require.Equal(t, http.StatusOK, writer.status)
+		require.Equal(t, "response", writer.body.String())
+	})
+
+	t.Run("flushes through a wrapper that only implements Unwrap", func(t *testing.T) {
+		grpcClient := &testRouteServiceClient{
+			stream: &testCallRouteResponseReceiver{
+				responses: []*pluginv3.CallRouteResponse{callRouteResponse(http.StatusOK, nil, []byte("response"))},
+			},
+		}
+		recorder := httptest.NewRecorder()
+
+		HandlerFunc(grpcClient)(&testUnwrappingResponseWriter{ResponseWriter: recorder}, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+		require.True(t, recorder.Flushed)
+		require.Equal(t, "response", recorder.Body.String())
+	})
+
+	t.Run("stops when writing the response fails", func(t *testing.T) {
+		writeErr := errors.New("write failed")
+		grpcClient := &testRouteServiceClient{
+			stream: &testCallRouteResponseReceiver{
+				responses: []*pluginv3.CallRouteResponse{callRouteResponse(http.StatusOK, nil, []byte("response"))},
+			},
+		}
+		writer := newTestHTTPResponseWriter(writeErr)
+
+		HandlerFunc(grpcClient)(writer, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+		require.Equal(t, http.StatusOK, writer.status)
+		require.True(t, writer.writeCalled)
+	})
+}
+
+type testRouteServiceClient struct {
+	ctx    context.Context
+	req    *pluginv3.CallRouteRequest
+	stream grpc.ServerStreamingClient[pluginv3.CallRouteResponse]
+	err    error
+}
+
+func (c *testRouteServiceClient) CallRoute(ctx context.Context, req *pluginv3.CallRouteRequest) (grpc.ServerStreamingClient[pluginv3.CallRouteResponse], error) {
+	c.ctx = ctx
+	c.req = req
+	return c.stream, c.err
+}
+
+type testCallRouteResponseReceiver struct {
+	grpc.ClientStream
+	responses []*pluginv3.CallRouteResponse
+	err       error
+}
+
+func (r *testCallRouteResponseReceiver) Recv() (*pluginv3.CallRouteResponse, error) {
+	if len(r.responses) == 0 {
+		if r.err != nil {
+			return nil, r.err
+		}
+		return nil, io.EOF
+	}
+	response := r.responses[0]
+	r.responses = r.responses[1:]
+	return response, nil
+}
+
+type testErrorReader struct {
+	err error
+}
+
+func (r *testErrorReader) Read([]byte) (int, error) {
+	return 0, r.err
+}
+
+type testHTTPResponseWriter struct {
+	header      http.Header
+	status      int
+	body        strings.Builder
+	writeErr    error
+	writeCalled bool
+}
+
+func newTestHTTPResponseWriter(writeErr error) *testHTTPResponseWriter {
+	return &testHTTPResponseWriter{
+		header:   make(http.Header),
+		writeErr: writeErr,
+	}
+}
+
+func (w *testHTTPResponseWriter) Header() http.Header {
+	return w.header
+}
+
+func (w *testHTTPResponseWriter) Write(body []byte) (int, error) {
+	w.writeCalled = true
+	if w.writeErr != nil {
+		return 0, w.writeErr
+	}
+	return w.body.Write(body)
+}
+
+func (w *testHTTPResponseWriter) WriteHeader(status int) {
+	w.status = status
+}
+
+// testUnwrappingResponseWriter hides the wrapped writer's optional interfaces,
+// as middleware wrappers typically do, but exposes it through Unwrap.
+type testUnwrappingResponseWriter struct {
+	http.ResponseWriter
+}
+
+func (w *testUnwrappingResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
+func callRouteResponse(code int, headers map[string][]string, body []byte) *pluginv3.CallRouteResponse {
+	response := &pluginv3.CallRouteResponse{}
+	if code != 0 {
+		response.SetCode(int32(code)) //nolint:gosec // Test status codes are constants in the valid HTTP range.
+	}
+	if headers != nil {
+		protoHeaders := make(map[string]*pluginv3.StringList, len(headers))
+		for key, values := range headers {
+			protoHeaders[key] = pluginv3.StringList_builder{Values: values}.Build()
+		}
+		response.SetHeaders(protoHeaders)
+	}
+	if body != nil {
+		response.SetBody(body)
+	}
+	return response
+}

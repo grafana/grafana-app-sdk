@@ -4,11 +4,13 @@ import "time"
 
 testManifest: {
 	appName: "test-app"
+	embed: testkinds: reembedVersion: 1
 	kinds: [testKind, testKind2]
 	versions: {
 		"v1": testManifestV1
 		"v2": testManifestV2
 		"v3": testManifestV3
+		"v4": testManifestV4
 	}
 	preferredVersion: "v1"
 	extraPermissions: {
@@ -18,7 +20,12 @@ testManifest: {
 			actions: ["get","list","watch"]
 		}]
 	}
-	operatorURL: "https://foo.bar:8443"
+	operator: {
+		url: "https://foo.bar:8443"
+		webhooks: {
+			validationPath: "/validate/test-app.ext.grafana.app/v1"
+		}
+	}
 	roles: {
 		"test-app:reader": {
 			title: "Test App Viewer"
@@ -55,6 +62,9 @@ testManifestV3: {
 		"/foobar": {
 			"POST": {
 				name: "createFoobar"
+				// Key identifies a foobar entry.
+				// It is referenced by a custom route, so its multi-line
+				// description exercises the route schema codegen path.
 				#Key: {
 					name: string
 					match?: string
@@ -67,7 +77,18 @@ testManifestV3: {
 				}
 			}
 		}
+		// Returns the resource of a kind, as its get call does, so it references the kind
+		// instead of defining a response type.
+		"/latest": GET: {
+			operationId:  "getLatestTestKind"
+			responseKind: "TestKind"
+		}
 	}
+}
+
+testManifestV4: {
+	codegen: ts: enabled: false
+	kinds: [testKind & testKind.versions["v4"]]
 }
 
 testKind: {
@@ -76,23 +97,73 @@ testKind: {
 	validation: operations: ["create","update"]
 	conversion: true
 	conversionWebhookProps: url: "http://foo.bar/convert"
-	current: "v1"
 	versions: {
 		"v1": {
+			embed: fields: [{name: "details", path: "spec.stringField"}]
 			schema: {
 				spec: {
-					stringField: string
+					stringField: string & =~"^[a-zA-Z_][a-zA-Z0-9_-]*$"
 				}
 			}
+			selectableFields: [".spec.stringField"]
+			searchFields: [
+				{
+					name: "stringField"
+					path: "spec.stringField"
+					type: "string"
+					capabilities: ["filter", "text", "sort", "retrieve"]
+					description: "The string field"
+				},
+			]
 		}
 		"v2": {
 			codegen: ts: enabled: true
 			schema: {
+				#Def: {
+					str: string
+					i: int
+				}
+				#Def2: {
+					str: string
+					b: bool
+				}
 				spec: {
 					stringField: string
 					intField: int64
 					timeField: string & time.Time
+					unionNull?: #Def | null // This generates a normal go pointer field, but needs to be handled correctly as a selectable field, as the schema logic registers it as a disjunction
+					unionNull2?: #Def | #Def2 | null // null variant should be ignore in disjunction when generating the selectable field
 				}
+			}
+			secure: [
+				{key: "apiKey", description: "note this only exists in the v2 schema!"},
+				{key: "token"},
+			]
+			selectableFields: [".spec.stringField", ".spec.intField", ".spec.unionNull.str", ".spec.unionNull2.str"]
+			searchFields: [
+				{
+					name: "stringField"
+					path: "spec.stringField"
+					type: "string"
+					capabilities: ["filter", "text", "sort", "retrieve"]
+					description: "The string field"
+				},
+				{
+					name: "intField"
+					path: "spec.intField"
+					type: "int64"
+					capabilities: ["filter", "retrieve"]
+					emitZeroIfAbsent: true
+				},
+			]
+			search: {
+				hybrid: true
+				global: true
+			}
+			embed: {
+				fields: [
+					{name: "details", path: "spec.unionNull.str"},
+				]
 			}
 			mutation: operations: ["create","update"]
 			additionalPrinterColumns: [
@@ -112,12 +183,45 @@ testKind: {
 					boolField: bool
 				}
 			}
+			selectableFields: [".spec.stringField", ".spec.intField", ".spec.boolField"]
+			searchFields: [
+				{
+					name: "stringField"
+					path: "spec.stringField"
+					type: "string"
+					capabilities: ["filter", "text", "sort", "retrieve"]
+					description: "The string field"
+				},
+				{
+					name: "intField"
+					path: "spec.intField"
+					type: "int64"
+					capabilities: ["filter", "retrieve"]
+					emitZeroIfAbsent: true
+				},
+				{
+					name: "boolField"
+					path: "spec.boolField"
+					type: "boolean"
+					capabilities: ["filter", "retrieve"]
+					emitZeroIfAbsent: true
+				},
+			]
 			mutation: operations: ["create","update"]
 			validation: operations: ["create","update"]
 			routes: {
+				"/emptyresp": {
+					POST: {
+						name: "createEmptyResp"
+						request: {}
+						response: {}
+					}
+				}
 				"/reconcile": {
 					POST: {
 						name: "createReconcileRequest"
+						summary: "Reconcile a TestKind"
+						description: "Triggers a reconcile of the TestKind.\nSet force to reconcile even if nothing changed."
 						request: {
 							body: {
 								force: bool | *false 
@@ -130,11 +234,19 @@ testKind: {
 							message: string
 						}
 						responseMetadata: typeMeta: false
+						authz: {
+							resource: "testkinds"
+							subresource: "reconcile"
+							verb: "create"
+						}
 					}
 				}
 				"/search": {
 					GET: {
 						name: "getTestKindSearchResult"
+						// Only the resource is declared here, so only the resource extension is generated.
+						authz: resource: "testkinds"
+						allowMissingParent: true
 						extensions: {
 							"x-grafana-test": true
 							"x-grafana-test-value": {
@@ -160,7 +272,44 @@ testKind: {
 						}
 					}
 				}
+				"/files/{file}": {
+					GET: {
+						// The identifier of the route: the operationId of the OpenAPI operation, and the name of
+						// the generated Go types and client method. It has no name, which is the deprecated spelling.
+						operationId: "fetchTestKindFile"
+						request: parameters: [
+							{name: "file", in: "path", description: "Name of the file", example: "report.csv"},
+							// A query parameter is defined here: its type, whether it is required and its default.
+							{name: "download", in: "query", description: "Send the file as an attachment", schema: bool | *false, example: true},
+							{name: "X-Request-Id", in: "header", description: "Correlates the request in logs", example: "7f0c"},
+						]
+						response: {
+							content: string
+						}
+					}
+				}
 			}
+		}
+		// v4: selectable field crosses a union nested under spec (spec.union is the disjunction; path .spec.union.spec.name).
+		"v4": {
+			schema: {
+				// Supported union variants.
+				// The kind field selects the variant's spec.
+				#Union: #UnionVariantA | #UnionVariantB
+				#UnionVariantA: {
+					kind: "VariantA"
+					spec: {name: string}
+				}
+				#UnionVariantB: {
+					kind: "VariantB"
+					spec: {name: string}
+				}
+				spec: {
+					union: #Union
+				}
+			}
+			selectableFields: [".spec.union.spec.name"]
+			validation: operations: ["create", "update"]
 		}
 	}
 }

@@ -28,9 +28,10 @@ func TestAppManifestKind_Read(t *testing.T) {
 	tm, _ := time.Parse(time.RFC3339, "2025-02-19T20:36:00Z")
 	schemaBytes, err := os.ReadFile(filepath.Join("testfiles", "schema-01.json"))
 	require.Nil(t, err)
-	schema := make(map[string]interface{})
+	schema := make(map[string]any)
 	require.Nil(t, json.Unmarshal(schemaBytes, &schema))
-	plural := "issues"
+	plural := "Issues"
+	resource := "issues"
 	served := true
 	preferred := "v1"
 	dryRunKinds := false
@@ -52,10 +53,11 @@ func TestAppManifestKind_Read(t *testing.T) {
 				Name:   "v1",
 				Served: &served,
 				Kinds: []AppManifestManifestVersionKind{{
-					Kind:    "Issue",
-					Plural:  &plural,
-					Scope:   "Namespaced",
-					Schemas: schema,
+					Kind:     "Issue",
+					Plural:   &plural,
+					Resource: &resource,
+					Scope:    "Namespaced",
+					Schemas:  schema,
 				}},
 				Routes: &AppManifestManifestVersionRoutes{
 					Namespaced: map[string]any{

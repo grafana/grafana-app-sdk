@@ -13,7 +13,7 @@ const (
 	// ErrReasonFieldNotAllowed is the "field not allowed" admission error reason string
 	ErrReasonFieldNotAllowed = "field_not_allowed"
 
-	errStringNoAdmissionControllerDefined = "no %s admission controller defined for group '%s' and kind '%s'"
+	errStringNoAdmissionControllerDefined = "no %s admission controller defined for group '%s', version '%s', and kind '%s'"
 )
 
 // SimpleAdmissionError implements resource.AdmissionError

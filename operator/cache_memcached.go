@@ -39,17 +39,18 @@ type MemcachedServerSelector interface {
 // MemcachedStore implements cache.Store using memcached as the store for objects.
 // It should be instantiated with NewMemcachedStore.
 type MemcachedStore struct {
-	client          *memcache.Client
-	keyFunc         func(any) (string, error)
-	kind            resource.Kind
-	readLatency     *prometheus.HistogramVec
-	writeLatency    *prometheus.HistogramVec
-	keys            sync.Map
-	trackKeys       bool
-	syncTicker      *time.Ticker
-	pageSize        int
-	cacheKeysKey    string
-	serverRefresher *memcachedServerRefresher
+	client              *memcache.Client
+	keyFunc             func(any) (string, error)
+	kind                resource.Kind
+	readLatency         *prometheus.HistogramVec
+	writeLatency        *prometheus.HistogramVec
+	keys                sync.Map
+	trackKeys           bool
+	syncTicker          *time.Ticker
+	pageSize            int
+	cacheKeysKey        string
+	serverRefresher     *memcachedServerRefresher
+	lastResourceVersion atomic.Value
 }
 
 // MemcachedStoreConfig is a collection of config values for a MemcachedStore
@@ -187,6 +188,7 @@ func (m *MemcachedStore) Add(obj any) error {
 	}
 	return err
 }
+
 func (m *MemcachedStore) Update(obj any) error {
 	key, _, err := m.getKey(obj)
 	if err != nil {
@@ -206,6 +208,7 @@ func (m *MemcachedStore) Update(obj any) error {
 	m.writeLatency.WithLabelValues(m.kind.Kind()).Observe(time.Since(start).Seconds())
 	return err
 }
+
 func (m *MemcachedStore) Delete(obj any) error {
 	key, trackKey, err := m.getKey(obj)
 	if err != nil {
@@ -253,6 +256,7 @@ func (m *MemcachedStore) List() []any {
 	}
 	return items
 }
+
 func (m *MemcachedStore) ListKeys() []string {
 	if !m.trackKeys {
 		// Not natively supported by memcached, so if the user didn't configure in-mem key tracking, we can't return a list of keys
@@ -265,6 +269,7 @@ func (m *MemcachedStore) ListKeys() []string {
 	})
 	return keys
 }
+
 func (m *MemcachedStore) Get(obj any) (item any, exists bool, err error) {
 	key, trackKey, err := m.getKey(obj)
 	if err != nil {
@@ -276,6 +281,7 @@ func (m *MemcachedStore) Get(obj any) (item any, exists bool, err error) {
 	}
 	return item, exists, err
 }
+
 func (m *MemcachedStore) GetByKey(key string) (item any, exists bool, err error) {
 	item, exists, err = m.getByKey(fmt.Sprintf("%s/%s", m.kind.Plural(), key))
 	if m.trackKeys && exists && err == nil {
@@ -308,8 +314,20 @@ func (m *MemcachedStore) getByKey(key string) (item any, exists bool, err error)
 func (*MemcachedStore) Replace([]any, string) error {
 	return nil
 }
+
 func (*MemcachedStore) Resync() error {
 	return nil
+}
+
+// Bookmark records the latest resource version observed from the API server.
+func (m *MemcachedStore) Bookmark(rv string) {
+	m.lastResourceVersion.Store(rv)
+}
+
+// LastStoreSyncResourceVersion returns the latest resource version the store has seen.
+func (m *MemcachedStore) LastStoreSyncResourceVersion() string {
+	rv, _ := m.lastResourceVersion.Load().(string) //nolint:revive
+	return rv
 }
 
 func (m *MemcachedStore) getKey(obj any) (prefixedKey string, externalKey string, err error) {

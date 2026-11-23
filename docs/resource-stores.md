@@ -1,6 +1,6 @@
 # Resource Stores
 
-While you can use a `resource.Client` directly to interact with the API server, the `resource` package also offers several types which allow you to treat the API server as a storage system and interact with it via key-value store paradigms. These use `resource.Client` under the hood, but handle some of the more annoying or repetitive tasks that you often need to do, and introduce some streamling and extra opinionated functionality.
+While you can use a `resource.Client` directly to interact with the API, the `resource` package also offers several types which allow you to treat the API as a storage system and interact with it via key-value store paradigms. These use `resource.Client` under the hood, but handle some of the more annoying or repetitive tasks that you often need to do, and introduce some streamling and extra opinionated functionality.
 
 There are three types of store provided by the `resource` package, but be aware that `SimpleStore` is currently deprecated and will not have new funtionality added to it.
 

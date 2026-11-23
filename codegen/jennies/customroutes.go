@@ -11,8 +11,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/grafana/codejen"
 	"golang.org/x/tools/imports"
+
+	"github.com/grafana/codejen"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
@@ -38,7 +39,8 @@ type CustomRouteGoTypesJenny struct {
 	// If nil, types will not implement OpenAPIModelNamer, which will cause problems with
 	// apiservers if using the default apiserver.AppInstaller.
 	// gvk.Kind may be empty when called if the custom route is a resource route without a kind.
-	OpenAPINamer func(OpenAPINamerInfo) string
+	OpenAPINamer       func(OpenAPINamerInfo) string
+	SkipImportsProcess bool
 }
 
 func (*CustomRouteGoTypesJenny) JennyName() string {
@@ -47,7 +49,7 @@ func (*CustomRouteGoTypesJenny) JennyName() string {
 
 //nolint:gocognit
 func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	for _, version := range appManifest.Versions() {
 		for _, kind := range version.Kinds() {
 			var openAPINamer func(string) string
@@ -116,31 +118,33 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 }
 
 func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, packageName string, filenamePrefix string, customRoute codegen.CustomRoute, openAPINamer func(string) string) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
-	if !customRoute.Response.Schema.Exists() {
+	files := make(codejen.Files, 0, 1)
+	if customRoute.ResponseKind == "" && !customRoute.Response.Exists() {
 		return nil, errors.New("custom route response is required")
 	}
-	if !customRoute.Response.Metadata.TypeMeta && (customRoute.Response.Metadata.ListMeta || customRoute.Response.Metadata.ObjectMeta) {
+	if !customRoute.ResponseMetadata.TypeMeta && (customRoute.ResponseMetadata.ListMeta || customRoute.ResponseMetadata.ObjectMeta) {
 		return nil, errors.New("custom route response metadata must have TypeMeta if ListMeta or ObjectMeta are present")
 	}
 	if filenamePrefix != "" {
 		filenamePrefix = fmt.Sprintf("%s_", filenamePrefix)
 	}
-	// Response
+	// Response. A route that returns the resource of a kind uses the kind's generated type, so it has no response type of its own.
 	typeName := exportField(customRoute.Name)
-	responseFiles, err := c.generateResponseTypes(customRoute, typeName, packageName, filenamePrefix, basePath, openAPINamer)
-	if err != nil {
-		return nil, err
+	if customRoute.ResponseKind == "" {
+		responseFiles, err := c.generateResponseTypes(customRoute, typeName, packageName, filenamePrefix, basePath, openAPINamer)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, responseFiles...)
 	}
-	files = append(files, responseFiles...)
 
 	// Request
 	requestTypeName := fmt.Sprintf("%sRequest", typeName)
 	requestParamsTypeName := fmt.Sprintf("%sParams", requestTypeName)
 
 	// Request Params
-	if customRoute.Request.Query.Exists() {
-		requestQueryType, err := GoTypesFromCUE(customRoute.Request.Query, CUEGoConfig{
+	if customRoute.Request.QuerySchema().Exists() {
+		requestQueryType, err := GoTypesFromCUE(customRoute.Request.QuerySchema(), CUEGoConfig{
 			PackageName: packageName,
 			Name:        "Params",
 			NamePrefix:  requestTypeName,
@@ -196,16 +200,16 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 }
 
 func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.CustomRoute, typeName, packageName, filenamePrefix, fileBasePath string, openAPINamer func(string) string) (codejen.Files, error) {
-	if !customRoute.Response.Metadata.TypeMeta && (customRoute.Response.Metadata.ListMeta || customRoute.Response.Metadata.ObjectMeta) {
+	if !customRoute.ResponseMetadata.TypeMeta && (customRoute.ResponseMetadata.ListMeta || customRoute.ResponseMetadata.ObjectMeta) {
 		return nil, errors.New("TypeMeta must be true if ObjectMeta or ListMeta is true")
 	}
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	bodyName := typeName + "Body"
 	goGenTypeName := "Response"
-	if customRoute.Response.Metadata.ListMeta || customRoute.Response.Metadata.TypeMeta || customRoute.Response.Metadata.ObjectMeta {
+	if customRoute.ResponseMetadata.ListMeta || customRoute.ResponseMetadata.TypeMeta || customRoute.ResponseMetadata.ObjectMeta {
 		goGenTypeName = "Body"
 	}
-	responseTypes, err := GoTypesFromCUE(customRoute.Response.Schema, CUEGoConfig{
+	responseTypes, err := GoTypesFromCUE(customRoute.Response, CUEGoConfig{
 		PackageName:                    packageName,
 		Name:                           goGenTypeName,
 		NamePrefix:                     toExportedFieldName(typeName), // TODO: not sure if we want this set
@@ -217,10 +221,10 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 	}
 	typeName += "Response"
 	body := ""
-	if customRoute.Response.Metadata.TypeMeta {
+	if customRoute.ResponseMetadata.TypeMeta {
 		body = "body_"
 	}
-	formattedResponseTypes, err := formatGoBytes(responseTypes)
+	formattedResponseTypes, err := c.formatGoBytes(responseTypes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to format custom route types: %w", err)
 	}
@@ -229,7 +233,7 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 		RelativePath: fmt.Sprintf(path.Join(fileBasePath, "%s%s_response_%stypes_gen.go"), filenamePrefix, strings.ToLower(customRoute.Name), body),
 		From:         []codejen.NamedJenny{c},
 	})
-	if customRoute.Response.Metadata.TypeMeta {
+	if customRoute.ResponseMetadata.TypeMeta {
 		wrapperOpenAPIName := ""
 		if openAPINamer != nil {
 			wrapperOpenAPIName = openAPINamer(typeName)
@@ -239,8 +243,8 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 			PackageName:               packageName,
 			TypeName:                  toExportedFieldName(bodyName),
 			WrapperTypeName:           typeName,
-			HasObjectMeta:             customRoute.Response.Metadata.ObjectMeta,
-			HasListMeta:               customRoute.Response.Metadata.ListMeta,
+			HasObjectMeta:             customRoute.ResponseMetadata.ObjectMeta,
+			HasListMeta:               customRoute.ResponseMetadata.ListMeta,
 			OpenAPIModelName:          wrapperOpenAPIName,
 			AddDeepCopyForTypeName:    true,
 			KubernetesCodegenComments: true,
@@ -248,7 +252,7 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 		if err != nil {
 			return nil, fmt.Errorf("failed to write runtime.Object for custom route types: %w", err)
 		}
-		formatted, err := formatGoBytes(buf.Bytes())
+		formatted, err := c.formatGoBytes(buf.Bytes())
 		if err != nil {
 			return nil, fmt.Errorf("failed to format custom route types: %w", err)
 		}
@@ -276,11 +280,18 @@ func defaultRouteName(method string, route string) string {
 	for len(route) > 1 && route[0] == '/' {
 		route = route[1:]
 	}
-	ucFirstPath := strings.ToUpper(route)
-	if len(route) > 1 {
-		ucFirstPath = ucFirstPath[:1] + route[1:]
+	nonAlphanumeric := regexp.MustCompile("[^A-Za-z0-9_]")
+	segments := strings.Split(route, "/")
+	var sb strings.Builder
+	for _, seg := range segments {
+		seg = nonAlphanumeric.ReplaceAllString(seg, "")
+		if len(seg) > 1 {
+			_, _ = sb.WriteString(strings.ToUpper(seg[:1]) + seg[1:])
+		} else {
+			_, _ = sb.WriteString(strings.ToUpper(seg))
+		}
 	}
-	return fmt.Sprintf("%s%s", httpMethodToK8sVerb[strings.ToUpper(method)], regexp.MustCompile("[^A-Za-z0-9_]").ReplaceAllString(ucFirstPath, ""))
+	return fmt.Sprintf("%s%s", httpMethodToK8sVerb[strings.ToUpper(method)], sb.String())
 }
 
 func toExportedFieldName(name string) string {
@@ -291,17 +302,19 @@ func toExportedFieldName(name string) string {
 	return strings.ToUpper(sanitized)
 }
 
-func formatGoBytes(b []byte) ([]byte, error) {
+func (c *CustomRouteGoTypesJenny) formatGoBytes(b []byte) ([]byte, error) {
 	formatted, err := format.Source(b)
 	if err != nil {
 		return nil, err
 	}
 
-	formatted, err = imports.Process("", formatted, &imports.Options{
-		Comments: true,
-	})
-	if err != nil {
-		return nil, err
+	if !c.SkipImportsProcess {
+		formatted, err = imports.Process("", formatted, &imports.Options{
+			Comments: true,
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 	return formatted, nil
 }

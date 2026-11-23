@@ -21,6 +21,7 @@
                                         "type": "string"
                                     },
                                     "appName": {
+                                        "pattern": "^([a-z][a-z0-9-]*[a-z0-9])$",
                                         "type": "string"
                                     },
                                     "dryRunKinds": {
@@ -312,12 +313,60 @@
                                                                 "description": "Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.\nIt may not prevent automatic conversion behavior between versions of the kind when set to false\n(for example, CRDs will always support simple conversion, and this flag enables webhook conversion).\nThis field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.",
                                                                 "type": "boolean"
                                                             },
+                                                            "fixedNames": {
+                                                                "description": "fixedNames are names of objects of this kind that are never stored: the app\nanswers requests for them itself. A route at exactly \u003cplural\u003e/\u003cname\u003e is\nallowed for each.",
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            },
                                                             "kind": {
                                                                 "description": "Kind is the name of the kind. This should begin with a capital letter and be CamelCased",
                                                                 "type": "string"
                                                             },
+                                                            "namingStrategy": {
+                                                                "description": "#ManifestVersionKindNamingStrategy declares what the name of an object of a kind means.",
+                                                                "properties": {
+                                                                    "mode": {
+                                                                        "description": "mode is the strategy: \"owner\" names objects for their owner (user-\u003cid\u003e, team-\u003cid\u003e or namespace).",
+                                                                        "type": "string"
+                                                                    },
+                                                                    "owner": {
+                                                                        "properties": {
+                                                                            "allowOrgAdmin": {
+                                                                                "description": "allowOrgAdmin lets an org admin do anything to the kind, whoever owns the object.",
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "owners": {
+                                                                                "description": "owners are the kinds of owner a name can have.",
+                                                                                "items": {
+                                                                                    "enum": [
+                                                                                        "user",
+                                                                                        "team",
+                                                                                        "namespace"
+                                                                                    ],
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "type": "array"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "owners"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "mode"
+                                                                ],
+                                                                "type": "object"
+                                                            },
                                                             "plural": {
-                                                                "description": "Plural is the plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
+                                                                "description": "Plural is the human readable plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
+                                                                "type": "string"
+                                                            },
+                                                            "resource": {
+                                                                "description": "Resource is the lowercase plural used as the resource in the k8s GroupVersionResource URL.\nThis is optional and defaults to the lowercase of plural if not present.",
                                                                 "type": "string"
                                                             },
                                                             "routes": {
@@ -343,6 +392,15 @@
                                                                     "type": "string"
                                                                 },
                                                                 "type": "array"
+                                                            },
+                                                            "storage": {
+                                                                "properties": {
+                                                                    "listKeys": {
+                                                                        "description": "listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.",
+                                                                        "type": "boolean"
+                                                                    }
+                                                                },
+                                                                "type": "object"
                                                             }
                                                         },
                                                         "required": [
@@ -509,12 +567,31 @@
                                     },
                                     "appName": {
                                         "description": "AppName is the unique ID of the app",
+                                        "pattern": "^([a-z][a-z0-9-]*[a-z0-9])$",
                                         "type": "string"
                                     },
                                     "dryRunKinds": {
                                         "default": false,
                                         "description": "DryRunKinds dictates whether this revision should create/update CRD's from the provided kinds,\nOr simply validate and report errors in status.resources.crds.\nIf dryRunKinds is true, CRD change validation will be skipped on ingress and reported in status instead.\nEven if no validation errors exist, CRDs will not be created or updated for a revision with dryRunKinds=true.",
                                         "type": "boolean"
+                                    },
+                                    "embed": {
+                                        "additionalProperties": {
+                                            "properties": {
+                                                "reembedVersion": {
+                                                    "description": "reembedVersion is a manual revision for requesting re-embedding of existing resources, shared by all API versions.\nIncrease it when a backfill is needed; changing the declared inputs does not require a bump by itself.",
+                                                    "exclusiveMinimum": true,
+                                                    "minimum": 0,
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "required": [
+                                                "reembedVersion"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "description": "Embed configures declarative embeddings by resource name (the lowercase plural) within this app's group.\nCustom embedding builders omit their entry and define their content version in Go.",
+                                        "type": "object"
                                     },
                                     "extraPermissions": {
                                         "description": "ExtraPermissions contains additional permissions needed for an app's backend component to operate.\nApps implicitly have all permissions for kinds they managed (defined in `kinds`).",
@@ -800,16 +877,116 @@
                                                                 "description": "Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.\nIt may not prevent automatic conversion behavior between versions of the kind when set to false\n(for example, CRDs will always support simple conversion, and this flag enables webhook conversion).\nThis field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.",
                                                                 "type": "boolean"
                                                             },
+                                                            "embed": {
+                                                                "description": "Kinds with a custom embedding builder omit this section.",
+                                                                "properties": {
+                                                                    "fields": {
+                                                                        "description": "fields supplies inputs, in declaration order, used only to generate the text to be embedded.\nDeclaring an embedding field does not enable filtering embeddings by that field.",
+                                                                        "items": {
+                                                                            "properties": {
+                                                                                "name": {
+                                                                                    "description": "name labels this input in the embedding document.",
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "path": {
+                                                                                    "description": "path supplies a string or string array from the resource, using the same\ndot-separated paths and [*] projections as searchFields.",
+                                                                                    "minLength": 1,
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "required": [
+                                                                                "name",
+                                                                                "path"
+                                                                            ],
+                                                                            "type": "object"
+                                                                        },
+                                                                        "type": "array"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "fields"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "extensions": {
+                                                                "description": "TODO: allow untyped keys for app-defined extensions, such as \"kgatlas.ext.grafana.app\", next to the typed ones.",
+                                                                "properties": {
+                                                                    "provisioning": {
+                                                                        "properties": {
+                                                                            "enabled": {
+                                                                                "default": false,
+                                                                                "description": "enabled declares whether provisioning manages resources of this kind.",
+                                                                                "type": "boolean"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "fixedNames": {
+                                                                "description": "fixedNames are names of objects of this kind that are never stored: the app\nanswers requests for them itself. A route at exactly \u003cplural\u003e/\u003cname\u003e is\nallowed for each.",
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "folderScoped": {
+                                                                "default": true,
+                                                                "description": "folderScoped controls whether resources of this kind are scoped to folders.\nOnly meaningful when scope is \"Namespaced\"; for cluster-scoped kinds the field is ignored.\nDefaults to true (folder-scoped).",
+                                                                "type": "boolean"
+                                                            },
                                                             "kind": {
                                                                 "description": "Kind is the name of the kind. This should begin with a capital letter and be CamelCased",
                                                                 "type": "string"
                                                             },
+                                                            "namingStrategy": {
+                                                                "description": "#ManifestVersionKindNamingStrategy declares what the name of an object of a kind means.",
+                                                                "properties": {
+                                                                    "mode": {
+                                                                        "description": "mode is the strategy: \"owner\" names objects for their owner (user-\u003cid\u003e, team-\u003cid\u003e or namespace).",
+                                                                        "type": "string"
+                                                                    },
+                                                                    "owner": {
+                                                                        "properties": {
+                                                                            "allowOrgAdmin": {
+                                                                                "description": "allowOrgAdmin lets an org admin do anything to the kind, whoever owns the object.",
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "owners": {
+                                                                                "description": "owners are the kinds of owner a name can have.",
+                                                                                "items": {
+                                                                                    "enum": [
+                                                                                        "user",
+                                                                                        "team",
+                                                                                        "namespace"
+                                                                                    ],
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "type": "array"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "owners"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "mode"
+                                                                ],
+                                                                "type": "object"
+                                                            },
                                                             "plural": {
-                                                                "description": "Plural is the plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
+                                                                "description": "Plural is the human readable plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
+                                                                "type": "string"
+                                                            },
+                                                            "resource": {
+                                                                "description": "Resource is the lowercase plural used as the resource in the k8s GroupVersionResource URL.\nThis is optional and defaults to the lowercase of plural if not present.",
                                                                 "type": "string"
                                                             },
                                                             "routes": {
-                                                                "description": "Routes is a map of subresource route path to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
+                                                                "description": "Routes is a map of subresource route path to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.\nDeprecated: routes now live in ManifestVersion#openapi",
                                                                 "type": "object",
                                                                 "x-kubernetes-preserve-unknown-fields": true
                                                             },
@@ -827,11 +1004,133 @@
                                                                 ],
                                                                 "type": "string"
                                                             },
+                                                            "search": {
+                                                                "description": "#ManifestVersionKindSearch declares which search endpoints are served for a kind.",
+                                                                "properties": {
+                                                                    "endpoint": {
+                                                                        "default": true,
+                                                                        "description": "endpoint declares whether the kind serves the /search endpoint.",
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "global": {
+                                                                        "default": false,
+                                                                        "description": "global declares whether the kind is included in the namespace-wide search index.",
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "hybrid": {
+                                                                        "default": false,
+                                                                        "description": "hybrid declares whether the kind serves the /search/hybrid endpoint.",
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "trash": {
+                                                                        "default": true,
+                                                                        "description": "trash declares whether the kind serves the /trash endpoint,\nwhich lists deleted resources of the kind.",
+                                                                        "type": "boolean"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "searchFields": {
+                                                                "items": {
+                                                                    "description": "#SearchField describes a field exposed for search indexing and querying.\nThe type and capabilities values, and which capabilities are valid on which\ntype, are defined by the searchfields package\n(github.com/grafana/grafana-app-sdk/searchfields), the shared source of\ntruth for both the SDK codegen validator and the runtime search backend.",
+                                                                    "properties": {
+                                                                        "array": {
+                                                                            "default": false,
+                                                                            "description": "array indicates that the field holds a list of values of the given type.",
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "capabilities": {
+                                                                            "description": "capabilities lists what the field can be used for at query time, such as\nfiltering, full-text search, sorting, or faceting.",
+                                                                            "items": {
+                                                                                "enum": [
+                                                                                    "filter",
+                                                                                    "text",
+                                                                                    "partial",
+                                                                                    "sort",
+                                                                                    "facet",
+                                                                                    "retrieve",
+                                                                                    "unranked"
+                                                                                ],
+                                                                                "type": "string"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "description": {
+                                                                            "description": "description is a human readable description of the field.",
+                                                                            "type": "string"
+                                                                        },
+                                                                        "emitZeroIfAbsent": {
+                                                                            "default": false,
+                                                                            "description": "emitZeroIfAbsent indexes the type's zero value when path resolves to nothing,\nso sort and range queries see every document. Without it, a document missing\nthe path omits the field entirely.",
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "name": {
+                                                                            "description": "name is the field name as it appears in search documents and queries.",
+                                                                            "type": "string"
+                                                                        },
+                                                                        "path": {
+                                                                            "description": "path is the JSON path within the resource that supplies this field's value\n(for example \"spec.email\"). When omitted, the field is populated by a custom\ndocument builder rather than read directly from the resource.",
+                                                                            "type": "string"
+                                                                        },
+                                                                        "type": {
+                                                                            "description": "type is the value type of the field.",
+                                                                            "enum": [
+                                                                                "string",
+                                                                                "int64",
+                                                                                "double",
+                                                                                "boolean",
+                                                                                "date"
+                                                                            ],
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "name",
+                                                                        "type",
+                                                                        "capabilities"
+                                                                    ],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "secure": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "description": {
+                                                                            "description": "Description explains how the secure value is used and where it should come from.\nthis text will be exposed in the openapi schema",
+                                                                            "type": "string"
+                                                                        },
+                                                                        "key": {
+                                                                            "description": "Key used in the secure value map\n\"*\" indicates that any key will be accepted",
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "key"
+                                                                    ],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
                                                             "selectableFields": {
                                                                 "items": {
                                                                     "type": "string"
                                                                 },
                                                                 "type": "array"
+                                                            },
+                                                            "storage": {
+                                                                "properties": {
+                                                                    "listKeys": {
+                                                                        "description": "listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.",
+                                                                        "type": "boolean"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "userReadable": {
+                                                                "default": false,
+                                                                "description": "userReadable controls whether end users may get/list cluster-scoped resources of this kind.\nOnly meaningful when scope is \"Cluster\"; for namespaced kinds the field is ignored.",
+                                                                "type": "boolean"
                                                             }
                                                         },
                                                         "required": [
@@ -847,7 +1146,38 @@
                                                     "description": "Name is the version name string, such as \"v1\" or \"v1alpha1\"",
                                                     "type": "string"
                                                 },
+                                                "openapi": {
+                                                    "properties": {
+                                                        "components": {
+                                                            "properties": {
+                                                                "examples": {
+                                                                    "type": "object",
+                                                                    "x-kubernetes-preserve-unknown-fields": true
+                                                                },
+                                                                "responses": {
+                                                                    "type": "object",
+                                                                    "x-kubernetes-preserve-unknown-fields": true
+                                                                },
+                                                                "schemas": {
+                                                                    "type": "object",
+                                                                    "x-kubernetes-preserve-unknown-fields": true
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "paths": {
+                                                            "description": "The path values are relative to the version root (eg, they do NOT include /apis/{group}/{version})",
+                                                            "type": "object",
+                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "paths"
+                                                    ],
+                                                    "type": "object"
+                                                },
                                                 "routes": {
+                                                    "description": "Deprecated: custom routes are moved to the openapi section",
                                                     "properties": {
                                                         "cluster": {
                                                             "description": "Cluster is a map of cluster-scoped route paths to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",

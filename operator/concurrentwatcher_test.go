@@ -4,12 +4,16 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -257,7 +261,7 @@ func TestConcurrentWatcher(t *testing.T) {
 		cw, err := newConcurrentWatcher(mock, 3, func(ctx context.Context, err error) { errCount.Add(1) })
 		assert.Nil(t, err)
 		go cw.Run(t.Context())
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			obj := schema.ZeroValue()
 			obj.SetName(strconv.Itoa(i))
 			err = cw.Add(t.Context(), obj)
@@ -278,18 +282,24 @@ func TestConcurrentWatcher(t *testing.T) {
 	})
 
 	t.Run("event for the same object should be processed sequentially (ie by the same worker)", func(t *testing.T) {
+		var eventsMu sync.Mutex
 		events := make([]string, 0)
+		record := func(event string) {
+			eventsMu.Lock()
+			defer eventsMu.Unlock()
+			events = append(events, event)
+		}
 		mock := &mockWatcher{}
 		mock.AddFunc = func(ctx context.Context, o resource.Object) error {
-			events = append(events, "add")
+			record("add")
 			return nil
 		}
 		mock.UpdateFunc = func(ctx context.Context, _, _ resource.Object) error {
-			events = append(events, "update")
+			record("update")
 			return nil
 		}
 		mock.DeleteFunc = func(ctx context.Context, o resource.Object) error {
-			events = append(events, "delete")
+			record("delete")
 			return nil
 		}
 		var errCount atomic.Int64
@@ -314,7 +324,9 @@ func TestConcurrentWatcher(t *testing.T) {
 		assert.Equal(t, int64(2), mock.updateAttempts.Load())
 		assert.Equal(t, int64(1), mock.deleteAttempts.Load())
 		assert.Equal(t, int64(0), errCount.Load())
-		// Events recieved should be in the same order of events triggered always.
+		// Events received should be in the same order of events triggered always.
+		eventsMu.Lock()
+		defer eventsMu.Unlock()
 		assert.Equal(t, []string{"add", "update", "update", "delete"}, events)
 	})
 
@@ -336,7 +348,7 @@ func TestConcurrentWatcher(t *testing.T) {
 			close(runReturned)
 		}()
 
-		for i := 0; i < 90; i++ {
+		for i := range 90 {
 			obj := schema.ZeroValue()
 			obj.SetName(strconv.Itoa(i))
 			err = cw.Add(t.Context(), obj)
@@ -380,3 +392,131 @@ func (mw *mockWatcher) Delete(ctx context.Context, obj resource.Object) error {
 	mw.deleteAttempts.Add(1)
 	return mw.SimpleWatcher.Delete(ctx, obj)
 }
+
+func TestConcurrentInformer_PrometheusCollectors(t *testing.T) {
+	t.Run("implements metrics.Provider", func(t *testing.T) {
+		ci, err := NewConcurrentInformerFromOptions(&noopInformer{}, InformerOptions{
+			MetricsConfig: metrics.DefaultConfig("test"),
+			ResourceKind:  "test.example.com/v1, Kind=TestKind",
+		})
+		require.NoError(t, err)
+
+		var provider metrics.Provider = ci
+		collectors := provider.PrometheusCollectors()
+		assert.Len(t, collectors, 1)
+	})
+
+	t.Run("queue_depth reflects pending events", func(t *testing.T) {
+		blockCh := make(chan struct{})
+		mock := &mockWatcher{}
+		mock.AddFunc = func(ctx context.Context, o resource.Object) error {
+			<-blockCh
+			return nil
+		}
+
+		ci, err := NewConcurrentInformerFromOptions(&noopInformer{}, InformerOptions{
+			MaxConcurrentWorkers: 2,
+			MetricsConfig:        metrics.DefaultConfig("test"),
+		})
+		require.NoError(t, err)
+
+		err = ci.AddEventHandler(mock)
+		require.NoError(t, err)
+
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		go ci.Run(ctx)
+
+		assert.Equal(t, float64(0), ci.QueueDepth())
+
+		ex := &resource.TypedSpecObject[string]{}
+		schema := resource.NewSimpleSchema("group", "version", ex, &resource.TypedList[*resource.TypedSpecObject[string]]{})
+
+		obj1 := schema.ZeroValue()
+		obj1.SetName("obj1")
+		obj2 := schema.ZeroValue()
+		obj2.SetName("obj2")
+
+		ci.watchers[0].Add(ctx, obj1)
+		ci.watchers[0].Add(ctx, obj2)
+
+		assert.Eventually(t, func() bool {
+			return ci.QueueDepth() > 0
+		}, time.Second, 10*time.Millisecond)
+
+		close(blockCh)
+
+		assert.Eventually(t, func() bool {
+			return ci.QueueDepth() == 0
+		}, time.Second, 10*time.Millisecond)
+	})
+
+	t.Run("multiple informers with different kinds register without collision", func(t *testing.T) {
+		reg := prometheus.NewRegistry()
+
+		ci1, err := NewConcurrentInformerFromOptions(&noopInformer{}, InformerOptions{
+			MetricsConfig: metrics.DefaultConfig("test"),
+			ResourceKind:  "group1/v1, Kind=KindA",
+		})
+		require.NoError(t, err)
+		for _, c := range ci1.PrometheusCollectors() {
+			require.NoError(t, reg.Register(c))
+		}
+
+		ci2, err := NewConcurrentInformerFromOptions(&noopInformer{}, InformerOptions{
+			MetricsConfig: metrics.DefaultConfig("test"),
+			ResourceKind:  "group2/v1, Kind=KindB",
+		})
+		require.NoError(t, err)
+		for _, c := range ci2.PrometheusCollectors() {
+			require.NoError(t, reg.Register(c))
+		}
+
+		mfs, err := reg.Gather()
+		require.NoError(t, err)
+		var found int
+		for _, mf := range mfs {
+			if mf.GetName() == "test_concurrent_watcher_queue_depth" {
+				found = len(mf.GetMetric())
+			}
+		}
+		assert.Equal(t, 2, found)
+	})
+
+	t.Run("deprecated constructor also creates metrics", func(t *testing.T) {
+		ci, err := NewConcurrentInformer(&noopInformer{}, ConcurrentInformerOptions{
+			MetricsConfig: metrics.DefaultConfig("test"),
+		})
+		require.NoError(t, err)
+
+		collectors := ci.PrometheusCollectors()
+		assert.Len(t, collectors, 1)
+	})
+
+	t.Run("forwards the wrapped informer's collectors", func(t *testing.T) {
+		wrapped := &collectorInformer{collectors: []prometheus.Collector{
+			prometheus.NewCounter(prometheus.CounterOpts{Name: "wrapped_events_total"}),
+			prometheus.NewGauge(prometheus.GaugeOpts{Name: "wrapped_queue_size"}),
+		}}
+
+		ci, err := NewConcurrentInformerFromOptions(wrapped, InformerOptions{
+			MetricsConfig: metrics.DefaultConfig("test"),
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, append([]prometheus.Collector{ci.queueDepth}, wrapped.collectors...), ci.PrometheusCollectors())
+	})
+}
+
+type noopInformer struct{}
+
+func (m *noopInformer) AddEventHandler(_ ResourceWatcher) error { return nil }
+func (m *noopInformer) Run(ctx context.Context) error           { <-ctx.Done(); return nil }
+func (m *noopInformer) WaitForSync(ctx context.Context) error   { return nil }
+
+type collectorInformer struct {
+	noopInformer
+	collectors []prometheus.Collector
+}
+
+func (m *collectorInformer) PrometheusCollectors() []prometheus.Collector { return m.collectors }

@@ -3,11 +3,11 @@ package simple
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
 	otelresource "go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
@@ -27,6 +27,9 @@ type OpenTelemetryConfig struct {
 	Port        int
 	ConnType    OTelConnType
 	ServiceName string
+	// Sampler overrides the default sampler. When nil, the SDK uses OTEL_TRACES_SAMPLER and
+	// OTEL_TRACES_SAMPLER_ARG if set, otherwise ParentBased(AlwaysSample).
+	Sampler trace.Sampler
 }
 
 // SetTraceProvider creates a trace.TracerProvider and sets it as the global TracerProvider which is used by
@@ -35,29 +38,29 @@ func SetTraceProvider(cfg OpenTelemetryConfig) error {
 	var exp trace.SpanExporter
 	switch cfg.ConnType {
 	case OTelConnTypeGRPC:
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-
-		// TODO: replace with grpc.NewClient, before we upgrade to 2.x.
-		// nolint: staticcheck
-		conn, err := grpc.DialContext(ctx, fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
+		conn, err := grpc.NewClient(fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
 			// Note the use of insecure transport here. TLS is recommended in production.
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
 		)
 		if err != nil {
 			return fmt.Errorf("failed to create gRPC connection to collector: %w", err)
 		}
 
 		// Set up a trace exporter
-		exp, err = otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))
+		exp, err = otlptracegrpc.New(context.Background(), otlptracegrpc.WithGRPCConn(conn))
 		if err != nil {
 			return err
 		}
 	case OTelConnTypeHTTP:
-		// TODO: better?
+		var opts []otlptracehttp.Option
+		if cfg.Host != "" {
+			opts = append(opts,
+				otlptracehttp.WithEndpoint(fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)),
+				otlptracehttp.WithInsecure(),
+			)
+		}
 		var err error
-		exp, err = otlptracehttp.New(context.Background())
+		exp, err = otlptracehttp.New(context.Background(), opts...)
 		if err != nil {
 			return err
 		}
@@ -76,9 +79,17 @@ func SetTraceProvider(cfg OpenTelemetryConfig) error {
 		return err
 	}
 
-	otel.SetTracerProvider(trace.NewTracerProvider(
+	opts := []trace.TracerProviderOption{
 		trace.WithBatcher(exp),
 		trace.WithResource(r),
+	}
+	if cfg.Sampler != nil {
+		opts = append(opts, trace.WithSampler(cfg.Sampler))
+	}
+	otel.SetTracerProvider(trace.NewTracerProvider(opts...))
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
 	))
 	return nil
 }

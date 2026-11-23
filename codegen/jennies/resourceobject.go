@@ -28,7 +28,6 @@ var (
 		Name:                       "foo",
 		GenerateName:               "bar",
 		Namespace:                  "foo",
-		SelfLink:                   "bar",
 		UID:                        types.UID("foo"),
 		ResourceVersion:            "bar",
 		Generation:                 i64,
@@ -71,7 +70,7 @@ func (*ResourceObjectGenerator) JennyName() string {
 }
 
 func (r *ResourceObjectGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	for version, kind := range codegen.VersionedKinds(appManifest) {
 		openAPIName := ""
 		if r.OpenAPINamer != nil {
@@ -135,6 +134,7 @@ func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.VersionedKind,
 	}
 	md := templates.ResourceObjectTemplateMetadata{
 		Package:              pkg,
+		HasSecureValues:      len(kind.SecureValues) > 0,
 		TypeName:             kind.Kind,
 		SpecTypeName:         typePrefix + "Spec",
 		ObjectTypeName:       "Object", // Package is the machine name of the object, so this makes it machinename.Object

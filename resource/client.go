@@ -5,6 +5,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 const NamespaceAll = ""
@@ -18,12 +21,12 @@ type Identifier struct {
 // FullIdentifier is a globally-unique identifier, consisting of Schema identity information
 // (Group, Version, Kind, Plural) and within-schema identity information (Namespace, Name)
 type FullIdentifier struct {
-	Namespace string
-	Name      string
-	Group     string
-	Version   string
-	Kind      string
-	Plural    string
+	Namespace string `json:"namespace,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Group     string `json:"group,omitempty"`
+	Version   string `json:"version,omitempty"`
+	Kind      string `json:"kind,omitempty"`
+	Plural    string `json:"plural,omitempty"`
 }
 
 // CreateOptions are the options passed to a Client.Create call
@@ -262,9 +265,32 @@ type SchemalessClient interface {
 	Watch(ctx context.Context, identifier FullIdentifier, options WatchOptions, example Object) (WatchResponse, error)
 }
 
+// CustomRouteClient is an interface for making requests to custom routes that are not covered by the standard CRUD operations of Client.
+type CustomRouteClient interface {
+	// NamespacedRequest makes a request to a namespaced custom route, using the provided verb and body, and returns the raw bytes of the response
+	NamespacedRequest(ctx context.Context, namespace string, opts CustomRouteRequestOptions) ([]byte, error)
+	// ClusteredRequest makes a request to a clustered custom route, using the provided verb and body, and returns the raw bytes of the response
+	ClusteredRequest(ctx context.Context, opts CustomRouteRequestOptions) ([]byte, error)
+}
+
 // ClientGenerator is used for creating clients to interface with given schemas
 type ClientGenerator interface {
 	// ClientFor returns a Client for the provided Schema. This returned Client is not guaranteed to be unique,
 	// and can be shared by other ClientFor calls.
 	ClientFor(Kind) (Client, error)
+	// GetCustomRouteClient returns a Client for the provided GroupVersion. This returned Client is not guaranteed to be unique,
+	// and can be shared by other ClientForGV calls.
+	GetCustomRouteClient(schema.GroupVersion, string) (CustomRouteClient, error)
+	// DiscoveryClient returns a DiscoveryClient that can be used to inspect API groups exposed by the
+	// underlying API server. Implementations may keep per-group clients internally to handle
+	// setups where different groups are routed to different hosts.
+	DiscoveryClient() (DiscoveryClient, error)
+}
+
+// DiscoveryClient inspects the API groups and resources exposed by the underlying API server.
+type DiscoveryClient interface {
+	// PreferredVersion returns the APIResourceList for the preferred version of the given API group.
+	// The returned list's GroupVersion is the preferred GroupVersion; each APIResource entry's
+	// Group and Version fields are also populated with that same GroupVersion for caller convenience.
+	PreferredVersion(apiGroup string) (*metav1.APIResourceList, error)
 }

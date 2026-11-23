@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"strconv"
 	"strings"
@@ -473,14 +474,9 @@ func (g *groupVersionClient) customRouteRequest(ctx context.Context, namespace, 
 	defer span.End()
 	req := g.client.Verb(request.Verb)
 	if plural != "" {
-		sr := request.Path
-		for len(sr) > 0 && sr[0] == '/' {
-			sr = sr[1:]
-		}
-		req = req.Resource(plural).Name(name).SubResource(sr)
-	} else {
-		req = req.Resource(request.Path)
+		req = req.Resource(plural).Name(name)
 	}
+	req = req.SubResource(strings.Split(strings.Trim(request.Path, "/"), "/")...)
 	if namespace != "" {
 		req = req.Namespace(namespace)
 	}
@@ -571,7 +567,7 @@ func (g *groupVersionClient) watch(ctx context.Context, namespace, plural string
 		codec:            codec,
 		watch:            resp,
 		ch:               make(chan resource.WatchEvent, channelBufferSize),
-		stopCh:           make(chan struct{}),
+		stopCh:           make(chan struct{}, 1),
 		ctx:              ctx,
 		namespace:        namespace,
 		plural:           plural,
@@ -622,6 +618,8 @@ type WatchResponse struct {
 
 //nolint:revive,staticcheck,gocritic
 func (w *WatchResponse) start() {
+	defer close(w.ch)
+
 	logger := logging.FromContext(w.ctx).With(
 		"kind", w.plural,
 		"namespace", w.namespace,
@@ -630,7 +628,17 @@ func (w *WatchResponse) start() {
 
 	for {
 		select {
-		case evt := <-w.watch.ResultChan():
+		case evt, ok := <-w.watch.ResultChan():
+			if !ok {
+				w.startMux.Lock()
+				if w.started {
+					w.watch.Stop()
+					w.started = false
+				}
+				w.startMux.Unlock()
+				logger.Debug("watch stream stopped due to ResultChan end")
+				return
+			}
 			if evt.Object == nil {
 				logger.Warn("received nil object in watch event",
 					"eventType", string(evt.Type))
@@ -669,13 +677,16 @@ func (w *WatchResponse) start() {
 
 			w.incWatchEventCounter(string(evt.Type))
 
-			w.ch <- resource.WatchEvent{
+			select {
+			case w.ch <- resource.WatchEvent{
 				EventType: string(evt.Type),
 				Object:    obj,
+			}:
+			case <-w.stopCh:
+				return
 			}
 		case <-w.stopCh:
 			logger.Debug("watch stream stopped")
-			close(w.stopCh)
 			return
 		}
 	}
@@ -686,8 +697,10 @@ func (w *WatchResponse) start() {
 func (w *WatchResponse) Stop() {
 	w.startMux.Lock()
 	defer w.startMux.Unlock()
+	if !w.started {
+		return
+	}
 	w.stopCh <- struct{}{}
-	close(w.ch)
 	w.watch.Stop()
 	w.started = false
 }
@@ -728,7 +741,7 @@ func (w *WatchResponse) KubernetesWatch() watch.Interface {
 			watchErrorsTotal: w.watchErrorsTotal,
 			ctx:              w.ctx,
 			ch:               make(chan watch.Event, cap(w.ch)),
-			stopCh:           make(chan struct{}),
+			stopCh:           make(chan struct{}, 1),
 		}
 	}
 
@@ -806,7 +819,11 @@ func (w *metricsWatchWrapper) interceptEvents() {
 			}
 
 			// Forward event to wrapper's channel
-			w.ch <- evt
+			select {
+			case w.ch <- evt:
+			case <-w.stopCh:
+				return
+			}
 
 		case <-w.stopCh:
 			logger.Debug("metrics watch wrapper stopped")
@@ -834,8 +851,6 @@ func addLabels(obj resource.Object, labels map[string]string) {
 	if l == nil {
 		l = make(map[string]string)
 	}
-	for k, v := range labels {
-		l[k] = v
-	}
+	maps.Copy(l, labels)
 	obj.SetLabels(l)
 }

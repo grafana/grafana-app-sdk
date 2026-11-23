@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -60,7 +61,7 @@ func (m *ResourceManager) WaitForAvailability(ctx context.Context, schema resour
 			if err == nil {
 				return nil
 			}
-			if err != nil && sc != http.StatusNotFound {
+			if sc != http.StatusNotFound {
 				return err
 			}
 		case <-ctx.Done():
@@ -109,8 +110,8 @@ func (m *ResourceManager) RegisterSchema(ctx context.Context, schema resource.Sc
 		existing.Spec.Versions = append(existing.Spec.Versions, toVersion(schema))
 	}
 	// Make sure the latest is the one with storage = true
-	sort.Slice(existing.Spec.Versions, func(i, j int) bool {
-		return existing.Spec.Versions[i].Name > existing.Spec.Versions[j].Name
+	slices.SortFunc(existing.Spec.Versions, func(a, b CustomResourceDefinitionSpecVersion) int {
+		return strings.Compare(b.Name, a.Name)
 	})
 	for i := 0; i < len(existing.Spec.Versions); i++ {
 		existing.Spec.Versions[i].Storage = false
@@ -208,14 +209,12 @@ const (
 )
 
 // toOpenAPIV3 converts a struct into a map[string]any representation of an OpenAPIV3-compliant JSON spec
-func toOpenAPIV3(typ reflect.Type) map[string]any { // nolint: funlen
+func toOpenAPIV3(typ reflect.Type) map[string]any {
 	for typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
 	m := make(map[string]any)
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
-
+	for field := range typ.Fields() {
 		// Process type
 		fieldType := field.Type
 		for fieldType.Kind() == reflect.Pointer {
@@ -245,9 +244,7 @@ func toOpenAPIV3(typ reflect.Type) map[string]any { // nolint: funlen
 		case reflect.Struct:
 			props := toOpenAPIV3(fieldType)
 			if field.Anonymous { // Embed anonymous fields
-				for key, val := range props {
-					m[key] = val
-				}
+				maps.Copy(m, props)
 				continue
 			}
 			v["type"] = openAPITypeObject
@@ -387,7 +384,7 @@ func DeepCopyObject(in any) runtime.Object {
 	cpy.Elem().Set(val)
 
 	// Using the <obj>, <ok> for the type conversion ensures that it doesn't panic if it can't be converted
-	if obj, ok := cpy.Interface().(runtime.Object); ok {
+	if obj, ok := reflect.TypeAssert[runtime.Object](cpy); ok {
 		return obj
 	}
 

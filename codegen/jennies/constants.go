@@ -40,7 +40,7 @@ func (c *Constants) Generate(appManifest codegen.AppManifest) (codejen.Files, er
 			}
 		}
 	}
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	for _, v := range m {
 		b := bytes.Buffer{}
 		err := templates.WriteConstantsFile(templates.ConstantsMetadata{

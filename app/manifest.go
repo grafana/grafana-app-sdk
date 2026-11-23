@@ -14,15 +14,30 @@ import (
 	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/spec3"
 	"k8s.io/kube-openapi/pkg/validation/spec"
+
+	sdkresource "github.com/grafana/grafana-app-sdk/resource"
 )
 
 const (
 	OpenAPIExtensionPrefix                   = "x-grafana-app"
 	OpenAPIExtensionUsesKubernetesObjectMeta = OpenAPIExtensionPrefix + "-uses-kubernetes-object-metadata"
 	OpenAPIExtensionUsesKubernetesListMeta   = OpenAPIExtensionPrefix + "-uses-kubernetes-list-metadata"
+
+	// OpenAPIExtensionAuthzResource and OpenAPIExtensionAuthzSubresource declare, on a route operation,
+	// the resource and subresource its access check is made against.
+	OpenAPIExtensionAuthzResource    = "x-grafana-declared-authz-resource"
+	OpenAPIExtensionAuthzSubresource = "x-grafana-declared-authz-subresource"
+
+	// OpenAPIExtensionAllowMissingParent declares, on a kind subresource route operation, that the
+	// route is served even when no object is stored under the name in its path.
+	OpenAPIExtensionAllowMissingParent = "x-grafana-allow-missing-parent"
+
+	// OpenAPIExtensionProxy declares the plugin proxy target of an operation.
+	OpenAPIExtensionProxy = "x-grafana-proxy"
 
 	ManifestRolePermissionSetViewer = "viewer"
 	ManifestRolePermissionSetEditor = "editor"
@@ -31,6 +46,7 @@ const (
 
 // NewEmbeddedManifest returns a Manifest which has the ManifestData embedded in it
 func NewEmbeddedManifest(manifestData ManifestData) Manifest {
+	manifestData.defaultKindResources()
 	return Manifest{
 		Location: ManifestLocation{
 			Type: ManifestLocationEmbedded,
@@ -91,8 +107,12 @@ type ManifestData struct {
 	// AppDisplayName is the human-readable display name of the app. Unlike the AppName, any printable characters are allowed in this field
 	AppDisplayName string `json:"appDisplayName" yaml:"appDisplayName"`
 	// Group is the group used for all kinds maintained by this app.
-	// This is usually "<AppName>.ext.grafana.com"
+	// This is usually "<AppName>.ext.grafana.app"
 	Group string `json:"group" yaml:"group"`
+	// Embed configures declarative embeddings by resource name (the lowercase plural) within Group.
+	// Each resource has one re-embedding version shared by all of its API versions.
+	// Custom embedding builders omit their entry and define their content version in Go.
+	Embed map[string]ManifestResourceEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
 	// Versions is a list of versions supported by this App
 	Versions []ManifestVersion `json:"versions" yaml:"versions"`
 	// PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.
@@ -115,50 +135,88 @@ type ManifestData struct {
 	RoleBindings *ManifestRoleBindings `json:"roleBindings,omitempty" yaml:"roleBindings,omitempty"`
 }
 
+// ManifestResourceEmbed configures declarative embeddings across all API versions of a resource.
+type ManifestResourceEmbed struct {
+	// ReembedVersion is a manual revision for requesting re-embedding of existing resources.
+	// Increase it when a backfill is needed; changing the declared inputs does not require a bump by itself.
+	ReembedVersion int `json:"reembedVersion" yaml:"reembedVersion"`
+}
+
 func (m *ManifestData) IsEmpty() bool {
-	return m.AppName == "" && m.Group == "" && len(m.Versions) == 0 && m.PreferredVersion == "" && m.ExtraPermissions == nil && m.Operator == nil
+	return m.AppName == "" && m.Group == "" && len(m.Versions) == 0 && len(m.Embed) == 0 && m.PreferredVersion == "" && m.ExtraPermissions == nil && m.Operator == nil
 }
 
 // Validate validates the ManifestData to ensure that the kind data across all Versions is consistent
 //
-//nolint:gocognit
+//nolint:gocognit,funlen,gocyclo
 func (m *ManifestData) Validate() error {
 	type kindData struct {
-		kind       string
-		plural     string
-		scope      string
-		conversion bool
-		version    string
+		kind         string
+		plural       string
+		resource     string
+		scope        string
+		conversion   bool
+		userReadable bool
+		folderScoped bool
+		version      string
 	}
+	hasPreferredVersion := false
 	var errs error
 	kinds := make(map[string]kindData)
 	for _, version := range m.Versions {
 		namespacedRoutes := make(map[string]struct{})
 		clusterRoutes := make(map[string]struct{})
+		if version.Name == m.PreferredVersion {
+			hasPreferredVersion = true
+		}
 		for _, kind := range version.Kinds {
+			if kind.Plural == "" {
+				errs = multierror.Append(errs, fmt.Errorf("kind '%s' in version '%s' has no plural", kind.Kind, version.Name))
+			}
+			if kind.Resource == "" {
+				errs = multierror.Append(errs, fmt.Errorf("kind '%s' in version '%s' has no resource", kind.Kind, version.Name))
+			}
+			if kind.Resource != "" {
+				// The resource is used as a path segment in the k8s GroupVersionResource URL, so it must be a valid lowercase DNS label
+				if msgs := validation.IsDNS1123Label(kind.Resource); len(msgs) > 0 {
+					errs = multierror.Append(errs, fmt.Errorf("kind '%s' in version '%s' has an invalid resource '%s': %s", kind.Kind, version.Name, kind.Resource, strings.Join(msgs, "; ")))
+				}
+			}
 			if kind.Scope == "Cluster" {
-				clusterRoutes[strings.ToLower(kind.Plural)] = struct{}{}
+				clusterRoutes[kind.Resource] = struct{}{}
 			} else {
-				namespacedRoutes[strings.ToLower(kind.Plural)] = struct{}{}
+				namespacedRoutes[kind.Resource] = struct{}{}
 			}
 			if k, ok := kinds[kind.Kind]; !ok {
 				k = kindData{
-					kind:       kind.Kind,
-					plural:     kind.Plural,
-					scope:      kind.Scope,
-					conversion: kind.Conversion,
-					version:    version.Name,
+					kind:         kind.Kind,
+					plural:       kind.Plural,
+					resource:     kind.Resource,
+					scope:        kind.Scope,
+					conversion:   kind.Conversion,
+					userReadable: kind.UserReadable,
+					folderScoped: isFolderScoped(kind.FolderScoped),
+					version:      version.Name,
 				}
 				kinds[kind.Kind] = k
 			} else {
 				if k.plural != kind.Plural {
 					errs = multierror.Append(errs, fmt.Errorf("kind '%s' has a different plural in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
 				}
+				if k.resource != kind.Resource {
+					errs = multierror.Append(errs, fmt.Errorf("kind '%s' has a different resource in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
+				}
 				if k.scope != kind.Scope {
 					errs = multierror.Append(errs, fmt.Errorf("kind '%s' has a different scope in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
 				}
 				if k.conversion != kind.Conversion {
 					errs = multierror.Append(errs, fmt.Errorf("kind '%s' conversion does not match in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
+				}
+				if k.userReadable != kind.UserReadable {
+					errs = multierror.Append(errs, fmt.Errorf("kind '%s' has a different userReadable in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
+				}
+				if k.folderScoped != isFolderScoped(kind.FolderScoped) {
+					errs = multierror.Append(errs, fmt.Errorf("kind '%s' has a different folderScoped in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
 				}
 			}
 		}
@@ -167,11 +225,21 @@ func (m *ManifestData) Validate() error {
 			if _, ok := namespacedRoutes[key]; ok {
 				errs = multierror.Append(errs, fmt.Errorf("namespaced custom route '%s' conflicts with already-registered kind '%s'", rpath, key))
 			}
+			if resource, endpoint, ok := reservedKindRoute(key); ok {
+				if _, exists := namespacedRoutes[resource]; exists {
+					errs = multierror.Append(errs, fmt.Errorf("namespaced custom route '%s' conflicts with reserved '%s' route for kind '%s'", rpath, endpoint, resource))
+				}
+			}
 		}
 		for rpath := range version.Routes.Cluster {
 			key := strings.Trim(strings.ToLower(rpath), "/")
 			if _, ok := clusterRoutes[key]; ok {
 				errs = multierror.Append(errs, fmt.Errorf("cluster-scoped custom route '%s' conflicts with already-registered kind '%s'", rpath, key))
+			}
+			if resource, endpoint, ok := reservedKindRoute(key); ok {
+				if _, exists := clusterRoutes[resource]; exists {
+					errs = multierror.Append(errs, fmt.Errorf("cluster-scoped custom route '%s' conflicts with reserved '%s' route for kind '%s'", rpath, endpoint, resource))
+				}
 			}
 		}
 	}
@@ -209,10 +277,180 @@ func (m *ManifestData) Validate() error {
 			}
 		}
 	}
+	if !hasPreferredVersion && m.PreferredVersion != "" {
+		errs = multierror.Append(errs, fmt.Errorf("unknown preferred version: %q", m.PreferredVersion))
+	}
+	return multierror.Append(errs, m.validateKindRoutes(), m.validateRoles(), m.validateEmbed()).ErrorOrNil()
+}
+
+func (m *ManifestData) validateKindRoutes() error {
+	var errs error
+	for _, version := range m.Versions {
+		for _, kind := range version.Kinds {
+			for _, rpath := range slices.Sorted(maps.Keys(kind.Routes)) {
+				if sub := firstSegment(rpath); isBuiltinSubresource(sub) {
+					errs = multierror.Append(errs, fmt.Errorf("kind %q version %q: custom route %q conflicts with the built-in %q subresource", kind.Kind, version.Name, rpath, strings.ToLower(sub)))
+				}
+			}
+		}
+	}
 	return errs
 }
 
+// validateRoles checks that each role kind is either a kind, or a kind and the subresource one of its custom routes is authorized against.
+func (m *ManifestData) validateRoles() error {
+	resources := make(map[string]string)
+	for _, version := range m.Versions {
+		for _, kind := range version.Kinds {
+			resources[strings.ToLower(kind.Kind)] = kind.Resource
+		}
+	}
+	routeSubresources, errs := m.routeSubresources()
+	for _, name := range slices.Sorted(maps.Keys(m.Roles)) {
+		for _, k := range m.Roles[name].Kinds {
+			kind, sub, isSub := strings.Cut(k.Kind, "/")
+			resource, ok := resources[strings.ToLower(kind)]
+			var err error
+			switch {
+			case isSub && isBuiltinSubresource(sub):
+				err = fmt.Errorf("invalid role %s: kind %q names the built-in %q subresource, which is not grantable", name, k.Kind, strings.ToLower(sub))
+			case !ok:
+				err = fmt.Errorf("invalid role %s: kind %q does not exist in manifest", name, kind)
+			case isSub && !routeSubresources[resource][sub]:
+				err = fmt.Errorf("invalid role %s: kind %q names %q, which is not a custom route of %s", name, k.Kind, sub, kind)
+			default:
+				continue
+			}
+			errs = multierror.Append(errs, err)
+		}
+	}
+	return errs
+}
+
+// routeSubresources returns, by resource, the subresources custom routes are authorized against:
+// the first path segment of each kind route, or the subresource a route's authz declares.
+// It reports declared resources and subresources that contain a slash, as neither can name a real check.
+func (m *ManifestData) routeSubresources() (map[string]map[string]bool, error) {
+	var errs error
+	subresources := make(map[string]map[string]bool)
+	add := func(resource, sub string) {
+		if resource == "" || sub == "" {
+			return
+		}
+		resource = strings.ToLower(resource)
+		if subresources[resource] == nil {
+			subresources[resource] = make(map[string]bool)
+		}
+		subresources[resource][sub] = true
+	}
+	visit := func(where, resource, sub string, props spec3.PathProps) {
+		add(resource, sub)
+		for _, op := range []*spec3.Operation{props.Get, props.Put, props.Post, props.Delete, props.Options, props.Head, props.Patch, props.Trace} {
+			if op == nil {
+				continue
+			}
+			declared, _ := op.Extensions.GetString(OpenAPIExtensionAuthzResource)
+			declaredSub, ok := op.Extensions.GetString(OpenAPIExtensionAuthzSubresource)
+			if strings.Contains(declared, "/") {
+				errs = multierror.Append(errs, fmt.Errorf("%s: %s must be a resource name, not %q; declare the subresource in %s",
+					where, OpenAPIExtensionAuthzResource, declared, OpenAPIExtensionAuthzSubresource))
+				continue
+			}
+			if strings.Contains(declaredSub, "/") {
+				errs = multierror.Append(errs, fmt.Errorf("%s: %s must be a single path segment, not %q",
+					where, OpenAPIExtensionAuthzSubresource, declaredSub))
+				continue
+			}
+			if !ok {
+				declaredSub = sub
+			}
+			add(declared, declaredSub)
+		}
+	}
+	for _, version := range m.Versions {
+		for _, kind := range version.Kinds {
+			for _, rpath := range slices.Sorted(maps.Keys(kind.Routes)) {
+				visit(fmt.Sprintf("kind %q version %q route %q", kind.Kind, version.Name, rpath), kind.Resource, firstSegment(rpath), kind.Routes[rpath])
+			}
+		}
+		routes := version.Routes //nolint:staticcheck // Routes is deprecated but older manifests still declare routes there
+		for _, paths := range []map[string]spec3.PathProps{version.OpenAPI.Paths, routes.Namespaced, routes.Cluster} {
+			for _, rpath := range slices.Sorted(maps.Keys(paths)) {
+				resource, sub := kindRouteSubresource(rpath)
+				visit(fmt.Sprintf("version %q route %q", version.Name, rpath), resource, sub, paths[rpath])
+			}
+		}
+	}
+	return subresources, errs
+}
+
+// kindRouteSubresource returns the resource and subresource of a version-relative kind route path,
+// such as namespaces/{namespace}/widgets/{name}/render, or empty strings for any other path.
+func kindRouteSubresource(path string) (resource, subresource string) {
+	resource, rest, _ := strings.Cut(strings.TrimPrefix(strings.Trim(path, "/"), "namespaces/{namespace}/"), "/")
+	if rest, ok := strings.CutPrefix(rest, "{name}/"); ok {
+		return resource, firstSegment(rest)
+	}
+	return "", ""
+}
+
+// firstSegment returns the first segment of a path, which is the subresource of a kind route.
+func firstSegment(path string) string {
+	segment, _, _ := strings.Cut(strings.Trim(path, "/"), "/")
+	return segment
+}
+
+// isBuiltinSubresource reports whether sub is served for every kind, so it is neither a custom route nor grantable.
+func isBuiltinSubresource(sub string) bool {
+	return strings.EqualFold(sub, "status") || strings.EqualFold(sub, "scale")
+}
+
+func (m *ManifestData) validateEmbed() error {
+	resources := make(map[string]struct{})
+	var errs error
+	for _, version := range m.Versions {
+		for _, kind := range version.Kinds {
+			resource := kind.Resource
+			resources[resource] = struct{}{}
+			if _, ok := m.Embed[resource]; kind.Embed != nil && !ok {
+				errs = multierror.Append(errs, fmt.Errorf("kind %q version %q declares embedding fields without embed configuration for resource %q", kind.Kind, version.Name, resource))
+			}
+			if kind.Embed != nil {
+				for _, field := range kind.Embed.Fields {
+					if field.Path == "" {
+						errs = multierror.Append(errs, fmt.Errorf("kind %q version %q embed field %q requires a path", kind.Kind, version.Name, field.Name))
+					}
+				}
+			}
+		}
+	}
+	for _, resource := range slices.Sorted(maps.Keys(m.Embed)) {
+		if _, ok := resources[resource]; !ok {
+			errs = multierror.Append(errs, fmt.Errorf("embed configuration references unknown resource %q", resource))
+		}
+		if m.Embed[resource].ReembedVersion <= 0 {
+			errs = multierror.Append(errs, fmt.Errorf("embed reembedVersion for resource %q must be greater than zero", resource))
+		}
+	}
+	return errs
+}
+
+func reservedKindRoute(route string) (resource, endpoint string, ok bool) {
+	// These paths remain reserved for kinds that opt out of the built-in endpoints.
+	// Opting out controls which endpoints are served; it does not make their paths
+	// available for custom routes. status and scale are built-in subresources.
+	for _, endpoint = range []string{"search", "trash", "search/hybrid", "status", "scale"} {
+		suffix := "/" + endpoint
+		if before, ok0 := strings.CutSuffix(route, suffix); ok0 {
+			resource = before
+			return resource, endpoint, resource != ""
+		}
+	}
+	return "", "", false
+}
+
 // Kinds returns a list of ManifestKinds parsed from Versions, for compatibility with kind-centric usage
+//
 // Deprecated: this exists to support current workflows, and should not be used for new ones.
 func (m *ManifestData) Kinds() []ManifestKind {
 	kinds := make(map[string]ManifestKind)
@@ -221,11 +459,14 @@ func (m *ManifestData) Kinds() []ManifestKind {
 			k, ok := kinds[kind.Kind]
 			if !ok {
 				k = ManifestKind{
-					Kind:       kind.Kind,
-					Plural:     kind.Plural,
-					Scope:      kind.Scope,
-					Conversion: kind.Conversion,
-					Versions:   make([]ManifestKindVersion, 0),
+					Kind:         kind.Kind,
+					Plural:       kind.Plural,
+					Resource:     kind.Resource,
+					Scope:        kind.Scope,
+					Conversion:   kind.Conversion,
+					UserReadable: kind.UserReadable,
+					FolderScoped: kind.FolderScoped,
+					Versions:     make([]ManifestKindVersion, 0),
 				}
 			}
 			k.Versions = append(k.Versions, ManifestKindVersion{
@@ -244,21 +485,30 @@ func (m *ManifestData) Kinds() []ManifestKind {
 
 // ManifestKind is the manifest for a particular kind, including its Kind, Scope, and Versions.
 // The values for Kind, Plural, Scope, and Conversion are hoisted up from their namesakes in Versions entries
+//
 // Deprecated: this is used only for the deprecated method ManifestData.Kinds()
 type ManifestKind struct {
 	// Kind is the name of the kind
 	Kind string `json:"kind" yaml:"kind"`
 	// Scope if the scope of the kind, typically restricted to "Namespaced" or "Cluster"
 	Scope string `json:"scope" yaml:"scope"`
-	// Plural is the plural of the kind
+	// Plural is the capitalized, human readable plural of the kind
 	Plural string `json:"plural" yaml:"plural"`
+	// Resource is the lowercase plural used in the k8s GroupVersionResource URL
+	Resource string `json:"resource" yaml:"resource"`
 	// Versions is the set of versions for the kind. This list should be ordered as a series of progressively later versions.
 	Versions []ManifestKindVersion `json:"versions" yaml:"versions"`
 	// Conversion is true if the app has a conversion capability for this kind
 	Conversion bool `json:"conversion" yaml:"conversion"`
+	// UserReadable is true when end users may get/list this cluster-scoped kind.
+	UserReadable bool `json:"userReadable" yaml:"userReadable"`
+	// FolderScoped declares whether resources of this namespaced kind are scoped to folders.
+	// A nil value defaults to true (folder-scoped). Ignored for cluster-scoped kinds.
+	FolderScoped *bool `json:"folderScoped,omitempty" yaml:"folderScoped,omitempty"`
 }
 
 // ManifestKindVersion is an extension on ManifestVersionKind that adds the version name
+//
 // Deprecated: this type if used only as part of the deprecated method ManifestData.Kinds()
 type ManifestKindVersion struct {
 	ManifestVersionKind `json:",inline" yaml:",inline"`
@@ -277,9 +527,43 @@ type ManifestVersion struct {
 	Kinds []ManifestVersionKind `json:"kinds" yaml:"kinds"`
 	// Routes is a map of path patterns to custom routes for this version.
 	// Routes should not conflict with the plural name of any kinds for this version.
-	Routes ManifestVersionRoutes `json:"routes,omitempty" yaml:"routes,omitempty"`
+	//
+	// Deprecated: this information is also represented in the OpenAPI paths
+	Routes ManifestVersionRoutes `json:"routes,omitzero" yaml:"routes,omitzero"`
+	// Defines the non-kind CRUD routes and any additional required schemas
+	OpenAPI ManifestVersionOpenAPI `json:"openapi,omitzero" yaml:"openapi,omitzero"`
 }
 
+type ManifestVersionOpenAPI struct {
+	// Paths are relative to the version
+	// They do NOT include /apis/{group}/{version}
+	Paths map[string]spec3.PathProps `json:"paths,omitempty,omitzero" yaml:"paths,omitempty,omitzero"`
+	// Additional schemas and responses referenced by the above paths
+	Components ManifestVersionOpenAPIComponents `json:"components,omitzero" yaml:"components,omitzero"`
+}
+
+type ManifestVersionOpenAPIComponents struct {
+	// Schemas holds reusable Schema Objects
+	Schemas map[string]spec.Schema `json:"schemas,omitempty" yaml:"schemas,omitempty"`
+
+	// Responses holds reusable Responses Objects
+	Responses map[string]*spec3.Response `json:"responses,omitempty" yaml:"responses,omitempty"`
+
+	// Examples holds reusable Example objects
+	Examples map[string]*spec3.Example `json:"examples,omitempty" yaml:"examples,omitempty"`
+}
+
+// IsZero reports whether there are no paths or reusable components.
+func (o ManifestVersionOpenAPI) IsZero() bool {
+	return len(o.Paths) == 0 && o.Components.IsZero()
+}
+
+// IsZero reports whether there are no reusable schemas, responses, or examples.
+func (c ManifestVersionOpenAPIComponents) IsZero() bool {
+	return len(c.Schemas) == 0 && len(c.Responses) == 0 && len(c.Examples) == 0
+}
+
+// Deprecated: routes now live in ManifestVersion#openapi
 type ManifestVersionRoutes struct {
 	Namespaced map[string]spec3.PathProps `json:"namespaced,omitempty" yaml:"namespaced,omitempty"`
 	Cluster    map[string]spec3.PathProps `json:"cluster,omitempty" yaml:"cluster,omitempty"`
@@ -287,21 +571,78 @@ type ManifestVersionRoutes struct {
 	Schemas map[string]spec.Schema `json:"schemas,omitempty" yaml:"schemas,omitempty"`
 }
 
+// IsZero reports whether there are no defined routes
+func (r ManifestVersionRoutes) IsZero() bool {
+	return len(r.Namespaced) == 0 && len(r.Cluster) == 0 && len(r.Schemas) == 0
+}
+
+// defaultKindResource returns the Resource used for manifests written before Resource was a required field.
+func defaultKindResource(plural string) string {
+	return strings.ToLower(plural)
+}
+
+// defaultKindResources fills in Resource with the lowercased Plural for every kind that has none.
+// The versions and kinds slices are copied before being modified, so callers' data is untouched.
+func (m *ManifestData) defaultKindResources() {
+	versions := make([]ManifestVersion, len(m.Versions))
+	copy(versions, m.Versions)
+	for i := range versions {
+		kinds := make([]ManifestVersionKind, len(versions[i].Kinds))
+		copy(kinds, versions[i].Kinds)
+		for j := range kinds {
+			if kinds[j].Resource == "" {
+				kinds[j].Resource = defaultKindResource(kinds[j].Plural)
+			}
+		}
+		versions[i].Kinds = kinds
+	}
+	m.Versions = versions
+}
+
+// UnmarshalJSON decodes a ManifestVersionKind, defaulting Resource to the lowercased Plural when it is absent
+// so that manifests written before Resource existed keep working.
+func (m *ManifestVersionKind) UnmarshalJSON(data []byte) error {
+	type plain ManifestVersionKind
+	var p plain
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	if p.Resource == "" {
+		p.Resource = defaultKindResource(p.Plural)
+	}
+	*m = ManifestVersionKind(p)
+	return nil
+}
+
 // ManifestVersionKind contains details for a version of a kind in a Manifest
 type ManifestVersionKind struct {
 	// Kind is the name of the kind. This should begin with a capital letter and be CamelCased
 	Kind string `json:"kind" yaml:"kind"`
-	// Plural is the plural version of `kind`. This is optional and defaults to the kind + "s" if not present.
-	Plural string `json:"plural,omitempty" yaml:"plural,omitempty"`
+	// Plural is the capitalized, human readable plural version of `kind` (e.g. "Issues"). Plural is required.
+	Plural string `json:"plural" yaml:"plural"`
+	// Resource is the all-lowercase plural used as the resource in the k8s GroupVersionResource URL (e.g. "issues").
+	// When loading from JSON or an embedded manifest, an empty Resource defaults to the lowercased Plural.
+	// Validate still requires it to be set, so a hand-built ManifestData must set it explicitly.
+	Resource string `json:"resource" yaml:"resource"`
 	// Scope dictates the scope of the kind. This field must be the same for all versions of the kind.
 	// Different values will result in an error or undefined behavior.
 	Scope string `json:"scope" yaml:"scope"`
+	// UserReadable declares that end users may get/list this kind when it is cluster-scoped.
+	// Ignored for namespaced kinds. Must match across all versions of the same kind.
+	UserReadable bool `json:"userReadable,omitempty" yaml:"userReadable,omitempty"`
+	// FolderScoped declares whether resources of this kind are scoped to folders.
+	// It is only meaningful for namespaced kinds and is ignored for cluster-scoped kinds.
+	// A nil value defaults to true (folder-scoped). Set it to a pointer to false to opt out
+	// of folder support. Must match across all versions of the same kind.
+	FolderScoped *bool `json:"folderScoped,omitempty" yaml:"folderScoped,omitempty"`
 	// Admission is the collection of admission capabilities for this version.
 	// If nil, no admission capabilities exist for the version.
 	Admission *AdmissionCapabilities `json:"admission,omitempty" yaml:"admission,omitempty"`
 	// Schema is the schema of this version, as an OpenAPI document.
 	// This is currently an `any` type as implementation is incomplete.
 	Schema *VersionSchema `json:"schema,omitempty" yaml:"schema,omitempty"`
+	// SecureValues describes the secure values used by this kind.
+	SecureValues []ManifestVersionKindSecureValue `json:"secure,omitempty" yaml:"secure,omitempty"`
 	// SelectableFields are the set of JSON paths in the schema which can be used as field selectors
 	SelectableFields []string `json:"selectableFields,omitempty" yaml:"selectableFields,omitempty"`
 	// Routes is a map of path patterns to custom routes for this kind to be used as custom subresource routes.
@@ -313,10 +654,162 @@ type ManifestVersionKind struct {
 	Conversion bool `json:"conversion" yaml:"conversion"`
 
 	AdditionalPrinterColumns []ManifestVersionKindAdditionalPrinterColumn `json:"additionalPrinterColumns,omitempty" yaml:"additionalPrinterColumns,omitempty"`
+	// SearchFields are the fields exposed for search indexing and querying.
+	SearchFields []ManifestVersionKindSearchField `json:"searchFields,omitempty" yaml:"searchFields,omitempty"`
+	// Storage declares storage-related behavior for this kind.
+	Storage *ManifestVersionKindStorage `json:"storage,omitempty" yaml:"storage,omitempty"`
+	// FixedNames are names of objects of this kind that are never stored: the app
+	// answers requests for them itself. A route at exactly <plural>/<name> is
+	// allowed for each, which would otherwise be rejected for shadowing the
+	// kind's own resource.
+	FixedNames []string `json:"fixedNames,omitempty" yaml:"fixedNames,omitempty"`
+	// NamingStrategy declares what the name of an object of this kind means, and that access to
+	// the object follows from it. A nil value means access does not follow from the name.
+	NamingStrategy *ManifestKindNamingStrategy `json:"namingStrategy,omitempty" yaml:"namingStrategy,omitempty"`
+	// Search declares which search endpoints are served for this kind.
+	// A nil value, or a nil field within it, means the endpoint takes its default.
+	Search *ManifestVersionKindSearch `json:"search,omitempty" yaml:"search,omitempty"`
+	// Embed defines the embedding document independently of search fields.
+	Embed *ManifestVersionKindEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
+	// Extensions declares how other Grafana features, such as provisioning, treat this kind.
+	Extensions *ManifestVersionKindExtensions `json:"extensions,omitempty" yaml:"extensions,omitempty"`
+}
+
+// ManifestVersionKindSecureValue describes a secure value used by a kind.
+type ManifestVersionKindSecureValue struct {
+	// Key is the key used in the secure value map. "*" accepts any key.
+	Key string `json:"key" yaml:"key"`
+	// Description explains how the secure value is used and where it should come from.
+	// This text is intended to be exposed in the OpenAPI schema.
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+}
+
+// ManifestVersionKindStorage declares storage-related behavior for a kind.
+type ManifestVersionKindStorage struct {
+	// ListKeys controls whether the kind serves generic list-keys endpoints. Nil defaults to true.
+	ListKeys *bool `json:"listKeys,omitempty" yaml:"listKeys,omitempty"`
+}
+
+// ManifestVersionKindSearch declares which search endpoints are served for a kind.
+// Each field is a pointer so that an unset value can keep the endpoint's default.
+// The /search, /trash, and /search/hybrid paths remain reserved for the kind when endpoints are disabled.
+type ManifestVersionKindSearch struct {
+	// Endpoint declares whether the kind serves the /search endpoint. A nil value defaults to true.
+	Endpoint *bool `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
+	// Trash declares whether the kind serves the /trash endpoint. A nil value defaults to true.
+	Trash *bool `json:"trash,omitempty" yaml:"trash,omitempty"`
+	// Hybrid declares whether the kind serves the /search/hybrid endpoint. A nil value
+	// defaults to false: serving it requires embeddings for the kind, so kinds opt in
+	// rather than out.
+	Hybrid *bool `json:"hybrid,omitempty" yaml:"hybrid,omitempty"`
+	// Global declares whether the kind is included in the namespace-wide search index.
+	// A nil value defaults to false: each kind must check how its documents are
+	// authorized before they can be returned next to other kinds.
+	Global *bool `json:"global,omitempty" yaml:"global,omitempty"`
+}
+
+// ManifestVersionKindEmbed defines the embedding document independently of search fields.
+// Kinds with a custom embedding builder omit this configuration.
+type ManifestVersionKindEmbed struct {
+	// Fields supplies inputs, in declaration order, used only to generate the text to be embedded.
+	// Declaring an embedding field does not enable filtering embeddings by that field.
+	Fields []ManifestVersionKindEmbedField `json:"fields" yaml:"fields"`
+}
+
+// ManifestVersionKindExtensions declares how other Grafana features treat a kind.
+// TODO: keep untyped keys for app-defined extensions, such as "kgatlas.ext.grafana.app".
+type ManifestVersionKindExtensions struct {
+	// Provisioning declares whether provisioning (Git Sync) manages this kind.
+	Provisioning *ManifestVersionKindProvisioning `json:"provisioning,omitempty" yaml:"provisioning,omitempty"`
+}
+
+// ManifestVersionKindProvisioning declares whether provisioning (Git Sync) manages a kind.
+type ManifestVersionKindProvisioning struct {
+	// Enabled declares whether provisioning manages resources of this kind. A nil value defaults to false.
+	Enabled *bool `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+}
+
+// ManifestVersionKindEmbedField supplies text for the embedding document without exposing a search field.
+type ManifestVersionKindEmbedField struct {
+	// Name labels this input in the embedding document.
+	Name string `json:"name" yaml:"name"`
+	// Path supplies a string or string array from the resource and must not be empty.
+	Path string `json:"path" yaml:"path"`
+}
+
+// NamingStrategyModeOwner is the naming strategy of a kind whose objects are named for their owner.
+const NamingStrategyModeOwner = "owner"
+
+// ManifestVersionKindNamingStrategy declares what the name of an object of a kind means. Mode says
+// which strategy it is, and the field of that mode holds its settings.
+type ManifestKindNamingStrategy struct {
+	// Mode is the strategy. The only one so far is NamingStrategyModeOwner.
+	Mode string `json:"mode" yaml:"mode"`
+	// Owner is set when Mode is NamingStrategyModeOwner.
+	Owner *ManifestKindNamingStrategyOwner `json:"owner,omitempty" yaml:"owner,omitempty"`
+}
+
+// ManifestKindNamingStrategyOwner is the naming strategy of a kind whose objects are named
+// for their owner (see resource.OwnerReference): user-<id>, team-<id> or namespace.
+type ManifestKindNamingStrategyOwner struct {
+	// Owners are the kinds of owner a name can have.
+	// A name that does not parse as one of them is not accessible, except the kind's FixedNames.
+	Owners []sdkresource.Owner `json:"owners" yaml:"owners"`
+	// AllowOrgAdmin lets an org admin do anything to the kind, whoever owns the object.
+	AllowOrgAdmin bool `json:"allowOrgAdmin,omitempty" yaml:"allowOrgAdmin,omitempty"`
+}
+
+// HasFixedName reports whether name is one of the kind's fixed names.
+func (m *ManifestVersionKind) HasFixedName(name string) bool {
+	return slices.Contains(m.FixedNames, name)
+}
+
+// HasListKeysEndpoint reports whether the kind serves generic list-keys endpoints.
+// Kinds serve them unless they explicitly opt out.
+func (m *ManifestVersionKind) HasListKeysEndpoint() bool {
+	return m.Storage == nil || m.Storage.ListKeys == nil || *m.Storage.ListKeys
+}
+
+// HasSearchEndpoint reports whether the kind serves the /search endpoint.
+// Kinds serve it unless they explicitly opt out.
+func (m *ManifestVersionKind) HasSearchEndpoint() bool {
+	return m.Search == nil || m.Search.Endpoint == nil || *m.Search.Endpoint
+}
+
+// HasTrashEndpoint reports whether the kind serves the /trash endpoint.
+// Kinds serve it unless they explicitly opt out.
+func (m *ManifestVersionKind) HasTrashEndpoint() bool {
+	return m.Search == nil || m.Search.Trash == nil || *m.Search.Trash
+}
+
+// HasHybridEndpoint reports whether the kind serves the /search/hybrid endpoint.
+// Kinds do not serve it unless they explicitly opt in, the reverse of the other two:
+// it needs embeddings for the kind, which are neither free nor automatic.
+func (m *ManifestVersionKind) HasHybridEndpoint() bool {
+	return m.Search != nil && m.Search.Hybrid != nil && *m.Search.Hybrid
+}
+
+// InGlobalSearchIndex reports whether the kind is included in the namespace-wide search index.
+// Kinds are not included unless they explicitly opt in.
+func (m *ManifestVersionKind) InGlobalSearchIndex() bool {
+	return m.Search != nil && m.Search.Global != nil && *m.Search.Global
+}
+
+// IsProvisionable reports whether provisioning (Git Sync) manages the kind.
+// Kinds are not provisionable unless they explicitly opt in.
+func (m *ManifestVersionKind) IsProvisionable() bool {
+	return m.Extensions != nil && m.Extensions.Provisioning != nil &&
+		m.Extensions.Provisioning.Enabled != nil && *m.Extensions.Provisioning.Enabled
+}
+
+// isFolderScoped returns the effective folderScoped value for a kind, treating a nil pointer
+// as the default of true (folder-scoped).
+func isFolderScoped(folderScoped *bool) bool {
+	return folderScoped == nil || *folderScoped
 }
 
 // Subresources returns a list of all (stored) subresources for the kind.
-// The list of subresources will not include "spec" or "metadata" as they are not subresources.
+// The list of subresources will not include "spec", "secure" or "metadata" as they are not subresources.
 // Routes for the kind (subresource routes) will also not be included, as they are not stored.
 //
 //nolint:goconst
@@ -343,7 +836,7 @@ func (m *ManifestVersionKind) Subresources() []string {
 	}
 	subresources := make([]string, 0)
 	for k := range cast {
-		if k == "spec" || k == "metadata" || k == "apiVersion" || k == "kind" {
+		if k == "spec" || k == "metadata" || k == "apiVersion" || k == "kind" || k == "secure" {
 			continue
 		}
 		subresources = append(subresources, k)
@@ -370,6 +863,28 @@ type ManifestVersionKindAdditionalPrinterColumn struct {
 	// jsonPath is a simple JSON path (i.e. with array notation) which is evaluated against
 	// each custom resource to produce the value for this column.
 	JSONPath string `json:"jsonPath"`
+}
+
+type ManifestVersionKindSearchField struct {
+	// Name is the field name as it appears in search documents and queries.
+	Name string `json:"name" yaml:"name"`
+	// Path is the JSON path within the resource that supplies this field's value
+	// (for example "spec.email"). When empty, the field is populated by a custom
+	// document builder rather than read directly from the resource.
+	Path string `json:"path,omitempty" yaml:"path,omitempty"`
+	// Type is the value type of the field. One of: string, int64, double, boolean, date.
+	Type string `json:"type" yaml:"type"`
+	// Array indicates that the field holds a list of values of the given type.
+	Array bool `json:"array,omitempty" yaml:"array,omitempty"`
+	// Capabilities lists what the field can be used for at query time, such as
+	// filtering, full-text search, sorting, or faceting.
+	Capabilities []string `json:"capabilities" yaml:"capabilities"`
+	// EmitZeroIfAbsent indexes the type's zero value when Path resolves to nothing,
+	// so sort and range queries see every document. Without it, a document missing
+	// the path omits the field entirely.
+	EmitZeroIfAbsent bool `json:"emitZeroIfAbsent,omitempty" yaml:"emitZeroIfAbsent,omitempty"`
+	// Description is a human readable description of the field.
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 }
 
 const parsedCRDSchemaKindName = "__KIND__"
@@ -736,11 +1251,12 @@ func KubeOpenAPIReferenceReplacerFunc(pkgPrefix string, gvk schema.GroupVersionK
 //
 // If you wish to exclude a field from your kind's object, ensure that the field name begins with a `#`, which will be treated as a definition.
 // Definitions are included in the returned map as types, but are not included as fields (alongside "spec","status", etc.) in the kind object.
+// When secureValues are provided, a secure object property is added with an optional InlineSecureValue property for each key.
 //
 // It will error if the underlying schema cannot be parsed as valid openAPI.
 //
 //nolint:funlen
-func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.ReferenceCallback, pkgPrefix string) (map[string]common.OpenAPIDefinition, error) {
+func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.ReferenceCallback, pkgPrefix string, secureValues ...ManifestVersionKindSecureValue) (map[string]common.OpenAPIDefinition, error) {
 	// Convert the kin-openapi to kube-openapi
 	oapi, err := v.AsOpenAPI3()
 	if err != nil {
@@ -764,11 +1280,16 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 			kindSchemaKey = k
 			break
 		}
-		parts := strings.Split(k, ".")
-		if len(parts) > 1 && strings.EqualFold(parts[len(parts)-1], gvk.Kind) {
-			kindSchema = oapi.Schemas[k]
-			kindSchemaKey = k
-			break
+	}
+	// Prefer the unqualified kind over shared definitions with the same suffix.
+	if kindSchema == nil {
+		for k := range oapi.Schemas {
+			parts := strings.Split(k, ".")
+			if len(parts) > 1 && strings.EqualFold(parts[len(parts)-1], gvk.Kind) {
+				kindSchema = oapi.Schemas[k]
+				kindSchemaKey = k
+				break
+			}
 		}
 	}
 	if kindSchema == nil {
@@ -830,6 +1351,10 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 		if k == "spec" {
 			kind.Schema.Required = append(kind.Schema.Required, k)
 		}
+	}
+
+	if len(secureValues) > 0 {
+		kind.Schema.Properties["secure"] = SecureValuesOpenAPISchema(secureValues)
 	}
 
 	// For each schema, create an entry in the result
@@ -959,6 +1484,7 @@ func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallba
 	if sch.Value.AdditionalProperties.Schema != nil {
 		s, deps := oapi3SchemaToKubeSchema(sch.Value.AdditionalProperties.Schema, ref, gvk, refReplacer)
 		resSchema.AdditionalProperties = &spec.SchemaOrBool{
+			Allows: true,
 			Schema: &s,
 		}
 		dependencies = updateDependencies(dependencies, deps)
@@ -1069,7 +1595,17 @@ func GetCRDOpenAPISchema(components *openapi3.Components, schemaName string) (*o
 	}
 
 	visited := make(map[string]bool)
-	return resolveSchema(sch, components, visited)
+	resolved, err := resolveSchema(sch, components, visited)
+	if err != nil {
+		return nil, err
+	}
+	// Kubernetes does not permit named properties alongside a typed map.
+	// Wildcard secure maps retain their value schema; named-key documentation
+	// remains in the manifest and served OpenAPI.
+	if secure := resolved.Properties["secure"]; secure != nil && secure.Value != nil && secure.Value.AdditionalProperties.Schema != nil {
+		secure.Value.Properties = nil
+	}
+	return resolved, nil
 }
 
 // resolveSchema does three things:
@@ -1218,6 +1754,16 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 	// https://kubernetes.io/blog/2019/06/20/crd-structural-schema/, to pass apiextensions validations
 	// https://github.com/kubernetes/apiextensions-apiserver/blob/master/pkg/apiserver/schema/validation.go#L309
 
+	// Preserve negated validation rules, such as description requiring create
+	// on an inline secure value.
+	if sch.Value.Not != nil {
+		resolved, err := resolveSchema(sch.Value.Not, components, visited)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve not schema: %w", err)
+		}
+		result.Not = openapi3.NewSchemaRef("", resolved)
+	}
+
 	// Resolve AllOf schemas
 	for _, s := range sch.Value.AllOf {
 		resolved, err := resolveSchema(s, components, visited)
@@ -1225,11 +1771,25 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 			return nil, fmt.Errorf("failed to resolve allOf schema: %w", err)
 		}
 
-		// Add the required fields to AllOf, rather than the whole schema
-		result.AllOf = append(result.AllOf, openapi3.NewSchemaRef("", &openapi3.Schema{
-			Required: resolved.Required,
-		}))
+		// Add the required fields to AllOf, rather than the whole schema.
+		// An entry with no required fields would only add an empty object to the CRD, so skip it.
+		if len(resolved.Required) > 0 {
+			result.AllOf = append(result.AllOf, openapi3.NewSchemaRef("", &openapi3.Schema{
+				Required: resolved.Required,
+			}))
+		}
 		resolved.Required = nil
+
+		// Keep nested validation rules when lifting the structural fields out
+		// of an allOf member, including a referenced shared value schema.
+		if len(resolved.AllOf) > 0 || len(resolved.OneOf) > 0 || len(resolved.AnyOf) > 0 || resolved.Not != nil {
+			result.AllOf = append(result.AllOf, openapi3.NewSchemaRef("", &openapi3.Schema{
+				AllOf: resolved.AllOf,
+				OneOf: resolved.OneOf,
+				AnyOf: resolved.AnyOf,
+				Not:   resolved.Not,
+			}))
+		}
 
 		// merge schema into existing schema, sans "required" section
 		err = mergeSchemas(result, resolved)
@@ -1268,7 +1828,7 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 			// Add the required fields to OneOf, rather than the whole schema
 			notReq := make([]*openapi3.SchemaRef, 0)
 			for _, v := range allRequired {
-				if _, has := resolved.Properties[v]; !has {
+				if _, has := resolved.Properties[v]; !has && !slices.Contains(resolved.Required, v) {
 					notReq = append(notReq, openapi3.NewSchemaRef("", &openapi3.Schema{
 						Required: []string{v},
 					}))
@@ -1301,10 +1861,13 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 			return nil, fmt.Errorf("failed to resolve anyOf schema: %w", err)
 		}
 
-		// Add the required fields to AnyOf, rather than the whole schema
-		result.AnyOf = append(result.AnyOf, openapi3.NewSchemaRef("", &openapi3.Schema{
-			Required: resolved.Required,
-		}))
+		// Add the required fields to AnyOf, rather than the whole schema.
+		// An entry with no required fields would only add an empty object to the CRD, so skip it.
+		if len(resolved.Required) > 0 {
+			result.AnyOf = append(result.AnyOf, openapi3.NewSchemaRef("", &openapi3.Schema{
+				Required: resolved.Required,
+			}))
+		}
 		resolved.Required = nil
 
 		// merge schema into existing schema, sans "required" section
@@ -1394,11 +1957,114 @@ func mergeSchemas(mergeInto, toMerge *openapi3.Schema) error {
 		}
 	}
 
+	mergeValidationFields(mergeInto, toMerge)
+
 	return nil
+}
+
+// mergeValidationFields copies validation and documentation fields from toMerge into mergeInto,
+// but only those which mergeInto doesn't already set itself.
+// Without this, constraints such as `enum` are lost when one schema is merged into another,
+// for example when a field is expressed as an allOf with a single $ref, which is a common way
+// of attaching a default value to a referenced type.
+func mergeValidationFields(mergeInto, toMerge *openapi3.Schema) {
+	if len(mergeInto.Enum) == 0 {
+		mergeInto.Enum = toMerge.Enum
+	}
+	if mergeInto.Default == nil {
+		mergeInto.Default = toMerge.Default
+	}
+	if mergeInto.Description == "" {
+		mergeInto.Description = toMerge.Description
+	}
+	if mergeInto.Title == "" {
+		mergeInto.Title = toMerge.Title
+	}
+	if mergeInto.Format == "" {
+		mergeInto.Format = toMerge.Format
+	}
+	if mergeInto.Pattern == "" {
+		mergeInto.Pattern = toMerge.Pattern
+	}
+	if mergeInto.Example == nil {
+		mergeInto.Example = toMerge.Example
+	}
+	if mergeInto.Min == nil {
+		mergeInto.Min = toMerge.Min
+		mergeInto.ExclusiveMin = toMerge.ExclusiveMin
+	}
+	if mergeInto.Max == nil {
+		mergeInto.Max = toMerge.Max
+		mergeInto.ExclusiveMax = toMerge.ExclusiveMax
+	}
+	if mergeInto.MultipleOf == nil {
+		mergeInto.MultipleOf = toMerge.MultipleOf
+	}
+	if mergeInto.MinLength == 0 {
+		mergeInto.MinLength = toMerge.MinLength
+	}
+	if mergeInto.MaxLength == nil {
+		mergeInto.MaxLength = toMerge.MaxLength
+	}
+	if mergeInto.MinItems == 0 {
+		mergeInto.MinItems = toMerge.MinItems
+	}
+	if mergeInto.MaxItems == nil {
+		mergeInto.MaxItems = toMerge.MaxItems
+	}
+	if !mergeInto.UniqueItems {
+		mergeInto.UniqueItems = toMerge.UniqueItems
+	}
+	if mergeInto.MinProps == 0 {
+		mergeInto.MinProps = toMerge.MinProps
+	}
+	if mergeInto.MaxProps == nil {
+		mergeInto.MaxProps = toMerge.MaxProps
+	}
+	if !mergeInto.Nullable {
+		mergeInto.Nullable = toMerge.Nullable
+	}
 }
 
 // getRefName extracts the schema name from a $ref string
 func getRefName(ref string) string {
 	parts := strings.Split(ref, "/")
 	return parts[len(parts)-1]
+}
+
+// SecureValuesOpenAPISchema describes an optional map of inline secure values.
+// Only manifest-declared keys are allowed unless a "*" entry enables arbitrary keys.
+func SecureValuesOpenAPISchema(values []ManifestVersionKindSecureValue) spec.Schema {
+	return secureValuesOpenAPISchema(values, func() spec.Schema {
+		return sdkresource.InlineSecureValue{}.OpenAPIDefinition().Schema
+	})
+}
+
+// SecureValuesOpenAPISchemaWithReference describes secure values using a shared value schema.
+// The caller must include the referenced definition in the OpenAPI document.
+func SecureValuesOpenAPISchemaWithReference(values []ManifestVersionKindSecureValue, ref spec.Ref) spec.Schema {
+	return secureValuesOpenAPISchema(values, func() spec.Schema {
+		return spec.Schema{SchemaProps: spec.SchemaProps{Ref: ref}}
+	})
+}
+
+func secureValuesOpenAPISchema(values []ManifestVersionKindSecureValue, newValueSchema func() spec.Schema) spec.Schema {
+	additional := &spec.SchemaOrBool{Allows: false}
+	properties := make(map[string]spec.Schema, len(values))
+	for _, value := range values {
+		valueSchema := newValueSchema()
+		if value.Description != "" && valueSchema.Ref.String() != "" {
+			valueSchema = spec.Schema{SchemaProps: spec.SchemaProps{AllOf: []spec.Schema{valueSchema}}}
+		}
+		valueSchema.Description = value.Description
+		if value.Key == "*" {
+			additional = &spec.SchemaOrBool{Allows: true, Schema: &valueSchema}
+			continue
+		}
+		properties[value.Key] = valueSchema
+	}
+	return spec.Schema{SchemaProps: spec.SchemaProps{
+		Type: []string{"object"}, Properties: properties,
+		AdditionalProperties: additional,
+	}}
 }

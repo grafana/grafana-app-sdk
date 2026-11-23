@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -30,7 +30,7 @@ make build                 # Output: target/grafana-app-sdk
 make install
 
 # Run linter
-make lint                  # Uses golangci-lint v2.5.0
+make lint                  # Uses golangci-lint v2.15.0
 
 # Update go.mod and go.work files
 make update-workspace
@@ -123,14 +123,13 @@ The SDK supports three application architectures:
 
 1. **Frontend-only**: Custom Kinds with basic validation, no backend
 2. **Operator-based**: Backend with validation, mutation, conversion, and reconciliation hooks
-3. **Custom API**: Full control with extension API server for custom endpoints
+3. **Custom API**: Custom routes declared in the app manifest, served alongside platform-managed kinds
 
 All patterns assume resources can be modified outside your UI (kubectl, gitops tools like Flux, backup tools like Velero).
 
 ### Kubernetes Integration
 
 - Built on `k8s.io/client-go` and `k8s.io/apimachinery`
-- Uses `k8s.io/apiserver` for extension API servers
 - Implements controller-runtime-like informers and reconcilers
 - Supports watch-list streaming via `WatchListClient` feature gate
 - Compatible with CRDs (Custom Resource Definitions)
@@ -282,7 +281,6 @@ k8s Watch Event → Reflector → DeltaFIFO → Controller →
 - `cache/controller.go` - Cache controller managing reflector + DeltaFIFO
 - `webhooks.go` - Admission webhook handlers
 - `conversion.go` - Multi-version conversion webhook
-- `apiserver/` - Extension API server support for custom endpoints
 
 **Key Pattern**: Watch-list protocol for memory efficiency:
 - Traditional: LIST all objects (high memory), then WATCH for changes
@@ -399,20 +397,19 @@ The SDK supports three architectural patterns:
 
 #### 3. Custom API Applications
 
-**Use case**: Apps needing custom endpoints or storage strategies
+**Use case**: Apps needing custom endpoints beyond CRUD
 
 **Components**:
-- Extension API server (implements k8s aggregation API)
-- Custom routing and storage logic
+- Custom routes declared in the app manifest (kind subresources or version-level routes)
+- App backend handling the routes (`app.App` custom route handlers)
 - Optional frontend plugin
 
 **Capabilities**:
 - Custom subresources (e.g., `/rollback`, `/scale`)
-- Custom storage backends
-- Full control over authorization
 - Non-standard API patterns (within RESTful constraints)
+- Storage remains platform-managed; the SDK does not ship an API server or custom storage integration
 
-**Trade-off**: Highest complexity, most flexibility
+**Trade-off**: Most flexibility, but routes must follow RESTful resource/subresource conventions
 
 ### Event-Driven Execution Flow
 
@@ -492,8 +489,6 @@ Understanding the event flow is critical for debugging and optimization.
 - Line 5: Object copying in `toResourceObject()` - reflection allocations
 - Line 5: `JSONCodec.Write()` in metrics/logging - map allocations
 - Line 8: Context creation per event - allocation overhead
-
-**See detailed architecture**: `/docs/architecture/reconciliation.md` (contains complete call graphs with file:line references)
 
 ### Configuration Patterns
 
@@ -921,19 +916,10 @@ The codebase is actively being optimized for production scale (10k-50k resources
 
 **Essential Documentation**:
 - Tutorial: `/docs/tutorials/issue-tracker/README.md` (start here!)
-- Platform concepts: `/docs/application-design/platform-concepts.md`
-- Operators: `/docs/operators.md`
 - Reconcilers: `/docs/writing-a-reconciler.md`
 - Admission control: `/docs/admission-control.md`
 - CUE kinds: `/docs/custom-kinds/writing-kinds.md`
 - Code generation: `/docs/code-generation.md`
-- Kubernetes primer: `/docs/kubernetes.md`
-- Architecture diagrams: `/docs/architecture/reconciliation.md`
-
-**Examples**:
-- Simple operator: `/examples/operator/simple/`
-- API server: `/examples/apiserver/`
-- Resource usage: `/examples/resource/`
 
 **Community**:
 - GitHub: https://github.com/grafana/grafana-app-sdk
@@ -942,7 +928,7 @@ The codebase is actively being optimized for production scale (10k-50k resources
 
 ### Quick Reference: File Paths
 
-All file paths are absolute from repository root `/Users/igor/Code/grafana/grafana-app-sdk/`:
+All file paths are relative to the repository root:
 
 **Core Interfaces**:
 - `resource.Object`: `/resource/object.go`

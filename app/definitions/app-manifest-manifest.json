@@ -6,7 +6,7 @@
     },
     "spec": {
         "appName": "app-manifest",
-        "appDisplayName": "",
+        "appDisplayName": "app-manifest",
         "group": "apps.grafana.app",
         "versions": [
             {
@@ -16,7 +16,9 @@
                     {
                         "kind": "AppManifest",
                         "plural": "AppManifests",
+                        "resource": "appmanifests",
                         "scope": "Cluster",
+                        "userReadable": false,
                         "schemas": {
                             "AdditionalPrinterColumns": {
                                 "additionalProperties": false,
@@ -205,12 +207,27 @@
                                         "description": "Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.\nIt may not prevent automatic conversion behavior between versions of the kind when set to false\n(for example, CRDs will always support simple conversion, and this flag enables webhook conversion).\nThis field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.",
                                         "type": "boolean"
                                     },
+                                    "fixedNames": {
+                                        "description": "fixedNames are names of objects of this kind that are never stored: the app\nanswers requests for them itself. A route at exactly \u003cplural\u003e/\u003cname\u003e is\nallowed for each.",
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    },
                                     "kind": {
                                         "description": "Kind is the name of the kind. This should begin with a capital letter and be CamelCased",
                                         "type": "string"
                                     },
+                                    "namingStrategy": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindNamingStrategy",
+                                        "description": "namingStrategy declares what the name of an object of this kind means, and that\naccess to the object follows from it."
+                                    },
                                     "plural": {
-                                        "description": "Plural is the plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
+                                        "description": "Plural is the human readable plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
+                                        "type": "string"
+                                    },
+                                    "resource": {
+                                        "description": "Resource is the lowercase plural used as the resource in the k8s GroupVersionResource URL.\nThis is optional and defaults to the lowercase of plural if not present.",
                                         "type": "string"
                                     },
                                     "routes": {
@@ -235,6 +252,10 @@
                                             "type": "string"
                                         },
                                         "type": "array"
+                                    },
+                                    "storage": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindStorage",
+                                        "description": "storage declares storage-related behavior for this kind."
                                     }
                                 },
                                 "required": [
@@ -244,8 +265,62 @@
                                 ],
                                 "type": "object"
                             },
+                            "ManifestVersionKindNamingStrategy": {
+                                "additionalProperties": false,
+                                "description": "#ManifestVersionKindNamingStrategy declares what the name of an object of a kind means.",
+                                "properties": {
+                                    "mode": {
+                                        "const": "owner",
+                                        "description": "mode is the strategy: \"owner\" names objects for their owner (user-\u003cid\u003e, team-\u003cid\u003e or namespace).",
+                                        "type": "string"
+                                    },
+                                    "owner": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindNamingStrategyOwner",
+                                        "description": "owner holds the settings of the \"owner\" strategy."
+                                    }
+                                },
+                                "required": [
+                                    "mode"
+                                ],
+                                "type": "object"
+                            },
+                            "ManifestVersionKindNamingStrategyOwner": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "allowOrgAdmin": {
+                                        "description": "allowOrgAdmin lets an org admin do anything to the kind, whoever owns the object.",
+                                        "type": "boolean"
+                                    },
+                                    "owners": {
+                                        "description": "owners are the kinds of owner a name can have.",
+                                        "items": {
+                                            "enum": [
+                                                "user",
+                                                "team",
+                                                "namespace"
+                                            ],
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    }
+                                },
+                                "required": [
+                                    "owners"
+                                ],
+                                "type": "object"
+                            },
                             "ManifestVersionKindSchema": {
                                 "additionalProperties": true,
+                                "type": "object"
+                            },
+                            "ManifestVersionKindStorage": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "listKeys": {
+                                        "description": "listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.",
+                                        "type": "boolean"
+                                    }
+                                },
                                 "type": "object"
                             },
                             "MutationCapability": {
@@ -432,6 +507,7 @@
                                         "type": "string"
                                     },
                                     "appName": {
+                                        "pattern": "^([a-z][a-z0-9-]*[a-z0-9])$",
                                         "type": "string"
                                     },
                                     "dryRunKinds": {
@@ -568,7 +644,9 @@
                     {
                         "kind": "AppManifest",
                         "plural": "AppManifests",
+                        "resource": "appmanifests",
                         "scope": "Cluster",
+                        "userReadable": false,
                         "schemas": {
                             "AdditionalPrinterColumns": {
                                 "additionalProperties": false,
@@ -728,9 +806,13 @@
                                         "description": "Name is the version name string, such as \"v1\" or \"v1alpha1\"",
                                         "type": "string"
                                     },
+                                    "openapi": {
+                                        "$ref": "#/components/schemas/ManifestVersionOpenAPI",
+                                        "description": "Define custom routes (cluster, namespaced, and sub-resources) and additional schemas"
+                                    },
                                     "routes": {
                                         "$ref": "#/components/schemas/ManifestVersionRoutes",
-                                        "description": "Routes is a section defining version-level custom resource routes.\nThese routes are registered at the same level as kinds, and thus should not conflict with existing kinds."
+                                        "description": "Routes is a section defining version-level custom resource routes.\nThese routes are registered at the same level as kinds, and thus should not conflict with existing kinds.\nDeprecated: routes are now exposed under the openapi property"
                                     },
                                     "served": {
                                         "default": true,
@@ -761,17 +843,45 @@
                                         "description": "Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.\nIt may not prevent automatic conversion behavior between versions of the kind when set to false\n(for example, CRDs will always support simple conversion, and this flag enables webhook conversion).\nThis field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.",
                                         "type": "boolean"
                                     },
+                                    "embed": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindEmbed",
+                                        "description": "embed defines the embedding document independently of search fields."
+                                    },
+                                    "extensions": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindExtensions",
+                                        "description": "extensions declares how other Grafana features, such as provisioning, treat this kind."
+                                    },
+                                    "fixedNames": {
+                                        "description": "fixedNames are names of objects of this kind that are never stored: the app\nanswers requests for them itself. A route at exactly \u003cplural\u003e/\u003cname\u003e is\nallowed for each.",
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "folderScoped": {
+                                        "default": true,
+                                        "description": "folderScoped controls whether resources of this kind are scoped to folders.\nOnly meaningful when scope is \"Namespaced\"; for cluster-scoped kinds the field is ignored.\nDefaults to true (folder-scoped).",
+                                        "type": "boolean"
+                                    },
                                     "kind": {
                                         "description": "Kind is the name of the kind. This should begin with a capital letter and be CamelCased",
                                         "type": "string"
                                     },
+                                    "namingStrategy": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindNamingStrategy",
+                                        "description": "namingStrategy declares what the name of an object of this kind means, and that\naccess to the object follows from it."
+                                    },
                                     "plural": {
-                                        "description": "Plural is the plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
+                                        "description": "Plural is the human readable plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
+                                        "type": "string"
+                                    },
+                                    "resource": {
+                                        "description": "Resource is the lowercase plural used as the resource in the k8s GroupVersionResource URL.\nThis is optional and defaults to the lowercase of plural if not present.",
                                         "type": "string"
                                     },
                                     "routes": {
                                         "additionalProperties": true,
-                                        "description": "Routes is a map of subresource route path to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
+                                        "description": "Routes is a map of subresource route path to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.\nDeprecated: routes now live in ManifestVersion#openapi",
                                         "type": "object"
                                     },
                                     "schemas": {
@@ -788,11 +898,36 @@
                                         ],
                                         "type": "string"
                                     },
+                                    "search": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindSearch",
+                                        "description": "search declares which search endpoints are served for this kind.\n/search and /trash default to enabled; /search/hybrid and global index inclusion default to disabled."
+                                    },
+                                    "searchFields": {
+                                        "items": {
+                                            "$ref": "#/components/schemas/SearchField"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "secure": {
+                                        "items": {
+                                            "$ref": "#/components/schemas/SecureValue"
+                                        },
+                                        "type": "array"
+                                    },
                                     "selectableFields": {
                                         "items": {
                                             "type": "string"
                                         },
                                         "type": "array"
+                                    },
+                                    "storage": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindStorage",
+                                        "description": "storage declares storage-related behavior for this kind."
+                                    },
+                                    "userReadable": {
+                                        "default": false,
+                                        "description": "userReadable controls whether end users may get/list cluster-scoped resources of this kind.\nOnly meaningful when scope is \"Cluster\"; for namespaced kinds the field is ignored.",
+                                        "type": "boolean"
                                     }
                                 },
                                 "required": [
@@ -802,8 +937,180 @@
                                 ],
                                 "type": "object"
                             },
+                            "ManifestVersionKindEmbed": {
+                                "additionalProperties": false,
+                                "description": "Kinds with a custom embedding builder omit this section.",
+                                "properties": {
+                                    "fields": {
+                                        "description": "fields supplies inputs, in declaration order, used only to generate the text to be embedded.\nDeclaring an embedding field does not enable filtering embeddings by that field.",
+                                        "items": {
+                                            "$ref": "#/components/schemas/ManifestVersionKindEmbedField"
+                                        },
+                                        "type": "array"
+                                    }
+                                },
+                                "required": [
+                                    "fields"
+                                ],
+                                "type": "object"
+                            },
+                            "ManifestVersionKindEmbedField": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "name": {
+                                        "description": "name labels this input in the embedding document.",
+                                        "type": "string"
+                                    },
+                                    "path": {
+                                        "description": "path supplies a string or string array from the resource, using the same\ndot-separated paths and [*] projections as searchFields.",
+                                        "minLength": 1,
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "name",
+                                    "path"
+                                ],
+                                "type": "object"
+                            },
+                            "ManifestVersionKindExtensions": {
+                                "additionalProperties": false,
+                                "description": "TODO: allow untyped keys for app-defined extensions, such as \"kgatlas.ext.grafana.app\", next to the typed ones.",
+                                "properties": {
+                                    "provisioning": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindProvisioning",
+                                        "description": "provisioning declares whether provisioning (Git Sync) manages this kind."
+                                    }
+                                },
+                                "type": "object"
+                            },
+                            "ManifestVersionKindNamingStrategy": {
+                                "additionalProperties": false,
+                                "description": "#ManifestVersionKindNamingStrategy declares what the name of an object of a kind means.",
+                                "properties": {
+                                    "mode": {
+                                        "const": "owner",
+                                        "description": "mode is the strategy: \"owner\" names objects for their owner (user-\u003cid\u003e, team-\u003cid\u003e or namespace).",
+                                        "type": "string"
+                                    },
+                                    "owner": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindNamingStrategyOwner",
+                                        "description": "owner holds the settings of the \"owner\" strategy."
+                                    }
+                                },
+                                "required": [
+                                    "mode"
+                                ],
+                                "type": "object"
+                            },
+                            "ManifestVersionKindNamingStrategyOwner": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "allowOrgAdmin": {
+                                        "description": "allowOrgAdmin lets an org admin do anything to the kind, whoever owns the object.",
+                                        "type": "boolean"
+                                    },
+                                    "owners": {
+                                        "description": "owners are the kinds of owner a name can have.",
+                                        "items": {
+                                            "enum": [
+                                                "user",
+                                                "team",
+                                                "namespace"
+                                            ],
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    }
+                                },
+                                "required": [
+                                    "owners"
+                                ],
+                                "type": "object"
+                            },
+                            "ManifestVersionKindProvisioning": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "enabled": {
+                                        "default": false,
+                                        "description": "enabled declares whether provisioning manages resources of this kind.",
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            },
+                            "ManifestVersionKindSearch": {
+                                "additionalProperties": false,
+                                "description": "#ManifestVersionKindSearch declares which search endpoints are served for a kind.",
+                                "properties": {
+                                    "endpoint": {
+                                        "default": true,
+                                        "description": "endpoint declares whether the kind serves the /search endpoint.",
+                                        "type": "boolean"
+                                    },
+                                    "global": {
+                                        "default": false,
+                                        "description": "global declares whether the kind is included in the namespace-wide search index.",
+                                        "type": "boolean"
+                                    },
+                                    "hybrid": {
+                                        "default": false,
+                                        "description": "hybrid declares whether the kind serves the /search/hybrid endpoint.",
+                                        "type": "boolean"
+                                    },
+                                    "trash": {
+                                        "default": true,
+                                        "description": "trash declares whether the kind serves the /trash endpoint,\nwhich lists deleted resources of the kind.",
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            },
+                            "ManifestVersionKindStorage": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "listKeys": {
+                                        "description": "listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.",
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            },
+                            "ManifestVersionOpenAPI": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "components": {
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "examples": {
+                                                "additionalProperties": true,
+                                                "type": "object"
+                                            },
+                                            "responses": {
+                                                "additionalProperties": true,
+                                                "type": "object"
+                                            },
+                                            "schemas": {
+                                                "additionalProperties": true,
+                                                "type": "object"
+                                            }
+                                        },
+                                        "type": "object"
+                                    },
+                                    "paths": {
+                                        "additionalProperties": true,
+                                        "description": "The path values are relative to the version root (eg, they do NOT include /apis/{group}/{version})",
+                                        "type": "object"
+                                    }
+                                },
+                                "required": [
+                                    "paths"
+                                ],
+                                "type": "object"
+                            },
                             "ManifestVersionRoutes": {
                                 "additionalProperties": false,
+                                "description": "Deprecated: custom routes are moved to the openapi section",
                                 "properties": {
                                     "cluster": {
                                         "additionalProperties": true,
@@ -902,6 +1209,21 @@
                                 },
                                 "type": "object"
                             },
+                            "ResourceEmbed": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "reembedVersion": {
+                                        "description": "reembedVersion is a manual revision for requesting re-embedding of existing resources, shared by all API versions.\nIncrease it when a backfill is needed; changing the declared inputs does not require a bump by itself.",
+                                        "exclusiveMinimum": true,
+                                        "minimum": 0,
+                                        "type": "integer"
+                                    }
+                                },
+                                "required": [
+                                    "reembedVersion"
+                                ],
+                                "type": "object"
+                            },
                             "Role": {
                                 "additionalProperties": false,
                                 "properties": {
@@ -984,6 +1306,84 @@
                                 ],
                                 "type": "object"
                             },
+                            "SearchField": {
+                                "additionalProperties": false,
+                                "description": "#SearchField describes a field exposed for search indexing and querying.\nThe type and capabilities values, and which capabilities are valid on which\ntype, are defined by the searchfields package\n(github.com/grafana/grafana-app-sdk/searchfields), the shared source of\ntruth for both the SDK codegen validator and the runtime search backend.",
+                                "properties": {
+                                    "array": {
+                                        "default": false,
+                                        "description": "array indicates that the field holds a list of values of the given type.",
+                                        "type": "boolean"
+                                    },
+                                    "capabilities": {
+                                        "description": "capabilities lists what the field can be used for at query time, such as\nfiltering, full-text search, sorting, or faceting.",
+                                        "items": {
+                                            "enum": [
+                                                "filter",
+                                                "text",
+                                                "partial",
+                                                "sort",
+                                                "facet",
+                                                "retrieve",
+                                                "unranked"
+                                            ],
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "description": {
+                                        "description": "description is a human readable description of the field.",
+                                        "type": "string"
+                                    },
+                                    "emitZeroIfAbsent": {
+                                        "default": false,
+                                        "description": "emitZeroIfAbsent indexes the type's zero value when path resolves to nothing,\nso sort and range queries see every document. Without it, a document missing\nthe path omits the field entirely.",
+                                        "type": "boolean"
+                                    },
+                                    "name": {
+                                        "description": "name is the field name as it appears in search documents and queries.",
+                                        "type": "string"
+                                    },
+                                    "path": {
+                                        "description": "path is the JSON path within the resource that supplies this field's value\n(for example \"spec.email\"). When omitted, the field is populated by a custom\ndocument builder rather than read directly from the resource.",
+                                        "type": "string"
+                                    },
+                                    "type": {
+                                        "description": "type is the value type of the field.",
+                                        "enum": [
+                                            "string",
+                                            "int64",
+                                            "double",
+                                            "boolean",
+                                            "date"
+                                        ],
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "name",
+                                    "type",
+                                    "capabilities"
+                                ],
+                                "type": "object"
+                            },
+                            "SecureValue": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "description": {
+                                        "description": "Description explains how the secure value is used and where it should come from.\nthis text will be exposed in the openapi schema",
+                                        "type": "string"
+                                    },
+                                    "key": {
+                                        "description": "Key used in the secure value map\n\"*\" indicates that any key will be accepted",
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "key"
+                                ],
+                                "type": "object"
+                            },
                             "ValidationCapability": {
                                 "additionalProperties": false,
                                 "properties": {
@@ -1008,12 +1408,20 @@
                                     },
                                     "appName": {
                                         "description": "AppName is the unique ID of the app",
+                                        "pattern": "^([a-z][a-z0-9-]*[a-z0-9])$",
                                         "type": "string"
                                     },
                                     "dryRunKinds": {
                                         "default": false,
                                         "description": "DryRunKinds dictates whether this revision should create/update CRD's from the provided kinds,\nOr simply validate and report errors in status.resources.crds.\nIf dryRunKinds is true, CRD change validation will be skipped on ingress and reported in status instead.\nEven if no validation errors exist, CRDs will not be created or updated for a revision with dryRunKinds=true.",
                                         "type": "boolean"
+                                    },
+                                    "embed": {
+                                        "additionalProperties": {
+                                            "$ref": "#/components/schemas/ResourceEmbed"
+                                        },
+                                        "description": "Embed configures declarative embeddings by resource name (the lowercase plural) within this app's group.\nCustom embedding builders omit their entry and define their content version in Go.",
+                                        "type": "object"
                                     },
                                     "extraPermissions": {
                                         "additionalProperties": false,
@@ -1130,6 +1538,199 @@
                                 "required": [
                                     "resources"
                                 ],
+                                "type": "object"
+                            }
+                        },
+                        "conversion": false
+                    },
+                    {
+                        "kind": "RouteBackend",
+                        "plural": "RouteBackends",
+                        "resource": "routebackends",
+                        "scope": "Cluster",
+                        "userReadable": false,
+                        "admission": {
+                            "validation": {
+                                "operations": [
+                                    "CREATE",
+                                    "UPDATE"
+                                ]
+                            }
+                        },
+                        "schemas": {
+                            "CommonBackendConfig": {
+                                "additionalProperties": false,
+                                "description": "#CommonBackendConfig is the common shape for every backend target: where to reach it and\nhow to trust it. The three concrete configs embed it. GroupVersions are NOT\ncarried here — they are derived from the same-name AppManifest for all modes.",
+                                "properties": {
+                                    "tls": {
+                                        "$ref": "#/components/schemas/TLSOptions"
+                                    },
+                                    "url": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "url",
+                                    "tls"
+                                ],
+                                "type": "object"
+                            },
+                            "OperatorConfig": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "tls": {
+                                        "$ref": "#/components/schemas/TLSOptions"
+                                    },
+                                    "url": {
+                                        "type": "string"
+                                    },
+                                    "webhooks": {
+                                        "$ref": "#/components/schemas/OperatorWebhookOptions"
+                                    }
+                                },
+                                "required": [
+                                    "url",
+                                    "tls"
+                                ],
+                                "type": "object"
+                            },
+                            "OperatorState": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "descriptiveState": {
+                                        "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
+                                        "type": "string"
+                                    },
+                                    "details": {
+                                        "additionalProperties": true,
+                                        "description": "details contains any extra information that is operator-specific",
+                                        "type": "object"
+                                    },
+                                    "lastEvaluation": {
+                                        "description": "lastEvaluation is the ResourceVersion last evaluated",
+                                        "type": "string"
+                                    },
+                                    "state": {
+                                        "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
+                                        "enum": [
+                                            "success",
+                                            "in_progress",
+                                            "failed"
+                                        ],
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "lastEvaluation",
+                                    "state"
+                                ],
+                                "type": "object"
+                            },
+                            "OperatorWebhookOptions": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "conversionPath": {
+                                        "type": "string"
+                                    },
+                                    "mutationPath": {
+                                        "type": "string"
+                                    },
+                                    "validationPath": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            },
+                            "PluginConfig": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "tls": {
+                                        "$ref": "#/components/schemas/TLSOptions"
+                                    },
+                                    "url": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "url",
+                                    "tls"
+                                ],
+                                "type": "object"
+                            },
+                            "RouteBackend": {
+                                "properties": {
+                                    "spec": {
+                                        "$ref": "#/components/schemas/spec"
+                                    },
+                                    "status": {
+                                        "$ref": "#/components/schemas/status"
+                                    }
+                                },
+                                "required": [
+                                    "spec"
+                                ]
+                            },
+                            "TLSOptions": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "caData": {
+                                        "type": "string"
+                                    },
+                                    "skipTLSVerify": {
+                                        "default": false,
+                                        "type": "boolean"
+                                    }
+                                },
+                                "required": [
+                                    "skipTLSVerify"
+                                ],
+                                "type": "object"
+                            },
+                            "spec": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "forward": {
+                                        "$ref": "#/components/schemas/CommonBackendConfig",
+                                        "description": "Basic HTTP Proxy mode"
+                                    },
+                                    "mode": {
+                                        "enum": [
+                                            "forward",
+                                            "plugin",
+                                            "operator"
+                                        ],
+                                        "type": "string"
+                                    },
+                                    "operator": {
+                                        "$ref": "#/components/schemas/OperatorConfig",
+                                        "description": "HTTP based operator"
+                                    },
+                                    "plugin": {
+                                        "$ref": "#/components/schemas/PluginConfig",
+                                        "description": "Plugin based handler"
+                                    }
+                                },
+                                "required": [
+                                    "mode"
+                                ],
+                                "type": "object"
+                            },
+                            "status": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "additionalFields": {
+                                        "additionalProperties": true,
+                                        "description": "additionalFields is reserved for future use",
+                                        "type": "object"
+                                    },
+                                    "operatorStates": {
+                                        "additionalProperties": {
+                                            "$ref": "#/components/schemas/OperatorState"
+                                        },
+                                        "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
+                                        "type": "object"
+                                    }
+                                },
                                 "type": "object"
                             }
                         },

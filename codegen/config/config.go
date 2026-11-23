@@ -15,8 +15,7 @@ const (
 )
 
 type KindsConfig struct {
-	Grouping       string
-	PerKindVersion bool
+	Grouping string
 }
 
 type DefinitionsConfig struct {
@@ -26,9 +25,13 @@ type DefinitionsConfig struct {
 	Encoding        string
 	Path            string
 	ManifestVersion string
+	// ManifestFileName overrides the generated app manifest's filename (relative to Path).
+	// When empty, the filename defaults to "<appName>-manifest.<Encoding>".
+	ManifestFileName string
 }
 
 type CodegenConfig struct {
+	GoEnabled                      bool
 	GoModule                       string
 	GoModGenPath                   string
 	GoGenPath                      string
@@ -45,19 +48,17 @@ type Config struct {
 }
 
 // Load loads configuration from the given source into a Config struct.
-// HACK: Base config is only used for backwards compatibilit with CLI flags.
-func Load(src any, selector string, baseConfig *Config) (*Config, error) {
+func Load(src any, selector string) (*Config, error) {
 	if selector == "" {
 		selector = DefaultConfigSelector
 	}
-	if baseConfig == nil {
-		baseConfig = &Config{}
-	}
+
+	config := &Config{}
 
 	var err error
 	switch v := src.(type) {
 	case *cuekind.Cue:
-		err = baseConfig.loadFromCue(v, selector)
+		err = config.loadFromCue(v, selector)
 	default:
 		// unknown source type, return baseConfig
 	}
@@ -65,7 +66,7 @@ func Load(src any, selector string, baseConfig *Config) (*Config, error) {
 		return nil, err
 	}
 
-	return baseConfig, nil
+	return config, nil
 }
 
 // GroupKinds returns true if the config is set to group by kind

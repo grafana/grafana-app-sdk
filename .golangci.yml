@@ -12,7 +12,6 @@ linters:
     - funlen
     - gochecknoinits
     - gocognit
-    - goconst
     - gocritic
     - gocyclo
     - goprintffuncname
@@ -20,6 +19,7 @@ linters:
     - govet
     - ineffassign
     - misspell
+    - modernize
     - nakedret
     - prealloc
     - revive
@@ -37,6 +37,11 @@ linters:
       min-complexity: 50
     misspell:
       locale: US
+    modernize:
+      disable:
+        - omitzero
+        # Flattening embedded TypeMeta/ObjectMeta fields hurts readability of k8s-style literals.
+        - embedlit
     mnd:
       checks:
         - argument
@@ -90,6 +95,9 @@ linters:
           disabled: true
         - name: use-errors-new
           disabled: true
+        # Switching MarshalJSON/MarshalYAML to value receivers changes how non-pointer values are encoded.
+        - name: marshal-receiver
+          disabled: true
   exclusions:
     generated: lax
     presets:
@@ -107,7 +115,6 @@ linters:
       - internal/deepmap/
       - third_party$
       - builtin$
-      - examples$
       - k8s/client
       - k8s/cache
       - .*_gen\.go$
@@ -126,7 +133,6 @@ formatters:
       - internal/deepmap/
       - third_party$
       - builtin$
-      - examples$
       - k8s/client
       - k8s/cache
       - .*_gen\.go$

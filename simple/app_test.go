@@ -8,9 +8,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/k8s"
@@ -43,6 +45,34 @@ func TestNewApp(t *testing.T) {
 		})
 		assert.NoError(t, err)
 		assert.NotNil(t, a)
+	})
+}
+
+func TestApp_PrometheusCollectors(t *testing.T) {
+	t.Run("default ClientGenerator", func(t *testing.T) {
+		a, err := NewApp(AppConfig{})
+		require.NoError(t, err)
+		reg, ok := a.clientGenerator.(*k8s.ClientRegistry)
+		require.True(t, ok)
+		assert.Subset(t, a.PrometheusCollectors(), reg.PrometheusCollectors())
+	})
+	t.Run("provided ClientGenerator with metrics.Provider", func(t *testing.T) {
+		reg := k8s.NewClientRegistry(rest.Config{}, k8s.DefaultClientConfig())
+		a, err := NewApp(AppConfig{ClientGenerator: reg})
+		require.NoError(t, err)
+		assert.Subset(t, a.PrometheusCollectors(), reg.PrometheusCollectors())
+	})
+	t.Run("manual registration does not duplicate", func(t *testing.T) {
+		reg := k8s.NewClientRegistry(rest.Config{}, k8s.DefaultClientConfig())
+		a, err := NewApp(AppConfig{ClientGenerator: reg})
+		require.NoError(t, err)
+		before := len(a.PrometheusCollectors())
+		a.RegisterMetricsCollectors(reg.PrometheusCollectors()...)
+		assert.Len(t, a.PrometheusCollectors(), before)
+		promReg := prometheus.NewRegistry()
+		for _, c := range a.PrometheusCollectors() {
+			assert.NoError(t, promReg.Register(c))
+		}
 	})
 }
 

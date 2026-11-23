@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/cespare/xxhash/v2"
+	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -50,6 +52,9 @@ type RetryProcessorConfig struct {
 	WorkerPoolSize int
 	// CheckInterval is how often workers check for due retries. Default: 1s.
 	CheckInterval time.Duration
+	// MetricsConfig controls the namespace and histogram settings for Prometheus metrics.
+	// Metrics are always created; an empty Namespace produces unprefixed metric names.
+	MetricsConfig metrics.Config
 }
 
 // NewRetryProcessor creates a new defaultRetryProcessor.
@@ -74,22 +79,73 @@ func NewRetryProcessor(cfg RetryProcessorConfig, retryPolicyFn func() RetryPolic
 		}
 	}
 
-	return &defaultRetryProcessor{
+	p := &defaultRetryProcessor{
 		workers:       workers,
-		workerCount:   uint64(cfg.WorkerPoolSize),
+		workerCount:   uint64(cfg.WorkerPoolSize), //nolint:gosec
 		retryPolicyFn: retryPolicyFn,
 	}
+
+	ns := cfg.MetricsConfig.Namespace
+	m := &retryProcessorMetrics{
+		enqueuedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: ns,
+			Subsystem: "retry_processor",
+			Name:      "enqueued_total",
+			Help:      "Total number of retry requests enqueued, by triggering action.",
+		}, []string{"action"}),
+		executionsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: ns,
+			Subsystem: "retry_processor",
+			Name:      "executions_total",
+			Help:      "Total number of retry executions by action and result. result: success=no error and no requeue, requeue=explicit RequeueAfter returned, retry=error with policy allowing another attempt, failed=error with policy exhausted.",
+		}, []string{"action", "result"}),
+		pendingTotal: prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+			Namespace: ns,
+			Subsystem: "retry_processor",
+			Name:      "pending_total",
+			Help:      "Current number of retry requests waiting across all workers.",
+		}, func() float64 { return float64(p.Len()) }),
+		waitDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace:                       ns,
+			Subsystem:                       "retry_processor",
+			Name:                            "queue_wait_duration_seconds",
+			Help:                            "Time between a retry's scheduled RetryAfter time and when it actually executes.",
+			Buckets:                         metrics.LatencyBuckets,
+			NativeHistogramBucketFactor:     cfg.MetricsConfig.NativeHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  cfg.MetricsConfig.NativeHistogramMaxBucketNumber,
+			NativeHistogramMinResetDuration: time.Hour,
+		}, []string{"action"}),
+	}
+	p.processorMetrics = m
+	for _, w := range p.workers {
+		w.processorMetrics = m
+	}
+
+	return p
 }
 
 // defaultRetryProcessor implements RetryProcessor using a sharded worker pool.
 type defaultRetryProcessor struct {
-	workers       []*retryWorker
-	workerCount   uint64
-	retryPolicyFn func() RetryPolicy
+	workers          []*retryWorker
+	workerCount      uint64
+	retryPolicyFn    func() RetryPolicy
+	processorMetrics *retryProcessorMetrics
+}
+
+// PrometheusCollectors implements metrics.Provider.
+func (p *defaultRetryProcessor) PrometheusCollectors() []prometheus.Collector {
+	return []prometheus.Collector{
+		p.processorMetrics.enqueuedTotal,
+		p.processorMetrics.executionsTotal,
+		p.processorMetrics.pendingTotal,
+		p.processorMetrics.waitDuration,
+	}
 }
 
 // Enqueue adds a retry request, routing it to a worker based on hash(key).
 func (p *defaultRetryProcessor) Enqueue(req RetryRequest) {
+	p.processorMetrics.incEnqueuedTotal(req.Action)
+
 	w := p.workers[xxhash.Sum64([]byte(req.Key))%p.workerCount]
 	w.mu.Lock()
 	heap.Push(&w.queue, req)
@@ -170,10 +226,11 @@ func (p *defaultRetryProcessor) Len() int {
 
 // retryWorker processes retries for its shard.
 type retryWorker struct {
-	mu            sync.Mutex
-	queue         retryPriorityQueue
-	wake          chan struct{}
-	checkInterval time.Duration
+	mu               sync.Mutex
+	queue            retryPriorityQueue
+	wake             chan struct{}
+	checkInterval    time.Duration
+	processorMetrics *retryProcessorMetrics
 }
 
 // run executes the worker loop, processing due retries on wake signals or periodic ticks.
@@ -221,6 +278,7 @@ func (w *retryWorker) processReady(retryPolicyFn func() RetryPolicy) {
 	}
 	results := make([]result, len(ready))
 	for i, req := range ready {
+		w.processorMetrics.observeWaitDuration(req.Action, req.RetryAfter)
 		requeue, err := req.RetryFunc()
 		results[i] = result{req: req, requeue: requeue, err: err}
 	}
@@ -229,7 +287,9 @@ func (w *retryWorker) processReady(retryPolicyFn func() RetryPolicy) {
 	w.mu.Lock()
 	policy := retryPolicyFn()
 	for _, res := range results {
-		if res.requeue != nil {
+		switch {
+		case res.requeue != nil:
+			w.processorMetrics.incExecutionsTotal(res.req.Action, retryResultRequeue)
 			heap.Push(&w.queue, RetryRequest{
 				Key:        res.req.Key,
 				RetryAfter: time.Now().Add(*res.requeue),
@@ -239,9 +299,13 @@ func (w *retryWorker) processReady(retryPolicyFn func() RetryPolicy) {
 				Object:     res.req.Object,
 				LastError:  res.err,
 			})
-		} else if res.err != nil && policy != nil {
-			ok, after := policy(res.err, res.req.Attempt+1)
+		case res.err != nil:
+			ok, after := false, time.Duration(0)
+			if policy != nil {
+				ok, after = policy(res.err, res.req.Attempt+1)
+			}
 			if ok {
+				w.processorMetrics.incExecutionsTotal(res.req.Action, retryResultRetry)
 				heap.Push(&w.queue, RetryRequest{
 					Key:        res.req.Key,
 					RetryAfter: time.Now().Add(after),
@@ -251,7 +315,11 @@ func (w *retryWorker) processReady(retryPolicyFn func() RetryPolicy) {
 					Object:     res.req.Object,
 					LastError:  res.err,
 				})
+			} else {
+				w.processorMetrics.incExecutionsTotal(res.req.Action, retryResultFailed)
 			}
+		default:
+			w.processorMetrics.incExecutionsTotal(res.req.Action, retryResultSuccess)
 		}
 	}
 	w.mu.Unlock()
@@ -270,4 +338,32 @@ func (pq *retryPriorityQueue) Pop() any {
 	item := old[n-1]
 	*pq = old[:n-1]
 	return item
+}
+
+// retryResultLabel values for the "result" label on retry_processor_executions_total.
+const (
+	retryResultSuccess = "success"
+	retryResultRequeue = "requeue"
+	retryResultRetry   = "retry"
+	retryResultFailed  = "failed"
+)
+
+// retryProcessorMetrics holds the Prometheus metric instruments shared across a processor and its workers.
+type retryProcessorMetrics struct {
+	enqueuedTotal   *prometheus.CounterVec
+	executionsTotal *prometheus.CounterVec
+	pendingTotal    prometheus.GaugeFunc
+	waitDuration    *prometheus.HistogramVec
+}
+
+func (m *retryProcessorMetrics) incEnqueuedTotal(action ResourceAction) {
+	m.enqueuedTotal.WithLabelValues(string(action)).Inc()
+}
+
+func (m *retryProcessorMetrics) incExecutionsTotal(action ResourceAction, result string) {
+	m.executionsTotal.WithLabelValues(string(action), result).Inc()
+}
+
+func (m *retryProcessorMetrics) observeWaitDuration(action ResourceAction, scheduledAt time.Time) {
+	m.waitDuration.WithLabelValues(string(action)).Observe(time.Since(scheduledAt).Seconds())
 }

@@ -54,8 +54,6 @@ A typical grafana app deployment might look more like:
 
 ![Application Using SDK Diagram](docs/diagrams/design_pattern_simple.png)
 
-For more details on application design, see [application design documentation](docs/application-design/README.md).
-
 ## CLI Usage
 
 Full CLI usage is covered in [CLI docs page](docs/cli.md), but for a brief overview of the commands:
@@ -66,20 +64,18 @@ Full CLI usage is covered in [CLI docs page](docs/cli.md), but for a brief overv
 | `generate` | Generates code from your CUE kinds (defaults to CUE in `kinds`, use `-s`/`--source` to speficy a different CUE path)  |
 | `project init <module name>` | Creates a project template, including directory structure, go module, CUE module, and Makefile                        |
 | `project kind add <kind name>` | Add a boilerplate kind in CUE with descriptive comments for all fields                                                |
-| `project component add <component>` | Add boilerplate code for a component to your project. `<component>` options are `frontend`, `backend`, and `operator` |
+| `project component add <component>` | Add boilerplate code for a component to your project. `<component>` options are `frontend` and `operator`             |
 | `project local init` | Initialize the `./local` directory for a local development environment (done automatically by `project init`)         |
 | `project local generate` | Generate a YAML bundle for local deployment, based on your CUE kinds and `./local/config.yaml`                        |
 
 ## Examples
 
-The [examples](./examples) directory contains small examples of different grafana-app-sdk functionality. For a complete example app, you can follow the [tutorial project](docs/tutorials/issue-tracker/README.md) to build a functioning simple app with no prior knowledge necessary.
+For a complete example app, you can follow the [tutorial project](docs/tutorials/issue-tracker/README.md) to build a functioning simple app with no prior knowledge necessary.
 
 ## Further Reading
 
 Please see the [/docs](docs/README.md) directory for full documentation,
-or take a look at the [Design Patterns](docs/application-design/README.md), [Kubernetes Concepts](docs/kubernetes.md), or the [tutorial](docs/tutorials/issue-tracker/README.md).
-
-The `examples` directory contains runnable example projects that use different SDK components.
+or take a look at the [tutorial](docs/tutorials/issue-tracker/README.md).
 
 Each package also contains a README.md detailing package usage and simple examples.
 
