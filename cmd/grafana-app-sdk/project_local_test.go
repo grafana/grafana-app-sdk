@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSanitizeClusterName(t *testing.T) {
@@ -83,6 +85,31 @@ func TestGrafanaImageVersionAtLeast(t *testing.T) {
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("'%s' >= %d.%d.%d (%v)", test.image, test.major, test.minor, test.patch, test.expected), func(t *testing.T) {
 			assert.Equal(t, test.expected, grafanaImageVersionAtLeast(test.image, test.major, test.minor, test.patch))
+		})
+	}
+}
+
+func TestGenerateK3dConfig_KubePort(t *testing.T) {
+	tests := []struct {
+		name     string
+		kubePort int
+		expected string
+	}{
+		{name: "unset falls back to default", kubePort: 0, expected: "8556"},
+		{name: "custom port", kubePort: 8557, expected: "8557"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := generateK3dConfig("/tmp/project", localEnvConfig{Port: 9999, KubePort: tc.kubePort})
+			require.NoError(t, err)
+
+			var cfg struct {
+				KubeAPI struct {
+					HostPort string `json:"hostPort"`
+				} `json:"kubeAPI"`
+			}
+			require.NoError(t, json.Unmarshal(out, &cfg), "generated k3d config must be valid JSON")
+			assert.Equal(t, tc.expected, cfg.KubeAPI.HostPort)
 		})
 	}
 }
