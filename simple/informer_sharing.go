@@ -37,8 +37,10 @@ func (s *sharedWatches) register(
 	if err != nil {
 		return err
 	}
-	entry := sharedWatch{needs: req.Options.WatchNeeds}
+	// Snapshot both sides: callers may reuse and mutate the channel pointers for a later registration.
+	entry := sharedWatch{needs: req.Options.WatchNeeds.WithDefaults()}
 	entry.provided, entry.stated = operator.InformerWatchOptions(informer)
+	entry.provided = entry.provided.WithDefaults()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
