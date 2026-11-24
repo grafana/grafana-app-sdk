@@ -210,15 +210,26 @@ operator.WatchOptions{
 Rules for the two channels:
 
 * If you set a channel, your handlers need that channel.
-* If you leave a channel nil, your handlers do not need it. The app does not check it.
+* If you leave a channel nil, your handlers do not need it. A mechanism without that channel can serve the kind.
 * If you leave **both** channels nil, the app treats this as a need for the live channel with default values.
   This is the default behavior.
 
 This means that if you need a resync **and** live changes, you must set both fields. `WatchOptions{Resync: ...}`
 alone means "no live changes needed". A mechanism that only sends every object on a schedule can serve it.
 
+A nil channel is not ignored completely. Your handlers cannot tell a live delivery from a resync delivery. So if a
+mechanism also sends deliveries on a channel that you left nil, those deliveries must meet the rules of the channel
+that you did set:
+
+* They must contain at least the `Detail` that you declared.
+* They must be `Sharded` if you declared `WatchDistributionSharded`.
+
+For example, a kind that declares only a resync with the whole object cannot get an event bus whose live events
+contain only the object's name.
+
 Inside a channel, every field has a safe default. If you leave `Detail` or `Distribution` empty, the app uses the
-strictest value: the whole object, sent to every instance.
+strictest value: the whole object, sent to every instance. So leaving these fields empty never lets the app pick a
+mechanism that it would not pick if you set them.
 
 #### `Detail`: how much of the object a delivery must contain
 
@@ -241,7 +252,8 @@ full object can serve a handler that needs only metadata.
 
 Note the difference between `Shared` and `Sharded`:
 
-* `Shared` is a permission. Every mechanism can serve it, including one that sends everything to every instance.
+* `Shared` is a permission. A mechanism with any distribution can serve it, including one that sends everything to
+  every instance.
 * `Sharded` is a requirement. Only a mechanism that shards by object can serve it.
 
 #### `Interval` and `ListPageSize`
@@ -304,6 +316,8 @@ cfg := simple.AppConfig{
         ReconcileOptions: simple.BasicReconcileOptions{
             // This reconciler does not need live changes. It needs only an hourly resync.
             // The first mechanism that can serve this is reList, so the app uses it.
+            // eventBus could not serve it: its live events contain only names, which is less
+            // than the full object that this kind declared for its resync.
             WatchNeeds: operator.WatchOptions{
                 Resync: &operator.WatchResyncOptions{Interval: time.Hour, ListPageSize: 5000},
             },
@@ -355,15 +369,26 @@ are metadata. So:
 To use identity-only deliveries, use a plain handler: set `UsePlain: true` for a managed kind, or leave
 `UseOpinionated` as `false` for an unmanaged kind. Then handle deletion in your own reconcile code.
 
+An opinionated **watcher** cannot declare a `Resync`. It skips every update in which the generation did not change,
+and a resync delivery is such an update. So it would never act on a resync, and the app rejects the declaration.
+This applies to a `Watcher` in `simple.App` that does not set `UsePlain` (or sets `UseOpinionated` for an unmanaged
+kind), and to `simple.Operator.WatchKind`. If you need a resync, use a `Reconciler` instead (the opinionated
+reconciler passes resyncs to your code), or use a plain `Watcher`.
+
 #### Two entries for the same kind
 
 Sometimes two entries watch the same kind. In `simple.App`, this happens when two entries have the same kind. In
 `simple.Operator`, it happens when two calls use the same kind and the same `ListWatchOptions`. In both cases, the
 informers for that kind send their deliveries to the handlers of **both** entries.
 
-So the app checks each pair of entries. If the informer of one entry sends less detail than the handlers of the other
-entry need, creation fails. Informers that provide different channels are fine, because each entry still gets the
-channels that it asked for from its own informer.
+So the app checks each pair of entries. Creation fails if the informer of one entry sends deliveries that the
+handlers of the other entry cannot take:
+
+* deliveries with less detail than those handlers declared, or
+* deliveries that are not sharded, when those handlers declared `WatchDistributionSharded`.
+
+Informers that provide different channels are fine, because each entry still gets the channels that it asked for
+from its own informer.
 
 ### What the SDK cannot check
 
@@ -375,6 +400,10 @@ The SDK cannot check these cases. You must take care of them yourself:
 * A `Watcher` reads the previous version of the object in an update event. A mechanism that does not keep the whole
   object cannot provide the previous version. If you declare less than `WatchDetailFullObject`, use a `Reconciler`
   instead of a `Watcher`.
+* The opinionated watcher itself needs the previous object. It compares the old and new objects in each update, and
+  it returns an error for an update without a previous object, even if your own watcher never reads it. If you
+  write your own informer, it must send the previous object with each update, with the same detail as the new
+  object.
 
 `WatchNeeds` is only about deliveries to your handlers. It does not control whether the informer keeps a cache.
 A cache affects memory use, but your handlers do not read the cache through `operator.Informer`.
