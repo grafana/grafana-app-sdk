@@ -111,6 +111,7 @@ type App struct {
 	patcher            *k8s.DynamicPatcher
 	collectors         []prometheus.Collector
 	handler            http.Handler
+	watches            sharedWatches
 
 	// Admission metrics (validate/mutate)
 	admissionLatency  *prometheus.HistogramVec
@@ -156,10 +157,10 @@ type AppConfig struct {
 	MetricsConfig metrics.Config
 }
 
-// InformerSupplier is a function which creates an operator.Informer for a kind, given a ClientGenerator and ListWatchOptions
-type InformerSupplier func(
-	kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions,
-) (operator.Informer, error)
+// InformerSupplier is a function which creates an operator.Informer for a kind, given a ClientGenerator and
+// InformerOptions. It is an alias: the type lives in operator, so wiring which does not use simple.App can take and
+// return one without importing this package.
+type InformerSupplier = operator.InformerSupplier
 
 // DefaultInformerSupplier is a default InformerSupplier function which creates a basic operator.KubernetesBasedInformer.
 // Note: This supplier does NOT respect WatchListPageSize or UseWatchList configuration.
@@ -236,7 +237,10 @@ type AppInformerConfig struct {
 	// By default, this is "<app name>-wip"
 	InProgressFinalizerSupplier operator.FinalizerSupplier
 	// InformerSupplier can be set to specify a function for creating informers for kinds.
-	// If left unset, DefaultInformerSupplier will be used.
+	// If left unset, DefaultInformerSupplier will be used, which builds the API watch.
+	//
+	// It is given each kind's declared needs as InformerOptions.WatchNeeds, so a supplier can both configure what it
+	// builds and choose what to build; operator.NewSelectingInformerSupplier is one which chooses.
 	InformerSupplier InformerSupplier
 	// RetryProcessorConfig enables the concurrent retry processor when non-nil.
 	// When set, a RetryProcessor is created and its Prometheus metrics are included in PrometheusCollectors().
@@ -292,6 +296,13 @@ type UnmanagedKindReconcileOptions struct {
 	// If true, the app must have permission to add finalizers to the unmanaged Kind, and if
 	// the AppUnmanagedKind is ever removed from the app, the finalizers added should be cleaned up.
 	UseOpinionated bool
+	// WatchNeeds is what the Reconciler or Watcher needs of the changes it is watched by. The App hands it to the
+	// supplier building this kind's informer, as the operator.InformerOptions field of the same name, and checks
+	// what was built against it. Its zero value needs live deliveries carrying the whole object, every instance
+	// receiving all of them, which is what the API watch gives a kind today.
+	//
+	// Experimental: this API may change in a minor release.
+	WatchNeeds operator.WatchOptions
 }
 
 // BasicReconcileOptions are settings for the ListWatch and informer setup for a reconciliation loop
@@ -304,6 +315,13 @@ type BasicReconcileOptions struct {
 	FieldSelectors []string
 	// UsePlain can be set to true to avoid wrapping the Reconciler or Watcher in its Opinionated variant.
 	UsePlain bool
+	// WatchNeeds is what the Reconciler or Watcher needs of the changes it is watched by. The App hands it to the
+	// supplier building this kind's informer, as the operator.InformerOptions field of the same name, and checks
+	// what was built against it. Its zero value needs live deliveries carrying the whole object, every instance
+	// receiving all of them, which is what the API watch gives a kind today.
+	//
+	// Experimental: this API may change in a minor release.
+	WatchNeeds operator.WatchOptions
 }
 
 type AppCustomRouteMethod string
@@ -591,10 +609,36 @@ func (a *App) manageKind(kind AppManagedKind) error {
 				LabelFilters:   kind.ReconcileOptions.LabelFilters,
 				FieldSelectors: kind.ReconcileOptions.FieldSelectors,
 				UseOpinionated: !kind.ReconcileOptions.UsePlain,
+				WatchNeeds:     kind.ReconcileOptions.WatchNeeds,
 			},
 		})
 	}
 	return nil
+}
+
+// addInformerFor builds the informer for a kind the App manages or watches, and adds it to the controller.
+func (a *App) addInformerFor(kind AppUnmanagedKind) error {
+	opts := a.cfg.InformerConfig.InformerOptions
+	if opts.MetricsConfig == (metrics.Config{}) {
+		opts.MetricsConfig = a.cfg.InformerConfig.MetricsConfig
+	}
+	supplier := a.cfg.InformerConfig.InformerSupplier
+	if supplier == nil {
+		supplier = DefaultInformerSupplier
+	}
+	opts.WatchNeeds = kind.ReconcileOptions.WatchNeeds
+	opts.ListWatchOptions = operator.ListWatchOptions{
+		Namespace:      kind.ReconcileOptions.Namespace,
+		LabelFilters:   kind.ReconcileOptions.LabelFilters,
+		FieldSelectors: kind.ReconcileOptions.FieldSelectors,
+	}
+	return a.watches.register(kind.Kind.GroupVersionKind().String(), operator.InformerRequest{
+		Kind:        kind.Kind,
+		Clients:     a.clientGenerator,
+		Supplier:    supplier,
+		Options:     opts,
+		Opinionated: kind.ReconcileOptions.UseOpinionated,
+	}, a.informerController.AddInformer)
 }
 
 func (a *App) watchKind(kind AppUnmanagedKind) error {
@@ -605,28 +649,8 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		return errors.New("please provide either Watcher or Reconciler, not both")
 	}
 	if kind.Reconciler != nil || kind.Watcher != nil {
-		infSupplier := a.cfg.InformerConfig.InformerSupplier
-		if infSupplier == nil {
-			infSupplier = DefaultInformerSupplier
-		}
-
-		opts := a.cfg.InformerConfig.InformerOptions
-		opts.ListWatchOptions = operator.ListWatchOptions{
-			Namespace:      kind.ReconcileOptions.Namespace,
-			LabelFilters:   kind.ReconcileOptions.LabelFilters,
-			FieldSelectors: kind.ReconcileOptions.FieldSelectors,
-		}
-		if opts.MetricsConfig == (metrics.Config{}) {
-			opts.MetricsConfig = a.cfg.InformerConfig.MetricsConfig
-		}
-
-		inf, err := infSupplier(kind.Kind, a.clientGenerator, opts)
-		if err != nil {
+		if err := a.addInformerFor(kind); err != nil {
 			return err
-		}
-		err = a.informerController.AddInformer(inf, kind.Kind.GroupVersionKind().String())
-		if err != nil {
-			return fmt.Errorf("could not add informer to controller: %v", err)
 		}
 		if kind.Reconciler != nil {
 			reconciler := kind.Reconciler
@@ -638,7 +662,7 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 				op.Wrap(kind.Reconciler)
 				reconciler = op
 			}
-			err = a.informerController.AddReconciler(reconciler, kind.Kind.GroupVersionKind().String())
+			err := a.informerController.AddReconciler(reconciler, kind.Kind.GroupVersionKind().String())
 			if err != nil {
 				return fmt.Errorf("could not add reconciler to controller: %v", err)
 			}
@@ -661,7 +685,7 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 				}
 				watcher = op
 			}
-			err = a.informerController.AddWatcher(watcher, kind.Kind.GroupVersionKind().String())
+			err := a.informerController.AddWatcher(watcher, kind.Kind.GroupVersionKind().String())
 			if err != nil {
 				return fmt.Errorf("could not add watcher to controller: %v", err)
 			}
