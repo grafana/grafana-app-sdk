@@ -403,6 +403,10 @@ func getPluginID(rootPath string) (string, error) {
 	return um.ID, err
 }
 
+// defaultKubePort is the host port the k3d cluster's kubernetes API server is bound to
+// when kubePort is not set in the local env config.
+const defaultKubePort = 8556
+
 func generateK3dConfig(projectRoot string, envCfg localEnvConfig) ([]byte, error) {
 	k3dConfigTmpl, err := template.ParseFS(localEnvFiles, "templates/local/generated/k3d-config.json")
 	if err != nil {
@@ -413,10 +417,15 @@ func generateK3dConfig(projectRoot string, envCfg localEnvConfig) ([]byte, error
 		v.SourcePath = expandPath(v.SourcePath, projectRoot)
 		additionalVolumes = append(additionalVolumes, v)
 	}
+	kubePort := envCfg.KubePort
+	if kubePort == 0 {
+		kubePort = defaultKubePort
+	}
 	buf := &bytes.Buffer{}
 	err = k3dConfigTmpl.Execute(buf, map[string]any{
 		"ProjectRoot":       projectRoot,
 		"BindPort":          strconv.Itoa(envCfg.Port),
+		"KubePort":          strconv.Itoa(kubePort),
 		"AdditionalVolumes": additionalVolumes,
 	})
 	return buf.Bytes(), err
