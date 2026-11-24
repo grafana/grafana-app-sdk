@@ -2,7 +2,7 @@
   "apiVersion": "k3d.io/v1alpha3",
   "kind": "Simple",
   "kubeAPI": {
-    "hostPort": "8556"
+    "hostPort": "{{.KubePort}}"
   },
   "options": {
     "k3d": {
