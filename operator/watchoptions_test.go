@@ -97,10 +97,32 @@ func TestWatchOptions_SatisfiedBy(t *testing.T) {
 			want:     false,
 		},
 		{
-			name:     "needing only a resync is satisfied by a bus whose re-list reads whole objects",
+			// Its identity-only live events still reach a handler which declared whole objects.
+			name:     "needing only a whole-object resync is not satisfied by a bus whose live events carry identities",
 			needs:    WatchOptions{Resync: &WatchResyncOptions{}},
 			provided: identityBus,
+			want:     false,
+		},
+		{
+			name:     "needing only an identity resync is satisfied by a bus whose live events carry identities",
+			needs:    WatchOptions{Resync: &WatchResyncOptions{Detail: WatchDetailIdentity}},
+			provided: identityBus,
 			want:     true,
+		},
+		{
+			name:     "a whole-object live need is not satisfied by a watch whose resync carries identities",
+			needs:    WatchOptions{Live: &WatchLiveOptions{}},
+			provided: WatchOptions{Live: &WatchLiveOptions{}, Resync: &WatchResyncOptions{Detail: WatchDetailIdentity}},
+			want:     false,
+		},
+		{
+			name:  "a sharded live need is not satisfied by a mechanism whose resync goes to every instance",
+			needs: WatchOptions{Live: &WatchLiveOptions{Distribution: WatchDistributionSharded}},
+			provided: WatchOptions{
+				Live:   &WatchLiveOptions{Distribution: WatchDistributionSharded},
+				Resync: &WatchResyncOptions{},
+			},
+			want: false,
 		},
 		{
 			name:     "needing whole objects on a resync is not satisfied by a keys-only lister",
@@ -124,8 +146,8 @@ func TestWatchOptions_SatisfiedBy(t *testing.T) {
 			want:     true,
 		},
 		{
-			name:     "a shared live channel is not compared for a kind which only resyncs",
-			needs:    WatchOptions{Resync: &WatchResyncOptions{}},
+			name:     "a shared live channel's distribution is not compared for a kind which only resyncs",
+			needs:    WatchOptions{Resync: &WatchResyncOptions{Detail: WatchDetailIdentity}},
 			provided: sharedBus,
 			want:     true,
 		},
@@ -137,7 +159,7 @@ func TestWatchOptions_SatisfiedBy(t *testing.T) {
 		},
 		{
 			name:     "a kind which only permits its resync to be divided is served by an undivided one",
-			needs:    WatchOptions{Resync: &WatchResyncOptions{Distribution: WatchDistributionShared}},
+			needs:    WatchOptions{Resync: &WatchResyncOptions{Detail: WatchDetailIdentity, Distribution: WatchDistributionShared}},
 			provided: sharedBus,
 			want:     true,
 		},
@@ -183,6 +205,21 @@ func TestWatchOptions_SatisfiedBy(t *testing.T) {
 			assert.Equal(t, tt.want, tt.needs.SatisfiedBy(tt.provided))
 		})
 	}
+}
+
+func TestWatchOptions_RefusedDeliveries(t *testing.T) {
+	// A missing or divided channel takes nothing away from a handler with its own informer for it.
+	assert.Empty(t, WatchOptions{Live: &WatchLiveOptions{}, Resync: &WatchResyncOptions{}}.RefusedDeliveries(
+		WatchOptions{Resync: &WatchResyncOptions{Distribution: WatchDistributionShared}}))
+
+	assert.Equal(t, []string{`Resync deliveries carrying less than "full-object"`},
+		WatchOptions{}.RefusedDeliveries(WatchOptions{
+			Live:   &WatchLiveOptions{},
+			Resync: &WatchResyncOptions{Detail: WatchDetailIdentity},
+		}))
+	assert.Equal(t, []string{`Live deliveries which are not "sharded"`},
+		WatchOptions{Resync: &WatchResyncOptions{Distribution: WatchDistributionSharded}}.RefusedDeliveries(
+			WatchOptions{Live: &WatchLiveOptions{}}))
 }
 
 func TestWatchOptions_String(t *testing.T) {

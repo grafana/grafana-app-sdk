@@ -2,6 +2,7 @@ package simple
 
 import (
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,30 +13,35 @@ import (
 )
 
 func TestSharedWatches_concurrentRegistration(t *testing.T) {
+	const registrations = 32
 	req := operator.InformerRequest{
 		Kind: testKind(),
 		Supplier: func(resource.Kind, resource.ClientGenerator, operator.InformerOptions) (operator.Informer, error) {
 			return &mockInformer{}, nil
 		},
 	}
-	var added sync.WaitGroup
+	var added atomic.Int32
 	add := func(operator.Informer, string) error {
-		added.Done()
+		added.Add(1)
 		return nil
 	}
 
 	var watches sharedWatches
 	var registering sync.WaitGroup
-	for i := 0; i < 32; i++ {
-		added.Add(1)
+	errs := make(chan error, registrations)
+	for i := 0; i < registrations; i++ {
 		registering.Add(1)
 		go func() {
 			defer registering.Done()
-			require.NoError(t, watches.register("foo/v1, Kind=Bar", req, add))
+			errs <- watches.register("foo/v1, Kind=Bar", req, add)
 		}()
 	}
 	registering.Wait()
-	added.Wait()
+	close(errs)
 
-	assert.Len(t, watches.byKey["foo/v1, Kind=Bar"], 32)
+	for err := range errs {
+		require.NoError(t, err)
+	}
+	assert.EqualValues(t, registrations, added.Load())
+	assert.Len(t, watches.byKey["foo/v1, Kind=Bar"], registrations)
 }
