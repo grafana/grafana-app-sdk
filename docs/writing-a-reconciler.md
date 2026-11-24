@@ -188,18 +188,13 @@ operator.WatchOptions{
 ```
 
 Setting a channel is what says you need it, which makes `Live` and `Resync` the one place leaving a field unset
-*widens* what is acceptable: a nil channel is not required. So a kind which wants a resync **as well as** live
-changes sets both — `WatchOptions{Resync: ...}` on its own says nothing is needed live, and a mechanism which only
-re-delivers everything on a schedule satisfies it. Declaring nothing at all is the exception: a `WatchOptions` with
-neither channel needs the live one.
-
-A nil channel is not ignored, though. Your handlers cannot tell a live delivery from a resync, so where a mechanism
-delivers on a channel you did not ask for, those deliveries must still carry the `Detail` you declared for the other
-channel, and be `Sharded` if you required that. A kind asking only for a whole-object resync is therefore not given
-a bus whose live events carry bare identities.
+*widens* what is acceptable: a nil channel is not compared at all. So a kind which wants a resync **as well as**
+live changes sets both — `WatchOptions{Resync: ...}` on its own says nothing is needed live, and a mechanism which
+only re-delivers everything on a schedule satisfies it. Declaring nothing at all is the exception: a `WatchOptions`
+with neither channel needs the live one.
 
 Within a channel, every field's zero value is the strictest thing it could say — whole objects, undivided — so
-leaving `Detail` or `Distribution` unset never makes a mechanism acceptable that setting it would not.
+leaving one of those unset never widens anything.
 
 `Detail` — the least a delivery must carry:
 
@@ -217,11 +212,11 @@ leaving `Detail` or `Distribution` unset never makes a mechanism acceptable that
 | `WatchDistributionShared` | the work is idempotent and done once, so you permit dividing it |
 | `WatchDistributionSharded` | you require that each object always goes to the same instance |
 
-`Shared` and `Sharded` read in opposite directions: `Shared` *permits* the work being divided, so a mechanism of any
-distribution satisfies it, while `Sharded` *requires* affinity and only a sharded mechanism provides it.
+`Shared` and `Sharded` read in opposite directions: `Shared` *permits* the work being divided, so anything satisfies
+it, while `Sharded` *requires* affinity and only a sharded mechanism provides it.
 
-`Resync.Interval` and `Resync.ListPageSize` say how often the resync should run and how many objects to read per page
-when the mechanism lists them from the API. Zero takes the mechanism's own.
+`Resync.Interval` and `Resync.ListPageSize` say how often the resync should run and how large a page anything it
+lists should read. Zero takes the mechanism's own.
 
 ### How a mechanism is chosen
 
@@ -252,8 +247,7 @@ simple.AppConfig{
 }
 ```
 
-A kind whose declaration no listed mechanism satisfies is built by the fallback supplier (the first argument), and an
-app which lists no mechanisms builds every kind with it.
+Anything no mechanism satisfies is watched, and an app which lists nothing watches everything.
 
 `Interval` and `ListPageSize` take no part in that choice: a mechanism takes a cadence rather than offering one, so
 the one a kind gets may ignore them. The API watch ignores the page size, since its resync re-delivers its cache
@@ -264,30 +258,25 @@ missed, where a mechanism which lists the API recovers as well.
 
 A declaration nothing can serve fails when the app is constructed, naming the way out. The API watch cannot resync
 without a cadence and cannot shard, so those are the declarations to be careful with. `WatchDistributionShared` is
-not one of them: it permits division rather than requiring it, so a kind declaring it where no mechanism divides its
-deliveries is served by an undivided one. A leader-elected deployment, where one replica is active anyway, needs no declaration at all.
+not one of them: it permits division rather than requiring it, so a kind declaring it where nothing divides anything
+is simply watched. A leader-elected deployment, where one replica is active anyway, needs no declaration at all.
 
 The `Opinionated` variants read the deletion timestamp, the finalizer list and the generation. All three are
 metadata, so `WatchDetailMetadata` serves them and `WatchDetailIdentity` does not: declaring identities alongside one
 is refused, as is a mechanism carrying them on any channel it delivers on. Set `UsePlain` (or `UseOpinionated: false`
 for an unmanaged kind) to be served by identities, and handle deletion in your own reconcile.
 
-An opinionated `Watcher` cannot declare a `Resync`: it skips any update whose generation is unchanged, which is how a
-resync arrives, so it would never act on one. Use a `Reconciler`, whose opinionated variant passes resyncs on, or a
-plain `Watcher`.
-
 Two entries watching the same kind and query share one set of deliveries, so what one entry's informer carries
-reaches the other's handlers too. A pair where that would hand a handler less detail than it declared, or unsharded
-deliveries where it required `Sharded`, fails at construction; informers with complementary channels are fine, since
-each entry still has its own for what it asked for.
+reaches the other's handlers too. A pair where that would hand a handler less detail than it declared fails at
+construction; informers with complementary channels are fine, since each entry still has its own for what it asked
+for.
 
 Two things the SDK cannot check for you:
 
 * Your own handler reading `obj.Spec` off a metadata-only delivery. That contract is yours to keep, like a label
   selector.
 * A `Watcher` reading the previous object on an update, which a mechanism keeping no object body cannot hand it.
-  Prefer a `Reconciler` for a kind declaring less than the whole object. The opinionated `Watcher` wrapper itself
-  needs the previous object, and refuses an update without one, even when your watcher never reads it.
+  Prefer a `Reconciler` for a kind declaring less than the whole object.
 
 Finally, a need is about the deliveries, not the informer behind them. Whether it keeps a cache decides its memory,
 but no handler reads that cache through `operator.Informer`.
