@@ -299,7 +299,7 @@ simple.AppConfig{
                 // InformerOptions.CacheResyncInterval or WatchListPageSize.
                 ResyncInterval: 15 * time.Minute,
                 PageSize:       1000,
-                RetryInterval:  10 * time.Second, // how often a failing initial list is retried
+                RetryInterval:  10 * time.Second, // how often a failed or deferred pass is retried
             }),
             myEventBusMechanism,
         ),
@@ -338,6 +338,12 @@ page size means something to it.
 
 Only `Add` is ever called: without a snapshot an update and a delete are indistinguishable from a re-delivery, so
 handlers re-evaluate an object from the object and treat one which has gone away as nothing to do.
+
+A pass does not start while the previous one's deliveries are still queued: it is retried every `RetryInterval`
+until they drain, so handlers slower than the cadence run less often instead of building a backlog. Retries a
+handler schedules itself with `RequeueAfter` are outside that queue, so prefer letting the next pass be the retry.
+`InformerOptions.EventTimeout` does not bound handlers here, as it does not under the stock informers while they
+run.
 
 **Deletion needs care.** This informer never emits `Delete`; a removed object simply stops appearing in the list, so
 nothing derived from events can notice it went. What does work is a finalizer: the `Opinionated` variants' `Add`

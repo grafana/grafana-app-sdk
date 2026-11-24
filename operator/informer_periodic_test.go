@@ -67,9 +67,9 @@ func (w *addRecordingWatcher) Update(context.Context, resource.Object, resource.
 
 func (w *addRecordingWatcher) Delete(context.Context, resource.Object) error { return nil }
 
-// The slice must be read under the lock: passing w.adds as an argument would read the slice header before the
-// callee could acquire it, racing a concurrent append.
-// added returns the objects as delivered, for a test which reads more than their names.
+// added returns the objects as delivered, for a test which reads more than their names. The slice must be read
+// under the lock: passing w.adds as an argument would read the slice header before the callee could acquire it,
+// racing a concurrent append.
 func (w *addRecordingWatcher) added() []resource.Object {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -241,6 +241,42 @@ func TestPeriodicInformer_RetriesAFailedPassOnTheShortInterval(t *testing.T) {
 	})
 }
 
+// Handlers slower than the cadence must not accumulate a backlog: a pass waits for the last one's deliveries to
+// drain, checking again on the short interval rather than waiting out another whole cadence.
+func TestPeriodicInformer_DefersAPassUntilThePreviousDrains(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var lists, pending atomic.Int64
+		lister := listerFunc(func(context.Context) ([]resource.Object, string, error) {
+			lists.Add(1)
+			return nil, "", nil
+		})
+		inf, err := NewPeriodicInformer(listerTestKind, lister, PeriodicInformerOptions{
+			ResyncInterval: time.Hour,
+			RetryInterval:  time.Second,
+		})
+		require.NoError(t, err)
+		inf.backlog = func() float64 { return float64(pending.Load()) }
+
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() { defer close(done); _ = inf.Run(ctx) }()
+		defer func() { cancel(); <-done; synctest.Wait() }()
+
+		synctest.Wait()
+		require.Equal(t, int64(1), lists.Load(), "the initial pass")
+
+		pending.Store(3)
+		time.Sleep(time.Hour + 7*time.Minute)
+		synctest.Wait()
+		assert.Equal(t, int64(1), lists.Load(), "no pass starts while the last one is still queued")
+
+		pending.Store(0)
+		time.Sleep(2 * time.Second)
+		synctest.Wait()
+		assert.Equal(t, int64(2), lists.Load(), "the deferred pass runs on the short interval once drained")
+	})
+}
+
 // Shutdown must not spend a whole snapshot dispatching with a canceled context.
 func TestPeriodicInformer_StopsDispatchingWhenCanceled(t *testing.T) {
 	watcher := &addRecordingWatcher{}
@@ -346,7 +382,6 @@ func (c listingClient) ListInto(ctx context.Context, namespace string, opts reso
 
 // A kind is served by this mechanism only by needing no live channel, which is what the App's check against the
 // informer it built enforces.
-// informer it built enforces.
 func TestPeriodicInformerMechanism_ProvidesAResyncAndNothingLive(t *testing.T) {
 	mechanism := NewPeriodicMechanism(PeriodicMechanismOptions{})
 	resyncOnly := WatchOptions{
@@ -371,10 +406,13 @@ func TestPeriodicInformerMechanism_ProvidesAResyncAndNothingLive(t *testing.T) {
 	// Handlers still run on per-key workers, as under the other suppliers.
 	unwrapped, ok := inf.(interface{ Unwrap() Informer })
 	require.True(t, ok)
-	assert.IsType(t, &ConcurrentInformer{}, unwrapped.Unwrap())
+	concurrent, ok := unwrapped.Unwrap().(*ConcurrentInformer)
+	require.True(t, ok)
+	periodic, ok := concurrent.Unwrap().(*PeriodicInformer)
+	require.True(t, ok)
+	assert.NotNil(t, periodic.backlog, "a pass must wait for the workers to drain the last one")
 }
 
-// The list is the informer's only source, so the selectors reach the server and nothing else has to honor them.
 // The list is the informer's only source, so the selectors reach the server and nothing else has to honor them.
 func TestPeriodicInformerMechanism_Listing(t *testing.T) {
 	t.Run("the list request carries the namespace, selectors and page size", func(t *testing.T) {
