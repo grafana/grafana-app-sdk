@@ -4,12 +4,11 @@ package main
 var (
 	localDatasourceConfigs = map[string]dataSourceConfig{
 		"cortex": {
-			Access:       "proxy",
-			Name:         "grafana-k3d-cortex-prom",
-			Type:         "prometheus",
-			UID:          "grafana-prom-cortex",
-			URL:          "http://cortex.default.svc.cluster.local:9009/api/prom", //nolint:revive
-			Dependencies: []string{"minio"},
+			Access: "proxy",
+			Name:   "grafana-k3d-cortex-prom",
+			Type:   "prometheus",
+			UID:    "grafana-prom-cortex",
+			URL:    "http://cortex.default.svc.cluster.local:9009/api/prom", //nolint:revive
 		},
 		"tempo": {
 			Access: "proxy",
@@ -24,7 +23,7 @@ var (
 			Type:         "loki",
 			UID:          "grafana-logs-loki",
 			URL:          "http://loki.default.svc.cluster.local:3100", //nolint:revive
-			Dependencies: []string{"minio", "agent"},
+			Dependencies: []string{"agent"},
 		},
 	}
 
@@ -35,7 +34,6 @@ var (
 	}
 
 	localDatasourceDependencyManifests = map[string][]string{
-		"minio": {"templates/local/generated/datasources/minio.yaml"},
 		"agent": {"templates/local/generated/datasources/agent.yaml"},
 	}
 )

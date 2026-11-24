@@ -221,7 +221,7 @@ There are other pages generated here as examples from the output of `yarn create
 
 ### Types
 
-`generated/issue/v1` contains the types for our v1 `Issue` kind, which we can use to interact with the API server.
+`generated/issue/v1alpha1` contains the types for our `v1alpha1` `Issue` kind, which we can use to interact with the API server.
 
 ## Go Code & Dockerfile from operator component
 

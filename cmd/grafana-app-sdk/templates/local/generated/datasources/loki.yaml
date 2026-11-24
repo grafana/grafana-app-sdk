@@ -30,12 +30,6 @@ data:
             period: 24h
     ruler:
       alertmanager_url: http://localhost:9093
-      storage:
-        type: s3
-        s3:
-          s3: http://minio:minio123@minio.default.svc.cluster.local:9000
-          bucketnames: loki
-          s3forcepathstyle: true
 ---
 apiVersion: apps/v1
 kind: Deployment

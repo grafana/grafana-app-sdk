@@ -66,7 +66,6 @@ So, what's going on with `issueKind`? We've got a few fields here that describe 
 | <nobr>`scope: "Namespaced"`</nobr>      | This is an optional field, which designates whether instances of the kind (resources) are created on a per-tenant basis (Namespaced) or globally (Cluster). It defaults to Namespaced if you leave the field out. |
 | <nobr>`codegen.ts.enabled: true`</nobr> | This instructs the CLI to generate front-end (TypeScript interfaces) code for our schema. This defaults to `true`, but we're specifying it here for clarity.                                                      |
 | <nobr>`codegen.go.enabled: true`</nobr> | This instructs the CLI to generate back-end (go) code for our schema. This defaults to `true`, but we're specifying it here for clarity.                                                                          |
-| <nobr>`current: "v1"`</nobr>            | This is the current version of the Schema to use for codegen.                                                                                                                                                     |
 
 Now, we still have `issuev1alpha1`, so what's its deal? In an app, we have one or more API versions which are exposed, 
 and each version has one or more kinds as part of it. Kinds with the same name should be the same logical kind 

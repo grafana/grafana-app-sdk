@@ -36,6 +36,9 @@ const (
 	// route is served even when no object is stored under the name in its path.
 	OpenAPIExtensionAllowMissingParent = "x-grafana-allow-missing-parent"
 
+	// OpenAPIExtensionProxy declares the plugin proxy target of an operation.
+	OpenAPIExtensionProxy = "x-grafana-proxy"
+
 	ManifestRolePermissionSetViewer = "viewer"
 	ManifestRolePermissionSetEditor = "editor"
 	ManifestRolePermissionSetAdmin  = "admin"

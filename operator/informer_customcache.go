@@ -90,6 +90,29 @@ type CustomCacheInformer struct {
 	processor      *informerProcessor
 	schema         resource.Kind
 	runContext     context.Context
+	// Resolved from opts.ResyncOptions(), kept beside opts so a reader can still tell what the caller set.
+	resyncInterval time.Duration
+	listPageSize   int64
+}
+
+// WatchOptions is what this informer gives a kind's handlers: each change as it happens, carrying the whole object,
+// to every instance. It resyncs as well when a cadence was resolved, re-delivering what its store holds rather than
+// reading the API.
+//
+// Experimental: this API may change in a minor release.
+func (c *CustomCacheInformer) WatchOptions() WatchOptions {
+	options := WatchOptions{Live: &WatchLiveOptions{
+		Detail:       WatchDetailFullObject,
+		Distribution: WatchDistributionAll,
+	}}
+	if c.resyncInterval > 0 {
+		options.Resync = &WatchResyncOptions{
+			Detail:       WatchDetailFullObject,
+			Distribution: WatchDistributionAll,
+			Interval:     c.resyncInterval,
+		}
+	}
+	return options
 }
 
 // NewCustomCacheInformer returns a new CustomCacheInformer using the provided cache.Store and cache.ListerWatcher.
@@ -101,16 +124,29 @@ func NewCustomCacheInformer(
 		opts.ProcessorBufferSize = processorBufferSize
 	}
 
-	if opts.CacheResyncInterval < 0 {
-		opts.CacheResyncInterval = 0
+	// Resolved once, so the timeout below, the resync period and what this informer advertises all agree.
+	var resyncInterval time.Duration
+	var listPageSize int64
+	if resolved := opts.ResyncOptions(); resolved != nil {
+		resyncInterval, listPageSize = resolved.Interval, resolved.ListPageSize
+	} else {
+		listPageSize = opts.WatchListPageSize
+	}
+	if resyncInterval < 0 {
+		resyncInterval = 0
+	}
+	// A resync re-delivers what the store can enumerate, and a memcached store without key tracking enumerates
+	// nothing: there is neither a resync to run nor one to advertise.
+	if memcached, ok := store.(*MemcachedStore); ok && !memcached.trackKeys {
+		resyncInterval = 0
 	}
 
 	if opts.EventTimeout < 0 {
 		opts.EventTimeout = 0
 	}
 
-	if opts.CacheResyncInterval > 0 && opts.EventTimeout > opts.CacheResyncInterval {
-		opts.EventTimeout = opts.CacheResyncInterval
+	if resyncInterval > 0 && opts.EventTimeout > resyncInterval {
+		opts.EventTimeout = resyncInterval
 	}
 
 	if opts.ErrorHandler == nil {
@@ -125,9 +161,11 @@ func NewCustomCacheInformer(
 		// TODO: objectType being set doesn't allow for a generic untyped object to be passed
 		// We can enable the k8s.KindNegotiatedSerializer for this, but it would be used by all clients then
 		// objectType:    kind.ZeroValue(),
-		processor: newInformerProcessor(),
-		schema:    kind,
-		opts:      opts,
+		processor:      newInformerProcessor(),
+		schema:         kind,
+		opts:           opts,
+		resyncInterval: resyncInterval,
+		listPageSize:   listPageSize,
 	}
 }
 
@@ -182,12 +220,12 @@ func (c *CustomCacheInformer) Run(ctx context.Context) error {
 		c.listerWatcher,
 		c.objectType,
 		c.schema.GroupVersionKind().String(),
-		c.opts.CacheResyncInterval,
+		c.resyncInterval,
 		c,
 		c.store,
 		nil,
 		c.opts.UseWatchList,
-		c.opts.WatchListPageSize)
+		c.listPageSize)
 	c.controllerLock.Unlock()
 
 	// Mark the informer as started
