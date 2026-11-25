@@ -227,15 +227,6 @@ func (p *PeriodicInformer) sweep(ctx context.Context) error {
 	return ctx.Err()
 }
 
-func withInformerEventTimeout(ctx context.Context, timeout time.Duration, fn func(context.Context) error) error {
-	if timeout <= 0 {
-		return fn(ctx)
-	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	return fn(ctx)
-}
-
 func waitInformerInterval(ctx context.Context, delay time.Duration) bool {
 	timer := time.NewTimer(wait.Jitter(delay, informerRetryJitter))
 	defer timer.Stop()
