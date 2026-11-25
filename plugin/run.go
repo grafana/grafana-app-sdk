@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 
@@ -131,25 +131,8 @@ func Run(provider app.Provider, opts ...RunOption) error {
 		cfg.insecureSkipAuthentication = true
 	}
 
-	if cfg.authenticator == nil {
-		authenticator, err := buildAuthenticator(cfg.pluginID, manifestData)
-		switch {
-		case err == nil:
-			cfg.authenticator = authenticator
-		case !errors.Is(err, ErrNoSigningKeys):
-			return err
-		case !cfg.insecureSkipAuthentication:
-			// Without an authenticator, the plugin v3 servers reject every request.
-			// Start anyway: hosts that never send plugin v3 requests, such as a
-			// Grafana that routes the App's API elsewhere, need not configure one.
-			logging.DefaultLogger.Warn("no authenticator configured: plugin protocol v3 requests will be rejected; set "+EnvVarGrafanaJWKSURL+" or "+EnvVarGrafanaJWKS+", or use WithAuthenticator; for local development, use WithInsecureSkipAuthentication or set "+EnvVarInsecureSkipAuthentication+"=true",
-				"pluginId", cfg.pluginID)
-		default:
-			// Authentication is explicitly skipped. Anything that can reach the
-			// plugin can then claim any identity, so make that visible.
-			logging.DefaultLogger.Warn("plugin protocol v3 requests are not verified: callers can claim any identity; use this only for local development",
-				"pluginId", cfg.pluginID)
-		}
+	if err := cfg.resolveAuthenticator(manifestData); err != nil {
+		return err
 	}
 
 	if cfg.kubeConfig == nil {
@@ -196,24 +179,7 @@ func Run(provider app.Provider, opts ...RunOption) error {
 		return err
 	}
 
-	// Start any background operations that the App requires, if it can reach
-	// the API server. Without a kube config, they would only fail repeatedly.
-	if cfg.kubeConfig != nil && runner != nil {
-		var runnerWait sync.WaitGroup
-		runnerCtx, runnerCancel := context.WithCancel(context.Background())
-		defer func() {
-			runnerCancel()
-			runnerWait.Wait()
-		}()
-		runnerWait.Go(func() {
-			err := runner.Run(runnerCtx)
-			if err != nil && !errors.Is(err, context.Canceled) {
-				backendlog.DefaultLogger.Error(err.Error())
-			}
-		})
-	} else if runner != nil {
-		logging.DefaultLogger.Info("not starting the app runner: no kube config for api access", "pluginId", cfg.pluginID)
-	}
+	defer startRunner(runner, &cfg)()
 
 	return manage(cfg.pluginID, cfg.appFunc, cfg.manageOpts)
 }
@@ -264,7 +230,7 @@ func selectRunner(a app.App, targets []string) (app.Runnable, error) {
 			for n := range named {
 				names = append(names, n)
 			}
-			sort.Strings(names)
+			slices.Sort(names)
 			return nil, fmt.Errorf("unknown target %q: must be %q, %q, or one or more of [%s]", t, TargetAll, TargetNone, strings.Join(names, ", "))
 		}
 		multi.AddRunnable(r)
@@ -276,7 +242,7 @@ func selectRunner(a app.App, targets []string) (app.Runnable, error) {
 func parseTargets(v string) []string {
 	var out []string
 	seen := map[string]bool{}
-	for _, t := range strings.Split(v, ",") {
+	for t := range strings.SplitSeq(v, ",") {
 		t = strings.TrimSpace(t)
 		if t == "" || seen[t] {
 			continue
@@ -285,6 +251,58 @@ func parseTargets(v string) []string {
 		out = append(out, t)
 	}
 	return out
+}
+
+// startRunner starts any background operations that the App requires in the background, if it can
+// reach the API server. Without a kube config, they would only fail repeatedly.
+// The returned func stops the runner and waits for it to exit.
+func startRunner(runner app.Runnable, cfg *runConfig) (stop func()) {
+	if runner == nil {
+		return func() {}
+	}
+	if cfg.kubeConfig == nil {
+		logging.DefaultLogger.Info("not starting the app runner: no kube config for api access", "pluginId", cfg.pluginID)
+		return func() {}
+	}
+	var wait sync.WaitGroup
+	ctx, cancel := context.WithCancel(context.Background())
+	wait.Go(func() {
+		err := runner.Run(ctx)
+		if err != nil && !errors.Is(err, context.Canceled) {
+			backendlog.DefaultLogger.Error(err.Error())
+		}
+	})
+	return func() {
+		cancel()
+		wait.Wait()
+	}
+}
+
+// resolveAuthenticator builds the authenticator from the environment when none was given,
+// logging a warning when requests cannot be verified.
+func (c *runConfig) resolveAuthenticator(manifestData *app.ManifestData) error {
+	if c.authenticator != nil {
+		return nil
+	}
+	authenticator, err := buildAuthenticator(c.pluginID, manifestData)
+	switch {
+	case err == nil:
+		c.authenticator = authenticator
+	case !errors.Is(err, ErrNoSigningKeys):
+		return err
+	case !c.insecureSkipAuthentication:
+		// Without an authenticator, the plugin v3 servers reject every request.
+		// Start anyway: hosts that never send plugin v3 requests, such as a
+		// Grafana that routes the App's API elsewhere, need not configure one.
+		logging.DefaultLogger.Warn("no authenticator configured: plugin protocol v3 requests will be rejected; set "+EnvVarGrafanaJWKSURL+" or "+EnvVarGrafanaJWKS+", or use WithAuthenticator; for local development, use WithInsecureSkipAuthentication or set "+EnvVarInsecureSkipAuthentication+"=true",
+			"pluginId", c.pluginID)
+	default:
+		// Authentication is explicitly skipped. Anything that can reach the
+		// plugin can then claim any identity, so make that visible.
+		logging.DefaultLogger.Warn("plugin protocol v3 requests are not verified: callers can claim any identity; use this only for local development",
+			"pluginId", c.pluginID)
+	}
+	return nil
 }
 
 // manage is backendapp.Manage, indirected so that tests can run Run without a plugin host.
