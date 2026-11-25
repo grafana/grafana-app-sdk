@@ -159,7 +159,7 @@ func TestNewBusInformer_Validation(t *testing.T) {
 
 	inf, err := NewBusInformer(busTestKind, sub, lister, BusInformerOptions{})
 	require.NoError(t, err)
-	assert.True(t, inf.IdentityPayload(), "the identity payload is the default")
+	assert.Equal(t, WatchDetailIdentity, inf.WatchOptions().Live.Detail, "the identity payload is the default")
 	assert.Equal(t, busTestKind.Schema, inf.Schema())
 	assert.Error(t, inf.AddEventHandler(nil))
 }
@@ -845,7 +845,7 @@ func TestBusInformer_HydratedPayload(t *testing.T) {
 			Payload: PayloadHydrated,
 			Getter:  getter,
 		})
-		assert.False(t, inf.IdentityPayload())
+		assert.Equal(t, WatchDetailFullObject, inf.WatchOptions().Live.Detail)
 
 		inf.handleEvent(context.Background(), busEvent(resourcebus.VerbAdded, "x", "200"))
 
@@ -1516,32 +1516,91 @@ func TestBusInformer_LiveEventsWithoutMetadataDeliverBareIdentities(t *testing.T
 	assert.Nil(t, got.GetDeletionTimestamp())
 }
 
-// What the bus announces decides whether an identity payload is enough for an opinionated reconciler or watcher,
-// since the SDK cannot see the allowlist the resource owner registered.
-func TestBusInformer_DeliversOpinionatedMetadata(t *testing.T) {
+// What a bus informer advertises is read by NewSelectingInformerSupplier and checked by BuildInformer, so it has to
+// be what the deliveries actually carry. The announced metadata decides whether its live channel reaches
+// WatchDetailMetadata, which is what an opinionated reconciler or watcher needs, since the SDK cannot see the
+// allowlist the resource owner registered.
+func TestBusInformer_WatchOptions(t *testing.T) {
 	complete := AnnouncedMetadata{DeletionTimestamp: true, Finalizers: true, Generation: true}
+	keys, err := NewIdentityLister(busTestKind, staticKeys("1"), IdentityListerOptions{})
+	require.NoError(t, err)
 
 	for _, tt := range []struct {
-		name string
-		opts BusInformerOptions
-		want bool
+		name   string
+		opts   BusInformerOptions
+		lister ResourceLister
+		want   WatchOptions
 	}{
-		{"identity with nothing announced", BusInformerOptions{}, false},
-		{"identity missing finalizers", BusInformerOptions{
-			AnnouncedMetadata: AnnouncedMetadata{DeletionTimestamp: true, Generation: true},
-		}, false},
-		{"identity missing the deletion timestamp", BusInformerOptions{
-			AnnouncedMetadata: AnnouncedMetadata{Finalizers: true, Generation: true},
-		}, false},
-		{"identity with all three announced", BusInformerOptions{AnnouncedMetadata: complete}, true},
-		{"hydrated carries the whole object", BusInformerOptions{
-			Payload: PayloadHydrated,
-			Getter:  &fakeGetter{objects: map[string]resource.Object{}},
-		}, true},
+		{
+			name: "identity with nothing announced",
+			want: WatchOptions{
+				Live:   &WatchLiveOptions{Detail: WatchDetailIdentity},
+				Resync: &WatchResyncOptions{Detail: WatchDetailMetadata, Distribution: WatchDistributionAll},
+			},
+		},
+		{
+			name: "identity missing finalizers",
+			opts: BusInformerOptions{AnnouncedMetadata: AnnouncedMetadata{DeletionTimestamp: true, Generation: true}},
+			want: WatchOptions{
+				Live:   &WatchLiveOptions{Detail: WatchDetailIdentity},
+				Resync: &WatchResyncOptions{Detail: WatchDetailMetadata, Distribution: WatchDistributionAll},
+			},
+		},
+		{
+			name: "identity announcing everything the opinionated path reads",
+			opts: BusInformerOptions{AnnouncedMetadata: complete},
+			want: WatchOptions{
+				Live:   &WatchLiveOptions{Detail: WatchDetailMetadata},
+				Resync: &WatchResyncOptions{Detail: WatchDetailMetadata, Distribution: WatchDistributionAll},
+			},
+		},
+		{
+			name: "hydrated carries the whole object on both channels",
+			opts: BusInformerOptions{
+				Payload: PayloadHydrated,
+				Getter:  &fakeGetter{objects: map[string]resource.Object{}},
+			},
+			want: WatchOptions{
+				Live:   &WatchLiveOptions{Detail: WatchDetailFullObject},
+				Resync: &WatchResyncOptions{Detail: WatchDetailFullObject, Distribution: WatchDistributionAll},
+			},
+		},
+		{
+			// A group round-robins the live stream; every member still lists the whole kind.
+			name: "a round-robin group shares the live channel only",
+			opts: BusInformerOptions{Group: resourcebus.Group{
+				Name:     "replicas",
+				Delivery: resourcebus.GroupDeliveryRoundRobin,
+			}},
+			want: WatchOptions{
+				Live: &WatchLiveOptions{
+					Detail:       WatchDetailIdentity,
+					Distribution: WatchDistributionShared,
+				},
+				Resync: &WatchResyncOptions{Detail: WatchDetailMetadata, Distribution: WatchDistributionAll},
+			},
+		},
+		{
+			name:   "a keys-only projection leaves the re-list a bare identity",
+			lister: keys,
+			want: WatchOptions{
+				Live:   &WatchLiveOptions{Detail: WatchDetailIdentity},
+				Resync: &WatchResyncOptions{Detail: WatchDetailIdentity, Distribution: WatchDistributionAll},
+			},
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			inf := newBusInformer(t, resourcebus.NewFake(), staticLister(), nil, tt.opts)
-			assert.Equal(t, tt.want, inf.DeliversOpinionatedMetadata())
+			lister := tt.lister
+			if lister == nil {
+				lister = staticLister()
+			}
+			tt.opts.ResyncInterval = time.Minute
+			inf := newBusInformer(t, resourcebus.NewFake(), lister, nil, tt.opts)
+
+			got := inf.WatchOptions()
+			tt.want.Resync.Interval = time.Minute
+			assert.Equal(t, tt.want, got)
+			assert.True(t, got.Live.Detail.SatisfiedBy(got.Live.Detail), "an advertisement satisfies itself")
 		})
 	}
 }

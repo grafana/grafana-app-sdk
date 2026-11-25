@@ -128,6 +128,18 @@ func (p *PeriodicInformer) HealthCheckName() string {
 	return "periodic-informer-" + p.kind.GroupVersionKind().String()
 }
 
+// WatchOptions is what this informer gives a kind's handlers: no live channel at all, and a resync which
+// re-delivers every listed object to every instance. What a re-delivery carries is whatever the lister returned.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+func (p *PeriodicInformer) WatchOptions() WatchOptions {
+	return WatchOptions{Resync: &WatchResyncOptions{
+		Detail:       listedDetail(p.lister),
+		Distribution: WatchDistributionAll,
+		Interval:     p.opts.ResyncInterval,
+	}}
+}
+
 // Schema returns the resource.Schema the informer is set up for.
 func (p *PeriodicInformer) Schema() resource.Schema { return p.kind.Schema }
 

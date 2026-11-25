@@ -289,14 +289,50 @@ func (b *BusInformer) logger(ctx context.Context) logging.Logger {
 	return logging.FromContext(ctx).With("component", "BusInformer", "kind", b.kind.GroupVersionKind().String())
 }
 
-// IdentityPayload reports whether the informer delivers identity-only objects.
-func (b *BusInformer) IdentityPayload() bool { return b.opts.Payload == PayloadIdentity }
+// WatchOptions is what this informer gives a kind's handlers. Its two channels genuinely differ, which is why they
+// are described apart: the live one carries whatever the payload and the bus's announcement amount to, while the
+// re-list carries whatever the lister read.
+//
+// Live deliveries carry the whole object under PayloadHydrated. Under PayloadIdentity they carry an identity and
+// the announced metadata, which is WatchDetailMetadata where the announcement covers what reads metadata off an
+// object — the deletion timestamp, the finalizer list and the generation — and WatchDetailIdentity where it does
+// not. A delivery group which shares the live stream makes that channel WatchDistributionShared; the re-list is
+// never divided, since every member lists the whole kind.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+func (b *BusInformer) WatchOptions() WatchOptions {
+	live := WatchLiveOptions{Detail: WatchDetailFullObject}
+	if b.opts.Payload == PayloadIdentity {
+		live.Detail = WatchDetailIdentity
+		if b.opts.AnnouncedMetadata.SupportsOpinionated() {
+			live.Detail = WatchDetailMetadata
+		}
+	}
+	if b.opts.Group.Delivery == resourcebus.GroupDeliveryRoundRobin {
+		live.Distribution = WatchDistributionShared
+	}
+	return WatchOptions{
+		Live: &live,
+		// The re-list is the correctness mechanism rather than an option, so there is always a resync channel. What
+		// it carries is the lister's answer, projected: identity mode keeps the metadata a listed object had, so it
+		// is only a bare identity where the lister itself returned one.
+		Resync: &WatchResyncOptions{
+			Detail:       b.resyncDetail(),
+			Distribution: WatchDistributionAll,
+			Interval:     b.opts.ResyncInterval,
+		},
+	}
+}
 
-// DeliversOpinionatedMetadata reports whether the objects it delivers carry what an opinionated reconciler or
-// watcher reads: the deletion timestamp, the finalizer list and the generation. A hydrated payload carries the whole
-// object and so always does; an identity payload does only where the bus announces those fields.
-func (b *BusInformer) DeliversOpinionatedMetadata() bool {
-	return b.opts.Payload == PayloadHydrated || b.opts.AnnouncedMetadata.SupportsOpinionated()
+// resyncDetail is what a re-list delivery carries: what the lister returned, weakened by the projection identity
+// mode applies to it. A listed object keeps its own metadata through that projection — unlike a live event, which
+// carries only what the bus announced — so a re-list over a full-object list delivers metadata either way.
+func (b *BusInformer) resyncDetail() WatchDetail {
+	listed := listedDetail(b.lister)
+	if b.opts.Payload != PayloadIdentity {
+		return listed
+	}
+	return weakerDetail(listed, WatchDetailMetadata)
 }
 
 // AddEventHandler adds a ResourceWatcher as an event handler. There is no cache to replay, so a watcher added after

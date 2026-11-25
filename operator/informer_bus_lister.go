@@ -352,3 +352,53 @@ func (l *pagedLister) convert(item runtime.Object) (resource.Object, error) {
 	}
 	return newIdentityObjectFrom(l.kind, accessor), nil
 }
+
+// ListedDetailLister is implemented by a ResourceLister whose results carry less than the whole object, so that an
+// informer built on it can advertise what its re-list actually delivers instead of assuming a full list. A lister
+// which does not implement it is taken to return whole objects.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+type ListedDetailLister interface {
+	// ListedDetail is the least a listed object carries.
+	ListedDetail() WatchDetail
+}
+
+// listedDetail is what a lister's results carry. A lister which does not say is taken at its word that it lists
+// objects, which is what the ResourceLister contract describes.
+func listedDetail(lister ResourceLister) WatchDetail {
+	if described, ok := lister.(ListedDetailLister); ok {
+		return described.ListedDetail()
+	}
+	return WatchDetailFullObject
+}
+
+// weakerDetail returns whichever of the two carries less, so that a composite never advertises more than its weakest
+// part. An unrecognized value is taken as the weaker, since nothing can be assumed about what it carries.
+func weakerDetail(a, b WatchDetail) WatchDetail {
+	if a.SatisfiedBy(b) {
+		return a
+	}
+	if b.SatisfiedBy(a) {
+		return b
+	}
+	return WatchDetailIdentity
+}
+
+// ListedDetail reports that this lister returns identities with no metadata: it builds them from keys alone.
+func (*identityLister) ListedDetail() WatchDetail { return WatchDetailIdentity }
+
+// ListedDetail reports whichever of the two listers carries less, since which one serves a given re-list is decided
+// per call.
+func (l *fallbackLister) ListedDetail() WatchDetail {
+	return weakerDetail(listedDetail(l.primary), listedDetail(l.fallback))
+}
+
+// ListedDetail reports what this lister's payload leaves on each item.
+func (l *pagedLister) ListedDetail() WatchDetail {
+	if l.opts.Payload == PayloadIdentity {
+		// The projection keeps the metadata the accessor could read, so it is a metadata delivery rather than a
+		// bare identity.
+		return WatchDetailMetadata
+	}
+	return WatchDetailFullObject
+}

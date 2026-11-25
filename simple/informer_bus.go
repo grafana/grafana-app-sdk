@@ -17,15 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// identityPayloadInformer is implemented by an informer which delivers identity-only objects. watchKind asserts it
-// to refuse a pairing with an opinionated reconciler or watcher, which reads the deletion timestamp and the
-// finalizer list off the delivered object and would see both as absent.
-type identityPayloadInformer interface {
-	IdentityPayload() bool
-	DeliversOpinionatedMetadata() bool
-}
-
-var _ identityPayloadInformer = (*operator.BusInformer)(nil)
 
 // BusInformerConfig configures the informers BusInformerSupplier creates.
 //
@@ -377,4 +368,75 @@ func InformerSupplierFromManifest(data app.ManifestData, cfg ManifestInformerCon
 	return func(kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions) (operator.Informer, error) {
 		return factory.Informer(kind, declarations[kind.Kind()], clients, options)
 	}
+}
+
+// BusInformerMechanism presents the bus supplier as an operator.InformerMechanism, so a deployment can list it among
+// the mechanisms operator.NewSelectingInformerSupplier chooses between and each kind takes the cheapest thing which
+// serves it. A nil subscriber returns nil, which the selector skips — which is how a deployment whose bus is
+// switched off lists it.
+//
+// What it advertises is read for selection only. The informer it builds describes itself, and more precisely: the
+// advertisement cannot call a KeyListerFactory to find out whether this kind's server serves the projection, so
+// where one is configured it claims the weaker re-list of the two it might get. That direction is the safe one — a
+// kind needing more of the re-list than the claim is passed over rather than served by less — and the informer's own
+// answer is what operator.BuildInformer then checks.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+func BusInformerMechanism(sub resourcebus.Subscriber, cfg BusInformerConfig) operator.InformerMechanism {
+	if sub == nil {
+		return nil
+	}
+	return operator.NewInformerMechanism(cfg.provides(), BusInformerSupplier(sub, cfg))
+}
+
+// provides is what a bus informer built from this configuration gives a kind's handlers. It mirrors
+// BusInformer.WatchOptions, from the configuration rather than from the built informer.
+func (c BusInformerConfig) provides() operator.WatchOptions {
+	live := operator.WatchLiveOptions{Detail: operator.WatchDetailFullObject}
+	if c.Payload != operator.PayloadHydrated {
+		live.Detail = operator.WatchDetailIdentity
+		if c.AnnouncedMetadata.SupportsOpinionated() {
+			live.Detail = operator.WatchDetailMetadata
+		}
+	}
+	if c.Group.Delivery == resourcebus.GroupDeliveryRoundRobin {
+		live.Distribution = operator.WatchDistributionShared
+	}
+
+	// The default lister reads whole objects, which identity mode then projects onto their metadata. A key
+	// projection reads no metadata to keep, and a ListerFactory is the caller's, so neither can be claimed for.
+	resync := operator.WatchDetailFullObject
+	if c.Payload != operator.PayloadHydrated {
+		resync = operator.WatchDetailMetadata
+	}
+	if c.KeyListerFactory != nil || c.ListerFactory != nil {
+		resync = operator.WatchDetailIdentity
+	}
+	return operator.WatchOptions{
+		Live: &live,
+		Resync: &operator.WatchResyncOptions{
+			Detail:       resync,
+			Distribution: operator.WatchDistributionAll,
+			Interval:     c.ResyncInterval,
+		},
+	}
+}
+
+// PeriodicInformerMechanism presents the periodic supplier as an operator.InformerMechanism: a resync channel and no
+// live one, so it serves a kind which asks only to be re-delivered everything on a cadence and is passed over by one
+// which needs changes as they happen.
+//
+// Experimental: the resource change bus is a work in progress and may change or be removed without notice.
+func PeriodicInformerMechanism(cfg PeriodicInformerConfig) operator.InformerMechanism {
+	detail := operator.WatchDetailFullObject
+	if cfg.ListerFactory != nil {
+		detail = operator.WatchDetailIdentity
+	}
+	return operator.NewInformerMechanism(operator.WatchOptions{
+		Resync: &operator.WatchResyncOptions{
+			Detail:       detail,
+			Distribution: operator.WatchDistributionAll,
+			Interval:     cfg.ResyncInterval,
+		},
+	}, PeriodicInformerSupplier(cfg))
 }
