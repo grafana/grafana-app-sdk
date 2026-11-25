@@ -87,7 +87,7 @@ const (
 	// GroupDeliveryDefault leaves the sharing to the bus, which is what a subscriber asks for when it needs the
 	// members to divide the events between them and does not care how.
 	GroupDeliveryDefault GroupDelivery = ""
-	// GroupDeliveryRoundRobin asks the bus to hand each event to one member in turn, with no affinity between an
+	// GroupDeliveryRoundRobin asks the bus to hand each event to one member, with no affinity between an
 	// object and the member which handles its events.
 	GroupDeliveryRoundRobin GroupDelivery = "round-robin"
 )

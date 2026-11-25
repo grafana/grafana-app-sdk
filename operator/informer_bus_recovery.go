@@ -328,7 +328,7 @@ func (b *BusInformer) relist(ctx context.Context) error {
 			delete(r.deleted, id)
 		}
 	}
-	r.items, r.listVersion = next, version
+	r.items, r.listVersion = next, max(r.listVersion, version)
 	return nil
 }
 

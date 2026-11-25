@@ -153,3 +153,22 @@ func TestBusRecoveryDegradedStartAndReconnect(t *testing.T) {
 		require.True(t, recovered.closed)
 	})
 }
+
+func TestBusRecoveryKeepsNumericWatermarkAfterOpaqueList(t *testing.T) {
+	subscriber := busSubscribeFunc(func(context.Context, schema.GroupVersionResource, string, func(context.Context, resourcebus.Event), ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
+		return &testBusSubscription{}, nil
+	})
+	version := "100"
+	informer, err := NewBusInformer(listerTestKind, subscriber, listerFunc(func(context.Context) ([]resource.Object, string, error) {
+		return nil, version, nil
+	}), BusInformerOptions{})
+	require.NoError(t, err)
+	require.NoError(t, informer.AddEventHandler(&SimpleWatcher{AddFunc: func(context.Context, resource.Object) error {
+		t.Error("a stale add resurrected a missing key")
+		return nil
+	}}))
+	require.NoError(t, informer.relist(t.Context()))
+	version = "opaque"
+	require.NoError(t, informer.relist(t.Context()))
+	informer.applyLive(t.Context(), resourcebus.Event{Verb: resourcebus.VerbAdded, Name: "item", ResourceVersion: "90"})
+}

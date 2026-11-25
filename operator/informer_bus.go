@@ -95,6 +95,9 @@ func validateBusOptions(group resourcebus.Group, query ListWatchOptions) error {
 	if group.Name == "" && group.Delivery != resourcebus.GroupDeliveryDefault {
 		return errors.New("bus delivery policy requires a group name")
 	}
+	if group.Delivery != resourcebus.GroupDeliveryDefault && group.Delivery != resourcebus.GroupDeliveryRoundRobin {
+		return fmt.Errorf("%w: unsupported group delivery policy %q", resourcebus.ErrSubscriptionRejected, group.Delivery)
+	}
 	return nil
 }
 
@@ -306,6 +309,30 @@ func (b *BusInformer) hasSynced() bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// Schema returns the kind served by the informer.
+func (b *BusInformer) Schema() resource.Schema { return b.kind.Schema }
+
+// HealthCheckName returns the name used by the SDK health endpoint.
+func (b *BusInformer) HealthCheckName() string {
+	return "bus-informer-" + b.kind.GroupVersionKind().String()
+}
+
+// HealthCheck reports whether initial sync has completed and the informer is running.
+func (b *BusInformer) HealthCheck(context.Context) error {
+	select {
+	case <-b.stopped:
+		if b.runErr != nil {
+			return b.runErr
+		}
+		return errors.New("bus informer has stopped")
+	default:
+		if !b.hasSynced() {
+			return errors.New("bus informer has not synced")
+		}
+		return nil
 	}
 }
 
