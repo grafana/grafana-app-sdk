@@ -244,10 +244,10 @@ func TestPeriodicInformerWaitsForHandlerBeforeNextSweep(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
-		var calls int
+		var calls atomic.Int64
 		var handlerErr error
 		informer, err := NewPeriodicInformer(listerTestKind, listerFunc(func(context.Context) ([]resource.Object, string, error) {
-			calls++
+			calls.Add(1)
 			return []resource.Object{listerObj("a")}, "", nil
 		}), PeriodicInformerOptions{
 			ResyncInterval: time.Minute,
@@ -262,15 +262,15 @@ func TestPeriodicInformerWaitsForHandlerBeforeNextSweep(t *testing.T) {
 		go func() { _ = informer.Run(ctx) }()
 		time.Sleep(90 * time.Second)
 		synctest.Wait()
-		require.Equal(t, 1, calls)
+		require.Equal(t, int64(1), calls.Load())
 		require.False(t, informer.HasSynced())
 		time.Sleep(30 * time.Second)
 		synctest.Wait()
 		require.ErrorIs(t, handlerErr, context.DeadlineExceeded)
 		require.True(t, informer.HasSynced())
-		require.Equal(t, 1, calls)
+		require.Equal(t, int64(1), calls.Load())
 		time.Sleep(67 * time.Second)
 		synctest.Wait()
-		require.Equal(t, 2, calls)
+		require.Equal(t, int64(2), calls.Load())
 	})
 }
