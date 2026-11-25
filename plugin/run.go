@@ -179,7 +179,8 @@ func Run(provider app.Provider, opts ...RunOption) error {
 		return err
 	}
 
-	defer startRunner(runner, &cfg)()
+	stopRunner := startRunner(runner, &cfg)
+	defer stopRunner()
 
 	return manage(cfg.pluginID, cfg.appFunc, cfg.manageOpts)
 }
