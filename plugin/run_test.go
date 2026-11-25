@@ -38,7 +38,10 @@ import (
 type fakeApp struct {
 	cfg    app.Config
 	runner app.Runnable
+	named  map[string]app.Runnable
 }
+
+func (a *fakeApp) NamedRunners() map[string]app.Runnable { return a.named }
 
 func (*fakeApp) PrometheusCollectors() []prometheus.Collector          { return nil }
 func (*fakeApp) HealthChecks() []health.Check                          { return nil }
@@ -195,6 +198,130 @@ func TestRun(t *testing.T) {
 		case <-runner.done:
 		default:
 			t.Error("expected the app runner to have been stopped before Run returned")
+		}
+	})
+
+	t.Run("runs only the targeted named runner", func(t *testing.T) {
+		stubManage(t, nil)
+		p := newFakeProvider("my-app")
+		all := p.app.runner.(*fakeRunner)
+		named := newFakeRunner()
+		other := newFakeRunner()
+		p.app.named = map[string]app.Runnable{"one": named, "two": other}
+
+		if err := Run(p, WithKubeConfig(rest.Config{Host: "https://example.com"}), WithInsecureSkipAuthentication(), WithTarget("one")); err != nil {
+			t.Fatalf("Run returned error: %v", err)
+		}
+		for name, r := range map[string]*fakeRunner{"all": all, "two": other} {
+			select {
+			case <-r.started:
+				t.Errorf("expected runner %q not to be started", name)
+			default:
+			}
+		}
+		select {
+		case <-named.done:
+		default:
+			t.Error("expected the targeted runner to have run and stopped")
+		}
+	})
+
+	t.Run("reads the target from the environment", func(t *testing.T) {
+		stubManage(t, nil)
+		t.Setenv(EnvVarTarget, "one")
+		p := newFakeProvider("my-app")
+		named := newFakeRunner()
+		p.app.named = map[string]app.Runnable{"one": named}
+
+		if err := Run(p, WithKubeConfig(rest.Config{Host: "https://example.com"}), WithInsecureSkipAuthentication()); err != nil {
+			t.Fatalf("Run returned error: %v", err)
+		}
+		select {
+		case <-named.started:
+		default:
+			t.Error("expected the targeted runner to have been started")
+		}
+	})
+
+	t.Run("runs multiple targets from a comma-separated environment variable", func(t *testing.T) {
+		stubManage(t, nil)
+		t.Setenv(EnvVarTarget, " one, two ,one")
+		p := newFakeProvider("my-app")
+		one, two, three := newFakeRunner(), newFakeRunner(), newFakeRunner()
+		p.app.named = map[string]app.Runnable{"one": one, "two": two, "three": three}
+
+		if err := Run(p, WithKubeConfig(rest.Config{Host: "https://example.com"}), WithInsecureSkipAuthentication()); err != nil {
+			t.Fatalf("Run returned error: %v", err)
+		}
+		for name, r := range map[string]*fakeRunner{"one": one, "two": two} {
+			select {
+			case <-r.started:
+			default:
+				t.Errorf("expected runner %q to have been started", name)
+			}
+		}
+		select {
+		case <-three.started:
+			t.Error("expected runner three not to be started")
+		default:
+		}
+	})
+
+	t.Run("target none runs nothing", func(t *testing.T) {
+		call := stubManage(t, nil)
+		p := newFakeProvider("my-app")
+		all := p.app.runner.(*fakeRunner)
+
+		if err := Run(p, WithKubeConfig(rest.Config{Host: "https://example.com"}), WithInsecureSkipAuthentication(), WithTarget(TargetNone)); err != nil {
+			t.Fatalf("Run returned error: %v", err)
+		}
+		select {
+		case <-all.started:
+			t.Error("expected the app runner not to be started")
+		default:
+		}
+		if call.appFunc == nil {
+			t.Error("expected Manage to be called")
+		}
+	})
+
+	t.Run("all and none cannot be combined", func(t *testing.T) {
+		stubManage(t, nil)
+		for _, targets := range [][]string{{"all", "one"}, {"one", "none"}} {
+			p := newFakeProvider("my-app")
+			p.app.named = map[string]app.Runnable{"one": newFakeRunner()}
+			if err := Run(p, WithInsecureSkipAuthentication(), WithTarget(targets...)); err == nil {
+				t.Errorf("expected an error for targets %v", targets)
+			}
+		}
+	})
+
+	t.Run("target all runs the whole app runner", func(t *testing.T) {
+		stubManage(t, nil)
+		p := newFakeProvider("my-app")
+		all := p.app.runner.(*fakeRunner)
+
+		if err := Run(p, WithKubeConfig(rest.Config{Host: "https://example.com"}), WithInsecureSkipAuthentication(), WithTarget(TargetAll)); err != nil {
+			t.Fatalf("Run returned error: %v", err)
+		}
+		select {
+		case <-all.started:
+		default:
+			t.Error("expected the app runner to have been started")
+		}
+	})
+
+	t.Run("returns an error for an unknown target", func(t *testing.T) {
+		call := stubManage(t, nil)
+		p := newFakeProvider("my-app")
+		p.app.named = map[string]app.Runnable{"one": newFakeRunner()}
+
+		err := Run(p, WithInsecureSkipAuthentication(), WithTarget("nope"))
+		if err == nil || !strings.Contains(err.Error(), `unknown target "nope"`) || !strings.Contains(err.Error(), "one") {
+			t.Fatalf("expected unknown target error listing targets, got %v", err)
+		}
+		if call.appFunc != nil {
+			t.Error("expected Manage not to be called")
 		}
 	})
 

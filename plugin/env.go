@@ -39,6 +39,11 @@ const (
 	// Grafana sets it from insecure_skip_authentication = true in the plugin's
 	// [plugin.<id>] settings. Use it only for local development.
 	EnvVarInsecureSkipAuthentication = "GF_PLUGIN_INSECURE_SKIP_AUTHENTICATION"
+
+	// EnvVarTarget names the environment variable that selects which named runnables
+	// of the App Run starts (see WithTarget): a comma-separated list of names, "all",
+	// or "none". Unset, empty, or "all" runs everything.
+	EnvVarTarget = "GF_APP_TARGET"
 )
 
 // legacyEnvVars maps environment variable names to the names they replace.
