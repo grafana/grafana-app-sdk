@@ -200,6 +200,7 @@ SchemaWithOperatorState: Schema & {
 	// extensions are all openAPI extensions that you wish to apply to this route.
 	extensions: {
 		[=~"^x-(.+)$"]: _
+		"x-grafana-proxy"?: #ProxyTarget
 	}
 	// authz declares the authorization attributes which are checked for this route.
 	// If present, each provided field is emitted as an openAPI extension on the route
@@ -211,6 +212,28 @@ SchemaWithOperatorState: Schema & {
 	// the app answers itself, or whose object only exists once it is written. It is emitted as
 	// the openAPI extension x-grafana-allow-missing-parent.
 	allowMissingParent?: bool
+}
+#ProxyTarget: {
+	// The path and method come from the operation, not the proxy target.
+	reqRole?: "" | "None" | "Viewer" | "Editor" | "Admin" | "none" | "viewer" | "editor" | "admin"
+	reqAction?: string
+	// An omitted URL uses the data source URL. Templates are evaluated at runtime.
+	url?: string
+	urlParams?: [...#ProxyNameContent]
+	headers?: [...#ProxyNameContent]
+	authType?: "" | "azure" | "gce" | "jwt"
+	tokenAuth?: #ProxyTokenAuth
+	jwtTokenAuth?: #ProxyTokenAuth
+	body?: _
+}
+#ProxyNameContent: {
+	name: string & strings.MinRunes(1)
+	content: string
+}
+#ProxyTokenAuth: {
+	url?: string
+	scopes?: [...string]
+	params?: [string]: string
 }
 #CustomRouteAuthz: {
 	// resource is the resource the authz check is performed against.
@@ -413,6 +436,10 @@ Kind: S={
 	machineName:       strings.ToLower(strings.Replace(S.kind, "-", "_", -1))
 	pluralName:        =~"^([A-Z][a-zA-Z0-9-]{0,61}[a-zA-Z])$" | *(S.kind + "s")
 	pluralMachineName: strings.ToLower(strings.Replace(S.pluralName, "-", "_", -1))
+	// resource is the lowercase name the kind is served under in the API path
+	// (/apis/<group>/<version>/namespaces/<ns>/<resource>). It defaults to the lowercased pluralName
+	// (which, unlike pluralMachineName, keeps any '-'), and must be a valid DNS-1123 label.
+	resource: =~"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" | *strings.ToLower(S.pluralName)
 	// codegen contains properties specific to generating code using tooling. At the root level of the kind, it sets
 	// the defaults for the `codegen` field in all entries in `versions`. 
 	// Valus set in `versions[x]: codegen` will overwrite the value set here.

@@ -50,7 +50,7 @@ var (
 			if b == nil {
 				return "nil"
 			}
-			return "func(b bool) *bool { return &b }(" + strconv.FormatBool(*b) + ")"
+			return "new(" + strconv.FormatBool(*b) + ")"
 		},
 	}
 
@@ -151,12 +151,14 @@ func WriteResourceTSType(metadata ResourceTSTemplateMetadata, out io.Writer) err
 
 // SchemaMetadata is the metadata required by the Resource Schema template
 type SchemaMetadata struct {
-	HasSecureValues  bool
-	Package          string
-	Group            string
-	Version          string
-	Kind             string
-	Plural           string
+	HasSecureValues bool
+	Package         string
+	Group           string
+	Version         string
+	Kind            string
+	Plural          string
+	// Resource is the lowercase API resource name. It is only emitted if it differs from the lowercased Plural.
+	Resource         string
 	Scope            string
 	SelectableFields []SchemaMetadataSelectableField
 	FuncPrefix       string

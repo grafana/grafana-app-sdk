@@ -36,6 +36,27 @@ type KubernetesBasedInformer struct {
 	errorHandlerFn        func(context.Context, error)
 	healthCheckName       string
 	deliveryMetrics       *InformerDeliveryMetrics
+	resyncInterval        time.Duration
+}
+
+// WatchOptions is what this informer gives a kind's handlers: each change as it happens, carrying the whole object,
+// to every instance. It resyncs as well when a cadence was resolved, re-delivering its cache rather than reading the
+// API — so it re-evaluates every object but discovers nothing the watch did not deliver.
+//
+// Experimental: this API may change in a minor release.
+func (k *KubernetesBasedInformer) WatchOptions() WatchOptions {
+	options := WatchOptions{Live: &WatchLiveOptions{
+		Detail:       WatchDetailFullObject,
+		Distribution: WatchDistributionAll,
+	}}
+	if k.resyncInterval > 0 {
+		options.Resync = &WatchResyncOptions{
+			Detail:       WatchDetailFullObject,
+			Distribution: WatchDistributionAll,
+			Interval:     k.resyncInterval,
+		}
+	}
+	return options
 }
 
 // InformerOptions are generic options for all Informer implementations.
@@ -46,6 +67,7 @@ type InformerOptions struct {
 	// This is distinct from a full resync, as no information is fetched from the API server.
 	// Changes to this value after run() is called will not take effect.
 	// An empty value will disable cache resyncs.
+	// A kind which states WatchNeeds.Resync.Interval gets that instead; see ResyncOptions.
 	CacheResyncInterval time.Duration
 	// EventTimeout is the timeout for an event to be processed.
 	// If an event is not processed within this timeout, it will be dropped.
@@ -75,6 +97,7 @@ type InformerOptions struct {
 	// Recommended values: 5000-10000 for most use cases.
 	// Note: This only affects traditional LIST operations. It does NOT apply to watch-list streaming (UseWatchList).
 	// An empty value (0) will use client-go's default pagination behavior based on resource version.
+	// A kind which states WatchNeeds.Resync.ListPageSize gets that instead; see ResyncOptions.
 	WatchListPageSize int64
 	// MaxConcurrentWorkers is the maximum number of concurrent workers for event processing in ConcurrentInformer.
 	// Each worker maintains a queue of events which are processed sequentially.
@@ -91,6 +114,41 @@ type InformerOptions struct {
 	// ResourceKind is used as the "kind" label on queue depth metrics.
 	// When empty, the label value defaults to an empty string.
 	ResourceKind string
+	// WatchNeeds is what the kind's handlers need of the changes they are watched by, for a mechanism to configure
+	// itself from. It wins over the overlapping fields above, which are the app-wide fallbacks; ResyncOptions
+	// resolves the two.
+	//
+	// Experimental: this API may change in a minor release.
+	WatchNeeds WatchOptions
+}
+
+// ResyncOptions is the resync an informer built from these options should run, and the page size any listing it
+// does should read: WatchNeeds.Resync where the kind stated a figure, CacheResyncInterval and WatchListPageSize
+// where it did not, each falling back on its own. Read
+// this, not CacheResyncInterval, wherever the effective cadence is used.
+//
+// A nil WatchNeeds.Resync states nothing, so it does not switch the app-wide resync off. The result is nil only
+// when neither side asked for a resync; an Interval of 0 means one was asked for with no cadence to run it at,
+// which each mechanism answers for itself. A negative figure stated by the kind is still a figure, so it is not
+// replaced by the app-wide one: it resolves to zero, since a negative cadence is no cadence.
+//
+// Experimental: this API may change in a minor release.
+func (o InformerOptions) ResyncOptions() *WatchResyncOptions {
+	needs := o.WatchNeeds.Resync
+	if needs == nil && o.CacheResyncInterval == 0 {
+		return nil
+	}
+	resolved := WatchResyncOptions{Interval: o.CacheResyncInterval, ListPageSize: o.WatchListPageSize}
+	if needs != nil {
+		resolved.Detail, resolved.Distribution = needs.Detail, needs.Distribution
+		if needs.Interval != 0 {
+			resolved.Interval = max(needs.Interval, 0)
+		}
+		if needs.ListPageSize != 0 {
+			resolved.ListPageSize = max(needs.ListPageSize, 0)
+		}
+	}
+	return &resolved
 }
 
 // NewKubernetesBasedInformer creates a new KubernetesBasedInformer for the provided kind and options,
@@ -102,12 +160,18 @@ func NewKubernetesBasedInformer(
 		return nil, errors.New("client cannot be nil")
 	}
 
+	// Resolved once, so the timeout below and the resync period agree.
+	var resync time.Duration
+	if resolved := options.ResyncOptions(); resolved != nil {
+		resync = resolved.Interval
+	}
+
 	var timeout time.Duration
 	if options.EventTimeout > 0 {
 		timeout = options.EventTimeout
 	}
-	if options.CacheResyncInterval > 0 && options.CacheResyncInterval < timeout {
-		timeout = options.CacheResyncInterval
+	if resync > 0 && resync < timeout {
+		timeout = resync
 	}
 
 	var errorHandler func(context.Context, error)
@@ -135,7 +199,7 @@ func NewKubernetesBasedInformer(
 	shared := cache.NewSharedIndexInformer(
 		NewListerWatcher(client, sch, options.ListWatchOptions),
 		nil,
-		options.CacheResyncInterval,
+		resync,
 		cache.Indexers{
 			cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
 		})
@@ -153,6 +217,7 @@ func NewKubernetesBasedInformer(
 		errorHandlerFn:        errorHandler,
 		SharedIndexInformer:   shared,
 		deliveryMetrics:       options.DeliveryMetrics,
+		resyncInterval:        resync,
 		HealthCheckIgnoreSync: options.HealthCheckIgnoreSync,
 		healthCheckName:       healthCheckName,
 	}, nil

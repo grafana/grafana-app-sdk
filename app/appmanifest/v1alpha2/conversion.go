@@ -1,6 +1,7 @@
 package v1alpha2
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -565,7 +566,10 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 			if err != nil {
 				return nil, err
 			}
-			if err := json.Unmarshal(raw, &ver.Openapi); err != nil {
+			// Preserve large integers instead of rounding them through float64.
+			decoder := json.NewDecoder(bytes.NewReader(raw))
+			decoder.UseNumber()
+			if err := decoder.Decode(&ver.Openapi); err != nil {
 				return nil, err
 			}
 			// paths is required by the schema, so never serialize it as null

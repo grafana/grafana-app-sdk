@@ -3,6 +3,7 @@ package jennies
 import (
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 )
@@ -55,6 +56,15 @@ func GetGeneratedGoTypePath(groupByKind bool, shortGroup string, version string,
 	return filepath.Join(ToPackageName(shortGroup), ToPackageName(version))
 }
 
+// kindResource returns the API resource name for the kind, which comes from the kind's definition.
+// It falls back to the lowercased PluralName for a VersionedKind which was not built from a definition.
+func kindResource(kind codegen.VersionedKind) string {
+	if kind.Resource != "" {
+		return kind.Resource
+	}
+	return strings.ToLower(kind.PluralName)
+}
+
 func versionedKindToKindProperties(kind codegen.VersionedKind, appManifest codegen.AppManifest) codegen.KindProperties {
 	return codegen.KindProperties{
 		Kind:                   kind.Kind,
@@ -63,6 +73,7 @@ func versionedKindToKindProperties(kind codegen.VersionedKind, appManifest codeg
 		MachineName:            kind.MachineName,
 		PluralMachineName:      kind.PluralMachineName,
 		PluralName:             kind.PluralName,
+		Resource:               kind.Resource,
 		Current:                appManifest.Properties().PreferredVersion,
 		Scope:                  kind.Scope,
 		UserReadable:           kind.UserReadable,
