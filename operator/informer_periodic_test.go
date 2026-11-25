@@ -274,3 +274,66 @@ func TestPeriodicInformerWaitsForHandlerBeforeNextSweep(t *testing.T) {
 		require.Equal(t, int64(2), calls.Load())
 	})
 }
+
+func TestPeriodicInformerControllerRetriesWithFreshTimeout(t *testing.T) {
+	for _, name := range []string{"watcher error", "reconciler error", "requeue"} {
+		t.Run(name, func(t *testing.T) {
+			runCtx, stop := context.WithCancel(t.Context())
+			defer stop()
+			const timeout = time.Second
+			informer, err := NewPeriodicInformer(listerTestKind, staticLister(listerObj("item")), PeriodicInformerOptions{EventTimeout: timeout})
+			require.NoError(t, err)
+			controller := NewInformerController(InformerControllerConfig{})
+			const key = "widget"
+			require.NoError(t, controller.AddInformer(informer, key))
+
+			var attempts []context.Context
+			var attemptErrors []error
+			record := func(ctx context.Context) error {
+				attempts = append(attempts, ctx)
+				attemptErrors = append(attemptErrors, ctx.Err())
+				if len(attempts) == 1 && name != "requeue" {
+					return errors.New("retry requested")
+				}
+				return nil
+			}
+			if name == "watcher error" {
+				require.NoError(t, controller.AddWatcher(&SimpleWatcher{AddFunc: func(ctx context.Context, _ resource.Object) error {
+					return record(ctx)
+				}}, key))
+			} else {
+				require.NoError(t, controller.AddReconciler(&SimpleReconciler{ReconcileFunc: func(ctx context.Context, _ ReconcileRequest) (ReconcileResult, error) {
+					err := record(ctx)
+					if len(attempts) == 1 && name == "requeue" {
+						return ReconcileResult{RequeueAfter: new(time.Second)}, nil
+					}
+					return ReconcileResult{}, err
+				}}, key))
+			}
+
+			require.NoError(t, informer.sweep(runCtx))
+			require.Len(t, attempts, 1)
+			require.ErrorIs(t, attempts[0].Err(), context.Canceled)
+			keys := controller.toRetry.Keys()
+			require.Len(t, keys, 1)
+			var retry retryInfo
+			controller.toRetry.RemoveItems(keys[0], func(item retryInfo) bool {
+				retry = item
+				return true
+			}, 1)
+			_, err = retry.retryFunc()
+			require.NoError(t, err)
+			require.Len(t, attempts, 2)
+			require.NoError(t, attemptErrors[1])
+			retryDeadline, ok := attempts[1].Deadline()
+			require.True(t, ok)
+			originalDeadline, _ := attempts[0].Deadline()
+			require.True(t, retryDeadline.After(originalDeadline))
+			// Shutdown also cancels any later attempt.
+			stop()
+			_, err = retry.retryFunc()
+			require.ErrorIs(t, err, context.Canceled)
+			require.Len(t, attempts, 2)
+		})
+	}
+}
