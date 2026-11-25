@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/cespare/xxhash/v2"
@@ -90,16 +89,17 @@ func NewBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, liste
 	if opts.ResyncInterval <= 0 {
 		opts.ResyncInterval = defaultPeriodicInterval
 	}
-	b.recovery = &busRecovery{lister: lister, opts: opts, relist: make(chan struct{}, 1),
+	b.recovery = &busRecovery{lister: lister, opts: opts, relist: make(chan struct{}, 1), overflowed: make(chan struct{}, 1),
 		items: make(map[resource.Identifier]resource.Object), deleted: make(map[resource.Identifier]int64)}
 	return b, nil
 }
 
 type busRecovery struct {
-	lister       ResourceLister
-	opts         BusInformerOptions
-	relist       chan struct{}
-	lastOverflow atomic.Int64
+	lister             ResourceLister
+	opts               BusInformerOptions
+	relist             chan struct{}
+	overflowed         chan struct{}
+	nextOverflowRelist time.Time
 
 	// The run loop alone mutates the snapshot and dispatches changes.
 	items       map[resource.Identifier]resource.Object
@@ -199,15 +199,30 @@ func (b *BusInformer) recoverSubscription(ctx context.Context, cancel context.Ca
 	<-ctx.Done()
 }
 
+const overflowRelistInterval = 30 * time.Second
+
 func (b *BusInformer) serveUntilRelist(ctx context.Context, delay time.Duration) bool {
+	r := b.recovery
 	timer := time.NewTimer(wait.Jitter(delay, informerRetryJitter))
 	defer timer.Stop()
+	var overflowTimer *time.Timer
+	defer func() {
+		if overflowTimer != nil {
+			overflowTimer.Stop()
+		}
+	}()
+	overflowEvents := (<-chan struct{})(r.overflowed)
+	var overflowReady <-chan time.Time
+
 	for ctx.Err() == nil {
 		// Prioritize recovery even when events arrive continuously.
 		select {
 		case <-timer.C:
 			return true
-		case <-b.recovery.relist:
+		case <-r.relist:
+			return true
+		case <-overflowReady:
+			r.nextOverflowRelist = time.Now().Add(overflowRelistInterval)
 			return true
 		default:
 		}
@@ -216,7 +231,21 @@ func (b *BusInformer) serveUntilRelist(ctx context.Context, delay time.Duration)
 			return false
 		case <-timer.C:
 			return true
-		case <-b.recovery.relist:
+		case <-r.relist:
+			return true
+		case <-overflowReady:
+			r.nextOverflowRelist = time.Now().Add(overflowRelistInterval)
+			return true
+		case <-overflowEvents:
+			if remaining := time.Until(r.nextOverflowRelist); remaining > 0 {
+				// A LIST already queued by the normal schedule or reconnect
+				// can cover this drop before the cooldown ends.
+				overflowTimer = time.NewTimer(remaining)
+				overflowReady = overflowTimer.C
+				overflowEvents = nil
+				continue
+			}
+			r.nextOverflowRelist = time.Now().Add(overflowRelistInterval)
 			return true
 		case event := <-b.events:
 			b.applyLive(ctx, event)
@@ -233,10 +262,9 @@ func (r *busRecovery) signalRelist() {
 }
 
 func (r *busRecovery) overflow() {
-	now := time.Now().UnixNano()
-	last := r.lastOverflow.Load()
-	if now-last >= int64(30*time.Second) && r.lastOverflow.CompareAndSwap(last, now) {
-		r.signalRelist()
+	select {
+	case r.overflowed <- struct{}{}:
+	default:
 	}
 }
 
@@ -303,7 +331,10 @@ func (b *BusInformer) relist(ctx context.Context) error {
 	}
 	for id, obj := range next {
 		old := r.items[id]
-		if version > 0 && r.deleted[id] > version {
+		if deleted := r.deleted[id]; deleted > version &&
+			(version > 0 || numericVersion(obj.GetResourceVersion()) <= deleted) {
+			// An opaque LIST cannot prove that an older or undated item
+			// was recreated after the live delete.
 			delete(next, id)
 			continue
 		}
@@ -324,7 +355,7 @@ func (b *BusInformer) relist(ctx context.Context) error {
 		b.deliverChange(ctx, old, nil)
 	}
 	for id, deleted := range r.deleted {
-		if version == 0 || deleted <= version {
+		if deleted <= version {
 			delete(r.deleted, id)
 		}
 	}

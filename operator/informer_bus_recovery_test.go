@@ -172,3 +172,89 @@ func TestBusRecoveryKeepsNumericWatermarkAfterOpaqueList(t *testing.T) {
 	require.NoError(t, informer.relist(t.Context()))
 	informer.applyLive(t.Context(), resourcebus.Event{Verb: resourcebus.VerbAdded, Name: "item", ResourceVersion: "90"})
 }
+
+func TestBusRecoveryArbitratesStaleSnapshots(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		live       resourcebus.Verb
+		listRV     string
+		listItemRV string
+	}{
+		{name: "live write omitted", live: resourcebus.VerbModified, listRV: "150"},
+		{name: "live write with older listed item", live: resourcebus.VerbModified, listRV: "150", listItemRV: "120"},
+		{name: "live delete with older listed item", live: resourcebus.VerbDeleted, listRV: "150", listItemRV: "120"},
+		{name: "live delete followed by opaque list", live: resourcebus.VerbDeleted, listRV: "opaque"},
+		{name: "live delete with older item in opaque list", live: resourcebus.VerbDeleted, listRV: "opaque", listItemRV: "120"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sub := busSubscribeFunc(func(context.Context, schema.GroupVersionResource, string, func(context.Context, resourcebus.Event), ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
+				return &testBusSubscription{}, nil
+			})
+			id := resource.Identifier{Namespace: listerTestNamespace, Name: "item"}
+			listRV := "100"
+			initial := listerObj(id.Name)
+			initial.SetResourceVersion("100")
+			objects := []resource.Object{initial}
+			informer, err := NewBusInformer(listerTestKind, sub, listerFunc(func(context.Context) ([]resource.Object, string, error) {
+				return objects, listRV, nil
+			}), BusInformerOptions{})
+			require.NoError(t, err)
+			seen := 0
+			require.NoError(t, informer.AddEventHandler(&SimpleWatcher{
+				AddFunc:    func(context.Context, resource.Object) error { seen++; return nil },
+				UpdateFunc: func(context.Context, resource.Object, resource.Object) error { seen++; return nil },
+				DeleteFunc: func(context.Context, resource.Object) error { seen++; return nil },
+			}))
+			require.NoError(t, informer.relist(t.Context()))
+			informer.applyLive(t.Context(), resourcebus.Event{Verb: tc.live, Namespace: id.Namespace, Name: id.Name, ResourceVersion: "200"})
+			require.Equal(t, 2, seen)
+
+			listRV, objects = tc.listRV, nil
+			if tc.listItemRV != "" {
+				item := listerObj(id.Name)
+				item.SetResourceVersion(tc.listItemRV)
+				objects = []resource.Object{item}
+			}
+			require.NoError(t, informer.relist(t.Context()))
+			informer.applyLive(t.Context(), resourcebus.Event{Verb: resourcebus.VerbAdded, Namespace: id.Namespace, Name: id.Name, ResourceVersion: "160"})
+			require.Equal(t, 2, seen)
+			if tc.live == resourcebus.VerbDeleted {
+				require.NotContains(t, informer.recovery.items, id)
+			} else {
+				require.Equal(t, "200", informer.recovery.items[id].GetResourceVersion())
+			}
+		})
+	}
+}
+
+func TestBusRecoveryRetainsOverflowDuringCooldown(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		sub := busSubscribeFunc(func(context.Context, schema.GroupVersionResource, string, func(context.Context, resourcebus.Event), ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
+			return &testBusSubscription{}, nil
+		})
+		var lists atomic.Int64
+		informer, err := NewBusInformer(listerTestKind, sub, listerFunc(func(context.Context) ([]resource.Object, string, error) {
+			lists.Add(1)
+			return nil, "100", nil
+		}), BusInformerOptions{ResyncInterval: time.Hour})
+		require.NoError(t, err)
+		done := make(chan error, 1)
+		go func() { done <- informer.Run(ctx) }()
+		require.NoError(t, informer.WaitForSync(ctx))
+
+		informer.recovery.overflow()
+		synctest.Wait()
+		require.Equal(t, int64(2), lists.Load())
+		time.Sleep(time.Second)
+		informer.recovery.overflow()
+		synctest.Wait()
+		require.Equal(t, int64(2), lists.Load(), "respect cooldown")
+		time.Sleep(30 * time.Second)
+		synctest.Wait()
+		require.Equal(t, int64(3), lists.Load(), "recover the second drop before the normal resync")
+		cancel()
+		require.NoError(t, <-done)
+	})
+}
