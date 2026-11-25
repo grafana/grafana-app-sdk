@@ -36,6 +36,9 @@ config: {
 * kind go code will be written to the path in `config.codegen.goGenPath`, with a package for each unique kind-version combination (unless `config.codegen.goEnabled` is `false`)
 * kind TypeScript code will be written to the path in `config.codegen.tsGenPath`, with a folder for each unique kind-version combination
 * kind CRD files and app manifest will be written to `config.definitions.path`, encoded according to `config.definitions.encoding`
+* per-kind informers will be written to an `informer` package beside the kind's go code. They are kept in their own
+  package because they depend on the operator machinery, which a consumer of the types alone should not have to
+  build. See [Informers](./informers.md#generated-per-kind-informers).
 
 By default the app manifest is named `<appName>-manifest.<encoding>`. Set `config.definitions.manifestFileName` to write it under a specific name instead (still relative to `config.definitions.path`):
 ```cue
