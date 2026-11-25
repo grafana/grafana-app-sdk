@@ -92,13 +92,9 @@ const (
 	GroupDeliveryRoundRobin GroupDelivery = "round-robin"
 )
 
-// Group is a set of subscribers which share delivery of a resource's events: each event reaches one member of the
-// group rather than all of them, so a member sees only a subset of the live stream. A consumer which must observe
-// every change therefore cannot rely on the live stream alone — an informer over a group stays reconciled through
-// its periodic re-list.
-//
-// A zero Group is no group at all: every subscriber receives every event.
-//
+// Group shares live delivery among subscribers. A notification is delivered to
+// at most one member of the group. A member that needs a complete view must
+// recover missed changes separately. An empty group selects broadcast delivery.
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type Group struct {
 	// Name identifies the group. Subscribers which pass the same name for the same resource and namespace share
