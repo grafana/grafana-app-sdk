@@ -26,11 +26,21 @@ func NewNotificationMechanism(subscriber resourcebus.Subscriber, group resourceb
 	if subscriber == nil {
 		return nil
 	}
-	return NewInformerMechanism(busWatchOptions(group), func(
+	return newBusMechanism(busWatchOptions(group), func(
 		kind resource.Kind, _ resource.ClientGenerator, opts InformerOptions,
 	) (Informer, error) {
 		return newBusInformer(kind, subscriber, group, opts)
 	})
+}
+
+type unfilteredBusMechanism struct{ InformerMechanism }
+
+func newBusMechanism(provides WatchOptions, supplier InformerSupplier) InformerMechanism {
+	return unfilteredBusMechanism{NewInformerMechanism(provides, supplier)}
+}
+
+func (unfilteredBusMechanism) supportsQuery(query ListWatchOptions) bool {
+	return len(query.LabelFilters) == 0 && len(query.FieldSelectors) == 0
 }
 
 func busWatchOptions(group resourcebus.Group) WatchOptions {
@@ -63,7 +73,7 @@ func newBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, group
 		return nil, errors.New("bus informer requires a kind and subscriber")
 	}
 	query := opts.ListWatchOptions
-	if len(query.LabelFilters) > 0 || len(query.FieldSelectors) > 0 {
+	if !(unfilteredBusMechanism{}).supportsQuery(query) {
 		return nil, errors.New("bus informer does not support selectors; use the API watch")
 	}
 	if group.Name == "" && group.Delivery != resourcebus.GroupDeliveryDefault {

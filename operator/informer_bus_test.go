@@ -112,10 +112,14 @@ func TestNotificationMechanismFallbackAndSelectionErrors(t *testing.T) {
 	bus := busSubscribeFunc(func(context.Context, schema.GroupVersionResource, string, func(context.Context, resourcebus.Event), ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
 		return nil, resourcebus.ErrSubscriptionRejected
 	})
-	supplier = NewSelectingInformerSupplier(fallback, NewNotificationMechanism(bus, resourcebus.Group{}))
-	_, err = supplier(notificationKind, nil, InformerOptions{WatchNeeds: needs, ListWatchOptions: ListWatchOptions{LabelFilters: []string{"a=b"}}})
+	mechanism := NewNotificationMechanism(bus, resourcebus.Group{})
+	supplier = NewSelectingInformerSupplier(fallback, mechanism)
+	filtered := InformerOptions{WatchNeeds: needs, ListWatchOptions: ListWatchOptions{LabelFilters: []string{"a=b"}}}
+	_, err = supplier(notificationKind, nil, filtered)
+	require.ErrorContains(t, err, "fallback reached")
+	require.True(t, fallbackCalled)
+	_, err = mechanism.NewInformer(notificationKind, nil, filtered)
 	require.ErrorContains(t, err, "selectors")
-	require.False(t, fallbackCalled)
 	inf, err := supplier(notificationKind, nil, InformerOptions{WatchNeeds: needs})
 	require.NoError(t, err)
 	require.ErrorIs(t, inf.Run(t.Context()), resourcebus.ErrSubscriptionRejected)
