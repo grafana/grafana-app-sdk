@@ -71,6 +71,10 @@ func NewSelectingInformerSupplier(fallback InformerSupplier, mechanisms ...Infor
 			if mechanism == nil {
 				continue
 			}
+			if scoped, ok := mechanism.(interface{ supportsQuery(ListWatchOptions) bool }); ok &&
+				!scoped.supportsQuery(options.ListWatchOptions) {
+				continue
+			}
 			provides := mechanism.WatchOptions(kind)
 			if !options.WatchNeeds.SatisfiedBy(provides) {
 				continue
