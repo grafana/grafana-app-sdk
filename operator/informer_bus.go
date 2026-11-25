@@ -21,14 +21,18 @@ const (
 )
 
 // NewNotificationMechanism serves plain handlers that use bus events as wake-ups
-// and can tolerate missed notifications. A nil subscriber disables the mechanism.
+// and opt in with WatchLiveOptions.NotificationOnly. A nil subscriber disables
+// the mechanism.
 func NewNotificationMechanism(subscriber resourcebus.Subscriber, group resourcebus.Group) InformerMechanism {
 	if subscriber == nil {
 		return nil
 	}
-	return newBusMechanism(busWatchOptions(group), func(
+	return newBusMechanism(notificationWatchOptions(group), func(
 		kind resource.Kind, _ resource.ClientGenerator, opts InformerOptions,
 	) (Informer, error) {
+		if opts.WatchNeeds.Live == nil || !opts.WatchNeeds.Live.NotificationOnly {
+			return nil, errors.New("bus informer requires notification-only live opt-in")
+		}
 		return newBusInformer(kind, subscriber, group, opts)
 	})
 }
@@ -41,6 +45,12 @@ func newBusMechanism(provides WatchOptions, supplier InformerSupplier) InformerM
 
 func (unfilteredBusMechanism) supportsQuery(query ListWatchOptions) bool {
 	return len(query.LabelFilters) == 0 && len(query.FieldSelectors) == 0
+}
+
+func notificationWatchOptions(group resourcebus.Group) WatchOptions {
+	options := busWatchOptions(group)
+	options.Live.NotificationOnly = true
+	return options
 }
 
 func busWatchOptions(group resourcebus.Group) WatchOptions {
@@ -88,7 +98,7 @@ func newBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, group
 		synced: make(chan struct{}), stopped: make(chan struct{})}, nil
 }
 
-func (b *busInformer) WatchOptions() WatchOptions { return busWatchOptions(b.group) }
+func (b *busInformer) WatchOptions() WatchOptions { return notificationWatchOptions(b.group) }
 
 func (b *busInformer) AddEventHandler(handler ResourceWatcher) error {
 	b.mu.Lock()
@@ -116,6 +126,24 @@ func (b *busInformer) WaitForSync(ctx context.Context) error {
 		return errors.New("bus informer stopped before syncing")
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+}
+
+func (b *busInformer) HealthCheckName() string {
+	return "bus-informer-" + b.kind.GroupVersionKind().String()
+}
+
+func (b *busInformer) HealthCheck(context.Context) error {
+	select {
+	case <-b.stopped:
+		return errors.New("bus informer has stopped")
+	default:
+	}
+	select {
+	case <-b.synced:
+		return nil
+	default:
+		return errors.New("bus subscription is not ready")
 	}
 }
 
@@ -173,21 +201,42 @@ func (b *busInformer) subscribe(ctx context.Context) (resourcebus.Subscription, 
 }
 
 func (b *busInformer) openSubscription(ctx context.Context) (resourcebus.Subscription, error) {
-	sub, err := b.subscriber.Subscribe(ctx, b.kind.GroupVersionResource(), b.namespace,
-		b.enqueue, resourcebus.WithGroup(b.group))
+	attemptCtx, cancelAttempt := context.WithCancel(ctx)
+	sub, err := b.subscriber.Subscribe(attemptCtx, b.kind.GroupVersionResource(), b.namespace,
+		func(eventCtx context.Context, event resourcebus.Event) {
+			if attemptCtx.Err() == nil {
+				b.enqueue(eventCtx, event)
+			}
+		}, resourcebus.WithGroup(b.group))
 	if err != nil {
+		cancelAttempt()
+		if sub != nil {
+			b.closeSubscription(ctx, sub)
+		}
 		return nil, fmt.Errorf("subscribe to %s: %w", b.kind.GroupVersionResource(), err)
 	}
 	if sub == nil {
+		cancelAttempt()
 		return nil, fmt.Errorf("%w: subscriber returned no subscription", resourcebus.ErrSubscriptionRejected)
 	}
-	readyCtx, cancel := context.WithTimeout(ctx, busReadyTimeout)
-	defer cancel()
+	active := busSubscription{Subscription: sub, cancel: cancelAttempt}
+	readyCtx, cancelReady := context.WithTimeout(attemptCtx, busReadyTimeout)
+	defer cancelReady()
 	if err := sub.WaitReady(readyCtx); err != nil {
-		b.closeSubscription(ctx, sub)
+		b.closeSubscription(ctx, active)
 		return nil, fmt.Errorf("wait for subscription readiness: %w", err)
 	}
-	return sub, nil
+	return active, nil
+}
+
+type busSubscription struct {
+	resourcebus.Subscription
+	cancel context.CancelFunc
+}
+
+func (s busSubscription) Close() error {
+	s.cancel()
+	return s.Subscription.Close()
 }
 
 func (b *busInformer) closeSubscription(ctx context.Context, sub resourcebus.Subscription) {
@@ -249,7 +298,7 @@ func (b *busInformer) dispatch(ctx context.Context, obj resource.Object, fn func
 		if len(b.handlers) > 1 {
 			target = obj.Copy()
 		}
-		err := withInformerEventTimeout(ctx, b.timeout, func(eventCtx context.Context) error {
+		err := withInformerEventTimeout(ctx, b.timeout, handler, func(eventCtx context.Context) error {
 			return fn(eventCtx, handler, target)
 		})
 		if err != nil {
