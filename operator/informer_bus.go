@@ -51,7 +51,8 @@ func busWatchOptions(group resourcebus.Group) WatchOptions {
 	return WatchOptions{Live: &WatchLiveOptions{Detail: WatchDetailIdentity, Distribution: distribution}}
 }
 
-type busInformer struct {
+// BusInformer delivers bus events with optional LIST recovery.
+type BusInformer struct {
 	kind        resource.Kind
 	subscriber  resourcebus.Subscriber
 	group       resourcebus.Group
@@ -59,6 +60,8 @@ type busInformer struct {
 	timeout     time.Duration
 	reportError func(context.Context, error)
 	events      chan resourcebus.Event
+	recovery    *busRecovery
+	deliveries  []chan busDelivery
 
 	mu       sync.Mutex
 	started  bool
@@ -68,29 +71,42 @@ type busInformer struct {
 	runErr   error
 }
 
-func newBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, group resourcebus.Group, opts InformerOptions) (*busInformer, error) {
+func newBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, group resourcebus.Group, opts InformerOptions) (*BusInformer, error) {
 	if subscriber == nil || kind.Schema == nil {
 		return nil, errors.New("bus informer requires a kind and subscriber")
 	}
 	query := opts.ListWatchOptions
-	if !(unfilteredBusMechanism{}).supportsQuery(query) {
-		return nil, errors.New("bus informer does not support selectors; use the API watch")
-	}
-	if group.Name == "" && group.Delivery != resourcebus.GroupDeliveryDefault {
-		return nil, errors.New("bus delivery policy requires a group name")
+	if err := validateBusOptions(group, query); err != nil {
+		return nil, err
 	}
 	report := opts.ErrorHandler
 	if report == nil {
 		report = DefaultErrorHandler
 	}
-	return &busInformer{kind: kind, subscriber: subscriber, group: group, namespace: query.Namespace,
+	return &BusInformer{kind: kind, subscriber: subscriber, group: group, namespace: query.Namespace,
 		timeout: opts.EventTimeout, reportError: report, events: make(chan resourcebus.Event, busQueueSize),
 		synced: make(chan struct{}), stopped: make(chan struct{})}, nil
 }
 
-func (b *busInformer) WatchOptions() WatchOptions { return busWatchOptions(b.group) }
+func validateBusOptions(group resourcebus.Group, query ListWatchOptions) error {
+	if !(unfilteredBusMechanism{}).supportsQuery(query) {
+		return errors.New("bus informer does not support selectors; use the API watch")
+	}
+	if group.Name == "" && group.Delivery != resourcebus.GroupDeliveryDefault {
+		return errors.New("bus delivery policy requires a group name")
+	}
+	return nil
+}
 
-func (b *busInformer) AddEventHandler(handler ResourceWatcher) error {
+// WatchOptions describes the live and scheduled deliveries provided by the informer.
+func (b *BusInformer) WatchOptions() WatchOptions {
+	if b.recovery != nil {
+		return recoveryWatchOptions(b.group)
+	}
+	return busWatchOptions(b.group)
+}
+
+func (b *BusInformer) AddEventHandler(handler ResourceWatcher) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.started || handler == nil {
@@ -100,7 +116,7 @@ func (b *busInformer) AddEventHandler(handler ResourceWatcher) error {
 	return nil
 }
 
-func (b *busInformer) WaitForSync(ctx context.Context) error {
+func (b *BusInformer) WaitForSync(ctx context.Context) error {
 	select {
 	case <-b.synced:
 		return nil
@@ -119,11 +135,11 @@ func (b *busInformer) WaitForSync(ctx context.Context) error {
 	}
 }
 
-func (b *busInformer) HealthCheckName() string {
+func (b *BusInformer) HealthCheckName() string {
 	return "bus-informer-" + b.kind.GroupVersionKind().String()
 }
 
-func (b *busInformer) HealthCheck(context.Context) error {
+func (b *BusInformer) HealthCheck(context.Context) error {
 	select {
 	case <-b.stopped:
 		return errors.New("bus informer has stopped")
@@ -137,7 +153,7 @@ func (b *busInformer) HealthCheck(context.Context) error {
 	}
 }
 
-func (b *busInformer) Run(ctx context.Context) error {
+func (b *BusInformer) Run(ctx context.Context) error {
 	b.mu.Lock()
 	if b.started {
 		b.mu.Unlock()
@@ -146,12 +162,16 @@ func (b *busInformer) Run(ctx context.Context) error {
 	b.started = true
 	b.mu.Unlock()
 
-	b.runErr = b.run(ctx)
+	if b.recovery != nil {
+		b.runErr = b.runRecovery(ctx)
+	} else {
+		b.runErr = b.run(ctx)
+	}
 	close(b.stopped)
 	return b.runErr
 }
 
-func (b *busInformer) run(ctx context.Context) error {
+func (b *BusInformer) run(ctx context.Context) error {
 	sub, err := b.subscribe(ctx)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -173,7 +193,7 @@ func (b *busInformer) run(ctx context.Context) error {
 	return nil
 }
 
-func (b *busInformer) subscribe(ctx context.Context) (resourcebus.Subscription, error) {
+func (b *BusInformer) subscribe(ctx context.Context) (resourcebus.Subscription, error) {
 	for {
 		sub, err := b.openSubscription(ctx)
 		if err == nil || ctx.Err() != nil || subscriptionRejected(err) {
@@ -190,14 +210,18 @@ func (b *busInformer) subscribe(ctx context.Context) (resourcebus.Subscription, 
 	}
 }
 
-func (b *busInformer) openSubscription(ctx context.Context) (resourcebus.Subscription, error) {
+func (b *BusInformer) openSubscription(ctx context.Context) (resourcebus.Subscription, error) {
 	attemptCtx, cancelAttempt := context.WithCancel(ctx)
 	sub, err := b.subscriber.Subscribe(attemptCtx, b.kind.GroupVersionResource(), b.namespace,
 		func(eventCtx context.Context, event resourcebus.Event) {
 			if attemptCtx.Err() == nil {
 				b.enqueue(eventCtx, event)
 			}
-		}, resourcebus.WithGroup(b.group))
+		}, resourcebus.WithGroup(b.group), resourcebus.WithOnReconnect(func() {
+			if attemptCtx.Err() == nil {
+				b.reconnected()
+			}
+		}))
 	if err != nil {
 		cancelAttempt()
 		if sub != nil {
@@ -229,7 +253,7 @@ func (s busSubscription) Close() error {
 	return s.Subscription.Close()
 }
 
-func (b *busInformer) closeSubscription(ctx context.Context, sub resourcebus.Subscription) {
+func (b *BusInformer) closeSubscription(ctx context.Context, sub resourcebus.Subscription) {
 	if err := sub.Close(); err != nil {
 		b.reportError(ctx, fmt.Errorf("close bus subscription: %w", err))
 	}
@@ -240,22 +264,24 @@ func subscriptionRejected(err error) bool {
 		apierrors.IsUnauthorized(err) || apierrors.IsForbidden(err)
 }
 
-func (b *busInformer) enqueue(ctx context.Context, event resourcebus.Event) {
+func (b *BusInformer) enqueue(ctx context.Context, event resourcebus.Event) {
 	if ctx.Err() != nil {
 		return
 	}
 	select {
 	case b.events <- event:
 	default:
-		// Notification-only delivery is best effort.
+		if b.recovery != nil {
+			b.recovery.overflow()
+		}
 	}
 }
 
-func (b *busInformer) handleNotification(ctx context.Context, event resourcebus.Event) {
-	if event.Name == "" || (b.namespace != "" && b.namespace != event.Namespace) {
+func (b *BusInformer) handleNotification(ctx context.Context, event resourcebus.Event) {
+	if !b.acceptEvent(event) {
 		return
 	}
-	obj := b.identity(event)
+	obj := newIdentityObject(b.kind, event.Namespace, event.Name, event.ResourceVersion)
 	switch event.Verb {
 	case resourcebus.VerbAdded, resourcebus.VerbModified:
 		b.dispatch(ctx, obj, func(ctx context.Context, w ResourceWatcher, target resource.Object) error {
@@ -270,16 +296,26 @@ func (b *busInformer) handleNotification(ctx context.Context, event resourcebus.
 	}
 }
 
-func (b *busInformer) identity(event resourcebus.Event) resource.Object {
-	obj := b.kind.ZeroValue()
-	obj.SetGroupVersionKind(b.kind.GroupVersionKind())
-	obj.SetNamespace(event.Namespace)
-	obj.SetName(event.Name)
-	obj.SetResourceVersion(event.ResourceVersion)
-	return obj
+func (b *BusInformer) acceptEvent(event resourcebus.Event) bool {
+	return event.Name != "" && (b.namespace == "" || b.namespace == event.Namespace)
 }
 
-func (b *busInformer) dispatch(ctx context.Context, obj resource.Object, fn func(context.Context, ResourceWatcher, resource.Object) error) {
+func (b *BusInformer) hasSynced() bool {
+	select {
+	case <-b.synced:
+		return true
+	default:
+		return false
+	}
+}
+
+func (b *BusInformer) reconnected() {
+	if b.recovery != nil {
+		b.recovery.signalRelist()
+	}
+}
+
+func (b *BusInformer) dispatch(ctx context.Context, obj resource.Object, fn func(context.Context, ResourceWatcher, resource.Object) error) {
 	for _, handler := range b.handlers {
 		if ctx.Err() != nil {
 			return
