@@ -249,13 +249,9 @@ func (b *busInformer) dispatch(ctx context.Context, obj resource.Object, fn func
 		if len(b.handlers) > 1 {
 			target = obj.Copy()
 		}
-		eventCtx := ctx
-		cancel := func() {}
-		if b.timeout > 0 {
-			eventCtx, cancel = context.WithTimeout(ctx, b.timeout)
-		}
-		err := fn(eventCtx, handler, target)
-		cancel()
+		err := withInformerEventTimeout(ctx, b.timeout, func(eventCtx context.Context) error {
+			return fn(eventCtx, handler, target)
+		})
 		if err != nil {
 			b.reportError(ctx, err)
 		}
