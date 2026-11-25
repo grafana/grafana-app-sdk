@@ -258,6 +258,10 @@ func (b *BusInformer) applyLive(ctx context.Context, event resourcebus.Event) {
 		obj := newIdentityObject(b.kind, id.Namespace, id.Name, event.ResourceVersion)
 		r.items[id] = obj
 		delete(r.deleted, id)
+		if event.Verb == resourcebus.VerbAdded {
+			// A recreate can reach this group member even if its delete did not.
+			old = nil
+		}
 		b.deliverChange(ctx, old, obj)
 	case resourcebus.VerbDeleted:
 		delete(r.items, id)
@@ -329,7 +333,10 @@ func (b *BusInformer) relist(ctx context.Context) error {
 }
 
 func numericVersion(version string) int64 {
-	n, _ := strconv.ParseInt(version, 10, 64)
+	n, err := strconv.ParseInt(version, 10, 64)
+	if err != nil {
+		return 0
+	}
 	return max(0, n)
 }
 

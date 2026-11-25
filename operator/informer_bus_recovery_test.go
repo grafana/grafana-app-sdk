@@ -2,7 +2,9 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -68,12 +70,14 @@ func TestBusRecoveryAfterSubscriptionGap(t *testing.T) {
 			{Verb: resourcebus.VerbAdded, ResourceVersion: "220"},
 			{Verb: resourcebus.VerbAdded, ResourceVersion: "260"},
 			{Verb: resourcebus.VerbDeleted, ResourceVersion: "255"},
+			// Another replica received the delete, then this replica received the recreation.
+			{Verb: resourcebus.VerbAdded, ResourceVersion: "280"},
 		} {
 			e.Namespace, e.Name = listerTestNamespace, "item"
 			publish(ctx, e)
 		}
 		synctest.Wait()
-		require.Equal(t, []string{"add:100", "100->200", "delete:200", "add:260"}, deliveries)
+		require.Equal(t, []string{"add:100", "100->200", "delete:200", "add:260", "add:280"}, deliveries)
 		cancel()
 		require.NoError(t, <-done)
 	})
@@ -110,5 +114,42 @@ func TestBusRecoverySchedulesRelistOnOverflow(t *testing.T) {
 		require.Equal(t, 2, calls)
 		cancel()
 		require.NoError(t, <-done)
+	})
+}
+
+func TestBusRecoveryDegradedStartAndReconnect(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		var attempts atomic.Int64
+		recovered := &testBusSubscription{}
+		subscriber := busSubscribeFunc(func(context.Context, schema.GroupVersionResource, string, func(context.Context, resourcebus.Event), ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
+			if attempts.Add(1) == 1 {
+				return nil, errors.New("bus unavailable")
+			}
+			return recovered, nil
+		})
+		var lists atomic.Int64
+		informer, err := NewBusInformer(listerTestKind, subscriber, listerFunc(func(context.Context) ([]resource.Object, string, error) {
+			lists.Add(1)
+			return nil, "", nil
+		}), BusInformerOptions{
+			AllowDegradedStart: true,
+			ResyncInterval:     time.Hour,
+			ErrorHandler:       func(context.Context, error) {},
+		})
+		require.NoError(t, err)
+		done := make(chan error, 1)
+		go func() { done <- informer.Run(ctx) }()
+		require.NoError(t, informer.WaitForSync(ctx))
+		synctest.Wait()
+		require.Equal(t, int64(1), lists.Load())
+		time.Sleep(busRetryInterval * 2)
+		synctest.Wait()
+		require.Equal(t, int64(2), attempts.Load())
+		require.Equal(t, int64(2), lists.Load())
+		cancel()
+		require.NoError(t, <-done)
+		require.True(t, recovered.closed)
 	})
 }
