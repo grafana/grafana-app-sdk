@@ -21,6 +21,10 @@ type InformerRequest struct {
 	// Opinionated states that the kind's handler is wrapped in its Opinionated variant, which reads the deletion
 	// timestamp, the finalizer list and the generation off the object on the event.
 	Opinionated bool
+	// DiscardsResyncs states that the kind's handler drops a resync delivery, as an OpinionatedWatcher does: it skips
+	// an update whose generation is unchanged, which is how a resync arrives. Declaring a resync for such a handler
+	// is refused rather than accepted and never delivered.
+	DiscardsResyncs bool
 }
 
 // BuildInformer asks the request's supplier for the kind's informer, handing it the kind's needs as
@@ -46,8 +50,15 @@ func BuildInformer(req InformerRequest) (Informer, error) {
 
 // validate rejects a declaration no mechanism which satisfies it could serve: the Opinionated variants read the
 // deletion timestamp, the finalizer list and the generation off the object, so a kind declaring less than metadata
-// alongside one is a contradiction rather than something to quietly upgrade.
+// alongside one is a contradiction rather than something to quietly upgrade. Since every channel is held to what the
+// kind declared (see WatchOptions.RefusedDeliveries), this also keeps every delivery to such a kind at metadata or
+// more, so selection needs no knowledge of the handler.
 func (r InformerRequest) validate() error {
+	if r.DiscardsResyncs && r.Options.WatchNeeds.Resync != nil {
+		return fmt.Errorf("kind '%s' declares a resync, which its opinionated watcher would never act on: it skips"+
+			" an update whose generation is unchanged, which is how a resync arrives. Use a reconciler, which the"+
+			" opinionated variant passes resyncs to, or a plain watcher", r.Kind.GroupVersionKind().String())
+	}
 	if !r.Opinionated {
 		return nil
 	}
@@ -84,6 +95,11 @@ func (r InformerRequest) checkProvision(inf Informer) error {
 	handler := "its reconciler or watcher"
 	if r.Opinionated {
 		handler = "its opinionated reconciler or watcher"
+	}
+	if refused := needs.RefusedDeliveries(provided); len(refused) > 0 {
+		return fmt.Errorf("informer for kind '%s' makes %s, which reach %s whether the kind asked for that channel"+
+			" or not, and it needs %s", r.Kind.GroupVersionKind().String(), strings.Join(refused, " and "), handler,
+			needs)
 	}
 	remedy := ""
 	// The one need nothing anywhere was configured for: a resync with no cadence to run it at.

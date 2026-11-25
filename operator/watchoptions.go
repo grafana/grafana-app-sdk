@@ -48,8 +48,11 @@ type WatchResyncOptions struct {
 }
 
 // SatisfiedBy reports whether a mechanism providing provided can serve handlers needing o. A channel the need leaves
-// nil is not compared.
+// nil is not required, but where provided delivers on it anyway it is held to RefusedDeliveries.
 func (o WatchOptions) SatisfiedBy(provided WatchOptions) bool {
+	if len(o.RefusedDeliveries(provided)) > 0 {
+		return false
+	}
 	needLive, needResync := o.channels()
 	haveLive, haveResync := provided.channels()
 	if needLive != nil {
@@ -67,6 +70,63 @@ func (o WatchOptions) SatisfiedBy(provided WatchOptions) bool {
 		}
 	}
 	return true
+}
+
+// RefusedDeliveries describes the deliveries a mechanism providing provided makes which handlers needing o cannot
+// take, on every channel provided delivers on, whether o asked for that channel or not. A handler cannot tell one
+// channel's deliveries from the other's, so a channel o leaves nil is held to what o declared for the other: as much
+// detail, and sharding where o requires it.
+//
+// It does not ask whether provided has the channels o needs, and of the distribution only sharding is compared,
+// since an extra copy of a delivery takes nothing away from a handler. That makes it the check for an informer
+// delivering to handlers which have another informer for what they asked, as entries sharing a watch do.
+func (o WatchOptions) RefusedDeliveries(provided WatchOptions) []string {
+	floorLive, floorResync := o.deliveryFloors()
+	haveLive, haveResync := provided.channels()
+	var refused []string
+	if haveLive != nil {
+		refused = append(refused, floorLive.refuses("Live", haveLive.detail(), haveLive.distribution())...)
+	}
+	if haveResync != nil {
+		refused = append(refused, floorResync.refuses("Resync", haveResync.detail(), haveResync.distribution())...)
+	}
+	return refused
+}
+
+// deliveryFloor is the least a delivery on one channel must carry to reach a kind's handlers.
+type deliveryFloor struct {
+	detail  WatchDetail
+	sharded bool
+}
+
+// deliveryFloors reads each channel's floor off o: what o declared for it, or for a channel o leaves nil, what o
+// declared for the other one.
+func (o WatchOptions) deliveryFloors() (live, resync deliveryFloor) {
+	needLive, needResync := o.channels()
+	if needLive != nil {
+		live = deliveryFloor{needLive.detail(), needLive.distribution() == WatchDistributionSharded}
+	}
+	if needResync != nil {
+		resync = deliveryFloor{needResync.detail(), needResync.distribution() == WatchDistributionSharded}
+	}
+	if needLive == nil {
+		live = resync
+	}
+	if needResync == nil {
+		resync = live
+	}
+	return live, resync
+}
+
+func (f deliveryFloor) refuses(channel string, detail WatchDetail, distribution WatchDistribution) []string {
+	var refused []string
+	if !f.detail.SatisfiedBy(detail) {
+		refused = append(refused, fmt.Sprintf("%s deliveries carrying less than %q", channel, f.detail))
+	}
+	if f.sharded && distribution != WatchDistributionSharded {
+		refused = append(refused, fmt.Sprintf("%s deliveries which are not %q", channel, WatchDistributionSharded))
+	}
+	return refused
 }
 
 // WithDefaults returns o with every unset field filled in, which is what SatisfiedBy compares and what a mechanism
@@ -222,6 +282,9 @@ func (d WatchDistribution) SatisfiedBy(provided WatchDistribution) bool {
 // WatchOptionsInformer is an Informer which says what it provides. Implement it on any informer which carries less
 // than the whole object, does not deliver each change as it happens, or divides a channel, so that pairing it with a
 // kind it cannot serve fails rather than silently losing deliveries.
+//
+// Whatever its deliveries carry, an update must still come with the previous object, at the same detail: the
+// OpinionatedWatcher compares the two and refuses an update without one, and nothing here can check for it.
 //
 // Experimental: this API may change in a minor release.
 type WatchOptionsInformer interface {

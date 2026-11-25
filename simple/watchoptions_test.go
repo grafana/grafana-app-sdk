@@ -104,11 +104,18 @@ func TestApp_WatchOptions(t *testing.T) {
 			want:   reList,
 		},
 		{
-			name:   "a kind needing whole objects on a schedule is served by a bus whose re-list reads them",
+			// The bus's re-list reads whole objects, but its identity-only live events would reach the reconciler too.
+			name:   "a kind needing whole objects on a schedule passes over a bus whose live events carry identities",
 			needs:  operator.WatchOptions{Resync: &operator.WatchResyncOptions{}},
 			offers: []string{eventBus, reList},
 			plain:  true,
-			want:   eventBus,
+			want:   reList,
+		},
+		{
+			name:   "an opinionated kind needing a resync passes over a bus whose live events carry identities",
+			needs:  operator.WatchOptions{Resync: &operator.WatchResyncOptions{}},
+			offers: []string{eventBus, reList},
+			want:   reList,
 		},
 		{
 			name: "a kind needing only a resync of identities takes whichever is offered first",
@@ -417,12 +424,12 @@ func TestApp_WatchOptions(t *testing.T) {
 		)
 		bespoke := func(kind resource.Kind, clients resource.ClientGenerator, opts operator.InformerOptions) (operator.Informer, error) {
 			if kind.Kind() == "Bespoke" {
-				return supplierOf(eventBus, &called)(kind, clients, opts)
+				return supplierOf(hydratingBus, &called)(kind, clients, opts)
 			}
 			return selecting(kind, clients, opts)
 		}
 
-		for kindName, want := range map[string]string{"Bespoke": eventBus, "Ordinary": reList} {
+		for kindName, want := range map[string]string{"Bespoke": hydratingBus, "Ordinary": reList} {
 			called = ""
 			createTestApp(t, AppConfig{
 				InformerConfig: AppInformerConfig{InformerSupplier: bespoke},
@@ -534,15 +541,16 @@ func TestApp_WatchOptions(t *testing.T) {
 		})
 	})
 
-	t.Run("an opinionated handler is refused a mechanism carrying identities on a channel it did not ask for", func(t *testing.T) {
+	t.Run("a mechanism carrying less on a channel the kind did not ask for is skipped for the fallback", func(t *testing.T) {
 		// The kind only asks for a resync, which the bus's re-list satisfies, but its identity-only live events
-		// still reach the opinionated wrapper.
+		// would still reach the opinionated wrapper, so selection moves on to the fallback.
 		var called string
-		_, err := NewApp(AppConfig{
+		createTestApp(t, AppConfig{
 			InformerConfig: AppInformerConfig{
 				InformerSupplier: operator.NewSelectingInformerSupplier(DefaultInformerSupplier,
 					operator.NewInformerMechanism(provisions[eventBus], supplierOf(eventBus, &called)),
 				),
+				InformerOptions: operator.InformerOptions{CacheResyncInterval: time.Minute},
 			},
 			ManagedKinds: []AppManagedKind{{
 				Kind:             testKind(),
@@ -550,9 +558,82 @@ func TestApp_WatchOptions(t *testing.T) {
 				ReconcileOptions: BasicReconcileOptions{WatchNeeds: operator.WatchOptions{Resync: &operator.WatchResyncOptions{}}},
 			}},
 		})
+		assert.Empty(t, called)
+	})
+
+	t.Run("an informer carrying less on a channel the kind did not ask for is refused", func(t *testing.T) {
+		// A whole-object live watch whose resync carries only identities, built directly rather than selected.
+		lister := func(resource.Kind, resource.ClientGenerator, operator.InformerOptions) (operator.Informer, error) {
+			return &optionedInformer{options: operator.WatchOptions{
+				Live:   &operator.WatchLiveOptions{},
+				Resync: &operator.WatchResyncOptions{Detail: operator.WatchDetailIdentity},
+			}}, nil
+		}
+		_, err := NewApp(AppConfig{
+			InformerConfig: AppInformerConfig{InformerSupplier: lister},
+			ManagedKinds: []AppManagedKind{{
+				Kind:             testKind(),
+				Reconciler:       &Reconciler{},
+				ReconcileOptions: BasicReconcileOptions{UsePlain: true},
+			}},
+		})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "carries less than the object's metadata on its Live channel")
+		assert.Contains(t, err.Error(), `makes Resync deliveries carrying less than "full-object"`)
 		assert.Contains(t, err.Error(), "whether the kind asked for that channel or not")
+	})
+
+	t.Run("entries sharing a watch are refused unsharded deliveries to a handler requiring sharding", func(t *testing.T) {
+		sharded := operator.WatchOptions{Live: &operator.WatchLiveOptions{Distribution: operator.WatchDistributionSharded}}
+		shardedBus := func(resource.Kind, resource.ClientGenerator, operator.InformerOptions) (operator.Informer, error) {
+			return &optionedInformer{options: sharded}, nil
+		}
+		_, err := NewApp(AppConfig{
+			InformerConfig: AppInformerConfig{
+				InformerSupplier: operator.NewSelectingInformerSupplier(DefaultInformerSupplier,
+					operator.NewInformerMechanism(sharded, shardedBus),
+				),
+			},
+			UnmanagedKinds: []AppUnmanagedKind{
+				{Kind: testKind(), Reconciler: &Reconciler{}, ReconcileOptions: UnmanagedKindReconcileOptions{WatchNeeds: sharded}},
+				{Kind: testKind(), Reconciler: &Reconciler{}},
+			},
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "is watched by more than one entry")
+		assert.Contains(t, err.Error(), `Live deliveries which are not "sharded"`)
+	})
+
+	t.Run("an opinionated watcher declaring a resync is refused", func(t *testing.T) {
+		_, err := NewApp(AppConfig{
+			InformerConfig: AppInformerConfig{
+				InformerOptions: operator.InformerOptions{CacheResyncInterval: time.Minute},
+			},
+			UnmanagedKinds: []AppUnmanagedKind{{
+				Kind:    testKind(),
+				Watcher: &Watcher{},
+				ReconcileOptions: UnmanagedKindReconcileOptions{
+					UseOpinionated: true,
+					WatchNeeds:     operator.WatchOptions{Live: &operator.WatchLiveOptions{}, Resync: &operator.WatchResyncOptions{}},
+				},
+			}},
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "declares a resync, which its opinionated watcher would never act on")
+
+		// The opinionated reconciler passes resyncs on, so the same declaration is served for one.
+		createTestApp(t, AppConfig{
+			InformerConfig: AppInformerConfig{
+				InformerOptions: operator.InformerOptions{CacheResyncInterval: time.Minute},
+			},
+			UnmanagedKinds: []AppUnmanagedKind{{
+				Kind:       testKind(),
+				Reconciler: &Reconciler{},
+				ReconcileOptions: UnmanagedKindReconcileOptions{
+					UseOpinionated: true,
+					WatchNeeds:     operator.WatchOptions{Live: &operator.WatchLiveOptions{}, Resync: &operator.WatchResyncOptions{}},
+				},
+			}},
+		})
 	})
 
 	t.Run("a kind needing a resync with no cadence anywhere is refused, naming both knobs", func(t *testing.T) {
@@ -590,8 +671,8 @@ func TestApp_WatchOptions(t *testing.T) {
 	})
 
 	t.Run("a mechanism's advertisement is checked even when its informer says nothing", func(t *testing.T) {
-		// The kind only asks for a resync, which this bus's re-list satisfies; its identity-only live events would
-		// otherwise reach the opinionated wrapper unchecked, because the informer it builds describes nothing.
+		// The first entry takes the bus, whose informer describes nothing; its identity-only live events would
+		// otherwise reach the second entry's reconciler unchecked.
 		silent := func(resource.Kind, resource.ClientGenerator, operator.InformerOptions) (operator.Informer, error) {
 			return &mockInformer{}, nil
 		}
@@ -602,14 +683,15 @@ func TestApp_WatchOptions(t *testing.T) {
 					operator.NewInformerMechanism(provisions[eventBus], silent),
 				),
 			},
-			ManagedKinds: []AppManagedKind{{
-				Kind:             testKind(),
-				Reconciler:       &Reconciler{},
-				ReconcileOptions: BasicReconcileOptions{WatchNeeds: operator.WatchOptions{Resync: &operator.WatchResyncOptions{}}},
-			}},
+			UnmanagedKinds: []AppUnmanagedKind{
+				{Kind: testKind(), Reconciler: &Reconciler{}, ReconcileOptions: UnmanagedKindReconcileOptions{
+					WatchNeeds: operator.WatchOptions{Live: &operator.WatchLiveOptions{Detail: operator.WatchDetailIdentity}},
+				}},
+				{Kind: testKind(), Reconciler: &Reconciler{}},
+			},
 		})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "carries less than the object's metadata on its Live channel")
+		assert.Contains(t, err.Error(), `Live deliveries carrying less than "full-object"`)
 	})
 
 	t.Run("an informer which says nothing about what it provides is not checked", func(t *testing.T) {
