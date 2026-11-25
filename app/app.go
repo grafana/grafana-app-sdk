@@ -152,6 +152,14 @@ type App interface {
 	Runner() Runnable
 }
 
+// NamedRunnerProvider is optionally implemented by an App which exposes parts of its Runner() as separately
+// runnable, named Runnables. Each named Runnable MUST also be part of Runner(), so running Runner() runs everything,
+// while a wrapper (such as plugin.Run with a target) MAY choose to run only one of the named Runnables.
+type NamedRunnerProvider interface {
+	// NamedRunners returns the App's named Runnables, keyed by name. The returned map MUST NOT be modified.
+	NamedRunners() map[string]Runnable
+}
+
 // RouteHandlerProvider optionally supplies an HTTP handler for plugin custom routes.
 type RouteHandlerProvider interface {
 	// Provide a standard http.Handler that will process custom routes.
