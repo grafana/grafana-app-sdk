@@ -556,7 +556,7 @@ func (t *TypedObject[Spec, Sub]) Copy() Object {
 	} else if err := json.Unmarshal(specBytes, &cpy.Spec); err != nil {
 		// Again, we shouldn't be hitting here with normal data, but we don't want to panic
 	}
-	srBytes, err := json.Marshal(t.Spec)
+	srBytes, err := json.Marshal(t.Subresources)
 	if err != nil {
 		// We really shouldn't end up here, but we don't want to panic. So we actually do nothing
 	} else if err := json.Unmarshal(srBytes, &cpy.Subresources); err != nil {
