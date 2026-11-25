@@ -282,3 +282,86 @@ Finally, a need is about the deliveries, not the informer behind them. Whether i
 but no handler reads that cache through `operator.Informer`.
 
 `simple.Operator` takes the same declaration, with `simple.WithWatchNeeds` on `WatchKind`/`ReconcileKind`.
+
+### Serving a Resync With a Re-List (experimental)
+
+`operator.NewPeriodicMechanism` is the re-list: no watch, no subscription, no cache. Each pass lists the kind and
+delivers every object as an add, unchanged ones included, which is what re-triggers the work.
+
+```go
+simple.AppConfig{
+    InformerConfig: simple.AppInformerConfig{
+        InformerSupplier: operator.NewSelectingInformerSupplier(
+            simple.DefaultInformerSupplier, // the API watch, for anything the mechanisms cannot serve
+            // Least capable first, so the re-list takes the kinds which only resync.
+            operator.NewPeriodicMechanism(operator.PeriodicMechanismOptions{
+                // Fallbacks, applied last: a kind's own figures win, and so does an app-wide
+                // InformerOptions.CacheResyncInterval or WatchListPageSize.
+                ResyncInterval: 15 * time.Minute,
+                PageSize:       1000,
+                RetryInterval:  10 * time.Second, // how often a failed or deferred pass is retried
+            }),
+            myEventBusMechanism,
+        ),
+    },
+    ManagedKinds: []simple.AppManagedKind{{
+        Kind:       myCleanupKind.Kind(),
+        Reconciler: &myCleanupReconciler,
+        ReconcileOptions: simple.BasicReconcileOptions{
+            // What to list: the server applies these, and the re-list is the only source, so nothing re-applies them.
+            Namespace:      "default",
+            LabelFilters:   []string{"app=myapp"},
+            FieldSelectors: []string{"spec.state=pending"},
+
+            // What the handlers need: no live channel, so the re-list satisfies this and the bus does not.
+            WatchNeeds: operator.WatchOptions{
+                Resync: &operator.WatchResyncOptions{
+                    Interval:     time.Hour, // this kind re-evaluates hourly, not every 15 minutes
+                    ListPageSize: 5000,      // and reads its larger set in larger pages
+                },
+            },
+            UsePlain: true, // no finalizer, so nothing to clean up on delete; see below
+        },
+    }},
+}
+```
+
+The kind declares a `Resync` and no `Live`, so the re-list satisfies it and is offered first; a kind needing the
+live channel passes over the re-list and takes the bus, or is watched when no mechanism serves it. A kind handed
+this mechanism outright while needing a live channel fails when the app is constructed.
+
+`Interval` and `ListPageSize` are requests rather than requirements: they take no part in choosing the mechanism,
+and `PeriodicMechanismOptions` answers for whichever a kind leaves unset — so the kind above resyncs hourly in
+5000-object pages while a kind declaring only `Resync: &operator.WatchResyncOptions{}` takes the mechanism's 15
+minutes and 1000. Unlike the watch's resync this one reads the API, so it recovers as well as re-evaluates, and a
+page size means something to it.
+
+Only `Add` is ever called: without a snapshot an update and a delete are indistinguishable from a re-delivery, so
+handlers re-evaluate an object from the object and treat one which has gone away as nothing to do.
+
+A pass does not start while the previous one's deliveries are still queued: it is retried every `RetryInterval`
+until they drain, so handlers slower than the cadence run less often instead of building a backlog. Retries a
+handler schedules itself with `RequeueAfter` are outside that queue, so prefer letting the next pass be the retry.
+`InformerOptions.EventTimeout` does not bound handlers here, as it does not under the stock informers while they
+run.
+
+**Deletion needs care.** This informer never emits `Delete`; a removed object simply stops appearing in the list, so
+nothing derived from events can notice it went. What does work is a finalizer: the `Opinionated` variants' `Add`
+handles an object which is pending deletion — running the delete handling and removing the finalizer, the path they
+already use for a resync — because such an object is still listed until its finalizers clear. Three consequences:
+
+* Cleanup is **cadence-delayed**. A deleted object sits in `Terminating` until the next pass reads its deletion
+  timestamp, so an hourly kind can take an hour to finalize.
+* A **selector can strand it**. An object holding the finalizer which then stops matching `LabelFilters` or
+  `FieldSelectors` disappears from the list, so nothing removes the finalizer and the deletion never completes.
+  Removing it then needs a delivery path which still sees the object — a second informer without the selectors, or a
+  sweep of your own.
+* **An object created and deleted between two passes is never seen at all**, finalizer or not, since it was gone
+  before anything could attach one.
+
+So `UsePlain` is not a way to handle deletion yourself — it opts out of the finalizer, which is the only thing that
+makes an external deletion observable here. Use it when the work needs no cleanup on delete, as the example above
+does, and reconcile from the listed set rather than from events when it does.
+
+A server which lists some other way is reached by building the informer yourself: `operator.NewPeriodicInformer`
+takes any `ResourceLister`, and `operator.NewInformerMechanism` pairs it with what it provides.
