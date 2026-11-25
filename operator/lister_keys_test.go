@@ -69,3 +69,77 @@ func TestIdentityListerFallback(t *testing.T) {
 		})
 	}
 }
+
+type keyListerClientGenerator struct {
+	resource.ClientGenerator
+	resource.Client
+}
+
+func (g keyListerClientGenerator) ClientFor(resource.Kind) (resource.Client, error) {
+	return g.Client, nil
+}
+
+type keyListerFallbackClient struct {
+	resource.Client
+	list func(context.Context, string, resource.ListOptions, resource.ListObject) error
+}
+
+func (c keyListerFallbackClient) ListInto(ctx context.Context, ns string, opts resource.ListOptions, into resource.ListObject) error {
+	return c.list(ctx, ns, opts, into)
+}
+
+func TestKeysPeriodicMechanismFactory(t *testing.T) {
+	query := ListWatchOptions{Namespace: listerTestNamespace, LabelFilters: []string{"app=one"}, FieldSelectors: []string{"metadata.name=item"}}
+	options := InformerOptions{
+		ListWatchOptions:  query,
+		WatchListPageSize: 5,
+		WatchNeeds:        WatchOptions{Resync: &WatchResyncOptions{Detail: WatchDetailIdentity, ListPageSize: 7}},
+	}
+	for _, tc := range []struct {
+		name       string
+		factoryErr error
+	}{
+		{name: "unsupported", factoryErr: ErrProjectionUnsupported},
+		{name: "authorization error", factoryErr: errors.New("forbidden")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			client := keyListerFallbackClient{list: func(_ context.Context, ns string, opts resource.ListOptions, into resource.ListObject) error {
+				calls++
+				require.Equal(t, query.Namespace, ns)
+				require.Equal(t, query.LabelFilters, opts.LabelFilters)
+				require.Equal(t, query.FieldSelectors, opts.FieldSelectors)
+				require.Equal(t, 7, opts.Limit)
+				item := listerObj("item")
+				item.Spec = map[string]any{"body": "omitted"}
+				into.SetItems([]resource.Object{item})
+				return nil
+			}}
+			factoryCalled := false
+			mechanism := NewKeysPeriodicMechanism(func(kind resource.Kind, opts ClientListerOptions) (ResourceKeyLister, error) {
+				factoryCalled = true
+				require.Equal(t, listerTestKind, kind)
+				require.Equal(t, ClientListerOptions{ListWatchOptions: query, PageSize: 7}, opts)
+				return nil, tc.factoryErr
+			}, PeriodicMechanismOptions{PageSize: 3})
+			supplier := NewSelectingInformerSupplier(nil, mechanism)
+			informer, err := supplier(listerTestKind, keyListerClientGenerator{Client: client}, options)
+			require.True(t, factoryCalled)
+			if !errors.Is(tc.factoryErr, ErrProjectionUnsupported) {
+				require.ErrorIs(t, err, tc.factoryErr)
+				require.Zero(t, calls)
+				return
+			}
+			require.NoError(t, err)
+			var received []resource.Object
+			require.NoError(t, informer.AddEventHandler(&SimpleWatcher{AddFunc: func(_ context.Context, obj resource.Object) error {
+				received = append(received, obj)
+				return nil
+			}}))
+			require.NoError(t, informer.(*PeriodicInformer).sweep(t.Context()))
+			require.Equal(t, 1, calls)
+			require.Equal(t, []string{"item"}, listerNames(received))
+			require.Empty(t, received[0].GetSpec())
+		})
+	}
+}
