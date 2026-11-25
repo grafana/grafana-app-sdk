@@ -33,8 +33,7 @@ func TestClientLister_List(t *testing.T) {
 					page.Continue = "page-2"
 					page.Items = []resource.Object{listerObj("a")}
 				case "page-2":
-					// Later pages repeat the pinned version; only the first page's is used.
-					page.ResourceVersion = "150"
+					page.ResourceVersion = "160"
 					page.Items = []resource.Object{listerObj("b")}
 				default:
 					return fmt.Errorf("unexpected continue token %q", options.Continue)

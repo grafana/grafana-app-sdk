@@ -216,9 +216,10 @@ func (p *PeriodicInformer) sweep(ctx context.Context) error {
 			if len(p.handlers) > 1 {
 				delivered = obj.Copy()
 			}
-			if err := withInformerEventTimeout(ctx, p.opts.EventTimeout, func(eventCtx context.Context) error {
+			err := withInformerEventTimeout(ctx, p.opts.EventTimeout, func(eventCtx context.Context) error {
 				return handler.Add(eventCtx, delivered)
-			}); err != nil {
+			})
+			if err != nil {
 				p.opts.ErrorHandler(ctx, err)
 			}
 		}
