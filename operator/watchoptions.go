@@ -45,6 +45,13 @@ type WatchResyncOptions struct {
 	// initial list it does at startup. The least likely field to be honored, since a mechanism which lists nothing
 	// ignores it.
 	ListPageSize int64
+	// Ignore leaves an object out of a resync pass, judged on the current object alone. It is a request: a
+	// mechanism that doesn't apply it delivers the object anyway.
+	Ignore WatchIgnoreFunc
+	// IgnoreUnchanged makes each resync pass deliver only what changed since the last delivery, leaving out objects
+	// it reports unchanged. Leave it nil if handlers use the resync to repair drift. It is a request: only a
+	// PreviousComparer applies it, and any other mechanism delivers every object.
+	IgnoreUnchanged WatchUnchangedFunc
 }
 
 // SatisfiedBy reports whether a mechanism providing provided can serve handlers needing o. A channel the need leaves
@@ -140,16 +147,18 @@ func (o WatchOptions) WithDefaults() WatchOptions {
 	}
 	if resync != nil {
 		defaulted.Resync = &WatchResyncOptions{
-			Detail:       resync.detail(),
-			Distribution: resync.distribution(),
-			Interval:     resync.Interval,
-			ListPageSize: resync.ListPageSize,
+			Detail:          resync.detail(),
+			Distribution:    resync.distribution(),
+			Interval:        resync.Interval,
+			ListPageSize:    resync.ListPageSize,
+			Ignore:          resync.Ignore,
+			IgnoreUnchanged: resync.IgnoreUnchanged,
 		}
 	}
 	return defaulted
 }
 
-// String names each channel as detail/distribution, and only what is compared.
+// String names each channel as detail/distribution, and marks a resync's Ignore and IgnoreUnchanged.
 func (o WatchOptions) String() string {
 	live, resync := o.channels()
 	described := "live=none"
@@ -159,7 +168,14 @@ func (o WatchOptions) String() string {
 	if resync == nil {
 		return described + " resync=none"
 	}
-	return fmt.Sprintf("%s resync=%s/%s", described, resync.detail(), resync.distribution())
+	described = fmt.Sprintf("%s resync=%s/%s", described, resync.detail(), resync.distribution())
+	if resync.Ignore != nil {
+		described += "/ignore"
+	}
+	if resync.IgnoreUnchanged != nil {
+		described += "/ignore-unchanged"
+	}
+	return described
 }
 
 // channels defaults a WatchOptions describing neither to the live channel: a kind which says nothing needs changes

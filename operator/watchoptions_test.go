@@ -198,6 +198,12 @@ func TestWatchOptions_SatisfiedBy(t *testing.T) {
 			provided: reList,
 			want:     true,
 		},
+		{
+			name:     "Ignore is a request, so any resync serves it",
+			needs:    WatchOptions{Resync: &WatchResyncOptions{Ignore: AlreadyObserved(nil)}},
+			provided: reList,
+			want:     true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -234,6 +240,16 @@ func TestWatchOptions_String(t *testing.T) {
 	assert.Equal(t, "live=none resync=full-object/all", WatchOptions{
 		Resync: &WatchResyncOptions{Interval: time.Hour, ListPageSize: 500},
 	}.String())
+	assert.Equal(t, "live=none resync=full-object/all/ignore/ignore-unchanged", WatchOptions{
+		Resync: &WatchResyncOptions{Ignore: AlreadyObserved(nil), IgnoreUnchanged: SameGeneration},
+	}.String())
+}
+
+func TestWatchOptions_WithDefaults_keepsTheResyncChecks(t *testing.T) {
+	declared := WatchOptions{Resync: &WatchResyncOptions{Ignore: AlreadyObserved(nil), IgnoreUnchanged: SameGeneration}}
+	defaulted := declared.WithDefaults().Resync
+	assert.NotNil(t, defaulted.Ignore)
+	assert.NotNil(t, defaulted.IgnoreUnchanged)
 }
 
 func TestWatchDetail_SatisfiedBy(t *testing.T) {
