@@ -112,6 +112,7 @@ func collectListPages(ctx context.Context, read func(context.Context, string) (l
 		if err := ctx.Err(); err != nil {
 			return nil, "", err
 		}
+		RecordInformerListPage(ctx)
 		page, err := read(ctx, token)
 		if err != nil {
 			return nil, "", err

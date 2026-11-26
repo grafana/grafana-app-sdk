@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -60,6 +61,7 @@ func busWatchOptions(group resourcebus.Group) WatchOptions {
 
 // BusInformerOptions configures the subscription and its event handlers.
 type BusInformerOptions struct {
+	Metrics      *InformerEventMetrics
 	Namespace    string
 	Group        resourcebus.Group
 	EventTimeout time.Duration
@@ -69,6 +71,7 @@ type BusInformerOptions struct {
 func busOptionsFor(group resourcebus.Group, opts InformerOptions) BusInformerOptions {
 	return BusInformerOptions{
 		Namespace:    opts.ListWatchOptions.Namespace,
+		Metrics:      opts.EventMetrics,
 		Group:        group,
 		EventTimeout: opts.EventTimeout,
 		ErrorHandler: opts.ErrorHandler,
@@ -76,6 +79,7 @@ func busOptionsFor(group resourcebus.Group, opts InformerOptions) BusInformerOpt
 }
 
 type busInformer struct {
+	record      informerEventRecorder
 	kind        resource.Kind
 	subscriber  resourcebus.Subscriber
 	group       resourcebus.Group
@@ -103,7 +107,9 @@ func newBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, opts 
 	if report == nil {
 		report = DefaultErrorHandler
 	}
-	return &busInformer{kind: kind, subscriber: subscriber, group: opts.Group, namespace: opts.Namespace,
+	record := eventRecorder(opts.Metrics, kind)
+	record.ready(0)
+	return &busInformer{record: record, kind: kind, subscriber: subscriber, group: opts.Group, namespace: opts.Namespace,
 		timeout: opts.EventTimeout, reportError: report, events: make(chan resourcebus.Event, busQueueSize),
 		synced: make(chan struct{}), stopped: make(chan struct{})}, nil
 }
@@ -193,7 +199,7 @@ func (b *busInformer) run(ctx context.Context) error {
 		}
 		return err
 	}
-	defer b.closeSubscription(ctx, sub)
+	defer b.closeReadySubscription(ctx, sub)
 	close(b.synced)
 
 	for ctx.Err() == nil {
@@ -232,9 +238,13 @@ func (b *busInformer) subscribe(ctx context.Context, hooks busSubscriptionHooks)
 func (b *busInformer) openSubscription(ctx context.Context, hooks busSubscriptionHooks) (resourcebus.Subscription, error) {
 	attemptCtx, cancelAttempt := context.WithCancel(ctx)
 	opts := []resourcebus.SubscribeOption{resourcebus.WithGroup(b.group)}
-	if hooks.onReconnect != nil {
+	if hooks.onReconnect != nil || b.record.metrics != nil {
 		opts = append(opts, resourcebus.WithOnReconnect(func() {
-			if attemptCtx.Err() == nil {
+			if attemptCtx.Err() != nil {
+				return
+			}
+			b.record.reconnect()
+			if hooks.onReconnect != nil {
 				hooks.onReconnect()
 			}
 		}))
@@ -263,6 +273,7 @@ func (b *busInformer) openSubscription(ctx context.Context, hooks busSubscriptio
 		b.closeSubscription(ctx, active)
 		return nil, fmt.Errorf("wait for subscription readiness: %w", err)
 	}
+	b.record.ready(1)
 	return active, nil
 }
 
@@ -274,6 +285,16 @@ type busSubscription struct {
 func (s busSubscription) Close() error {
 	s.cancel()
 	return s.Subscription.Close()
+}
+
+// PrometheusCollectors returns the event collectors shared by this informer.
+func (b *busInformer) PrometheusCollectors() []prometheus.Collector {
+	return b.record.metrics.PrometheusCollectors()
+}
+
+func (b *busInformer) closeReadySubscription(ctx context.Context, sub resourcebus.Subscription) {
+	defer b.record.ready(-1)
+	b.closeSubscription(ctx, sub)
 }
 
 func (b *busInformer) closeSubscription(ctx context.Context, sub resourcebus.Subscription) {
@@ -294,6 +315,7 @@ func (b *busInformer) enqueue(ctx context.Context, event resourcebus.Event, onOv
 	select {
 	case b.events <- event:
 	default:
+		b.record.drop("queue_full")
 		if onOverflow != nil {
 			onOverflow()
 		}
@@ -309,15 +331,23 @@ func (b *busInformer) handleNotification(ctx context.Context, event resourcebus.
 	obj := b.kind.NewIdentityObject(id, event.ResourceVersion)
 	switch event.Verb {
 	case resourcebus.VerbAdded, resourcebus.VerbModified:
+		b.recordNotification("add", event.ResourceVersion)
 		b.dispatch(ctx, obj, func(ctx context.Context, w ResourceWatcher, target resource.Object) error {
 			return w.Add(ctx, target)
 		})
 	case resourcebus.VerbDeleted:
+		b.recordNotification("delete", event.ResourceVersion)
 		b.dispatch(ctx, obj, func(ctx context.Context, w ResourceWatcher, target resource.Object) error {
 			return w.Delete(ctx, target)
 		})
 	default:
 		b.reportError(ctx, fmt.Errorf("unknown bus verb %q", event.Verb))
+	}
+}
+
+func (b *busInformer) recordNotification(action, version string) {
+	if len(b.handlers) > 0 {
+		b.record.delivery(DeliveryLive, action, version)
 	}
 }
 

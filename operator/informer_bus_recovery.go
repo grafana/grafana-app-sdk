@@ -185,7 +185,7 @@ func (b *BusInformerWithRecovery) run(parent context.Context) error {
 	defer func() {
 		cancel(nil)
 		if sub != nil {
-			b.closeSubscription(ctx, sub)
+			b.closeReadySubscription(ctx, sub)
 		}
 		workers.Wait()
 	}()
@@ -232,7 +232,7 @@ func (b *BusInformerWithRecovery) retrySubscription(ctx context.Context, cancel 
 	}
 	b.requestRelist()
 	<-ctx.Done()
-	b.closeSubscription(ctx, sub)
+	b.closeReadySubscription(ctx, sub)
 }
 
 func (b *BusInformerWithRecovery) initialList(ctx context.Context) error {
@@ -507,7 +507,27 @@ func (b *BusInformerWithRecovery) queueDelivery(d busDelivery) {
 	}
 }
 
+func (d busDelivery) observation() (action, version string) {
+	version = AnnouncedVersionFromContext(d.ctx)
+	switch {
+	case d.current == nil:
+		return "delete", version
+	case d.old == nil:
+		if DeliveryFromContext(d.ctx) == DeliveryRelist && !isInitialList(d.ctx) {
+			version = d.current.GetResourceVersion()
+		}
+		return "add", version
+	default:
+		return "update", version
+	}
+}
+
 func (b *BusInformerWithRecovery) dispatchChange(d busDelivery) {
+	if d.ctx.Err() != nil || len(b.handlers) == 0 {
+		return
+	}
+	action, version := d.observation()
+	b.record.delivery(DeliveryFromContext(d.ctx), action, version)
 	for _, handler := range b.handlers {
 		if d.ctx.Err() != nil {
 			return

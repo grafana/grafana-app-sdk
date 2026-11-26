@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"reflect"
+	"slices"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -384,7 +386,16 @@ func (c *InformerController) PrometheusCollectors() []prometheus.Collector {
 			collectors = append(collectors, cast.PrometheusCollectors()...)
 		}
 	})
-	return collectors
+	seen := make(map[prometheus.Collector]struct{}, len(collectors))
+	return slices.DeleteFunc(collectors, func(collector prometheus.Collector) bool {
+		// Collectors shared by several informers should be registered once.
+		if !reflect.ValueOf(collector).Comparable() {
+			return false
+		}
+		_, duplicate := seen[collector]
+		seen[collector] = struct{}{}
+		return duplicate
+	})
 }
 
 // HealthChecks
