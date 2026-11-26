@@ -10,6 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
@@ -147,10 +148,11 @@ func NewOpinionatedReconciler(client PatchClient, finalizer string) (*Opinionate
 // "resync" events on start-up when the reconciler has handled the "created" event on a previous run,
 // and ensures that "delete" events are not missed during reconciler down-time by using the finalizer.
 type OpinionatedReconciler struct {
-	Reconciler       Reconciler
-	finalizer        string
-	finalizerUpdater FinalizerUpdater
-	collectors       []prometheus.Collector
+	Reconciler        Reconciler
+	finalizer         string
+	finalizerUpdater  *finalizerUpdater
+	cleanupOperations objectOperations
+	collectors        []prometheus.Collector
 }
 
 const (
@@ -158,14 +160,69 @@ const (
 	opinionatedReconcilerPatchRemoveStateKey = "grafana-app-sdk-opinionated-reconciler-delete-patch-status"
 )
 
+func (o *OpinionatedReconciler) needsCleanup(obj resource.Object) bool {
+	return obj.GetDeletionTimestamp() != nil && slices.Contains(obj.GetFinalizers(), o.finalizer)
+}
+
+// A deferred delivery can race a fresh one. Check the current metadata under
+// the same lock for both and preserve the event payload for metadata-only clients.
+func (o *OpinionatedReconciler) reconcileCurrent(ctx context.Context, req ReconcileRequest) (ReconcileResult, error) {
+	id := req.Object.GetStaticMetadata().Identifier()
+	release, _, err := o.cleanupOperations.acquire(ctx, id)
+	if err != nil {
+		return ReconcileResult{}, err
+	}
+	defer release()
+	current, err := o.readForCleanup(ctx, id, req.Object)
+	if apierrors.IsNotFound(err) {
+		return ReconcileResult{}, nil
+	}
+	if err != nil {
+		if ctx.Err() != nil {
+			return ReconcileResult{}, interruptedDelivery{ctx.Err()}
+		}
+		return ReconcileResult{}, err
+	}
+	if current.GetUID() != req.Object.GetUID() || !o.needsCleanup(current) {
+		return ReconcileResult{}, nil
+	}
+	req.Object = current
+	return o.reconcile(ctx, req)
+}
+
+func (o *OpinionatedReconciler) readForCleanup(ctx context.Context, id resource.Identifier, event resource.Object) (resource.Object, error) {
+	client := o.finalizerUpdater.client
+	if reader, ok := client.(fullObjectReader); ok {
+		return reader.Get(ctx, id)
+	}
+	// GetInto only promises finalizer metadata. Preserve the event payload
+	// even if this client also decodes some fields into its target.
+	metadata := event.Copy()
+	metadata.SetUID("")
+	metadata.SetFinalizers(nil)
+	metadata.SetDeletionTimestamp(nil)
+	if err := client.GetInto(ctx, id, metadata); err != nil {
+		return nil, err
+	}
+	current := event.Copy()
+	current.SetCommonMetadata(metadata.GetCommonMetadata())
+	return current, nil
+}
+
 // Reconcile consumes a ReconcileRequest and passes it off to the underlying ReconcileFunc, using the following criteria to modify or drop the request if needed:
 //   - If the action is a Create, and the OpinionatedReconciler's finalizer is in the finalizer list, update the action to a Resync
 //   - If the action is a Create, and the OpinionatedReconciler's finalizer is missing, add the finalizer after the delegated Reconcile request returns successfully
 //   - If the action is an Update, and the DeletionTimestamp is non-nil, remove the OpinionatedReconciler's finalizer, and do not delegate (the subsequent Delete will be delegated)
 //   - If the action is an Update, and the OpinionatedReconciler's finalizer is missing (and DeletionTimestamp is nil), add the finalizer, and do not delegate (the subsequent update action will delegate)
-//
-//nolint:funlen,gocognit
 func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
+	if ctx.Value(refreshCleanupKey{}) != nil && request.Action != ReconcileActionDeleted && o.needsCleanup(request.Object) {
+		return o.reconcileCurrent(ctx, request)
+	}
+	return o.reconcile(ctx, request)
+}
+
+//nolint:funlen,gocognit
+func (o *OpinionatedReconciler) reconcile(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
 	ctx, span := GetTracer().Start(ctx, "OpinionatedReconciler-reconcile")
 	defer span.End()
 	logger := logging.FromContext(ctx).With("action", ResourceActionFromReconcileAction(request.Action), "component", "OpinionatedReconciler", "kind", request.Object.GroupVersionKind().Kind, "namespace", request.Object.GetNamespace(), "name", request.Object.GetName())

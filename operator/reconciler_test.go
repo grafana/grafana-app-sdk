@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -36,9 +37,7 @@ func TestNewOpinionatedReconciler(t *testing.T) {
 		op, err := NewOpinionatedReconciler(client, finalizer)
 		assert.Nil(t, err)
 		assert.Equal(t, finalizer, op.finalizer)
-		cast, ok := op.finalizerUpdater.(*finalizerUpdater)
-		require.True(t, ok)
-		assert.Equal(t, client, cast.client)
+		assert.Equal(t, client, op.finalizerUpdater.client)
 	})
 
 	t.Run("finzlizer too long", func(t *testing.T) {
@@ -57,6 +56,70 @@ type cleanupReadClient struct {
 func (c *cleanupReadClient) Get(ctx context.Context, id resource.Identifier) (resource.Object, error) {
 	obj := &resource.TypedSpecObject[map[string]string]{}
 	return obj, c.GetInto(ctx, id, obj)
+}
+
+func TestOpinionatedReconciler_Reconcile_RefreshCleanup(t *testing.T) {
+	oldSpec := map[string]string{"removed": "old", "kept": "old"}
+	newSpec := map[string]string{"kept": "new"}
+	for _, test := range []struct {
+		name         string
+		fullRead     bool
+		fullResponse bool
+		wantSpec     map[string]string
+	}{
+		{"full read drops removed fields", true, true, newSpec},
+		{"metadata refresh preserves event payload", false, false, oldSpec},
+		{"GetInto-only decoder cannot mix payloads", false, true, oldSpec},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			event := &resource.TypedSpecObject[map[string]string]{Spec: oldSpec}
+			event.SetName("item")
+			event.SetUID("original")
+			event.SetFinalizers([]string{"cleanup"})
+			now := metav1.Now()
+			event.SetDeletionTimestamp(&now)
+			event.SetResourceVersion("1")
+			original := event.Copy()
+			server := newFinalizerAPIServer(event)
+			server.change(func(obj resource.Object) { require.NoError(t, obj.SetSpec(newSpec)) })
+			patcher := &mockPatchClient{PatchIntoFunc: server.PatchInto}
+			var client PatchClient = patcher
+			if test.fullResponse {
+				// The Kubernetes client decodes into the supplied target. JSON
+				// keeps pre-existing map keys when the response omits them.
+				codec := resource.NewJSONCodec()
+				patcher.GetIntoFunc = func(_ context.Context, _ resource.Identifier, into resource.Object) error {
+					var response bytes.Buffer
+					require.NoError(t, codec.Write(&response, server.state()))
+					return codec.Read(&response, into)
+				}
+			} else {
+				patcher.GetIntoFunc = func(_ context.Context, _ resource.Identifier, into resource.Object) error {
+					into.SetCommonMetadata(server.state().GetCommonMetadata())
+					return nil
+				}
+			}
+			if test.fullRead {
+				client = &cleanupReadClient{patcher}
+			}
+			rec, err := NewOpinionatedReconciler(client, "cleanup")
+			require.NoError(t, err)
+			calls := 0
+			rec.Wrap(&SimpleReconciler{ReconcileFunc: func(_ context.Context, req ReconcileRequest) (ReconcileResult, error) {
+				calls++
+				assert.Equal(t, ReconcileActionDeleted, req.Action)
+				assert.Equal(t, test.wantSpec, req.Object.GetSpec())
+				assert.Equal(t, server.state().GetResourceVersion(), req.Object.GetResourceVersion())
+				return ReconcileResult{}, nil
+			}})
+			ctx := context.WithValue(t.Context(), refreshCleanupKey{}, true)
+			_, err = rec.Reconcile(ctx, ReconcileRequest{Action: ReconcileActionUpdated, Object: event})
+			require.NoError(t, err)
+			assert.Equal(t, 1, calls)
+			assert.Equal(t, original, event)
+			assert.Empty(t, server.state().GetFinalizers())
+		})
+	}
 }
 
 func TestOpinionatedReconciler_Reconcile(t *testing.T) {

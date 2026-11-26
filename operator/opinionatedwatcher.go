@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"sync/atomic"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/codes"
@@ -74,6 +75,7 @@ type OpinionatedWatcher struct {
 	addPendingFinalizer string
 	schema              resource.Schema
 	collectors          []prometheus.Collector
+	operations          objectOperations
 	finalizerUpdater    finalizerUpdater
 }
 
@@ -214,8 +216,14 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	return o.addNew(ctx, span, logger, nil, object)
 }
 
-// An update retains its original object pair across the fresh read.
+// addNew serializes pending Add work, including any spec catch-up that cleanup
+// must follow. An update retains its original object pair across the fresh read.
 func (o *OpinionatedWatcher) addNew(ctx context.Context, span trace.Span, logger logging.Logger, previous, event resource.Object) error {
+	release, waited, err := o.operations.acquire(ctx, event.GetStaticMetadata().Identifier())
+	if err != nil {
+		return err
+	}
+	defer release()
 	finalizers := o.getFinalizers(event)
 	// If this isn't a delete or an add we've seen before, then it's a new resource we need to handle appropriately.
 	// Call the add handler, and if it returns successfully (no error), add the finalizer.
@@ -226,8 +234,11 @@ func (o *OpinionatedWatcher) addNew(ctx context.Context, span trace.Span, logger
 	// a resync.
 	object := event.Copy()
 	logger.Debug("Adding in-progress finalizer before add call", "finalizer", o.addPendingFinalizer, "currentFinalizers", finalizers)
-	object, state, err := o.startAdd(ctx, object)
+	object, state, err := o.startAdd(ctx, object, waited)
 	if err != nil {
+		if ctx.Err() != nil {
+			return interruptedDelivery{ctx.Err()}
+		}
 		span.SetStatus(codes.Error, fmt.Sprintf("finalizer add error: %s", err.Error()))
 		if chk, ok := errors.AsType[FinalizerError](err); ok {
 			logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
@@ -273,7 +284,9 @@ const (
 
 // startAdd protects the side effect with the in-progress finalizer. It returns
 // the working object, which a fresh read may replace.
-func (o *OpinionatedWatcher) startAdd(ctx context.Context, object resource.Object) (resource.Object, addState, error) {
+//
+//nolint:revive // A waiter must refresh even if its event predates the pending patch.
+func (o *OpinionatedWatcher) startAdd(ctx context.Context, object resource.Object, waited bool) (resource.Object, addState, error) {
 	id := object.GetStaticMetadata().Identifier()
 	uid := object.GetUID()
 	check := func(obj resource.Object) addState {
@@ -286,7 +299,7 @@ func (o *OpinionatedWatcher) startAdd(ctx context.Context, object resource.Objec
 		}
 		return addNeeded
 	}
-	if slices.Contains(object.GetFinalizers(), o.addPendingFinalizer) {
+	if waited || slices.Contains(object.GetFinalizers(), o.addPendingFinalizer) {
 		// An earlier attempt started. Adding the in-progress finalizer again would be a no-op which reads nothing, so
 		// read the current state here.
 		current, err := o.readCurrent(ctx, id)
@@ -359,8 +372,8 @@ func (o *OpinionatedWatcher) callbackObject(event, current resource.Object) reso
 	return event.Copy()
 }
 
-// Update filters unchanged positive generations, handles deletion and recovers missing finalizers.
-// An admitted spec change is delivered even if Add completed after the notification was queued.
+// Update handles deletion before generation filtering. Other updates with an unchanged
+// positive generation are ignored. Admitted updates recover missing finalizers through Add.
 //
 //nolint:funlen
 func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tgt resource.Object) error {
@@ -377,11 +390,6 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 	logger := logging.FromContext(ctx).With("action", "update", "component", "OpinionatedWatcher", "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())
 	logger.Debug("Handling update")
 
-	// Only fire off Update if the generation has changed (so skip subresource updates)
-	if tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration() {
-		return nil
-	}
-
 	oldFinalizers := o.getFinalizers(src)
 	newFinalizers := o.getFinalizers(tgt)
 
@@ -389,6 +397,11 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 	// This denotes that the resource was deletes, but has one or more finalizers blocking it from actually deleting.
 	if tgt.GetDeletionTimestamp() != nil {
 		return o.cleanup(ctx, tgt)
+	}
+
+	// Only fire off Update if the generation has changed (so skip subresource updates)
+	if tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration() {
+		return nil
 	}
 
 	if !slices.Contains(newFinalizers, o.finalizer) {
@@ -471,12 +484,20 @@ func (o *OpinionatedWatcher) cleanup(ctx context.Context, obj resource.Object) e
 		return nil
 	}
 	id := obj.GetStaticMetadata().Identifier()
+	release, _, err := o.operations.acquire(ctx, id)
+	if err != nil {
+		return err
+	}
+	defer release()
 	// A replay can carry our finalizer even after a previous cleanup removed it.
 	current, err := o.readCurrent(ctx, id)
 	if apierrors.IsNotFound(err) {
 		return nil
 	}
 	if err != nil {
+		if ctx.Err() != nil {
+			return interruptedDelivery{ctx.Err()}
+		}
 		return err
 	}
 	uid := obj.GetUID()
@@ -554,7 +575,11 @@ func (o *OpinionatedWatcher) deleteFunc(ctx context.Context, object resource.Obj
 // syncFunc is a wrapper for SyncFunc which makes a nil check to avoid panics
 func (o *OpinionatedWatcher) syncFunc(ctx context.Context, object resource.Object) error {
 	if o.SyncFunc != nil {
-		return o.SyncFunc(ctx, object)
+		err := o.SyncFunc(ctx, object)
+		if failed, ok := ctx.Value(syncFailureKey{}).(*atomic.Pointer[OpinionatedWatcher]); ok && err != nil {
+			failed.Store(o)
+		}
+		return err
 	}
 	// TODO: log?
 	return nil
