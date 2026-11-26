@@ -42,12 +42,12 @@ import (
 //	}
 //
 // Plugin protocol v2 calls (query, stream, health and resource calls) are
-// authenticated with the same authenticator, and must carry the caller's access
+// authenticated with the same authenticator when they carry the caller's access
 // token (X-Access-Token): their handlers' clients then act on behalf of the
-// caller. A v2 call without a valid token is rejected, unless
-// WithInsecureSkipAuthentication is set, which lets a call without a token
-// through with no identity. CallResource handlers also get the app instance
-// settings as resource.RouteRequestInfo (see resource.RouteRequestInfoFrom).
+// caller. A token that does not verify fails the call. A call without a token
+// is let through with no identity, acting as the plugin, and a warning is
+// logged. CallResource handlers also get the app instance settings as
+// resource.RouteRequestInfo (see resource.RouteRequestInfoFrom).
 //
 // If the App needs to talk to the Kubernetes API server, the rest.Config
 // can be overridden via WithKubeConfig. Without one from WithKubeConfig or

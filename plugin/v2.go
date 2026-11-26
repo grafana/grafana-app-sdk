@@ -13,6 +13,7 @@ import (
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/plugin/grpcplugin"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -41,7 +42,7 @@ const (
 type v2Auth struct {
 	authenticator authn.Authenticator
 	// insecure is set by InsecureSkipAuthentication: tokens are parsed without
-	// being verified, and calls without one are let through.
+	// being verified.
 	insecure bool
 }
 
@@ -59,12 +60,12 @@ func (cfg *runConfig) v2Auth() v2Auth {
 // resource.RouteRequestInfo, as v3 custom route handlers get theirs.
 // CollectMetrics has no headers to carry a token, and passes through unchanged.
 //
-// Each call must carry the caller's access token (X-Access-Token), which is
+// Each call should carry the caller's access token (X-Access-Token), which is
 // verified; the handler's context then carries the caller's AuthInfo, so
-// clients made with the app's KubeConfig act on behalf of the caller. A call
-// without a token, or with one that does not verify, fails, rather than leaving
-// the handler to act as the plugin. Only with InsecureSkipAuthentication is a
-// call without a token let through, carrying no identity.
+// clients made with the app's KubeConfig act on behalf of the caller. A token
+// that does not verify fails the call, rather than leaving the handler to act
+// as the plugin. A call without a token is let through with no identity, so its
+// requests act as the plugin, and a warning is logged. This fails open for now.
 func newV2Middleware(auth v2Auth) backend.HandlerMiddleware {
 	return backend.HandlerMiddlewareFunc(func(next backend.Handler) backend.Handler {
 		return &v2Handler{BaseHandler: backend.NewBaseHandler(next), auth: auth}
@@ -80,7 +81,7 @@ func (h *v2Handler) QueryData(ctx context.Context, req *backend.QueryDataRequest
 	if req == nil {
 		return h.BaseHandler.QueryData(ctx, req)
 	}
-	ctx, err := h.auth.authenticate(ctx, req.PluginContext, req.GetHTTPHeader(v2AccessTokenHeader))
+	ctx, err := h.auth.authenticate(ctx, "QueryData", req.PluginContext, req.GetHTTPHeader(v2AccessTokenHeader))
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,7 @@ func (h *v2Handler) QueryChunkedData(ctx context.Context, req *backend.QueryChun
 	if req == nil {
 		return h.BaseHandler.QueryChunkedData(ctx, req, w)
 	}
-	ctx, err := h.auth.authenticate(ctx, req.PluginContext, req.GetHTTPHeader(v2AccessTokenHeader))
+	ctx, err := h.auth.authenticate(ctx, "QueryChunkedData", req.PluginContext, req.GetHTTPHeader(v2AccessTokenHeader))
 	if err != nil {
 		return err
 	}
@@ -102,7 +103,7 @@ func (h *v2Handler) SubscribeStream(ctx context.Context, req *backend.SubscribeS
 	if req == nil {
 		return h.BaseHandler.SubscribeStream(ctx, req)
 	}
-	ctx, err := h.auth.authenticate(ctx, req.PluginContext, req.GetHTTPHeader(v2AccessTokenHeader))
+	ctx, err := h.auth.authenticate(ctx, "SubscribeStream", req.PluginContext, req.GetHTTPHeader(v2AccessTokenHeader))
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +114,7 @@ func (h *v2Handler) PublishStream(ctx context.Context, req *backend.PublishStrea
 	if req == nil {
 		return h.BaseHandler.PublishStream(ctx, req)
 	}
-	ctx, err := h.auth.authenticate(ctx, req.PluginContext, req.GetHTTPHeader(v2AccessTokenHeader))
+	ctx, err := h.auth.authenticate(ctx, "PublishStream", req.PluginContext, req.GetHTTPHeader(v2AccessTokenHeader))
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +125,7 @@ func (h *v2Handler) RunStream(ctx context.Context, req *backend.RunStreamRequest
 	if req == nil {
 		return h.BaseHandler.RunStream(ctx, req, sender)
 	}
-	ctx, err := h.auth.authenticate(ctx, req.PluginContext, req.GetHTTPHeader(v2AccessTokenHeader))
+	ctx, err := h.auth.authenticate(ctx, "RunStream", req.PluginContext, req.GetHTTPHeader(v2AccessTokenHeader))
 	if err != nil {
 		return err
 	}
@@ -135,7 +136,7 @@ func (h *v2Handler) CheckHealth(ctx context.Context, req *backend.CheckHealthReq
 	if req == nil {
 		return h.BaseHandler.CheckHealth(ctx, req)
 	}
-	ctx, err := h.auth.authenticate(ctx, req.PluginContext, req.GetHTTPHeader(v2AccessTokenHeader))
+	ctx, err := h.auth.authenticate(ctx, "CheckHealth", req.PluginContext, req.GetHTTPHeader(v2AccessTokenHeader))
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +147,7 @@ func (h *v2Handler) CallResource(ctx context.Context, req *backend.CallResourceR
 	if req == nil {
 		return h.BaseHandler.CallResource(ctx, req, sender)
 	}
-	ctx, err := h.auth.authenticate(ctx, req.PluginContext, req.GetHTTPHeader(v2AccessTokenHeader))
+	ctx, err := h.auth.authenticate(ctx, "CallResource", req.PluginContext, req.GetHTTPHeader(v2AccessTokenHeader))
 	if err != nil {
 		return err
 	}
@@ -159,19 +160,19 @@ func (h *v2Handler) CallResource(ctx context.Context, req *backend.CallResourceR
 }
 
 // authenticate returns ctx with the caller's AuthInfo. A call without a token
-// is rejected, unless InsecureSkipAuthentication is set, in which case it
-// carries no identity. A verified token must cover the plugin context's
-// namespace.
-func (a v2Auth) authenticate(ctx context.Context, pluginCtx backend.PluginContext, token string) (context.Context, error) {
+// is let through with no identity, and a warning is logged: this fails open
+// for now, so as not to block calls Grafana does not yet send a token for. A
+// verified token must cover the plugin context's namespace.
+func (a v2Auth) authenticate(ctx context.Context, call string, pluginCtx backend.PluginContext, token string) (context.Context, error) {
 	token = strings.TrimSpace(token)
 	if len(token) > len("Bearer ") && strings.EqualFold(token[:len("Bearer ")], "Bearer ") {
 		token = strings.TrimSpace(token[len("Bearer "):])
 	}
 	if token == "" {
-		if a.insecure {
-			return ctx, nil
-		}
-		return nil, status.Error(codes.Unauthenticated, "an access token ("+v2AccessTokenHeader+") is required")
+		// TODO: reject calls without a token once Grafana sends one on every call.
+		logging.FromContext(ctx).Warn("plugin v2 call without an access token; it is served without the caller's identity",
+			"call", call, "pluginId", pluginCtx.PluginID, "namespace", pluginCtx.Namespace)
+		return ctx, nil
 	}
 	if a.authenticator == nil {
 		// The token cannot be verified, and must not be ignored: its handler

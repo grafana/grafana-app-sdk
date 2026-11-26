@@ -167,20 +167,19 @@ func v2Resource(namespace, token string) *backend.CallResourceRequest {
 func TestV2MiddlewareAuthentication(t *testing.T) {
 	authenticator, sign := v2TestTokens(t)
 
-	t.Run("a call without a token is rejected", func(t *testing.T) {
-		h, rec := newV2TestHandler(t, (&runConfig{authenticator: authenticator}).v2Auth())
-		for name, err := range v2AllCalls(h, rec, "default", "") {
-			assert.Equal(t, codes.Unauthenticated, status.Code(err), name)
-			assert.Nil(t, rec.calls[name], "%s: the handler must not run", name)
-		}
-	})
-
-	t.Run("insecure skip authentication lets a call without a token through, with no identity", func(t *testing.T) {
-		h, rec := newV2TestHandler(t, (&runConfig{insecureSkipAuthentication: true}).v2Auth())
-		for name, err := range v2AllCalls(h, rec, "default", "") {
-			require.NoError(t, err, name)
-			_, ok := types.AuthInfoFrom(rec.calls[name])
-			assert.False(t, ok, name)
+	t.Run("a call without a token is let through with no identity", func(t *testing.T) {
+		for name, auth := range map[string]v2Auth{
+			"verifying": (&runConfig{authenticator: authenticator}).v2Auth(),
+			"insecure":  (&runConfig{insecureSkipAuthentication: true}).v2Auth(),
+			"no auth":   (&runConfig{}).v2Auth(),
+		} {
+			h, rec := newV2TestHandler(t, auth)
+			for call, err := range v2AllCalls(h, rec, "default", "") {
+				require.NoError(t, err, name+" "+call)
+				require.Contains(t, rec.calls, call)
+				_, ok := types.AuthInfoFrom(rec.calls[call])
+				assert.False(t, ok, name+" "+call)
+			}
 		}
 	})
 
