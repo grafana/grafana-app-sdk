@@ -38,20 +38,43 @@ func (a serverAuth) authenticate(ctx context.Context) (context.Context, bool, er
 	if len(tokens) != 1 || tokens[0] == "" || len(md.Get("x-id-token")) != 0 {
 		return nil, false, status.Error(codes.Unauthenticated, "a single access token and no separate ID token are required")
 	}
-	info, err := a.authenticator.Authenticate(ctx, authn.NewGRPCTokenProvider(md))
+	ctx, err := AuthenticateAccessToken(ctx, a.authenticator, tokens[0])
+	if err != nil {
+		return nil, false, err
+	}
+	return ctx, !a.insecure, nil
+}
+
+// AuthenticateAccessToken verifies an access token the host sent some other
+// way than plugin protocol v3 metadata, such as the X-Access-Token header of a
+// plugin protocol v2 call, the way a v3 request's token is verified. It
+// returns ctx carrying the caller's AuthInfo, which keeps the token, so that
+// clients made with k8s.NewTokenExchangeRestConfig act on behalf of the caller.
+//
+// A token that does not verify is a codes.Unauthenticated status error; a
+// failure of the authenticator itself, such as fetching signing keys, is
+// codes.Internal.
+func AuthenticateAccessToken(ctx context.Context, authenticator authn.Authenticator, token string) (context.Context, error) {
+	if authenticator == nil {
+		return nil, status.Error(codes.FailedPrecondition, "plugin has no authenticator configured")
+	}
+	if token == "" {
+		return nil, status.Error(codes.Unauthenticated, "an access token is required")
+	}
+	info, err := authenticator.Authenticate(ctx, authn.NewGRPCTokenProvider(metadata.Pairs("x-access-token", token)))
 	if err != nil {
 		if isInvalidTokenErr(err) {
-			return nil, false, status.Error(codes.Unauthenticated, "invalid access token")
+			return nil, status.Error(codes.Unauthenticated, "invalid access token")
 		}
-		return nil, false, status.Error(codes.Internal, "authentication failed")
+		return nil, status.Error(codes.Internal, "authentication failed")
 	}
 	if info == nil {
-		return nil, false, status.Error(codes.Unauthenticated, "authenticator returned no identity")
+		return nil, status.Error(codes.Unauthenticated, "authenticator returned no identity")
 	}
 	// authlib's AuthInfo does not retain the raw access token. Keep the token
 	// only after successful authentication so downstream clients can exchange
 	// it without losing the caller's identity or delegation chain.
-	return types.WithAuthInfo(ctx, &authenticatedAuthInfo{AuthInfo: info, accessToken: tokens[0]}), !a.insecure, nil
+	return types.WithAuthInfo(ctx, &authenticatedAuthInfo{AuthInfo: info, accessToken: token}), nil
 }
 
 // invalidTokenErrs are errors about the token itself that authlib passes on

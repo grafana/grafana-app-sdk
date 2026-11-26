@@ -101,6 +101,7 @@ func (v *Validator) Validate(ctx context.Context, req *app.AdmissionRequest) err
 type App struct {
 	informerController *operator.InformerController
 	runner             *app.MultiRunner
+	namedRunners       map[string]app.Runnable
 	clientGenerator    resource.ClientGenerator
 	kinds              map[string]AppManagedKind
 	gvrToGVK           map[string]string
@@ -509,6 +510,7 @@ func NewApp(config AppConfig) (*App, error) {
 		a.RegisterKindConverter(gk, converter)
 	}
 	a.runner.AddRunnable(a.informerController)
+	a.namedRunners = map[string]app.Runnable{RunnerNameInformers: a.informerController}
 	return a, nil
 }
 
@@ -575,6 +577,37 @@ func (a *App) AddRunnable(runner app.Runnable) {
 	a.runner.AddRunnable(runner)
 }
 
+const (
+	// RunnerNameInformers is the name of the Runnable which runs the App's informers (and thus its reconcilers and watchers).
+	RunnerNameInformers = "informers"
+	// RunnerNameAll is reserved for running every runnable of the App, and cannot be used as a runnable name.
+	RunnerNameAll = "all"
+)
+
+// AddNamedRunnable adds a Runnable to the App like AddRunnable, and additionally registers it under name,
+// so that it can be run on its own (for example, by selecting it as the target of plugin.Run).
+// It is still run as part of Runner(). It returns an error if the name is empty, reserved, or already in use.
+func (a *App) AddNamedRunnable(name string, runner app.Runnable) error {
+	if name == "" || name == RunnerNameAll {
+		return fmt.Errorf("invalid runnable name %q", name)
+	}
+	if runner == nil {
+		return errors.New("runnable cannot be nil")
+	}
+	if _, ok := a.namedRunners[name]; ok {
+		return fmt.Errorf("runnable %q already exists", name)
+	}
+	a.namedRunners[name] = runner
+	a.runner.AddRunnable(runner)
+	return nil
+}
+
+// NamedRunners implements app.NamedRunnerProvider. It always contains RunnerNameInformers,
+// plus any runnables added via AddNamedRunnable.
+func (a *App) NamedRunners() map[string]app.Runnable {
+	return a.namedRunners
+}
+
 // manageKind introduces a new kind to manage.
 func (a *App) manageKind(kind AppManagedKind) error {
 	if kind.Kind.Schema == nil {
@@ -633,11 +666,12 @@ func (a *App) addInformerFor(kind AppUnmanagedKind) error {
 		FieldSelectors: kind.ReconcileOptions.FieldSelectors,
 	}
 	return a.watches.register(kind.Kind.GroupVersionKind().String(), operator.InformerRequest{
-		Kind:        kind.Kind,
-		Clients:     a.clientGenerator,
-		Supplier:    supplier,
-		Options:     opts,
-		Opinionated: kind.ReconcileOptions.UseOpinionated,
+		Kind:            kind.Kind,
+		Clients:         a.clientGenerator,
+		Supplier:        supplier,
+		Options:         opts,
+		Opinionated:     kind.ReconcileOptions.UseOpinionated,
+		DiscardsResyncs: kind.ReconcileOptions.UseOpinionated && kind.Watcher != nil,
 	}, a.informerController.AddInformer)
 }
 

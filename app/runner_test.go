@@ -518,3 +518,14 @@ func waitForMessageOrTimeout(ch <-chan struct{}, timeout time.Duration) bool {
 		return true
 	}
 }
+
+func TestDynamicMultiRunnerConcurrentTerminalErrors(t *testing.T) {
+	runner := NewDynamicMultiRunner()
+	first := errors.New("subscription rejected")
+	runner.AddRunnable(&testRunnable{RunFunc: func(context.Context) error { return first }})
+	runner.AddRunnable(&testRunnable{RunFunc: func(ctx context.Context) error {
+		<-ctx.Done()
+		return errors.New("subscription also failed")
+	}})
+	require.ErrorIs(t, runner.Run(t.Context()), first)
+}

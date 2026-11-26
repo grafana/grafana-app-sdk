@@ -16,11 +16,10 @@ type sharedWatches struct {
 	byKey map[string][]sharedWatch
 }
 
-// sharedWatch is one registered entry: the least its handlers can take on each channel, and what its informer
-// carries where the informer says.
+// sharedWatch is one registered entry: what its handlers need, and what its informer carries where the informer
+// says.
 type sharedWatch struct {
-	live     operator.WatchDetail
-	resync   operator.WatchDetail
+	needs    operator.WatchOptions
 	provided operator.WatchOptions
 	stated   bool
 }
@@ -28,9 +27,9 @@ type sharedWatch struct {
 // register builds this entry's informer, checks the deliveries it and the entries already under key would exchange,
 // and adds it with add before recording it, so an informer which fails to register leaves nothing behind.
 //
-// Only the detail is compared across entries. An extra copy of a delivery takes nothing away from a handler, so a
-// channel another entry's informer divides, or does not have at all, serves a handler with its own informer for it;
-// affinity would be the exception, and nothing provides it yet.
+// Deliveries are compared with operator.WatchOptions.RefusedDeliveries: each entry has its own informer for what it
+// asked, so a channel another entry's informer lacks or divides takes nothing away from it, but one carrying less
+// detail, or breaking the sharding it requires, does.
 func (s *sharedWatches) register(
 	key string, req operator.InformerRequest, add func(operator.Informer, string) error,
 ) error {
@@ -38,7 +37,10 @@ func (s *sharedWatches) register(
 	if err != nil {
 		return err
 	}
-	entry := newSharedWatch(req, informer)
+	// Snapshot both sides: callers may reuse and mutate the channel pointers for a later registration.
+	entry := sharedWatch{needs: req.Options.WatchNeeds.WithDefaults()}
+	entry.provided, entry.stated = operator.InformerWatchOptions(informer)
+	entry.provided = entry.provided.WithDefaults()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -60,44 +62,17 @@ func (s *sharedWatches) register(
 	return nil
 }
 
-// newSharedWatch reads the floors req's handlers impose on each channel: what the kind declared for a channel it
-// asked for, and for one it did not, the object's metadata where its handler is opinionated — those deliveries
-// still reach the wrapper — or anything at all where it is not.
-func newSharedWatch(req operator.InformerRequest, informer operator.Informer) sharedWatch {
-	needs := req.Options.WatchNeeds.WithDefaults()
-	unasked := operator.WatchDetailIdentity
-	if req.Opinionated {
-		unasked = operator.WatchDetailMetadata
-	}
-	entry := sharedWatch{live: unasked, resync: unasked}
-	if needs.Live != nil {
-		entry.live = needs.Live.Detail
-	}
-	if needs.Resync != nil {
-		entry.resync = needs.Resync.Detail
-	}
-	entry.provided, entry.stated = operator.InformerWatchOptions(informer)
-	return entry
-}
-
-// refuses describes the deliveries other's informer makes which carry less than this entry's handlers can take. An
-// informer which says nothing about what it provides has nothing to check.
+// refuses describes the deliveries other's informer makes which this entry's handlers cannot take. An informer
+// which says nothing about what it provides has nothing to check.
 func (w sharedWatch) refuses(other sharedWatch) []string {
 	if !other.stated {
 		return nil
 	}
-	var refused []string
-	if other.provided.Live != nil && !w.live.SatisfiedBy(other.provided.Live.Detail) {
-		refused = append(refused, fmt.Sprintf("Live deliveries carrying less than %q", w.live))
-	}
-	if other.provided.Resync != nil && !w.resync.SatisfiedBy(other.provided.Resync.Detail) {
-		refused = append(refused, fmt.Sprintf("Resync deliveries carrying less than %q", w.resync))
-	}
-	return refused
+	return w.needs.RefusedDeliveries(other.provided)
 }
 
 func sharedWatchError(key string, refused []string) error {
 	return fmt.Errorf("kind '%s' is watched by more than one entry, and every informer for it delivers to every one"+
-		" of its reconcilers and watchers: one of them makes %s, which another entry's handlers need. Give the"+
-		" entries the same declaration, or watch the kind once", key, strings.Join(refused, " and "))
+		" of its reconcilers and watchers: one of them makes %s, which another entry's handlers cannot take. Give"+
+		" the entries the same declaration, or watch the kind once", key, strings.Join(refused, " and "))
 }

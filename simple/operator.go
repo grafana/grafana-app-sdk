@@ -278,9 +278,10 @@ func WithWatchNeeds(needs operator.WatchOptions) KindWatchOption {
 	}
 }
 
-// addInformerForKind builds the informer for a kind and adds it to the controller under its key.
+// addInformerForKind builds the informer for a kind and adds it to the controller under its key. forWatcher states
+// that the kind's handler is an OpinionatedWatcher rather than an OpinionatedReconciler.
 func (o *Operator) addInformerForKind(
-	kind resource.Kind, options operator.ListWatchOptions, opts []KindWatchOption,
+	kind resource.Kind, options operator.ListWatchOptions, opts []KindWatchOption, forWatcher bool,
 ) error {
 	var settings kindWatchSettings
 	for _, opt := range opts {
@@ -303,7 +304,8 @@ func (o *Operator) addInformerForKind(
 			WatchNeeds:          settings.watchNeeds,
 		},
 		// WatchKind and ReconcileKind both wrap their handler in its Opinionated variant.
-		Opinionated: true,
+		Opinionated:     true,
+		DiscardsResyncs: forWatcher,
 	}, o.controller.AddInformer)
 }
 
@@ -336,7 +338,7 @@ func (o *Operator) WatchKind(
 	}
 	ow.Wrap(watcher, false)
 	ow.SyncFunc = watcher.Sync
-	if err := o.addInformerForKind(kind, options, opts); err != nil {
+	if err := o.addInformerForKind(kind, options, opts, true); err != nil {
 		return err
 	}
 	return o.controller.AddWatcher(ow, kindStr)
@@ -360,7 +362,7 @@ func (o *Operator) ReconcileKind(
 		return err
 	}
 	or.Reconciler = reconciler
-	if err := o.addInformerForKind(kind, options, opts); err != nil {
+	if err := o.addInformerForKind(kind, options, opts, false); err != nil {
 		return err
 	}
 	return o.controller.AddReconciler(or, kindStr)

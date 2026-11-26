@@ -164,7 +164,8 @@ func NewMyKindReconciler(infoClient InfoClient, store *resource.TypedStore[*v1.M
 ## Declaring What a Reconciler Needs From a Watch (experimental)
 
 > [!WARNING]
-> `WatchOptions` and the code that reads it are experimental. They may change in a minor release.
+> `WatchOptions`, the watch mechanisms, and the `resourcebus` package are experimental. They may change in a minor
+> release. The `resourcebus` package may change or be removed without notice.
 
 ### Overview
 
@@ -182,14 +183,17 @@ Some handlers need less than this. For example:
 * A reconciler that checks every object once an hour does not need to see changes as they happen.
 
 You can tell the app what your handlers need with `WatchNeeds`. The app uses this to pick a cheaper way to watch the
-kind, if one is configured. This section uses these terms:
+kind, if one is configured. For example, it can use a periodic LIST, or a message bus that sends change
+notifications. This section uses these terms:
 
 | Term | Meaning |
 | --- | --- |
 | delivery | one event that the app sends to your handlers |
 | live channel | deliveries sent when an object changes |
 | resync channel | deliveries of every object again, on a fixed schedule |
-| watch mechanism | a way to watch a kind, such as the API watch or an event bus. It states what it provides |
+| watch mechanism | a way to watch a kind, such as the API watch or a bus. It states what it provides |
+| bus | a message system, outside the Kubernetes API, that announces changes to objects |
+| identity | only the namespace, name, and `resourceVersion` of an object |
 
 If you do not set `WatchNeeds`, nothing changes: the kind is watched as before. If you set `WatchNeeds` but the app
 has no cheaper mechanism configured, nothing changes either. The kind still gets the API watch.
@@ -203,7 +207,10 @@ operator.WatchOptions{
     // What the handlers need from the live channel. Nil means they do not need the live channel.
     Live: &operator.WatchLiveOptions{Detail: ..., Distribution: ...},
     // What the handlers need from the resync channel. Nil means they do not need a resync.
-    Resync: &operator.WatchResyncOptions{Detail: ..., Distribution: ..., Interval: ..., ListPageSize: ...},
+    Resync: &operator.WatchResyncOptions{
+        Detail: ..., Distribution: ..., Interval: ..., ListPageSize: ...,
+        Ignore: ..., IgnoreUnchanged: ..., // see "Leaving objects out of a resync"
+    },
 }
 ```
 
@@ -211,8 +218,10 @@ Rules for the two channels:
 
 * If you set a channel, your handlers need that channel.
 * If you leave a channel nil, your handlers do not need it. A mechanism without that channel can serve the kind.
-* If you leave **both** channels nil, the app treats this as a need for the live channel with default values.
-  This is the default behavior.
+* If you leave **both** channels nil, the app treats this as a need for the live channel with default values: the
+  whole object, sent to every instance. This is what the API watch gives every kind, so a kind that does not set
+  `WatchNeeds` keeps working as before. It does not need a resync, but it still gets one if the app sets
+  `InformerOptions.CacheResyncInterval`.
 
 This means that if you need a resync **and** live changes, you must set both fields. `WatchOptions{Resync: ...}`
 alone means "no live changes needed". A mechanism that only sends every object on a schedule can serve it.
@@ -224,8 +233,8 @@ that you did set:
 * They must contain at least the `Detail` that you declared.
 * They must be `Sharded` if you declared `WatchDistributionSharded`.
 
-For example, a kind that declares only a resync with the whole object cannot get an event bus whose live events
-contain only the object's name.
+For example, a kind that declares only a resync with the whole object cannot get a bus whose live events contain
+only identities.
 
 Inside a channel, every field has a safe default. If you leave `Detail` or `Distribution` empty, the app uses the
 strictest value: the whole object, sent to every instance. So leaving these fields empty never lets the app pick a
@@ -237,7 +246,7 @@ mechanism that it would not pick if you set them.
 | --- | --- |
 | `WatchDetailFullObject` (default) | read the object from the event |
 | `WatchDetailMetadata` | use only metadata, such as labels, finalizers, or timestamps |
-| `WatchDetailIdentity` | need only the namespace and name, because they read the object again before they act |
+| `WatchDetailIdentity` | need only the identity, because they read the object again before they act |
 
 A delivery with more detail can always serve a handler that needs less. For example, a mechanism that sends the
 full object can serve a handler that needs only metadata.
@@ -254,7 +263,8 @@ Note the difference between `Shared` and `Sharded`:
 
 * `Shared` is a permission. A mechanism with any distribution can serve it, including one that sends everything to
   every instance.
-* `Sharded` is a requirement. Only a mechanism that shards by object can serve it.
+* `Sharded` is a requirement. Only a mechanism that shards by object can serve it. No built-in mechanism does this
+  today.
 
 #### `Interval` and `ListPageSize`
 
@@ -265,69 +275,89 @@ page when the mechanism lists objects from the API. If you leave them at zero, t
 These two values are requests. The app does not use them to pick a mechanism, and a mechanism can ignore them.
 For example, the API watch ignores `ListPageSize` for its resync (see below).
 
+#### Leaving objects out of a resync
+
+> [!NOTE]
+> No built-in mechanism applies `Ignore` or `IgnoreUnchanged` yet. Today, every resync delivers every object, even if
+> you set these fields. You can set them now. Mechanisms that support them will start to use them.
+
+A resync delivers every object. Often, most of those objects need no work. Two optional fields let you say which
+objects a resync can leave out:
+
+* `Resync.Ignore` is a `WatchIgnoreFunc`. It looks at the current object only. If it returns `true`, the resync
+  can leave the object out.
+* `Resync.IgnoreUnchanged` is a `WatchUnchangedFunc`. It compares the object with the version that the mechanism
+  delivered last time. If it returns `true` (unchanged), the resync can leave the object out. Only a mechanism that
+  implements `operator.PreviousComparer` applies it.
+
+Both fields are requests. A mechanism that does not apply them delivers the object anyway, and the app does not use
+them to pick a mechanism. Some objects are never left out:
+
+* an object that is being deleted (it has a deletion timestamp),
+* for `IgnoreUnchanged`: an object with no earlier delivery, or with a missing or different UID (the object was
+  deleted and created again).
+
+The `operator` package has ready-made checks:
+
+| Check | Leaves out an object when |
+| --- | --- |
+| `SameResourceVersion` | its `resourceVersion` did not change, so nobody wrote to it |
+| `SameGeneration` | its `generation` did not change, so only status or metadata changed. Without a generation, it compares `resourceVersion` |
+| `SameLabels` | its labels did not change |
+| `SameAnnotations` | its annotations did not change |
+| `AllUnchanged(checks...)` | every check reports it unchanged |
+| `AlreadyObserved(accessor)` | the observed generation in its status (read by your accessor function) equals its `generation`. Use it as an `Ignore` function |
+
+For example:
+
+```go
+Resync: &operator.WatchResyncOptions{
+    Interval:        time.Hour,
+    IgnoreUnchanged: operator.AllUnchanged(operator.SameGeneration, operator.SameLabels),
+},
+```
+
+Leave `IgnoreUnchanged` nil if your handlers use the resync to repair drift, for example to recreate something
+outside the cluster that was removed. If unchanged objects are left out, that repair never runs.
+
 ### How the app picks a mechanism
 
 Use `operator.NewSelectingInformerSupplier` as the app's `InformerSupplier`. Give it:
 
-1. A fallback supplier. The app uses it for any kind that no mechanism can serve.
+1. A fallback supplier. The app uses it for any kind that no mechanism can serve. Usually this is
+   `simple.DefaultInformerSupplier` (the API watch).
 2. A list of mechanisms, ordered from the cheapest to the most capable.
 
 For each kind, the app uses the **first** mechanism in the list that can serve the kind's `WatchNeeds`. So each kind
-gets the cheapest mechanism that works for it. If no mechanism matches, the app uses the fallback supplier. If you
-list no mechanisms, every kind uses the fallback supplier.
+gets the cheapest mechanism that works for it. The app also skips:
 
-You can create a mechanism from an existing supplier with `operator.NewInformerMechanism`. You pass what the
-mechanism provides, and the supplier that builds its informers. You can also implement the
-`operator.InformerMechanism` interface yourself.
+* a `nil` mechanism. The bus constructors return `nil` when you pass a `nil` subscriber, so you can turn a bus off
+  without changing the list.
+* a mechanism that cannot handle the kind's query. The bus mechanisms do not support label selectors or field
+  selectors, so a kind with selectors never gets a bus.
 
-In the example below, `myReListSupplier`, `myNotifySupplier`, and `myEventBusSupplier` are your own
-`operator.InformerSupplier` functions.
+If no mechanism matches, the app uses the fallback supplier. If you list no mechanisms, every kind uses the fallback
+supplier.
 
-```go
-// Sends every object on a schedule. Has no live channel.
-reList := operator.NewInformerMechanism(operator.WatchOptions{
-    Resync: &operator.WatchResyncOptions{Detail: operator.WatchDetailFullObject},
-}, myReListSupplier)
+### Built-in mechanisms
 
-// Sends metadata as changes happen. Has no resync.
-notifyOnly := operator.NewInformerMechanism(operator.WatchOptions{
-    Live: &operator.WatchLiveOptions{Detail: operator.WatchDetailMetadata},
-}, myNotifySupplier)
+The `operator` package has these mechanisms:
 
-// Sends the name of each changed object, and every full object on a schedule.
-// It costs the most: a subscription and a periodic list.
-eventBus := operator.NewInformerMechanism(operator.WatchOptions{
-    Live:   &operator.WatchLiveOptions{Detail: operator.WatchDetailIdentity},
-    Resync: &operator.WatchResyncOptions{Detail: operator.WatchDetailFullObject},
-}, myEventBusSupplier)
+| Mechanism | Live channel | Resync channel |
+| --- | --- | --- |
+| API watch (`simple.DefaultInformerSupplier`) | full object, every instance | full object, every instance, only if an interval is set |
+| `NewPeriodicList` | none | full object, every instance |
+| `NewPeriodicKeysList` | none | identity, every instance |
+| `NewBusNotifications` | identity. Every instance, or shared in a named group | none |
+| `NewBusRecovery` | identity. Every instance, or shared in a named group | identity, every instance |
 
-cfg := simple.AppConfig{
-    InformerConfig: simple.AppInformerConfig{
-        InformerSupplier: operator.NewSelectingInformerSupplier(
-            simple.DefaultInformerSupplier, // fallback: the API watch
-            reList,
-            notifyOnly,
-            eventBus,
-        ),
-    },
-    ManagedKinds: []simple.AppManagedKind{{
-        Kind:       myCleanupKind.Kind(),
-        Reconciler: &myCleanupReconciler,
-        ReconcileOptions: simple.BasicReconcileOptions{
-            // This reconciler does not need live changes. It needs only an hourly resync.
-            // The first mechanism that can serve this is reList, so the app uses it.
-            // eventBus could not serve it: its live events contain only names, which is less
-            // than the full object that this kind declared for its resync.
-            WatchNeeds: operator.WatchOptions{
-                Resync: &operator.WatchResyncOptions{Interval: time.Hour, ListPageSize: 5000},
-            },
-            UsePlain: true,
-        },
-    }},
-}
-```
+You can also write your own. Use `operator.NewInformerMechanism` to wrap an existing `operator.InformerSupplier`
+with what it provides, or implement the `operator.InformerMechanism` interface.
 
-#### The resync of the API watch
+All built-in mechanisms use `InformerOptions.EventTimeout` as the time limit for each handler call. A retry gets a
+new time limit of the same length. Your handler must stop when its context is canceled.
+
+#### The API watch
 
 The API watch can resync only if a resync interval is set, either in `WatchNeeds.Resync.Interval` or in
 `InformerOptions.CacheResyncInterval`. Its resync sends again the objects that are already in its in-memory cache.
@@ -336,6 +366,164 @@ It does not list objects from the API. This has two effects:
 * It ignores `ListPageSize` for the resync.
 * It runs your handlers again for every object, but it cannot find changes that the live channel missed.
   A mechanism that lists objects from the API during its resync can find those changes.
+
+#### Periodic LIST: `NewPeriodicList`
+
+Use a periodic LIST for kinds that declare only a `Resync`, for work that visits every existing object again, such
+as age-based cleanup. Use a live channel for work that must react to changes or deletions.
+
+On each run (a "sweep"), the mechanism does one complete paginated LIST. Then it sends every object to your handlers
+as an add event, including objects that did not change since the last sweep. Note these details:
+
+* It does not send delete events. An object deleted between two sweeps is simply not in the next sweep.
+* The next interval starts after all objects of the sweep have been delivered.
+* If the LIST fails, the mechanism discards the objects it already read, reports the error, and tries again after
+  `RetryInterval` (default 5 seconds).
+* It supports a namespace, label selectors, and field selectors. A finalizer-aware handler can process a pending
+  deletion only while the object still matches those selectors.
+
+`PeriodicListOptions` sets the defaults for this mechanism. The kind's settings win over the app's settings, and the
+app's settings win over these defaults:
+
+| Setting | Order of precedence |
+| --- | --- |
+| interval | `WatchNeeds.Resync.Interval`, then `CacheResyncInterval`, then `PeriodicListOptions.ResyncInterval`, then 5 minutes |
+| page size | `WatchNeeds.Resync.ListPageSize`, then `WatchListPageSize`, then `PeriodicListOptions.PageSize`, then 500 |
+
+#### Periodic keys-only LIST: `NewPeriodicKeysList`
+
+This works like `NewPeriodicList`, but it delivers only identities. Use it for handlers that read each object again
+before they act.
+
+Pass an `operator.KeyListerFactory` to read only keys from the API, which costs less than reading whole objects.
+If the factory is `nil`, or if it returns `operator.ErrProjectionUnsupported` for the kind or query, the mechanism
+does a normal LIST and keeps only the identities.
+
+#### Bus notifications: `NewBusNotifications`
+
+This mechanism subscribes to a bus (see [Connecting a bus](#connecting-a-bus)) and delivers each notification as an
+identity:
+
+* a created or modified object arrives as an add event,
+* a deleted object arrives as a delete event.
+
+It does not recover notifications that it misses. The bus delivers each notification at most once. If the app is
+not connected, or its queue (1000 notifications) is full, those notifications are lost. Use it only for handlers
+that can accept missed changes, or use `NewBusRecovery`.
+
+The `resourcebus.Group` that you pass controls the distribution:
+
+* With an empty group name, every instance receives every notification (`WatchDistributionAll`).
+* With a group name, the instances in the group share the notifications. Each notification goes to one instance.
+  The mechanism then provides `WatchDistributionShared`. So a kind must declare `WatchDistributionShared` for its
+  live channel to get it, because the default distribution (`WatchDistributionAll`) requires every instance.
+
+#### Bus with recovery: `NewBusRecovery`
+
+This mechanism combines bus notifications with LIST requests, so it does not lose changes. It keeps a list of the
+identities that it knows about (not whole objects). It works like this:
+
+1. At startup, it subscribes to the bus and does a LIST. The informer is ready after this first LIST.
+2. Live: it delivers each notification as an add, update, or delete event. It drops a notification that is older
+   than what it already knows about the object.
+3. Scheduled resync: it does a LIST at each interval (default 5 minutes). It delivers every listed object, and a
+   delete event for each object that is no longer there.
+4. Catch-up: it does an extra LIST when the bus reconnects after a gap, when notifications were dropped because its
+   queue was full (at most once every 30 seconds), and to retry after a failed LIST. A catch-up LIST delivers only
+   the objects that changed.
+
+Requirements and options:
+
+* The LIST and the bus notifications must use the same numeric `resourceVersion` values, and those values must
+  increase with every write. If a LIST returns a value that is not a number, the LIST fails.
+* Handlers run on up to `InformerOptions.MaxConcurrentWorkers` workers (default 10). Events for the same object
+  always go to the same worker, so they stay in order.
+* `BusRecoveryDefaults` sets the default `ResyncInterval` and `PageSize`, and a `KeyListerFactory` (used in the same
+  way as in `NewPeriodicKeysList`). The kind's settings win over these defaults.
+* By default, startup waits until the bus subscription works. Set `AllowDegradedStart` to start with only the LIST
+  when the bus is not available. The mechanism keeps trying to subscribe, and does a LIST again when it connects.
+
+With a named group, the instances share the live notifications, but every instance does its own LIST. So the live
+channel is shared, and the resync channel goes to every instance.
+
+#### Connecting a bus
+
+The bus mechanisms read from a `resourcebus.Subscriber`. The SDK does not include an adapter for a specific bus
+(such as NATS). You write a small adapter that implements this interface:
+
+```go
+type Subscriber interface {
+    Subscribe(ctx context.Context, gvr schema.GroupVersionResource, namespace string,
+        handler func(context.Context, resourcebus.Event), opts ...resourcebus.SubscribeOption) (resourcebus.Subscription, error)
+}
+```
+
+The adapter must follow these rules:
+
+* `Subscribe` delivers notifications for one resource, in one namespace, or in every namespace when `namespace` is
+  empty. It delivers each notification at most once.
+* `handler` must not block. It is called on the delivery path.
+* A `resourcebus.Event` contains the change (`VerbAdded`, `VerbModified`, or `VerbDeleted`) and the identity of the
+  object, but never the object itself. A delete that only sets a deletion timestamp is a `VerbModified`.
+* `Subscription.WaitReady` returns when the subscription can receive events. Its context always has a deadline.
+  `Subscription.Close` stops delivery.
+* Read the options with `resourcebus.NewSubscribeConfig(opts...)`:
+  * `Group`: subscribers with the same group name, resource, and namespace share delivery. If the adapter cannot
+    provide the requested `Delivery` (`GroupDeliveryDefault` or `GroupDeliveryRoundRobin`), it must return an error.
+    It must not use a different delivery mode instead.
+  * `OnReconnect`: call it each time the subscription connects again after a gap. `NewBusRecovery` uses it to start a
+    catch-up LIST. It must not block.
+* For a permanent failure, such as missing permissions, wrap `resourcebus.ErrSubscriptionRejected` in the error. The
+  informer then stops and reports the error. For other errors, it tries again about every 5 seconds.
+
+#### Example
+
+In this example, `subscriber` is your `resourcebus.Subscriber`.
+
+```go
+group := resourcebus.Group{Name: "my-app"}
+
+cfg := simple.AppConfig{
+    InformerConfig: simple.AppInformerConfig{
+        InformerSupplier: operator.NewSelectingInformerSupplier(
+            simple.DefaultInformerSupplier, // fallback: the API watch
+            operator.NewPeriodicList(operator.PeriodicListOptions{}),
+            operator.NewBusNotifications(subscriber, group),
+            operator.NewBusRecovery(subscriber, group, operator.BusRecoveryDefaults{}),
+        ),
+    },
+    ManagedKinds: []simple.AppManagedKind{{
+        Kind:       myCleanupKind.Kind(),
+        Reconciler: &myCleanupReconciler,
+        ReconcileOptions: simple.BasicReconcileOptions{
+            // Needs no live changes, only an hourly resync with the whole object.
+            // The first mechanism that can serve this is NewPeriodicList.
+            WatchNeeds: operator.WatchOptions{
+                Resync: &operator.WatchResyncOptions{Interval: time.Hour, ListPageSize: 5000},
+            },
+            UsePlain: true,
+        },
+    }, {
+        Kind:       mySyncKind.Kind(),
+        Reconciler: &mySyncReconciler,
+        ReconcileOptions: simple.BasicReconcileOptions{
+            // Reads each object again, so identities are enough. Allows the group to share live changes,
+            // and needs a resync to catch missed changes. NewBusNotifications has no resync,
+            // so the first mechanism that can serve this is NewBusRecovery.
+            WatchNeeds: operator.WatchOptions{
+                Live: &operator.WatchLiveOptions{
+                    Detail:       operator.WatchDetailIdentity,
+                    Distribution: operator.WatchDistributionShared,
+                },
+                Resync: &operator.WatchResyncOptions{Detail: operator.WatchDetailIdentity},
+            },
+            UsePlain: true, // identities cannot serve an opinionated reconciler
+        },
+    }},
+}
+```
+
+Any other kind in this app keeps the default needs, so it gets the API watch.
 
 ### What the app rejects
 
@@ -366,8 +554,10 @@ are metadata. So:
 * The app also rejects a mechanism that sends identity-only deliveries on **any** channel to an opinionated handler,
   even on a channel that the kind did not ask for.
 
-To use identity-only deliveries, use a plain handler: set `UsePlain: true` for a managed kind, or leave
-`UseOpinionated` as `false` for an unmanaged kind. Then handle deletion in your own reconcile code.
+To use identity-only deliveries, such as from the bus mechanisms or `NewPeriodicKeysList`, use a plain handler: set
+`UsePlain: true` for a managed kind, or leave `UseOpinionated` as `false` for an unmanaged kind. Then handle deletion
+in your own reconcile code. Because `simple.Operator` always uses opinionated handlers, it cannot use identity-only
+deliveries.
 
 An opinionated **watcher** cannot declare a `Resync`. It skips every update in which the generation did not change,
 and a resync delivery is such an update. So it would never act on a resync, and the app rejects the declaration.

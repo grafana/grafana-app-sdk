@@ -153,17 +153,24 @@ func (w *concurrentWatcher) Run(ctx context.Context) {
 }
 
 func (w *concurrentWatcher) handleEvent(ctx context.Context, event eventInfo) {
-	var err error
-	switch event.action {
-	case ResourceActionCreate:
-		err = w.watcher.Add(event.ctx, event.target)
-	case ResourceActionUpdate:
-		err = w.watcher.Update(event.ctx, event.source, event.target)
-	case ResourceActionDelete:
-		err = w.watcher.Delete(event.ctx, event.target)
-	default:
-		utilruntime.HandleError(fmt.Errorf("invalid event type: %T", event.action))
+	eventCtx := event.ctx
+	var timeout time.Duration
+	if budget, ok := eventCtx.Value(eventTimeoutContextKey{}).(eventTimeout); ok {
+		eventCtx, timeout = budget.parent, budget.duration
 	}
+	err := withInformerEventTimeout(eventCtx, timeout, w.watcher, func(ctx context.Context) error {
+		switch event.action {
+		case ResourceActionCreate:
+			return w.watcher.Add(ctx, event.target)
+		case ResourceActionUpdate:
+			return w.watcher.Update(ctx, event.source, event.target)
+		case ResourceActionDelete:
+			return w.watcher.Delete(ctx, event.target)
+		default:
+			utilruntime.HandleError(fmt.Errorf("invalid event type: %T", event.action))
+			return nil
+		}
+	})
 	if err != nil && w.errorHandler != nil {
 		w.errorHandler(ctx, err)
 	}
