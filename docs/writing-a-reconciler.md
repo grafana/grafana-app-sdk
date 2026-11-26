@@ -282,3 +282,16 @@ Finally, a need is about the deliveries, not the informer behind them. Whether i
 but no handler reads that cache through `operator.Informer`.
 
 `simple.Operator` takes the same declaration, with `simple.WithWatchNeeds` on `WatchKind`/`ReconcileKind`.
+
+### Periodic LIST
+
+Offer `operator.NewPeriodicMechanism` to handle kinds that request only a
+`Resync`. The mechanism completes a paginated LIST and delivers each object to
+the handler as an add, including objects it saw on the previous sweep. The next
+interval starts after dispatch finishes. A failed LIST triggers a retry and its
+partial results are discarded.
+
+Use a periodic LIST for work that needs to revisit existing objects, such as
+age-based cleanup. Use a live watch for work that needs to observe changes or
+deletions. A finalizer-aware handler can only process a pending deletion while
+the object still matches its LIST selectors.
