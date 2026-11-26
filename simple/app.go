@@ -158,12 +158,11 @@ type AppConfig struct {
 	MetricsConfig metrics.Config
 }
 
-// InformerSupplier is a function which creates an operator.Informer for a kind, given a ClientGenerator and
-// InformerOptions. It is an alias: the type lives in operator, so wiring which does not use simple.App can take and
-// return one without importing this package.
+// InformerSupplier creates an operator.Informer for a kind. It is an alias of operator.InformerSupplier.
 type InformerSupplier = operator.InformerSupplier
 
-// DefaultInformerSupplier is a default InformerSupplier function which creates a basic operator.KubernetesBasedInformer.
+// DefaultInformerSupplier creates an operator.KubernetesBasedInformer (the API watch), wrapped in an
+// operator.ConcurrentInformer.
 // Note: This supplier does NOT respect WatchListPageSize or UseWatchList configuration.
 // For memory-optimized informers that support these options, use OptimizedInformerSupplier instead.
 var DefaultInformerSupplier = func(
@@ -240,8 +239,8 @@ type AppInformerConfig struct {
 	// InformerSupplier can be set to specify a function for creating informers for kinds.
 	// If left unset, DefaultInformerSupplier will be used, which builds the API watch.
 	//
-	// It is given each kind's declared needs as InformerOptions.WatchNeeds, so a supplier can both configure what it
-	// builds and choose what to build; operator.NewSelectingInformerSupplier is one which chooses.
+	// It receives each kind's needs in InformerOptions.WatchNeeds. Use operator.NewSelectingInformerSupplier to choose
+	// a watch mechanism for each kind.
 	InformerSupplier InformerSupplier
 	// RetryProcessorConfig enables the concurrent retry processor when non-nil.
 	// When set, a RetryProcessor is created and its Prometheus metrics are included in PrometheusCollectors().
@@ -297,10 +296,9 @@ type UnmanagedKindReconcileOptions struct {
 	// If true, the app must have permission to add finalizers to the unmanaged Kind, and if
 	// the AppUnmanagedKind is ever removed from the app, the finalizers added should be cleaned up.
 	UseOpinionated bool
-	// WatchNeeds is what the Reconciler or Watcher needs of the changes it is watched by. The App hands it to the
-	// supplier building this kind's informer, as the operator.InformerOptions field of the same name, and checks
-	// what was built against it. Its zero value needs live deliveries carrying the whole object, every instance
-	// receiving all of them, which is what the API watch gives a kind today.
+	// WatchNeeds is what the Reconciler or Watcher needs. The App passes it to the InformerSupplier as
+	// operator.InformerOptions.WatchNeeds, and checks the informer against it. The zero value needs live changes with
+	// the full object, sent to every instance, which is what the API watch provides.
 	//
 	// Experimental: this API may change in a minor release.
 	WatchNeeds operator.WatchOptions
@@ -316,10 +314,9 @@ type BasicReconcileOptions struct {
 	FieldSelectors []string
 	// UsePlain can be set to true to avoid wrapping the Reconciler or Watcher in its Opinionated variant.
 	UsePlain bool
-	// WatchNeeds is what the Reconciler or Watcher needs of the changes it is watched by. The App hands it to the
-	// supplier building this kind's informer, as the operator.InformerOptions field of the same name, and checks
-	// what was built against it. Its zero value needs live deliveries carrying the whole object, every instance
-	// receiving all of them, which is what the API watch gives a kind today.
+	// WatchNeeds is what the Reconciler or Watcher needs. The App passes it to the InformerSupplier as
+	// operator.InformerOptions.WatchNeeds, and checks the informer against it. The zero value needs live changes with
+	// the full object, sent to every instance, which is what the API watch provides.
 	//
 	// Experimental: this API may change in a minor release.
 	WatchNeeds operator.WatchOptions
@@ -649,7 +646,7 @@ func (a *App) manageKind(kind AppManagedKind) error {
 	return nil
 }
 
-// addInformerFor builds the informer for a kind the App manages or watches, and adds it to the controller.
+// addInformerFor builds the informer for a managed or unmanaged kind and adds it to the controller.
 func (a *App) addInformerFor(kind AppUnmanagedKind) error {
 	opts := a.cfg.InformerConfig.InformerOptions
 	if opts.MetricsConfig == (metrics.Config{}) {

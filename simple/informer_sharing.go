@@ -8,28 +8,26 @@ import (
 	"github.com/grafana/grafana-app-sdk/operator"
 )
 
-// sharedWatches records what has been registered under each of an informer controller's keys. The controller fans
-// every informer's events out to every reconciler and watcher under the same key, so an entry's deliveries reach
-// the handlers of every other entry sharing that key, and each entry's own check is not enough.
+// sharedWatches records the entries registered under each informer controller key. The controller sends every
+// informer's events to every handler under the same key, so each entry must also be checked against the others.
 type sharedWatches struct {
 	mu    sync.Mutex
 	byKey map[string][]sharedWatch
 }
 
-// sharedWatch is one registered entry: what its handlers need, and what its informer carries where the informer
-// says.
+// sharedWatch is one registered entry: what its handlers need, and what its informer provides (if it says).
 type sharedWatch struct {
 	needs    operator.WatchOptions
 	provided operator.WatchOptions
 	stated   bool
 }
 
-// register builds this entry's informer, checks the deliveries it and the entries already under key would exchange,
-// and adds it with add before recording it, so an informer which fails to register leaves nothing behind.
+// register builds the entry's informer, checks it against the entries already under key, and then adds it with add.
+// If any step fails, nothing is recorded.
 //
-// Deliveries are compared with operator.WatchOptions.RefusedDeliveries: each entry has its own informer for what it
-// asked, so a channel another entry's informer lacks or divides takes nothing away from it, but one carrying less
-// detail, or breaking the sharding it requires, does.
+// The check uses operator.WatchOptions.RefusedDeliveries. Each entry has its own informer for what it asked for, so
+// a missing or split channel in another entry's informer is fine. Less detail, or no sharding when sharding is
+// required, is not.
 func (s *sharedWatches) register(
 	key string, req operator.InformerRequest, add func(operator.Informer, string) error,
 ) error {
@@ -37,7 +35,7 @@ func (s *sharedWatches) register(
 	if err != nil {
 		return err
 	}
-	// Snapshot both sides: callers may reuse and mutate the channel pointers for a later registration.
+	// Copy both sides: callers may reuse and change the channel pointers later.
 	entry := sharedWatch{needs: req.Options.WatchNeeds.WithDefaults()}
 	entry.provided, entry.stated = operator.InformerWatchOptions(informer)
 	entry.provided = entry.provided.WithDefaults()
@@ -62,8 +60,8 @@ func (s *sharedWatches) register(
 	return nil
 }
 
-// refuses describes the deliveries other's informer makes which this entry's handlers cannot take. An informer
-// which says nothing about what it provides has nothing to check.
+// refuses describes the deliveries from other's informer that this entry's handlers cannot accept. An informer that
+// does not say what it provides is not checked.
 func (w sharedWatch) refuses(other sharedWatch) []string {
 	if !other.stated {
 		return nil

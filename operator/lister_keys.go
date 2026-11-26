@@ -9,30 +9,30 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-// ErrProjectionUnsupported signals that the server or adapter cannot serve a
-// keys projection for the requested kind and query.
+// ErrProjectionUnsupported means that a key lister cannot list only keys for the requested kind and query. The
+// caller then falls back to a full LIST.
 var ErrProjectionUnsupported = errors.New("list projection unsupported")
 
-// ResourceKey identifies one item in a keys-only snapshot.
+// ResourceKey identifies one object in a keys-only snapshot.
 type ResourceKey struct {
 	Namespace       string
 	Name            string
 	ResourceVersion string
 }
 
-// ResourceKeyLister reads one complete snapshot, fetching every page as the
-// iterator is consumed. A page failure must terminate the iterator with an error.
+// ResourceKeyLister lists the keys of every object of one kind. It reads pages while the iterator is consumed. If
+// a page fails, the iterator must end with that error.
 type ResourceKeyLister interface {
 	ListKeys(context.Context) (snapshotVersion string, keys iter.Seq2[ResourceKey, error])
 }
 
-// KeyListerFactory builds a paginated keys lister for a kind and query. Return
-// ErrProjectionUnsupported if the adapter cannot honor the namespace or selectors.
+// KeyListerFactory builds a ResourceKeyLister for a kind and query. Return ErrProjectionUnsupported if it cannot
+// handle the namespace or selectors.
 type KeyListerFactory func(resource.Kind, ClientListerOptions) (ResourceKeyLister, error)
 
-// NewPeriodicKeysList schedules LIST sweeps for handlers that use only
-// identities. It falls back to full-object LIST and projects those results
-// when the keys route cannot serve the requested kind or query.
+// NewPeriodicKeysList returns a mechanism like NewPeriodicList that delivers only identities. It lists keys with
+// factory. If factory is nil, or returns ErrProjectionUnsupported, it does a full LIST and keeps only the
+// identities.
 func NewPeriodicKeysList(factory KeyListerFactory, defaults PeriodicListOptions) InformerMechanism {
 	return NewInformerMechanism(periodicWatchOptions(WatchDetailIdentity), func(
 		kind resource.Kind, clients resource.ClientGenerator, opts InformerOptions,
@@ -70,8 +70,8 @@ func keysListerFor(kind resource.Kind, factory KeyListerFactory, full ResourceLi
 	return NewIdentityLister(kind, keys, full)
 }
 
-// NewIdentityLister returns identities from keys, or projects the fallback LIST
-// when keys is nil or the adapter explicitly reports unsupported projection.
+// NewIdentityLister returns a ResourceLister that returns identities. It reads them from keys. If keys is nil, or
+// returns ErrProjectionUnsupported, it uses fallback and keeps only the identities.
 func NewIdentityLister(kind resource.Kind, keys ResourceKeyLister, fallback ResourceLister) (ResourceLister, error) {
 	if kind.Schema == nil || fallback == nil {
 		return nil, errors.New("identity lister requires a kind and fallback lister")

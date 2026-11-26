@@ -31,7 +31,7 @@ func (b *BusInformerWithRecovery) applyLive(ctx context.Context, event resourceb
 		b.items[id] = obj
 		delete(b.deleted, id)
 		if event.Verb == resourcebus.VerbAdded {
-			// A recreate can reach this group member even if its delete did not.
+			// Deliver an add, not an update: this member may have missed the delete of an earlier object.
 			old = nil
 		}
 		b.deliverChange(ctx, old, obj)
@@ -91,8 +91,8 @@ func (b *BusInformerWithRecovery) readSnapshot(ctx context.Context) (map[resourc
 func (b *BusInformerWithRecovery) applySnapshot(ctx context.Context, trigger busRelistTrigger, next map[resource.Identifier]resource.Object, version int64) {
 	for id, obj := range next {
 		old := b.items[id]
-		// Grafana's first LIST page can see item writes committed after it
-		// reads the collection version. Use the item's own version when present.
+		// The first LIST page can include writes made after the snapshot version was read, so compare each object's
+		// own version.
 		itemVersion := numericVersion(obj.GetResourceVersion())
 		if b.deleted[id] >= itemVersion {
 			delete(next, id)

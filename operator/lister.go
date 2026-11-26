@@ -11,29 +11,28 @@ import (
 // DefaultListerPageSize is the page size the default ResourceLister requests when none is configured.
 const DefaultListerPageSize = 500
 
-// ResourceLister reads every object of one kind, for an informer with no watch. A successful result represents a complete snapshot.
+// ResourceLister reads every object of one kind. A successful result must be a complete snapshot.
 //
-// listResourceVersion dates the snapshot, for an informer which arbitrates a list against changes that raced it. Periodic delivery does not require the version.
+// listResourceVersion is the resourceVersion of the snapshot. NewBusRecovery uses it to order the LIST against bus
+// notifications. The periodic LIST does not use it.
 //
 // Experimental: this API may change in a minor release.
 type ResourceLister interface {
 	List(ctx context.Context) (objs []resource.Object, listResourceVersion string, err error)
 }
 
-// ClientListerOptions configures a ResourceLister.
+// ClientListerOptions configures NewClientLister.
 //
 // Experimental: this API may change in a minor release.
 type ClientListerOptions struct {
-	// ListWatchOptions are the namespace and filters to apply to the list request.
+	// ListWatchOptions holds the namespace and the selectors for the LIST request.
 	ListWatchOptions ListWatchOptions
-	// PageSize is the number of items per page. An empty value uses DefaultListerPageSize.
+	// PageSize is the number of objects per page. Zero uses DefaultListerPageSize.
 	PageSize int64
 }
 
-// NewClientLister returns a ResourceLister reading whole objects over a ListWatchClient.
-//
-// It pages to the end of the set and fails the whole list on any page's error: a truncated snapshot does not read as
-// stale to the informer reading it, which takes the missing objects for deleted or skips them outright.
+// NewClientLister returns a ResourceLister that reads full objects with client. It reads every page. If any page
+// fails, the whole List fails, because a partial snapshot would look like deleted objects.
 //
 // Experimental: this API may change in a minor release.
 func NewClientLister(client ListWatchClient, kind resource.Kind, opts ClientListerOptions) (ResourceLister, error) {
@@ -96,7 +95,7 @@ func (l *clientLister) List(ctx context.Context) ([]resource.Object, string, err
 		if err != nil {
 			return nil, "", fmt.Errorf("failed to list %s: %w", l.kind.GroupVersionKind().String(), err)
 		}
-		// The continue token pins the version across pages, so the first page's dates the snapshot.
+		// The continue token keeps one version across pages, so the first page's version is the snapshot's.
 		if continueTok == "" {
 			listRV = page.GetResourceVersion()
 		}

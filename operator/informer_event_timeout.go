@@ -20,7 +20,7 @@ func withInformerEventTimeout(ctx context.Context, timeout time.Duration, handle
 	}
 	budget := eventTimeout{parent: ctx, duration: timeout}
 	if _, queued := handler.(*concurrentWatcher); queued {
-		// The queue carries the budget. The worker starts its deadline.
+		// The concurrent watcher starts the deadline when a worker picks up the event.
 		return fn(context.WithValue(ctx, eventTimeoutContextKey{}, budget))
 	}
 	attempt, cancel := context.WithTimeout(ctx, timeout)
@@ -31,8 +31,7 @@ func withInformerEventTimeout(ctx context.Context, timeout time.Duration, handle
 func retryInformerEvent(ctx context.Context, fn func(context.Context) (*time.Duration, error)) func() (*time.Duration, error) {
 	return func() (*time.Duration, error) {
 		retryCtx := ctx
-		// The first attempt's deadline is over. Use the informer run context
-		// so shutdown still cancels the retry and delivery values survive.
+		// Give the retry a new deadline from the informer's run context, so shutdown still cancels it.
 		if budget, ok := ctx.Value(eventTimeoutContextKey{}).(eventTimeout); ok {
 			if err := budget.parent.Err(); err != nil {
 				return nil, err

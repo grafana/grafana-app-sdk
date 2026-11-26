@@ -18,15 +18,17 @@ const (
 	informerRetryJitter          = 0.1
 )
 
-// PeriodicListOptions sets defaults for scheduled LIST delivery. A kind's
-// resync settings and the app's informer settings take precedence.
+// PeriodicListOptions holds defaults for NewPeriodicList and NewPeriodicKeysList. The kind's
+// WatchNeeds.Resync and the app's InformerOptions win over ResyncInterval and PageSize. Zero values use 5 minutes,
+// DefaultListerPageSize, and DefaultPeriodicRetryInterval.
 type PeriodicListOptions struct {
 	ResyncInterval time.Duration
 	PageSize       int64
 	RetryInterval  time.Duration
 }
 
-// NewPeriodicList offers scheduled delivery of full objects from a paginated LIST.
+// NewPeriodicList returns a mechanism that provides a resync of full objects to every instance, and no live channel.
+// Each sweep does one complete paginated LIST and delivers every object as an add. It sends no deletes.
 func NewPeriodicList(defaults PeriodicListOptions) InformerMechanism {
 	return NewInformerMechanism(periodicWatchOptions(WatchDetailFullObject), func(
 		kind resource.Kind, clients resource.ClientGenerator, opts InformerOptions,
@@ -55,8 +57,9 @@ func resyncIntervalOr(opts InformerOptions, fallback time.Duration) time.Duratio
 	return fallback
 }
 
-// PeriodicInformerOptions configures a scheduled LIST. EventTimeout bounds each
-// handler's context. A handler must honor cancellation to stop early.
+// PeriodicInformerOptions configures a PeriodicInformer. Zero values use 5 minutes for ResyncInterval and
+// DefaultPeriodicRetryInterval for RetryInterval. EventTimeout limits each handler call. The handler must stop when
+// its context is canceled.
 type PeriodicInformerOptions struct {
 	ResyncInterval time.Duration
 	RetryInterval  time.Duration
@@ -64,8 +67,10 @@ type PeriodicInformerOptions struct {
 	ErrorHandler   func(context.Context, error)
 }
 
-// PeriodicInformer performs one complete LIST at a time and dispatches every
-// object through Add. Objects removed between sweeps generate no delete event.
+// PeriodicInformer lists every object on a schedule and delivers each one through Add, to one handler call at a
+// time. It sends no delete events: an object deleted between sweeps is simply missing from the next sweep. If a
+// LIST fails, it discards the partial result and retries after RetryInterval. It is synced after the first
+// successful sweep.
 type PeriodicInformer struct {
 	kind   resource.Kind
 	lister ResourceLister
@@ -79,7 +84,7 @@ type PeriodicInformer struct {
 	stopped  chan struct{}
 }
 
-// NewPeriodicInformer creates an informer whose lister returns full objects.
+// NewPeriodicInformer returns a PeriodicInformer that reads with lister. The lister must return full objects.
 func NewPeriodicInformer(kind resource.Kind, lister ResourceLister, opts PeriodicInformerOptions) (*PeriodicInformer, error) {
 	return newPeriodicInformer(kind, lister, opts, WatchDetailFullObject)
 }

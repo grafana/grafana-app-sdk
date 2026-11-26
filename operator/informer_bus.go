@@ -20,8 +20,13 @@ const (
 	busReadyTimeout  = 30 * time.Second
 )
 
-// NewBusNotifications offers live identities to handlers that can tolerate
-// missed notifications. A nil subscriber disables this option in the selector.
+// NewBusNotifications returns a mechanism that delivers bus notifications as identities on the live channel. It
+// has no resync. A created or modified object arrives as an add, and a deleted object as a delete.
+//
+// It does not deliver objects that exist at startup, and it does not recover missed notifications. Notifications
+// that arrive while its queue is full are dropped without an error. With a group name, it provides
+// WatchDistributionShared. It does not support label or field selectors. If subscriber is nil, it returns nil, and
+// NewSelectingInformerSupplier skips it.
 func NewBusNotifications(subscriber resourcebus.Subscriber, group resourcebus.Group) InformerMechanism {
 	if subscriber == nil {
 		return nil
@@ -58,7 +63,7 @@ func busWatchOptions(group resourcebus.Group) WatchOptions {
 	return WatchOptions{Live: &WatchLiveOptions{Detail: WatchDetailIdentity, Distribution: distribution}}
 }
 
-// BusInformerOptions configures the subscription and its event handlers.
+// BusInformerOptions configures the bus subscription and the handler calls.
 type BusInformerOptions struct {
 	Namespace    string
 	Group        resourcebus.Group

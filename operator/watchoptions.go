@@ -5,63 +5,62 @@ import (
 	"time"
 )
 
-// WatchOptions is what a kind's handlers need of the changes they are watched by, and what a watch mechanism
-// provides. Both sides use one type so the two can be compared.
+// WatchOptions describes the deliveries for one kind. A kind uses it to say what its handlers need. A watch mechanism
+// uses it to say what it provides. Use SatisfiedBy to compare the two.
 //
 // Experimental: this API may change in a minor release.
 type WatchOptions struct {
-	// Live is what the handlers need as changes happen, or nil for none. A WatchOptions setting neither channel
-	// needs the live channel with its defaults.
+	// Live describes deliveries sent when an object changes. Nil means none. If both Live and Resync are nil, the
+	// kind needs Live with default values.
 	Live *WatchLiveOptions
-	// Resync is what they need of the periodic re-delivery of every object, or nil for none.
+	// Resync describes deliveries of every object again, on a schedule. Nil means none.
 	Resync *WatchResyncOptions
 }
 
-// WatchLiveOptions is one mechanism's live channel, or what a kind's handlers need of it.
+// WatchLiveOptions describes the live channel: deliveries sent when an object changes.
 //
 // Experimental: this API may change in a minor release.
 type WatchLiveOptions struct {
-	// Detail is the least a live delivery must carry. Zero needs WatchDetailFullObject.
+	// Detail is the least each delivery must contain. Empty means WatchDetailFullObject.
 	Detail WatchDetail
-	// Distribution is how live deliveries may be divided across instances. Zero needs WatchDistributionAll.
+	// Distribution is how deliveries can be split across instances. Empty means WatchDistributionAll.
 	Distribution WatchDistribution
-	// Ignore leaves out an add or update, judged on the current object alone. Deletes are always delivered. It is a
-	// request: a mechanism that doesn't apply it delivers the change anyway.
+	// Ignore can leave out an add or update, based on the current object. Deletes are always delivered. A mechanism
+	// can ignore this field and deliver the change anyway.
 	Ignore WatchIgnoreFunc
-	// IgnoreUnchanged leaves out an update it reports unchanged from the previous object the update carries. Adds and
-	// deletes are always delivered. It is a request: a mechanism that doesn't apply it delivers every update.
+	// IgnoreUnchanged can leave out an update when the current object is unchanged from the previous object in the
+	// update. Adds and deletes are always delivered. A mechanism can ignore this field and deliver every update.
 	IgnoreUnchanged WatchUnchangedFunc
 }
 
-// WatchResyncOptions is one mechanism's periodic re-delivery of every object, or what a kind's handlers need of it.
-// It is separate from WatchLiveOptions because a mechanism's two channels differ: a bus may carry identities live
-// and whole objects on its re-list, and a round-robin group divides only the live one.
+// WatchResyncOptions describes the resync channel: deliveries of every object again, on a schedule. It is separate
+// from WatchLiveOptions because a mechanism can provide different detail and distribution on each channel.
 //
 // Experimental: this API may change in a minor release.
 type WatchResyncOptions struct {
-	// Detail is the least a re-delivered object must carry. Zero needs WatchDetailFullObject.
+	// Detail is the least each delivery must contain. Empty means WatchDetailFullObject.
 	Detail WatchDetail
-	// Distribution is how the resync may be divided across instances. Zero needs WatchDistributionAll.
+	// Distribution is how deliveries can be split across instances. Empty means WatchDistributionAll.
 	Distribution WatchDistribution
-	// Interval is how often the handlers need the resync, resolved against the mechanism's own by
-	// InformerOptions.ResyncOptions. A request rather than a requirement: it takes no part in SatisfiedBy.
+	// Interval is how often the resync should run. Zero uses InformerOptions.CacheResyncInterval (see
+	// InformerOptions.ResyncOptions). It is a request: it is not used to pick a mechanism, and a mechanism can ignore
+	// it.
 	Interval time.Duration
-	// ListPageSize is how large a page any listing should read at a time, resolved the same way. It is named for
-	// listing because that is what it governs: a mechanism which resyncs by listing uses it there, a watch for the
-	// initial list it does at startup. The least likely field to be honored, since a mechanism which lists nothing
-	// ignores it.
+	// ListPageSize is how many objects to read per page when a mechanism lists objects from the API. Zero uses
+	// InformerOptions.WatchListPageSize. It is a request: a mechanism that does not list ignores it.
 	ListPageSize int64
-	// Ignore leaves an object out of a resync pass, judged on the current object alone. It is a request: a
-	// mechanism that doesn't apply it delivers the object anyway.
+	// Ignore can leave an object out of a resync, based on the current object. A mechanism can ignore this field and
+	// deliver the object anyway.
 	Ignore WatchIgnoreFunc
-	// IgnoreUnchanged makes each resync pass deliver only what changed since the last delivery, leaving out objects
-	// it reports unchanged. Leave it nil if handlers use the resync to repair drift. It is a request: only a
-	// PreviousComparer applies it, and any other mechanism delivers every object.
+	// IgnoreUnchanged can leave an object out of a resync when it is unchanged since its last delivery. Leave it nil
+	// if your handlers use the resync to repair drift. Only a PreviousComparer applies it. Other mechanisms deliver
+	// every object.
 	IgnoreUnchanged WatchUnchangedFunc
 }
 
-// SatisfiedBy reports whether a mechanism providing provided can serve handlers needing o. A channel the need leaves
-// nil is not required, but where provided delivers on it anyway it is held to RefusedDeliveries.
+// SatisfiedBy reports whether a mechanism that provides provided can serve handlers that need o. A channel that o
+// leaves nil is not required. But if provided delivers on that channel, those deliveries must pass
+// RefusedDeliveries.
 func (o WatchOptions) SatisfiedBy(provided WatchOptions) bool {
 	if len(o.RefusedDeliveries(provided)) > 0 {
 		return false
@@ -85,14 +84,12 @@ func (o WatchOptions) SatisfiedBy(provided WatchOptions) bool {
 	return true
 }
 
-// RefusedDeliveries describes the deliveries a mechanism providing provided makes which handlers needing o cannot
-// take, on every channel provided delivers on, whether o asked for that channel or not. A handler cannot tell one
-// channel's deliveries from the other's, so a channel o leaves nil is held to what o declared for the other: as much
-// detail, and sharding where o requires it.
+// RefusedDeliveries describes the deliveries from provided that handlers needing o cannot accept. It checks every
+// channel that provided delivers on, including channels that o leaves nil. Handlers cannot tell the two channels
+// apart, so a nil channel in o must meet the rules of the channel o declared: at least the same Detail, and
+// WatchDistributionSharded if o requires it.
 //
-// It does not ask whether provided has the channels o needs, and of the distribution only sharding is compared,
-// since an extra copy of a delivery takes nothing away from a handler. That makes it the check for an informer
-// delivering to handlers which have another informer for what they asked, as entries sharing a watch do.
+// It does not check that provided has the channels o needs. Use SatisfiedBy for that.
 func (o WatchOptions) RefusedDeliveries(provided WatchOptions) []string {
 	floorLive, floorResync := o.deliveryFloors()
 	haveLive, haveResync := provided.channels()
@@ -106,14 +103,14 @@ func (o WatchOptions) RefusedDeliveries(provided WatchOptions) []string {
 	return refused
 }
 
-// deliveryFloor is the least a delivery on one channel must carry to reach a kind's handlers.
+// deliveryFloor is the least a delivery on one channel must meet to reach a kind's handlers.
 type deliveryFloor struct {
 	detail  WatchDetail
 	sharded bool
 }
 
-// deliveryFloors reads each channel's floor off o: what o declared for it, or for a channel o leaves nil, what o
-// declared for the other one.
+// deliveryFloors returns the floor for each channel: what o declared for it, or, for a nil channel, what o declared
+// for the other channel.
 func (o WatchOptions) deliveryFloors() (live, resync deliveryFloor) {
 	needLive, needResync := o.channels()
 	if needLive != nil {
@@ -142,9 +139,8 @@ func (f deliveryFloor) refuses(channel string, detail WatchDetail, distribution 
 	return refused
 }
 
-// WithDefaults returns o with every unset field filled in, which is what SatisfiedBy compares and what a mechanism
-// is handed: the one place the zero values are defined. The result is a copy, so a declaration is never defaulted in
-// place.
+// WithDefaults returns a copy of o with every empty field set to its default. This is what SatisfiedBy compares and
+// what a mechanism receives. It does not change o.
 func (o WatchOptions) WithDefaults() WatchOptions {
 	live, resync := o.channels()
 	defaulted := WatchOptions{}
@@ -169,7 +165,7 @@ func (o WatchOptions) WithDefaults() WatchOptions {
 	return defaulted
 }
 
-// String names each channel as detail/distribution, and marks each channel's Ignore and IgnoreUnchanged.
+// String describes each channel as detail/distribution, and marks Ignore and IgnoreUnchanged when they are set.
 func (o WatchOptions) String() string {
 	live, resync := o.channels()
 	described := "live=none"
@@ -195,8 +191,8 @@ func ignoreMarks(ignore WatchIgnoreFunc, ignoreUnchanged WatchUnchangedFunc) str
 	return marks
 }
 
-// channels defaults a WatchOptions describing neither to the live channel: a kind which says nothing needs changes
-// as they happen, and an informer which says nothing delivers them.
+// channels returns o's channels. If both are nil, it returns a default live channel: a kind that declares nothing
+// needs live changes, and an informer that describes nothing delivers them.
 func (o WatchOptions) channels() (*WatchLiveOptions, *WatchResyncOptions) {
 	if o.Live == nil && o.Resync == nil {
 		return &WatchLiveOptions{}, nil
@@ -232,28 +228,26 @@ func (r WatchResyncOptions) distribution() WatchDistribution {
 	return r.Distribution
 }
 
-// WatchDetail is how much of an object a delivery carries: what a mechanism's deliveries carry, or the least a
-// kind's handlers need. It is about the delivery, not about whether the informer behind it holds a cache.
+// WatchDetail is how much of an object a delivery contains. It describes the delivery only, not whether the
+// informer keeps a cache.
 //
 // Experimental: this API may change in a minor release.
 type WatchDetail string
 
 const (
-	// WatchDetailFullObject is a delivery carrying the whole object, which is what every informer the SDK ships
-	// carries and what a kind needs by needing nothing.
+	// WatchDetailFullObject is a delivery with the whole object. It is the default.
 	WatchDetailFullObject WatchDetail = "full-object"
-	// WatchDetailMetadata is a delivery carrying the object's metadata but not its spec or status — the projection
-	// the API serves as PartialObjectMetadata. It is what the Opinionated variants need, since the deletion
-	// timestamp, the finalizer list and the generation are all metadata.
+	// WatchDetailMetadata is a delivery with the object's metadata, but not its spec or status (like
+	// PartialObjectMetadata). Opinionated reconcilers and watchers need at least this, because they read the deletion
+	// timestamp, the finalizers, and the generation.
 	WatchDetailMetadata WatchDetail = "metadata"
-	// WatchDetailIdentity is a delivery carrying only which object it is about — namespace, name and version — for
-	// handlers which re-read whatever they act on. It cannot serve the Opinionated variants.
+	// WatchDetailIdentity is a delivery with only the namespace, name, and resourceVersion. Use it for handlers that
+	// read the object again before they act. Opinionated reconcilers and watchers cannot use it.
 	WatchDetailIdentity WatchDetail = "identity"
 )
 
-// SatisfiedBy reports whether deliveries carrying provided can serve handlers needing d. A value this build does not
-// recognize satisfies only a need for exactly it: the type is an open string a third-party mechanism answers with, so
-// an unknown detail level must not pass for whole objects, while two sides which name the same one agree.
+// SatisfiedBy reports whether deliveries with detail provided can serve handlers that need d. More detail serves a
+// need for less. An unknown value serves only a need for the same value.
 func (d WatchDetail) SatisfiedBy(provided WatchDetail) bool {
 	switch provided {
 	case WatchDetailFullObject, "":
@@ -267,34 +261,29 @@ func (d WatchDetail) SatisfiedBy(provided WatchDetail) bool {
 	}
 }
 
-// WatchDistribution is how one channel's work is divided across an app's instances — which live deliveries each
-// receives, or which slice of a resync each lists. Which instance is *active* is a separate matter: leader election
-// decides that, and composes with any distribution.
+// WatchDistribution is how a channel's deliveries are split across the app's instances. It does not decide which
+// instance is active. Leader election does that, and works with any distribution.
 //
 // Experimental: this API may change in a minor release.
 type WatchDistribution string
 
 const (
-	// WatchDistributionAll gives every instance the whole channel, which a watch does and a kind needs by needing
-	// nothing. Handlers need it when they keep state of their own derived from the kind, where an instance which
-	// does not see part of it holds something wrong rather than something unfinished.
+	// WatchDistributionAll sends every delivery to every instance. It is the default. Handlers need it when they
+	// keep their own state about the kind in memory.
 	WatchDistributionAll WatchDistribution = "all"
-	// WatchDistributionShared divides the channel over the instances with no affinity. As a kind's declaration it
-	// permits division rather than requiring it, so every distribution satisfies it: a kind declaring it where
-	// nothing divides anything is simply watched.
+	// WatchDistributionShared sends each delivery to one instance, with no affinity. As a need, it allows splitting
+	// but does not require it, so every distribution satisfies it.
 	WatchDistributionShared WatchDistribution = "shared"
-	// WatchDistributionSharded divides it by object, so each object keeps going to the same instance. Unlike
-	// WatchDistributionShared it is a requirement, for handlers which keep per-object state between deliveries.
+	// WatchDistributionSharded sends all deliveries for one object to the same instance. As a need, it is a
+	// requirement: only a sharded mechanism satisfies it.
 	WatchDistributionSharded WatchDistribution = "sharded"
 )
 
-// SatisfiedBy reports whether a channel divided as provided can serve handlers needing d. The values are not a
-// scale, and two of them read in opposite directions: WatchDistributionShared permits division rather than requiring
-// it, so every instance getting everything serves it too, while WatchDistributionSharded requires the affinity only
-// sharding gives and WatchDistributionAll requires that nothing is divided at all.
+// SatisfiedBy reports whether a channel with distribution provided can serve handlers that need d. An empty value
+// means WatchDistributionAll. WatchDistributionShared is satisfied by any value. WatchDistributionSharded is
+// satisfied only by WatchDistributionSharded. WatchDistributionAll is satisfied only by WatchDistributionAll.
 func (d WatchDistribution) SatisfiedBy(provided WatchDistribution) bool {
-	// Unset means WatchDistributionAll on either side, so this comparator agrees with WatchOptions.SatisfiedBy,
-	// which defaults both before comparing.
+	// Empty means WatchDistributionAll, as in WatchOptions.WithDefaults.
 	needed := d
 	if needed == "" {
 		needed = WatchDistributionAll
@@ -312,22 +301,22 @@ func (d WatchDistribution) SatisfiedBy(provided WatchDistribution) bool {
 	}
 }
 
-// WatchOptionsInformer is an Informer which says what it provides. Implement it on any informer which carries less
-// than the whole object, does not deliver each change as it happens, or divides a channel, so that pairing it with a
-// kind it cannot serve fails rather than silently losing deliveries.
+// WatchOptionsInformer is an Informer that describes what it provides. Implement it on an informer that sends less
+// than the whole object, does not send live changes, or splits a channel. Then the app rejects a kind that the
+// informer cannot serve, instead of losing deliveries.
 //
-// Whatever its deliveries carry, an update must still come with the previous object, at the same detail: the
-// OpinionatedWatcher compares the two and refuses an update without one, and nothing here can check for it.
+// An update must include the previous object, with the same detail. The OpinionatedWatcher returns an error for an
+// update without one. Nothing checks this for you.
 //
 // Experimental: this API may change in a minor release.
 type WatchOptionsInformer interface {
 	Informer
-	// WatchOptions is what this informer gives a kind's handlers.
+	// WatchOptions returns what this informer provides to a kind's handlers.
 	WatchOptions() WatchOptions
 }
 
-// InformerWatchOptions reports what inf says it provides, and whether it says anything at all. An informer wrapping
-// another is unwrapped, since wrapping changes nothing about what a delivery carries.
+// InformerWatchOptions returns what inf provides, and false if inf does not say. It looks through wrappers that
+// implement Unwrap() Informer.
 func InformerWatchOptions(inf Informer) (WatchOptions, bool) {
 	for inf != nil {
 		if described, ok := inf.(WatchOptionsInformer); ok {
