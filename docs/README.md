@@ -17,6 +17,7 @@ Godocs on exported library package code (such as `resource`, `operator`, `plugin
 | [Resource Objects](./resource-objects.md)             | Describes the function and usage of the `resource.Object` interface |
 | [Resource Stores](./resource-stores.md)               | Describes the various "Store" types in the `resource` package, and why you may want to use one or another |
 | [Writing a Reconciler](./writing-a-reconciler.md)     | Reconcilers and watchers for event-based code |
+| [Optimizing Watches](./optimizing-watches.md)         | Declare what your reconcilers and watchers need, so the app can watch kinds in a cheaper way (experimental) |
 | [Code Generation](./code-generation.md)               | How to use CUE and the CLI for code generation. |
 | [Admission Control](./admission-control.md)           | How to add validation and mutation logic to your kinds |
 
