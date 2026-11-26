@@ -495,8 +495,15 @@ func (c *InformerController) informerUpdateFunc(resourceKind string) func(contex
 			// Generate the unique key for this object
 			retryKey := c.keyForWatcherEvent(resourceKind, idx, newObj)
 
+			// An identical update reaches a watcher which handles it as a re-listed Add as a resync of the object
+			action := ResourceActionUpdate
+			resync := isIdenticalUpdate(oldObj, newObj) && handlesIdenticalUpdates(watcher)
+			if resync {
+				action = ResourceActionResync
+			}
+
 			// Dequeue retries according to the RetryDequeuePolicy
-			c.dequeueIfRequired(retryKey, newObj, ResourceActionUpdate)
+			c.dequeueIfRequired(retryKey, newObj, action)
 
 			// Do the watcher's Update, check for error
 			c.wrapWatcherCall(string(ResourceActionUpdate), newObj.GetStaticMetadata().Kind, func() {
@@ -510,7 +517,10 @@ func (c *InformerController) informerUpdateFunc(resourceKind string) func(contex
 				if err != nil && c.RetryPolicy != nil {
 					c.queueRetry(retryKey, err, retryInformerEvent(ctx, func(retryCtx context.Context) (*time.Duration, error) {
 						return nil, watcher.Update(retryCtx, oldObj, newObj)
-					}), ResourceActionUpdate, newObj)
+					}), action, newObj)
+				}
+				if err == nil && resync {
+					c.retireSupersededRetries(retryKey)
 				}
 			})
 		})
@@ -619,6 +629,28 @@ func (c *InformerController) dequeueIfRequired(retryKey string, currentObjectSta
 		// If no RetryDequeuePolicy exists, dequeue all retries for the object
 		c.toRetry.RemoveKey(retryKey)
 	}
+}
+
+// handlesIdenticalUpdates reports whether watcher handles an identical update as a re-listed Add, as an
+// OpinionatedWatcher with HandleIdentical does.
+func handlesIdenticalUpdates(watcher ResourceWatcher) bool {
+	handler, ok := watcher.(interface{ handlesIdenticalUpdates() bool })
+	return ok && handler.handlesIdenticalUpdates()
+}
+
+// retireSupersededRetries drops the queued create and resync retries for key once a resync of the object succeeded.
+// The watcher handled the object as a re-listed Add, which completed any outstanding add and synced the object's
+// current state, so replaying either would repeat the add or sync stale data. Update and delete retries are kept, and
+// nothing is dropped when the resync fails.
+func (c *InformerController) retireSupersededRetries(key string) {
+	superseded := func(action ResourceAction) bool {
+		return action == ResourceActionCreate || action == ResourceActionResync
+	}
+	if c.retryProcessor != nil {
+		c.retryProcessor.Dequeue(key, func(req RetryRequest) bool { return superseded(req.Action) })
+		return
+	}
+	c.toRetry.RemoveItems(key, func(info retryInfo) bool { return superseded(info.action) }, -1)
 }
 
 func (c *InformerController) doReconcile(ctx context.Context, reconciler Reconciler, req ReconcileRequest, retryKey string) {

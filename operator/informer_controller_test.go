@@ -1472,3 +1472,110 @@ func counterValueFromVec(t *testing.T, cv *prometheus.CounterVec, labelValues ..
 	require.NoError(t, m.Write(&pb))
 	return pb.GetCounter().GetValue()
 }
+
+// identicalHandlingWatcher handles an identical update as a re-listed Add, as an OpinionatedWatcher with
+// HandleIdentical does.
+type identicalHandlingWatcher struct {
+	SimpleWatcher
+}
+
+func (*identicalHandlingWatcher) handlesIdenticalUpdates() bool { return true }
+
+// A failed add leaves a create retry queued. A resync which completes the add must retire it, or the retry repeats the
+// add's side effects; one which fails must leave it for the retry to do the add.
+func TestInformerController_ResyncRetiresSupersededRetries(t *testing.T) {
+	obj := &resource.TypedSpecObject[string]{}
+	obj.SetName("obj")
+	obj.SetResourceVersion("5")
+	obj.SetGeneration(1)
+	failing := errors.New("failed")
+
+	newController := func(t *testing.T, processor bool) (*InformerController, func() int) {
+		cfg := InformerControllerConfig{RetryDequeuePolicy: OpinionatedRetryDequeuePolicy}
+		if processor {
+			cfg.RetryProcessorConfig = &RetryProcessorConfig{}
+		}
+		c := NewInformerController(cfg)
+		c.RetryPolicy = func(error, int) (bool, time.Duration) { return true, time.Hour }
+		queued := func() int {
+			if c.retryProcessor != nil {
+				return c.retryProcessor.Len()
+			}
+			total := 0
+			for _, key := range c.toRetry.Keys() {
+				total += c.toRetry.KeySize(key)
+			}
+			return total
+		}
+		return c, queued
+	}
+	watcherFor := func(handlesIdentical bool, addErr, updateErr error) ResourceWatcher {
+		simple := SimpleWatcher{
+			AddFunc:    func(context.Context, resource.Object) error { return addErr },
+			UpdateFunc: func(context.Context, resource.Object, resource.Object) error { return updateErr },
+		}
+		if handlesIdentical {
+			return &identicalHandlingWatcher{SimpleWatcher: simple}
+		}
+		return &simple
+	}
+
+	for _, processor := range []bool{false, true} {
+		name := "legacy retry queue"
+		if processor {
+			name = "retry processor"
+		}
+		t.Run(name, func(t *testing.T) {
+			t.Run("a resync which succeeds retires a queued add", func(t *testing.T) {
+				c, queued := newController(t, processor)
+				require.NoError(t, c.AddWatcher(watcherFor(true, failing, nil), "foo"))
+				require.NoError(t, c.informerAddFunc("foo")(t.Context(), obj))
+				require.Equal(t, 1, queued())
+				require.NoError(t, c.informerUpdateFunc("foo")(t.Context(), obj, obj.Copy()))
+				assert.Equal(t, 0, queued())
+			})
+
+			t.Run("a resync which fails keeps the queued add, and queues itself", func(t *testing.T) {
+				c, queued := newController(t, processor)
+				require.NoError(t, c.AddWatcher(watcherFor(true, failing, failing), "foo"))
+				require.NoError(t, c.informerAddFunc("foo")(t.Context(), obj))
+				require.NoError(t, c.informerUpdateFunc("foo")(t.Context(), obj, obj.Copy()))
+				assert.Equal(t, 2, queued())
+			})
+
+			t.Run("a later resync which succeeds retires a failed one", func(t *testing.T) {
+				c, queued := newController(t, processor)
+				updateErr := failing
+				watcher := &identicalHandlingWatcher{SimpleWatcher: SimpleWatcher{
+					UpdateFunc: func(context.Context, resource.Object, resource.Object) error { return updateErr },
+				}}
+				require.NoError(t, c.AddWatcher(watcher, "foo"))
+				require.NoError(t, c.informerUpdateFunc("foo")(t.Context(), obj, obj.Copy()))
+				require.Equal(t, 1, queued())
+				updateErr = nil
+				newer := obj.Copy()
+				newer.SetResourceVersion("6") // a status write: the generation is unchanged
+				require.NoError(t, c.informerUpdateFunc("foo")(t.Context(), newer, newer.Copy()))
+				assert.Equal(t, 0, queued())
+			})
+
+			t.Run("a changed update leaves a queued add alone", func(t *testing.T) {
+				c, queued := newController(t, processor)
+				require.NoError(t, c.AddWatcher(watcherFor(true, failing, nil), "foo"))
+				require.NoError(t, c.informerAddFunc("foo")(t.Context(), obj))
+				changed := obj.Copy()
+				changed.SetResourceVersion("6")
+				require.NoError(t, c.informerUpdateFunc("foo")(t.Context(), obj, changed))
+				assert.Equal(t, 1, queued())
+			})
+
+			t.Run("a watcher which does not handle identical updates keeps the queued add", func(t *testing.T) {
+				c, queued := newController(t, processor)
+				require.NoError(t, c.AddWatcher(watcherFor(false, failing, nil), "foo"))
+				require.NoError(t, c.informerAddFunc("foo")(t.Context(), obj))
+				require.NoError(t, c.informerUpdateFunc("foo")(t.Context(), obj, obj.Copy()))
+				assert.Equal(t, 1, queued())
+			})
+		})
+	}
+}

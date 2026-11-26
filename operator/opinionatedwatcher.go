@@ -8,7 +8,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/codes"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
@@ -170,15 +169,6 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	logger := logging.FromContext(ctx).With("action", "add", "component", "OpinionatedWatcher", "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
 	logger.Debug("Handling add")
 
-	completed, err := o.addCompletedElsewhere(ctx, object)
-	if err != nil {
-		span.SetStatus(codes.Error, fmt.Sprintf("error reading object: %s", err.Error()))
-		return err
-	}
-	if completed {
-		logger.Debug("A later delivery completed this add, or the object is gone; nothing left to do")
-		return nil
-	}
 	finalizers := o.getFinalizers(object)
 
 	// If we're pending deletion, check on the finalizers to see if it's waiting on us.
@@ -260,7 +250,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	// Call the add handler, and if it returns successfully (no error), add the finalizer.
 	// Before we call the downstream add, add an "add pending" finalizer to prevent us missing a delete during the add process (and/or its retries)
 	logger.Debug("Adding in-progress finalizer before add call", "finalizer", o.addPendingFinalizer, "currentFinalizers", finalizers)
-	err = o.finalizerUpdater.AddFinalizer(ctx, object, o.addPendingFinalizer)
+	err := o.finalizerUpdater.AddFinalizer(ctx, object, o.addPendingFinalizer)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("finalizer add error: %s", err.Error()))
 		if chk, ok := errors.AsType[FinalizerError](err); ok {
@@ -268,12 +258,6 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 		}
 		logger.Error("error adding in-progress finalizer", "error", err.Error(), "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
 		return fmt.Errorf("error adding in-progress finalizer: %w", err)
-	}
-	// A conflict while adding it re-reads the object's metadata, which may show the add completed by another delivery
-	// meanwhile: this delivery is then stale, and only the in-progress finalizer it just wrote is left to undo.
-	if slices.Contains(o.getFinalizers(object), o.finalizer) {
-		logger.Debug("A later delivery completed this add, removing the in-progress finalizer", "finalizer", o.addPendingFinalizer)
-		return o.finalizerUpdater.RemoveFinalizer(ctx, object, o.addPendingFinalizer)
 	}
 
 	err = o.addFunc(ctx, object)
@@ -294,25 +278,6 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 		return fmt.Errorf("error adding finalizer: %w", err)
 	}
 	return nil
-}
-
-// addCompletedElsewhere reports whether another delivery has completed the add of object, or the object is gone,
-// when an earlier attempt left its in-progress finalizer on this copy of it, as a queued retry of a failed add does.
-// Such a delivery is stale and must not call a handler. It reads a separate copy of the object, since a PatchClient
-// may read only metadata into it, and fresh metadata on a stale spec would make an inconsistent object.
-func (o *OpinionatedWatcher) addCompletedElsewhere(ctx context.Context, object resource.Object) (bool, error) {
-	finalizers := o.getFinalizers(object)
-	if !slices.Contains(finalizers, o.addPendingFinalizer) || slices.Contains(finalizers, o.finalizer) {
-		return false, nil
-	}
-	current := object.Copy()
-	if err := o.finalizerUpdater.client.GetInto(ctx, object.GetStaticMetadata().Identifier(), current); err != nil {
-		if apierrors.IsNotFound(err) {
-			return true, nil
-		}
-		return false, fmt.Errorf("error reading object to resume an in-progress add: %w", err)
-	}
-	return slices.Contains(o.getFinalizers(current), o.finalizer), nil
 }
 
 // Update is part of implementing ResourceWatcher
@@ -337,10 +302,9 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 	logger := logging.FromContext(ctx).With("action", "update", "component", "OpinionatedWatcher", "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())
 	logger.Debug("Handling update")
 
-	// Every write changes the resourceVersion, so the same one on both sides is the object re-delivered unchanged.
-	// resourceVersions may only be compared for equality, and an empty one identifies nothing. Add is handed a copy,
-	// since its finalizer patches write into the object: a retry of this event must still find the two sides identical.
-	if rv := tgt.GetResourceVersion(); o.handleIdentical && rv != "" && rv == src.GetResourceVersion() {
+	// Add is handed a copy, since its finalizer patches write into the object: a retry of this event must still find
+	// the two sides identical.
+	if o.handlesIdenticalUpdates() && isIdenticalUpdate(src, tgt) {
 		logger.Debug("Update re-delivers the object unchanged, handling it as a re-listed object")
 		return o.Add(ctx, tgt.Copy())
 	}
@@ -477,6 +441,20 @@ func (o *OpinionatedWatcher) deleteFunc(ctx context.Context, object resource.Obj
 	}
 	// TODO: log?
 	return nil
+}
+
+// handlesIdenticalUpdates reports whether o handles an identical update as a re-listed Add, which completes whatever
+// add was outstanding for the object: the InformerController then retires a queued retry of that add.
+func (o *OpinionatedWatcher) handlesIdenticalUpdates() bool {
+	return o.handleIdentical
+}
+
+// isIdenticalUpdate reports whether an update re-delivers the object unchanged: every write changes the
+// resourceVersion, so the same one on both sides means nothing was written. resourceVersions may only be compared for
+// equality, and an empty one identifies nothing.
+func isIdenticalUpdate(src, tgt resource.Object) bool {
+	rv := tgt.GetResourceVersion()
+	return src != nil && rv != "" && rv == src.GetResourceVersion()
 }
 
 // syncFunc is a wrapper for SyncFunc which makes a nil check to avoid panics
