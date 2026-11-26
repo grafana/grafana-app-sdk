@@ -41,13 +41,13 @@ import (
 //		}
 //	}
 //
-// Plugin protocol v2 health and resource calls, which Grafana makes for the
-// app's settings subresources, are authenticated with the same authenticator
-// when they carry the caller's access token (X-Access-Token): their handlers'
-// clients then act on behalf of the caller. A v2 call without a token, as
-// Grafana sends when it exchanges none, has no identity and acts as the
-// plugin. CallResource handlers also get the app instance settings as
-// resource.RouteRequestInfo (see resource.RouteRequestInfoFrom).
+// Plugin protocol v2 calls (query, stream, health and resource calls) are
+// authenticated with the same authenticator, and must carry the caller's access
+// token (X-Access-Token): their handlers' clients then act on behalf of the
+// caller. A v2 call without a valid token is rejected, unless
+// WithInsecureSkipAuthentication is set, which lets a call without a token
+// through with no identity. CallResource handlers also get the app instance
+// settings as resource.RouteRequestInfo (see resource.RouteRequestInfoFrom).
 //
 // If the App needs to talk to the Kubernetes API server, the rest.Config
 // can be overridden via WithKubeConfig. Without one from WithKubeConfig or
@@ -271,8 +271,8 @@ func newStubAppInstance(_ context.Context, _ backend.AppInstanceSettings) (insta
 }
 
 // serve sets the manage options that serve a: ExtraPlugins for the plugin v3
-// interfaces, and a middleware that authenticates the plugin v2 calls (health
-// and resources) the same way, and gives resource handlers the app instance
+// interfaces, and a middleware that authenticates the plugin v2 calls the same
+// way, and gives resource handlers the app instance
 // settings as RouteRequestInfo.
 func (cfg *runConfig) serve(a app.App) error {
 	if len(cfg.manageOpts.ExtraPlugins) > 0 {

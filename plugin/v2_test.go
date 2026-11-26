@@ -18,9 +18,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/grafana/grafana-plugin-sdk-go/backend"
-
 	"github.com/grafana/grafana-app-sdk/resource"
+	"github.com/grafana/grafana-plugin-sdk-go/backend"
 )
 
 const v2TestPluginID = "my-app"
@@ -52,6 +51,24 @@ func v2TestTokens(t *testing.T) (authn.Authenticator, func(namespace, audience s
 // v2Recorder is the plugin's handler: it records the context each call reached it with.
 type v2Recorder struct {
 	ctx context.Context
+	// calls is the context each call of v2AllCalls reached the handler with,
+	// by call name; nil when it did not reach it.
+	calls map[string]context.Context
+}
+
+func (r *v2Recorder) SubscribeStream(ctx context.Context, _ *backend.SubscribeStreamRequest) (*backend.SubscribeStreamResponse, error) {
+	r.ctx = ctx
+	return &backend.SubscribeStreamResponse{}, nil
+}
+
+func (r *v2Recorder) PublishStream(ctx context.Context, _ *backend.PublishStreamRequest) (*backend.PublishStreamResponse, error) {
+	r.ctx = ctx
+	return &backend.PublishStreamResponse{}, nil
+}
+
+func (r *v2Recorder) RunStream(ctx context.Context, _ *backend.RunStreamRequest, _ *backend.StreamSender) error {
+	r.ctx = ctx
+	return nil
 }
 
 func (r *v2Recorder) handler() *backend.Handlers {
@@ -60,6 +77,15 @@ func (r *v2Recorder) handler() *backend.Handlers {
 			r.ctx = ctx
 			return &backend.CheckHealthResult{Status: backend.HealthStatusOk}, nil
 		}),
+		QueryDataHandler: backend.QueryDataHandlerFunc(func(ctx context.Context, _ *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
+			r.ctx = ctx
+			return &backend.QueryDataResponse{}, nil
+		}),
+		QueryChunkedDataHandler: backend.QueryChunkedDataHandlerFunc(func(ctx context.Context, _ *backend.QueryChunkedDataRequest, _ backend.ChunkedDataWriter) error {
+			r.ctx = ctx
+			return nil
+		}),
+		StreamHandler: r,
 		CallResourceHandler: backend.CallResourceHandlerFunc(func(ctx context.Context, _ *backend.CallResourceRequest, _ backend.CallResourceResponseSender) error {
 			r.ctx = ctx
 			return nil
@@ -67,9 +93,50 @@ func (r *v2Recorder) handler() *backend.Handlers {
 	}
 }
 
+// v2AllCalls makes each call that carries headers, with the given token, against
+// h, and returns the error each returned.
+func v2AllCalls(h backend.Handler, rec *v2Recorder, namespace, token string) map[string]error {
+	pc := backend.PluginContext{PluginID: v2TestPluginID, Namespace: namespace}
+	ctx := context.Background()
+	calls := map[string]error{}
+
+	qd := &backend.QueryDataRequest{PluginContext: pc}
+	qcd := &backend.QueryChunkedDataRequest{PluginContext: pc}
+	ss := &backend.SubscribeStreamRequest{PluginContext: pc}
+	ps := &backend.PublishStreamRequest{PluginContext: pc}
+	rs := &backend.RunStreamRequest{PluginContext: pc}
+	ch := &backend.CheckHealthRequest{PluginContext: pc}
+	if token != "" {
+		qd.SetHTTPHeader(v2AccessTokenHeader, token)
+		qcd.SetHTTPHeader(v2AccessTokenHeader, token)
+		ss.SetHTTPHeader(v2AccessTokenHeader, token)
+		ps.SetHTTPHeader(v2AccessTokenHeader, token)
+		rs.SetHTTPHeader(v2AccessTokenHeader, token)
+		ch.SetHTTPHeader(v2AccessTokenHeader, token)
+	}
+
+	call := func(name string, err error) {
+		calls[name] = err
+		rec.calls[name] = rec.ctx
+		rec.ctx = nil
+	}
+	_, err := h.QueryData(ctx, qd)
+	call("QueryData", err)
+	call("QueryChunkedData", h.QueryChunkedData(ctx, qcd, nil))
+	_, err = h.SubscribeStream(ctx, ss)
+	call("SubscribeStream", err)
+	_, err = h.PublishStream(ctx, ps)
+	call("PublishStream", err)
+	call("RunStream", h.RunStream(ctx, rs, backend.NewStreamSender(nil)))
+	_, err = h.CheckHealth(ctx, ch)
+	call("CheckHealth", err)
+	call("CallResource", h.CallResource(ctx, v2Resource(namespace, token), nopSender))
+	return calls
+}
+
 func newV2TestHandler(t *testing.T, auth v2Auth) (backend.Handler, *v2Recorder) {
 	t.Helper()
-	rec := &v2Recorder{}
+	rec := &v2Recorder{calls: map[string]context.Context{}}
 	h, err := backend.HandlerFromMiddlewares(rec.handler(), newV2Middleware(auth))
 	require.NoError(t, err)
 	return h, rec
@@ -100,11 +167,21 @@ func v2Resource(namespace, token string) *backend.CallResourceRequest {
 func TestV2MiddlewareAuthentication(t *testing.T) {
 	authenticator, sign := v2TestTokens(t)
 
-	t.Run("a call without a token has no identity", func(t *testing.T) {
+	t.Run("a call without a token is rejected", func(t *testing.T) {
 		h, rec := newV2TestHandler(t, (&runConfig{authenticator: authenticator}).v2Auth())
-		require.NoError(t, h.CallResource(context.Background(), v2Resource("default", ""), nopSender))
-		_, ok := types.AuthInfoFrom(rec.ctx)
-		assert.False(t, ok)
+		for name, err := range v2AllCalls(h, rec, "default", "") {
+			assert.Equal(t, codes.Unauthenticated, status.Code(err), name)
+			assert.Nil(t, rec.calls[name], "%s: the handler must not run", name)
+		}
+	})
+
+	t.Run("insecure skip authentication lets a call without a token through, with no identity", func(t *testing.T) {
+		h, rec := newV2TestHandler(t, (&runConfig{insecureSkipAuthentication: true}).v2Auth())
+		for name, err := range v2AllCalls(h, rec, "default", "") {
+			require.NoError(t, err, name)
+			_, ok := types.AuthInfoFrom(rec.calls[name])
+			assert.False(t, ok, name)
+		}
 	})
 
 	t.Run("a verified token is the caller, and is kept for delegation", func(t *testing.T) {
@@ -119,9 +196,11 @@ func TestV2MiddlewareAuthentication(t *testing.T) {
 
 	t.Run("a Bearer prefix is accepted", func(t *testing.T) {
 		h, rec := newV2TestHandler(t, (&runConfig{authenticator: authenticator}).v2Auth())
-		require.NoError(t, h.CallResource(context.Background(), v2Resource("default", "Bearer "+sign("default", v2TestPluginID)), nopSender))
-		_, ok := types.AuthInfoFrom(rec.ctx)
-		assert.True(t, ok)
+		for _, prefix := range []string{"Bearer ", "bearer "} {
+			require.NoError(t, h.CallResource(context.Background(), v2Resource("default", prefix+sign("default", v2TestPluginID)), nopSender))
+			_, ok := types.AuthInfoFrom(rec.ctx)
+			assert.True(t, ok, prefix)
+		}
 	})
 
 	t.Run("health checks are authenticated too", func(t *testing.T) {
@@ -136,6 +215,24 @@ func TestV2MiddlewareAuthentication(t *testing.T) {
 		req.SetHTTPHeader(v2AccessTokenHeader, "not-a-jwt")
 		_, err = h.CheckHealth(context.Background(), req)
 		assert.Equal(t, codes.Unauthenticated, status.Code(err))
+	})
+
+	t.Run("every call that carries headers is authenticated", func(t *testing.T) {
+		h, rec := newV2TestHandler(t, (&runConfig{authenticator: authenticator}).v2Auth())
+
+		for name, err := range v2AllCalls(h, rec, "default", sign("default", v2TestPluginID)) {
+			require.NoError(t, err, name)
+			_, ok := types.AuthInfoFrom(rec.calls[name])
+			assert.True(t, ok, name)
+		}
+		for name, err := range v2AllCalls(h, rec, "default", "not-a-jwt") {
+			assert.Equal(t, codes.Unauthenticated, status.Code(err), name)
+			assert.Nil(t, rec.calls[name], "%s: the handler must not run", name)
+		}
+		for name, err := range v2AllCalls(h, rec, "stacks-1", sign("stacks-2", v2TestPluginID)) {
+			assert.Equal(t, codes.PermissionDenied, status.Code(err), name)
+			assert.Nil(t, rec.calls[name], "%s: the handler must not run", name)
+		}
 	})
 
 	for name, tt := range map[string]struct {
@@ -167,7 +264,9 @@ func TestV2MiddlewareAuthentication(t *testing.T) {
 }
 
 func TestV2MiddlewareRouteRequestInfo(t *testing.T) {
-	h, rec := newV2TestHandler(t, (&runConfig{insecureSkipAuthentication: false}).v2Auth())
+	// Route info does not depend on the caller's identity; skip authentication
+	// to make the calls without tokens.
+	h, rec := newV2TestHandler(t, (&runConfig{insecureSkipAuthentication: true}).v2Auth())
 
 	t.Run("resource calls get the app instance settings", func(t *testing.T) {
 		require.NoError(t, h.CallResource(context.Background(), v2Resource("default", ""), nopSender))
