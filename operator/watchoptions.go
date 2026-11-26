@@ -49,8 +49,8 @@ type WatchResyncOptions struct {
 	// mechanism that doesn't apply it delivers the object anyway.
 	Ignore WatchIgnoreFunc
 	// IgnoreUnchanged makes each resync pass deliver only what changed since the last delivery, leaving out objects
-	// it reports unchanged. Leave it nil if handlers use the resync to repair drift. It is a request: only a
-	// PreviousComparer applies it, and any other mechanism delivers every object.
+	// it reports unchanged. Leave it nil if handlers use the resync to repair drift. It is a request: selection
+	// prefers a PreviousComparer, and any other mechanism delivers every object.
 	IgnoreUnchanged WatchUnchangedFunc
 }
 

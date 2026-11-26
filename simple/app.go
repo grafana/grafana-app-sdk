@@ -672,7 +672,16 @@ func (a *App) addInformerFor(kind AppUnmanagedKind) error {
 		Options:         opts,
 		Opinionated:     kind.ReconcileOptions.UseOpinionated,
 		DiscardsResyncs: kind.ReconcileOptions.UseOpinionated && kind.Watcher != nil,
+		Finalizer:       a.opinionatedFinalizer(kind),
 	}, a.informerController.AddInformer)
+}
+
+// opinionatedFinalizer returns the finalizer of kind's opinionated handler, or "" for a plain one.
+func (a *App) opinionatedFinalizer(kind AppUnmanagedKind) string {
+	if !kind.ReconcileOptions.UseOpinionated {
+		return ""
+	}
+	return a.getFinalizer(kind.Kind)
 }
 
 func (a *App) watchKind(kind AppUnmanagedKind) error {

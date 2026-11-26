@@ -2,6 +2,7 @@ package operator
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -25,6 +26,9 @@ type InformerRequest struct {
 	// an update whose generation is unchanged, which is how a resync arrives. Declaring a resync for such a handler
 	// is refused rather than accepted and never delivered.
 	DiscardsResyncs bool
+	// Finalizer is the finalizer an Opinionated handler adds once an object is handled. Resync checks never leave out
+	// an object without it. Required when an Opinionated kind sets Ignore or IgnoreUnchanged.
+	Finalizer string
 }
 
 // BuildInformer asks the request's supplier for the kind's informer, handing it the kind's needs as
@@ -37,6 +41,7 @@ func BuildInformer(req InformerRequest) (Informer, error) {
 	if err := req.validate(); err != nil {
 		return nil, err
 	}
+	req.keepUnfinishedObjects()
 
 	inf, err := req.Supplier(req.Kind, req.Clients, req.Options)
 	if err != nil {
@@ -62,6 +67,13 @@ func (r InformerRequest) validate() error {
 	if !r.Opinionated {
 		return nil
 	}
+	if resync := r.Options.WatchNeeds.Resync; r.Finalizer == "" && resync != nil &&
+		(resync.Ignore != nil || resync.IgnoreUnchanged != nil) {
+		return fmt.Errorf("kind '%s' sets WatchNeeds.Resync.Ignore or IgnoreUnchanged for its opinionated"+
+			" reconciler or watcher, but its InformerRequest names no Finalizer to tell an object the handler has"+
+			" finished from one it has not, which either check could leave out of every resync",
+			r.Kind.GroupVersionKind().String())
+	}
 	if channels := channelsBelowMetadata(r.Options.WatchNeeds); len(channels) > 0 {
 		return fmt.Errorf("kind '%s' declares %s deliveries carrying less than the object's metadata, which its"+
 			" opinionated reconciler or watcher cannot be served by: it reads the deletion timestamp, the finalizer"+
@@ -72,11 +84,34 @@ func (r InformerRequest) validate() error {
 	return nil
 }
 
+// keepUnfinishedObjects wraps an Opinionated kind's resync checks so they keep objects without its Finalizer.
+func (r *InformerRequest) keepUnfinishedObjects() {
+	resync := r.Options.WatchNeeds.Resync
+	if !r.Opinionated || resync == nil {
+		return
+	}
+	finished := func(obj resource.Object) bool { return slices.Contains(obj.GetFinalizers(), r.Finalizer) }
+	if ignore := resync.Ignore; ignore != nil {
+		resync.Ignore = func(current resource.Object) bool { return finished(current) && ignore(current) }
+	}
+	if unchanged := resync.IgnoreUnchanged; unchanged != nil {
+		resync.IgnoreUnchanged = func(previous, current resource.Object) bool {
+			return finished(current) && unchanged(previous, current)
+		}
+	}
+}
+
 // checkProvision reports an error when an informer which says what it provides provides less than its kind's
 // handlers need. One which says nothing is not checked: nothing can be read off it.
 func (r InformerRequest) checkProvision(inf Informer) error {
 	needs := r.Options.WatchNeeds
 	provided, stated := InformerWatchOptions(inf)
+	if stated && dividesComparedResync(needs, inf, provided) {
+		return fmt.Errorf("informer for kind '%s' compares its resync against previous deliveries, for the kind's"+
+			" IgnoreUnchanged, on a resync divided as %q, which has no affinity: an object listed to another instance"+
+			" would be taken for one which is gone. Divide it by object (%q), or not at all",
+			r.Kind.GroupVersionKind().String(), provided.Resync.distribution(), WatchDistributionSharded)
+	}
 	if !stated {
 		return nil
 	}

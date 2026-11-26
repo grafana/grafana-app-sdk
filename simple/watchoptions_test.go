@@ -753,3 +753,28 @@ type optionedInformer struct {
 func (o *optionedInformer) WatchOptions() operator.WatchOptions {
 	return o.options
 }
+
+// An opinionated kind may set resync checks, and they keep objects without its finalizer.
+func TestApp_OpinionatedKindMayIgnoreObjects(t *testing.T) {
+	var received operator.InformerOptions
+	supplier := func(_ resource.Kind, _ resource.ClientGenerator, options operator.InformerOptions) (operator.Informer, error) {
+		received = options
+		return &optionedInformer{options: operator.WatchOptions{Resync: &operator.WatchResyncOptions{}}}, nil
+	}
+	createTestApp(t, AppConfig{
+		InformerConfig: AppInformerConfig{
+			InformerSupplier: supplier,
+			InformerOptions:  operator.InformerOptions{CacheResyncInterval: time.Minute},
+		},
+		ManagedKinds: []AppManagedKind{{
+			Kind:       testKind(),
+			Reconciler: &Reconciler{},
+			ReconcileOptions: BasicReconcileOptions{WatchNeeds: operator.WatchOptions{Resync: &operator.WatchResyncOptions{
+				Ignore: func(resource.Object) bool { return true },
+			}}},
+		}},
+	})
+	require.NotNil(t, received.WatchNeeds.Resync)
+	unfinished := &resource.UntypedObject{}
+	assert.False(t, received.WatchNeeds.Resync.Ignore(unfinished), "an object without the reconciler's finalizer is kept")
+}

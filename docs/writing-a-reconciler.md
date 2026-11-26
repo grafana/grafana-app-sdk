@@ -295,3 +295,65 @@ Use a periodic LIST for work that needs to revisit existing objects, such as
 age-based cleanup. Use a live watch for work that needs to observe changes or
 deletions. A finalizer-aware handler can only process a pending deletion while
 the object still matches its LIST selectors.
+
+### Leaving objects out of a resync
+
+A resync can deliver fewer objects. Set one or both checks on `WatchNeeds.Resync`:
+
+```
+Ignore(current)                     -> leave this object out, judged on the object alone
+IgnoreUnchanged(previous, current)  -> leave this object out if it hasn't changed since its last delivery
+```
+
+* `Ignore` works with any re-list, including `NewPeriodicList`.
+* `IgnoreUnchanged` needs a mechanism that remembers what it delivered: one that implements
+  `operator.PreviousComparer`. With such a mechanism, a pass delivers only what changed: `Add` for a new object,
+  `Update(previous, current)` for a changed one, and `Delete` for one that is gone. Other mechanisms deliver every
+  object as usual.
+* Both are requests, never requirements. If the mechanism cannot apply a check, your handler gets the object anyway.
+* Leave `IgnoreUnchanged` unset if your handler uses the resync to repair drift outside the object (for example,
+  an external resource someone changed). A left-out object gets no chance to be repaired.
+
+Built-in checks, in the `operator` package:
+
+| Check | Leaves out an object when |
+|---|---|
+| `SameResourceVersion` | nobody wrote to it since its last delivery |
+| `SameGeneration` | its spec did not change (status and metadata writes are left out) |
+| `SameLabels`, `SameAnnotations` | its labels, or annotations, did not change |
+| `AllUnchanged(checks...)` | every listed check reports it unchanged |
+| `AlreadyObserved(accessor)` | its status already records the current generation as handled (for `Ignore`) |
+
+`AlreadyObserved` takes a function that reads `observedGeneration` from your kind's status.
+
+Some objects are never left out:
+
+* an object being deleted, so finalizers still run;
+* an object with a different UID than before (deleted and recreated), or without a UID;
+* for an opinionated reconciler or watcher, an object without the handler's finalizer. Its add may not be finished
+  yet. `simple` passes the finalizer automatically.
+
+Example: skip objects the reconciler has already handled, and skip status-only changes:
+
+```go
+simple.AppManagedKind{
+    Kind:       v1.FooKind(),
+    Reconciler: &FooReconciler{},
+    ReconcileOptions: simple.BasicReconcileOptions{
+        WatchNeeds: operator.WatchOptions{
+            Live: &operator.WatchLiveOptions{},
+            Resync: &operator.WatchResyncOptions{
+                Interval: time.Hour,
+                Ignore: operator.AlreadyObserved(func(obj resource.Object) (int64, bool) {
+                    foo := obj.(*v1.Foo)
+                    if foo.Status.ObservedGeneration == nil {
+                        return 0, false
+                    }
+                    return *foo.Status.ObservedGeneration, true
+                }),
+                IgnoreUnchanged: operator.AllUnchanged(operator.SameGeneration, operator.SameLabels),
+            },
+        },
+    },
+}
+```

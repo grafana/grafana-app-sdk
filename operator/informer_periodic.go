@@ -44,8 +44,12 @@ func periodicWatchOptions(detail WatchDetail) WatchOptions {
 }
 
 func periodicOptions(opts InformerOptions, defaults PeriodicListOptions) PeriodicInformerOptions {
+	var ignore WatchIgnoreFunc
+	if resync := opts.ResyncOptions(); resync != nil {
+		ignore = resync.Ignore
+	}
 	return PeriodicInformerOptions{ResyncInterval: resyncIntervalOr(opts, defaults.ResyncInterval), RetryInterval: defaults.RetryInterval,
-		EventTimeout: opts.EventTimeout, ErrorHandler: opts.ErrorHandler}
+		EventTimeout: opts.EventTimeout, ErrorHandler: opts.ErrorHandler, Ignore: ignore}
 }
 
 func resyncIntervalOr(opts InformerOptions, fallback time.Duration) time.Duration {
@@ -62,6 +66,9 @@ type PeriodicInformerOptions struct {
 	RetryInterval  time.Duration
 	EventTimeout   time.Duration
 	ErrorHandler   func(context.Context, error)
+	// Ignore leaves objects out of each sweep. Keys-only informers don't apply it. For an opinionated handler, set
+	// it through WatchNeeds instead, so BuildInformer can guard it.
+	Ignore WatchIgnoreFunc
 }
 
 // PeriodicInformer performs one complete LIST at a time and dispatches every
@@ -96,6 +103,10 @@ func newPeriodicInformer(kind resource.Kind, lister ResourceLister, opts Periodi
 	}
 	if opts.ErrorHandler == nil {
 		opts.ErrorHandler = DefaultErrorHandler
+	}
+	// Identities carry no deletion timestamp.
+	if detail == WatchDetailIdentity {
+		opts.Ignore = nil
 	}
 	return &PeriodicInformer{kind: kind, lister: lister, opts: opts, detail: detail,
 		synced: make(chan struct{}), stopped: make(chan struct{})}, nil
@@ -187,6 +198,12 @@ func (p *PeriodicInformer) sweep(ctx context.Context) error {
 		return fmt.Errorf("periodic LIST: %w", err)
 	}
 	for _, obj := range objects {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if p.opts.Ignore.Ignores(obj) {
+			continue
+		}
 		for _, handler := range p.handlers {
 			if err := ctx.Err(); err != nil {
 				return err

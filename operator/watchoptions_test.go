@@ -610,3 +610,186 @@ func TestInformerWithWatchOptions_wrappingAStockInformer(t *testing.T) {
 	require.True(t, stated)
 	assert.Equal(t, WatchDetailIdentity, options.Live.Detail)
 }
+
+// comparingInformer is an informer that compares against previous deliveries.
+type comparingInformer struct {
+	mockInformer
+}
+
+func (*comparingInformer) ComparesPrevious() bool { return true }
+
+// comparingMechanism is a mechanism which builds comparingInformers.
+type comparingMechanism struct {
+	InformerMechanism
+}
+
+func (comparingMechanism) ComparesPrevious() bool { return true }
+
+func TestPreviousComparer(t *testing.T) {
+	resync := WatchOptions{Resync: &WatchResyncOptions{}}
+	needsPrevious := WatchOptions{Resync: &WatchResyncOptions{IgnoreUnchanged: SameGeneration}}
+	plain := NewInformerMechanism(resync, func(resource.Kind, resource.ClientGenerator, InformerOptions) (Informer, error) {
+		return &mockInformer{}, nil
+	})
+	comparing := comparingMechanism{NewInformerMechanism(resync, func(resource.Kind, resource.ClientGenerator, InformerOptions) (Informer, error) {
+		return &comparingInformer{}, nil
+	})}
+	build := func(needs WatchOptions, supplier InformerSupplier) (Informer, error) {
+		return BuildInformer(InformerRequest{Kind: untypedKind, Supplier: supplier, Options: InformerOptions{WatchNeeds: needs}})
+	}
+
+	t.Run("selection skips a mechanism which does not compare, for a kind which sets IgnoreUnchanged", func(t *testing.T) {
+		inf, err := build(needsPrevious, NewSelectingInformerSupplier(nil, plain, comparing))
+		require.NoError(t, err)
+		assert.True(t, comparesPrevious(inf), "the comparing mechanism's informer, through the advertising wrapper")
+	})
+
+	t.Run("a kind which does not set it takes the first mechanism", func(t *testing.T) {
+		inf, err := build(resync, NewSelectingInformerSupplier(nil, plain, comparing))
+		require.NoError(t, err)
+		assert.False(t, comparesPrevious(inf))
+	})
+
+	t.Run("an informer which does not compare serves the kind, re-delivering every object", func(t *testing.T) {
+		inf, err := build(needsPrevious, func(resource.Kind, resource.ClientGenerator, InformerOptions) (Informer, error) {
+			return &mockInformer{}, nil
+		})
+		require.NoError(t, err)
+		assert.False(t, comparesPrevious(inf))
+	})
+
+	t.Run("with no comparing mechanism, a mechanism which does not compare is taken before the fallback", func(t *testing.T) {
+		fellBack := false
+		inf, err := build(needsPrevious, NewSelectingInformerSupplier(
+			func(resource.Kind, resource.ClientGenerator, InformerOptions) (Informer, error) {
+				fellBack = true
+				return &mockInformer{}, nil
+			},
+			plain,
+		))
+		require.NoError(t, err)
+		assert.False(t, fellBack)
+		assert.False(t, comparesPrevious(inf))
+	})
+
+	t.Run("with no mechanism at all, the fallback, as the API watch is, takes over", func(t *testing.T) {
+		fellBack := false
+		_, err := build(needsPrevious, NewSelectingInformerSupplier(
+			func(resource.Kind, resource.ClientGenerator, InformerOptions) (Informer, error) {
+				fellBack = true
+				return &mockInformer{}, nil
+			},
+			nil, // the NATS mechanism, switched off
+		))
+		require.NoError(t, err)
+		assert.True(t, fellBack)
+	})
+
+	t.Run("a comparer dividing its resync with no affinity is not selected, and refused when built", func(t *testing.T) {
+		shared := WatchOptions{Resync: &WatchResyncOptions{Distribution: WatchDistributionShared}}
+		sharedComparing := comparingMechanism{NewInformerMechanism(shared, func(resource.Kind, resource.ClientGenerator, InformerOptions) (Informer, error) {
+			return &comparingInformer{}, nil
+		})}
+		needsShared := WatchOptions{Resync: &WatchResyncOptions{
+			IgnoreUnchanged: SameGeneration, Distribution: WatchDistributionShared,
+		}}
+
+		inf, err := build(needsShared, NewSelectingInformerSupplier(nil, sharedComparing, plain))
+		require.NoError(t, err)
+		assert.False(t, comparesPrevious(inf), "the shared comparer would report objects on other instances as gone")
+
+		_, err = build(needsShared, func(resource.Kind, resource.ClientGenerator, InformerOptions) (Informer, error) {
+			return InformerWithWatchOptions(&comparingInformer{}, shared), nil
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "an object listed to another instance would be taken for one which is gone")
+	})
+
+	t.Run("so is a comparer whose resync distribution this build does not recognize", func(t *testing.T) {
+		roundRobin := WatchOptions{Resync: &WatchResyncOptions{Distribution: WatchDistribution("round-robin")}}
+		custom := comparingMechanism{NewInformerMechanism(roundRobin, func(resource.Kind, resource.ClientGenerator, InformerOptions) (Informer, error) {
+			return &comparingInformer{}, nil
+		})}
+		needsShared := WatchOptions{Resync: &WatchResyncOptions{
+			IgnoreUnchanged: SameGeneration, Distribution: WatchDistributionShared,
+		}}
+
+		inf, err := build(needsShared, NewSelectingInformerSupplier(nil, custom, plain))
+		require.NoError(t, err)
+		assert.False(t, comparesPrevious(inf))
+
+		_, err = build(needsShared, func(resource.Kind, resource.ClientGenerator, InformerOptions) (Informer, error) {
+			return InformerWithWatchOptions(&comparingInformer{}, roundRobin), nil
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `"round-robin"`)
+	})
+
+	t.Run("a sharded comparer serves such a kind", func(t *testing.T) {
+		sharded := WatchOptions{Resync: &WatchResyncOptions{Distribution: WatchDistributionSharded}}
+		_, err := build(WatchOptions{Resync: &WatchResyncOptions{IgnoreUnchanged: SameGeneration, Distribution: WatchDistributionShared}},
+			func(resource.Kind, resource.ClientGenerator, InformerOptions) (Informer, error) {
+				return InformerWithWatchOptions(&comparingInformer{}, sharded), nil
+			})
+		require.NoError(t, err)
+	})
+
+	t.Run("a comparer serves a kind which does not set IgnoreUnchanged, shared or not", func(t *testing.T) {
+		_, err := build(WatchOptions{Resync: &WatchResyncOptions{Distribution: WatchDistributionShared}},
+			func(resource.Kind, resource.ClientGenerator, InformerOptions) (Informer, error) {
+				return InformerWithWatchOptions(&comparingInformer{},
+					WatchOptions{Resync: &WatchResyncOptions{Distribution: WatchDistributionShared}}), nil
+			})
+		require.NoError(t, err)
+	})
+}
+
+func TestBuildInformer_keepsObjectsAnOpinionatedHandlerHasNotFinished(t *testing.T) {
+	var received InformerOptions
+	supplier := func(_ resource.Kind, _ resource.ClientGenerator, options InformerOptions) (Informer, error) {
+		received = options
+		return &mockInformer{}, nil
+	}
+	always := WatchOptions{Resync: &WatchResyncOptions{
+		Ignore:          func(resource.Object) bool { return true },
+		IgnoreUnchanged: func(resource.Object, resource.Object) bool { return true },
+	}}
+	object := func(finalizers ...string) resource.Object {
+		obj := &resource.UntypedObject{}
+		obj.SetFinalizers(finalizers)
+		return obj
+	}
+
+	t.Run("without a Finalizer, an opinionated kind setting either check is refused", func(t *testing.T) {
+		for _, needs := range []WatchOptions{
+			{Resync: &WatchResyncOptions{Ignore: always.Resync.Ignore}},
+			{Resync: &WatchResyncOptions{IgnoreUnchanged: always.Resync.IgnoreUnchanged}},
+		} {
+			_, err := BuildInformer(InformerRequest{
+				Kind: untypedKind, Supplier: supplier, Options: InformerOptions{WatchNeeds: needs}, Opinionated: true,
+			})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "names no Finalizer")
+		}
+	})
+
+	t.Run("with one, both checks keep an object without it", func(t *testing.T) {
+		_, err := BuildInformer(InformerRequest{
+			Kind: untypedKind, Supplier: supplier, Options: InformerOptions{WatchNeeds: always},
+			Opinionated: true, Finalizer: "done",
+		})
+		require.NoError(t, err)
+		resync := received.WatchNeeds.Resync
+		assert.False(t, resync.Ignore(object("wip")), "an add the handler has not finished")
+		assert.True(t, resync.Ignore(object("done")))
+		assert.False(t, resync.IgnoreUnchanged(object(), object("wip")))
+		assert.True(t, resync.IgnoreUnchanged(object("done"), object("done")))
+		assert.True(t, always.Resync.Ignore(object()), "the declaration itself is left as it was")
+	})
+
+	t.Run("a plain handler's checks are passed on unchanged", func(t *testing.T) {
+		_, err := BuildInformer(InformerRequest{Kind: untypedKind, Supplier: supplier, Options: InformerOptions{WatchNeeds: always}})
+		require.NoError(t, err)
+		assert.True(t, received.WatchNeeds.Resync.Ignore(object()))
+	})
+}

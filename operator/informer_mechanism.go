@@ -39,6 +39,34 @@ type PreviousComparer interface {
 	ComparesPrevious() bool
 }
 
+func needsPrevious(needs WatchOptions) bool {
+	return needs.Resync != nil && needs.Resync.IgnoreUnchanged != nil
+}
+
+// dividesComparedResync reports whether comparer would compare a resync that is neither undivided nor sharded.
+func dividesComparedResync(needs WatchOptions, comparer any, provides WatchOptions) bool {
+	if !needsPrevious(needs) || !comparesPrevious(comparer) || provides.Resync == nil {
+		return false
+	}
+	distribution := provides.Resync.distribution()
+	return distribution != WatchDistributionAll && distribution != WatchDistributionSharded
+}
+
+// comparesPrevious reports whether v, or an informer it wraps, says it is a PreviousComparer which compares.
+func comparesPrevious(v any) bool {
+	for v != nil {
+		if comparer, ok := v.(PreviousComparer); ok {
+			return comparer.ComparesPrevious()
+		}
+		wrapper, ok := v.(interface{ Unwrap() Informer })
+		if !ok {
+			return false
+		}
+		v = wrapper.Unwrap()
+	}
+	return false
+}
+
 // NewInformerMechanism presents a supplier whose provision is fixed as an InformerMechanism.
 //
 // Experimental: this API may change in a minor release.
@@ -76,23 +104,31 @@ func (f fixedMechanism) NewInformer(
 // Experimental: this API may change in a minor release.
 func NewSelectingInformerSupplier(fallback InformerSupplier, mechanisms ...InformerMechanism) InformerSupplier {
 	return func(kind resource.Kind, clients resource.ClientGenerator, options InformerOptions) (Informer, error) {
-		for _, mechanism := range mechanisms {
-			if mechanism == nil {
-				continue
+		// A kind setting IgnoreUnchanged prefers a comparer, but any mechanism can serve it.
+		passes := []bool{false}
+		if needsPrevious(options.WatchNeeds) {
+			passes = []bool{true, false}
+		}
+		for _, requireComparing := range passes {
+			for _, mechanism := range mechanisms {
+				if mechanism == nil {
+					continue
+				}
+				if scoped, ok := mechanism.(interface{ supportsQuery(ListWatchOptions) bool }); ok &&
+					!scoped.supportsQuery(options.ListWatchOptions) {
+					continue
+				}
+				provides := mechanism.WatchOptions(kind)
+				if !options.WatchNeeds.SatisfiedBy(provides) || dividesComparedResync(options.WatchNeeds, mechanism, provides) ||
+					requireComparing && !comparesPrevious(mechanism) {
+					continue
+				}
+				inf, err := mechanism.NewInformer(kind, clients, options)
+				if err != nil {
+					return nil, err
+				}
+				return InformerWithWatchOptions(inf, provides), nil
 			}
-			if scoped, ok := mechanism.(interface{ supportsQuery(ListWatchOptions) bool }); ok &&
-				!scoped.supportsQuery(options.ListWatchOptions) {
-				continue
-			}
-			provides := mechanism.WatchOptions(kind)
-			if !options.WatchNeeds.SatisfiedBy(provides) {
-				continue
-			}
-			inf, err := mechanism.NewInformer(kind, clients, options)
-			if err != nil {
-				return nil, err
-			}
-			return InformerWithWatchOptions(inf, provides), nil
 		}
 		if fallback == nil {
 			return nil, fmt.Errorf("no watch mechanism provides what kind '%s' needs (%s), and no fallback supplier"+

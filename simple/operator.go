@@ -281,7 +281,7 @@ func WithWatchNeeds(needs operator.WatchOptions) KindWatchOption {
 // addInformerForKind builds the informer for a kind and adds it to the controller under its key. forWatcher states
 // that the kind's handler is an OpinionatedWatcher rather than an OpinionatedReconciler.
 func (o *Operator) addInformerForKind(
-	kind resource.Kind, options operator.ListWatchOptions, opts []KindWatchOption, forWatcher bool,
+	kind resource.Kind, options operator.ListWatchOptions, opts []KindWatchOption, forWatcher bool, finalizer string,
 ) error {
 	var settings kindWatchSettings
 	for _, opt := range opts {
@@ -306,7 +306,19 @@ func (o *Operator) addInformerForKind(
 		// WatchKind and ReconcileKind both wrap their handler in its Opinionated variant.
 		Opinionated:     true,
 		DiscardsResyncs: forWatcher,
+		Finalizer:       finalizer,
 	}, o.controller.AddInformer)
+}
+
+// finalizerFor returns the finalizer the operator's opinionated handlers add to objects of kind.
+func (o *Operator) finalizerFor(kind resource.Kind) string {
+	if o.FinalizerGenerator != nil {
+		return o.FinalizerGenerator(kind)
+	}
+	if o.Name != "" {
+		return fmt.Sprintf("%s-%s-finalizer", o.Name, kind.Plural())
+	}
+	return fmt.Sprintf("%s-finalizer", kind.Plural())
 }
 
 // WatchKind will watch the specified kind (schema) with opinionated logic, passing the relevant events on to the SyncWatcher.
@@ -317,15 +329,7 @@ func (o *Operator) WatchKind(
 ) error {
 	kindStr := o.label(kind, options)
 	ow, err := operator.NewOpinionatedWatcher(kind, &watchPatcher{o.patcher.ForKind(kind.GroupVersionKind().GroupKind())}, operator.OpinionatedWatcherConfig{
-		Finalizer: func(sch resource.Schema) string {
-			if o.FinalizerGenerator != nil {
-				return o.FinalizerGenerator(sch)
-			}
-			if o.Name != "" {
-				return fmt.Sprintf("%s-%s-finalizer", o.Name, kind.Plural())
-			}
-			return fmt.Sprintf("%s-finalizer", kind.Plural())
-		},
+		Finalizer: func(resource.Schema) string { return o.finalizerFor(kind) },
 		InProgressFinalizer: func(_ resource.Schema) string {
 			if o.Name != "" {
 				return fmt.Sprintf("%s-%s-wip", o.Name, kind.Plural())
@@ -338,7 +342,7 @@ func (o *Operator) WatchKind(
 	}
 	ow.Wrap(watcher, false)
 	ow.SyncFunc = watcher.Sync
-	if err := o.addInformerForKind(kind, options, opts, true); err != nil {
+	if err := o.addInformerForKind(kind, options, opts, true, o.finalizerFor(kind)); err != nil {
 		return err
 	}
 	return o.controller.AddWatcher(ow, kindStr)
@@ -351,18 +355,13 @@ func (o *Operator) ReconcileKind(
 	kind resource.Kind, reconciler operator.Reconciler, options operator.ListWatchOptions, opts ...KindWatchOption,
 ) error {
 	kindStr := o.label(kind, options)
-	finalizer := fmt.Sprintf("%s-finalizer", kind.Plural())
-	if o.FinalizerGenerator != nil {
-		finalizer = o.FinalizerGenerator(kind)
-	} else if o.Name != "" {
-		finalizer = fmt.Sprintf("%s-%s-finalizer", o.Name, kind.Plural())
-	}
+	finalizer := o.finalizerFor(kind)
 	or, err := operator.NewOpinionatedReconciler(&watchPatcher{o.patcher.ForKind(kind.GroupVersionKind().GroupKind())}, finalizer)
 	if err != nil {
 		return err
 	}
 	or.Reconciler = reconciler
-	if err := o.addInformerForKind(kind, options, opts, false); err != nil {
+	if err := o.addInformerForKind(kind, options, opts, false, finalizer); err != nil {
 		return err
 	}
 	return o.controller.AddReconciler(or, kindStr)

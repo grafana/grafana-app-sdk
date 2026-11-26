@@ -337,3 +337,69 @@ func TestPeriodicInformerControllerRetriesWithFreshTimeout(t *testing.T) {
 		})
 	}
 }
+
+// Ignore leaves objects out of a sweep, but never one being deleted.
+func TestPeriodicInformer_IgnoreLeavesObjectsOut(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		handled, pending, gone := listerObj("handled"), listerObj("pending"), listerObj("gone")
+		dt := metav1.NewTime(time.Time{})
+		gone.SetDeletionTimestamp(&dt)
+		ignoreHandled := func(obj resource.Object) bool { return obj.GetName() != "pending" }
+
+		watcher := &addRecordingWatcher{}
+		inf, err := NewPeriodicInformer(listerTestKind, staticLister(handled, pending, gone),
+			PeriodicInformerOptions{ResyncInterval: time.Minute, Ignore: ignoreHandled})
+		require.NoError(t, err)
+		require.NoError(t, inf.AddEventHandler(watcher))
+
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() { defer close(done); _ = inf.Run(ctx) }()
+		defer func() { cancel(); <-done; synctest.Wait() }()
+
+		synctest.Wait()
+		assert.Equal(t, []string{"pending", "gone"}, watcher.addedNames())
+	})
+}
+
+func TestPeriodicList_TakesIgnoreFromTheKind(t *testing.T) {
+	ignore := AlreadyObserved(func(resource.Object) (int64, bool) { return 0, false })
+	opts := periodicOptions(InformerOptions{
+		WatchNeeds: WatchOptions{Resync: &WatchResyncOptions{Ignore: ignore}},
+	}, PeriodicListOptions{})
+	assert.NotNil(t, opts.Ignore)
+	assert.Nil(t, periodicOptions(InformerOptions{}, PeriodicListOptions{}).Ignore)
+}
+
+// A keys-only sweep does not apply Ignore.
+func TestPeriodicInformer_KeysOnlyDoesNotApplyIgnore(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		watcher := &addRecordingWatcher{}
+		inf, err := newPeriodicInformer(listerTestKind, staticLister(listerObj("a"), listerObj("b")),
+			PeriodicInformerOptions{ResyncInterval: time.Minute, Ignore: func(resource.Object) bool { return true }},
+			WatchDetailIdentity)
+		require.NoError(t, err)
+		require.NoError(t, inf.AddEventHandler(watcher))
+
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() { defer close(done); _ = inf.Run(ctx) }()
+		defer func() { cancel(); <-done; synctest.Wait() }()
+
+		synctest.Wait()
+		assert.Equal(t, []string{"a", "b"}, watcher.addedNames())
+	})
+}
+
+// A cancelled sweep stops before running Ignore.
+func TestPeriodicInformer_CancelledSweepStopsBeforeIgnore(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	judged := 0
+	inf, err := NewPeriodicInformer(listerTestKind, listerFunc(func(context.Context) ([]resource.Object, string, error) {
+		cancel()
+		return []resource.Object{listerObj("a"), listerObj("b")}, "", nil
+	}), PeriodicInformerOptions{Ignore: func(resource.Object) bool { judged++; return true }})
+	require.NoError(t, err)
+	require.ErrorIs(t, inf.sweep(ctx), context.Canceled)
+	assert.Zero(t, judged)
+}

@@ -135,6 +135,7 @@ func (o InformerOptions) ResyncOptions() *WatchResyncOptions {
 	resolved := WatchResyncOptions{Interval: o.CacheResyncInterval, ListPageSize: o.WatchListPageSize}
 	if needs != nil {
 		resolved.Detail, resolved.Distribution = needs.Detail, needs.Distribution
+		resolved.Ignore, resolved.IgnoreUnchanged = needs.Ignore, needs.IgnoreUnchanged
 		if needs.Interval != 0 {
 			resolved.Interval = max(needs.Interval, 0)
 		}
