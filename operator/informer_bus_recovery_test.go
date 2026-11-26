@@ -510,3 +510,55 @@ func TestBusRecoveryCancelsBlockedWorkerEnqueue(t *testing.T) {
 		require.NoError(t, <-done)
 	})
 }
+
+func TestBusRecoverySnapshotReportsInstalledIdentities(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		item := listerObj("item")
+		item.SetResourceVersion("10")
+		id := resource.Identifier{Namespace: item.GetNamespace(), Name: item.GetName()}
+		var reconnect func()
+		sub := busSubscribeFunc(func(_ context.Context, _ schema.GroupVersionResource, _ string, _ func(context.Context, resourcebus.Event), opts ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
+			reconnect = resourcebus.NewSubscribeConfig(opts...).OnReconnect
+			return &testBusSubscription{}, nil
+		})
+		calls := 0
+		lister := listerFunc(func(context.Context) ([]resource.Object, string, error) {
+			calls++
+			if calls == 1 {
+				return []resource.Object{item}, "10", nil
+			}
+			return nil, "20", nil
+		})
+		informer, err := NewBusInformerWithRecovery(listerTestKind, sub, lister, BusInformerOptions{}, BusRecoveryOptions{ResyncInterval: time.Hour})
+		require.NoError(t, err)
+		require.Empty(t, informer.Snapshot())
+
+		seen := make(chan []resource.Identifier, 2)
+		require.NoError(t, informer.AddEventHandler(&SimpleWatcher{
+			AddFunc: func(context.Context, resource.Object) error {
+				seen <- informer.Snapshot()
+				return nil
+			},
+			DeleteFunc: func(context.Context, resource.Object) error {
+				seen <- informer.Snapshot()
+				return nil
+			},
+		}))
+		done := make(chan error, 1)
+		go func() { done <- informer.Run(ctx) }()
+		require.NoError(t, informer.WaitForSync(ctx))
+		keys := <-seen
+		require.Equal(t, []resource.Identifier{id}, keys)
+		keys[0].Name = "changed by caller"
+		require.Equal(t, []resource.Identifier{id}, informer.Snapshot())
+
+		reconnect()
+		require.Empty(t, <-seen)
+		require.Empty(t, informer.Snapshot())
+		cancel()
+		require.NoError(t, <-done)
+	})
+}

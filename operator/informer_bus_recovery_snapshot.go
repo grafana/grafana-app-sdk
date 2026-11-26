@@ -9,6 +9,18 @@ import (
 	"github.com/grafana/grafana-app-sdk/resourcebus"
 )
 
+// Snapshot returns the informer's last known identities. Missed notifications
+// can leave this view behind storage until a recovery LIST succeeds.
+func (b *BusInformerWithRecovery) Snapshot() []resource.Identifier {
+	b.snapshotMu.RLock()
+	defer b.snapshotMu.RUnlock()
+	keys := make([]resource.Identifier, 0, len(b.items))
+	for key := range b.items {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
 func (b *BusInformerWithRecovery) applyLive(ctx context.Context, event resourcebus.Event) {
 	if !b.acceptEvent(event) {
 		return
@@ -28,7 +40,9 @@ func (b *BusInformerWithRecovery) applyLive(ctx context.Context, event resourceb
 	switch event.Verb {
 	case resourcebus.VerbAdded, resourcebus.VerbModified:
 		obj := newIdentityObject(b.kind, id.Namespace, id.Name, event.ResourceVersion)
+		b.snapshotMu.Lock()
 		b.items[id] = obj
+		b.snapshotMu.Unlock()
 		delete(b.deleted, id)
 		if event.Verb == resourcebus.VerbAdded {
 			// A recreate can reach this group member even if its delete did not.
@@ -36,7 +50,9 @@ func (b *BusInformerWithRecovery) applyLive(ctx context.Context, event resourceb
 		}
 		b.deliverChange(ctx, old, obj)
 	case resourcebus.VerbDeleted:
+		b.snapshotMu.Lock()
 		delete(b.items, id)
+		b.snapshotMu.Unlock()
 		b.deleted[id] = version
 		if old == nil {
 			old = newIdentityObject(b.kind, id.Namespace, id.Name, event.ResourceVersion)
@@ -89,6 +105,7 @@ func (b *BusInformerWithRecovery) readSnapshot(ctx context.Context) (map[resourc
 }
 
 func (b *BusInformerWithRecovery) applySnapshot(ctx context.Context, trigger busRelistTrigger, next map[resource.Identifier]resource.Object, version int64) {
+	changes := make([]busDelivery, 0, len(next))
 	for id, obj := range next {
 		old := b.items[id]
 		// Grafana's first LIST page can see item writes committed after it
@@ -108,7 +125,7 @@ func (b *BusInformerWithRecovery) applySnapshot(ctx context.Context, trigger bus
 				continue
 			}
 		}
-		b.deliverChange(ctx, old, obj)
+		changes = append(changes, busDelivery{old: old, current: obj})
 	}
 	for id, old := range b.items {
 		if next[id] != nil {
@@ -118,14 +135,19 @@ func (b *BusInformerWithRecovery) applySnapshot(ctx context.Context, trigger bus
 			next[id] = old
 			continue
 		}
-		b.deliverChange(ctx, old, nil)
+		changes = append(changes, busDelivery{old: old})
 	}
 	for id, deleted := range b.deleted {
 		if deleted <= version {
 			delete(b.deleted, id)
 		}
 	}
+	b.snapshotMu.Lock()
 	b.items, b.listVersion = next, version
+	b.snapshotMu.Unlock()
+	for _, change := range changes {
+		b.deliverChange(ctx, change.old, change.current)
+	}
 }
 
 func numericVersion(version string) int64 {
