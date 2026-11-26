@@ -132,7 +132,7 @@ func TestBusRecoveryDegradedStartAndReconnect(t *testing.T) {
 		var lists atomic.Int64
 		informer, err := NewBusInformer(listerTestKind, subscriber, listerFunc(func(context.Context) ([]resource.Object, string, error) {
 			lists.Add(1)
-			return nil, "", nil
+			return nil, "100", nil
 		}), BusInformerOptions{
 			AllowDegradedStart: true,
 			ResyncInterval:     time.Hour,
@@ -154,7 +154,7 @@ func TestBusRecoveryDegradedStartAndReconnect(t *testing.T) {
 	})
 }
 
-func TestBusRecoveryKeepsNumericWatermarkAfterOpaqueList(t *testing.T) {
+func TestBusRecoveryRejectsOpaqueListAndKeepsNumericWatermark(t *testing.T) {
 	subscriber := busSubscribeFunc(func(context.Context, schema.GroupVersionResource, string, func(context.Context, resourcebus.Event), ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
 		return &testBusSubscription{}, nil
 	})
@@ -169,7 +169,7 @@ func TestBusRecoveryKeepsNumericWatermarkAfterOpaqueList(t *testing.T) {
 	}}))
 	require.NoError(t, informer.relist(t.Context()))
 	version = "opaque"
-	require.NoError(t, informer.relist(t.Context()))
+	require.ErrorContains(t, informer.relist(t.Context()), "snapshot resource version")
 	informer.applyLive(t.Context(), resourcebus.Event{Verb: resourcebus.VerbAdded, Name: "item", ResourceVersion: "90"})
 }
 
@@ -179,12 +179,15 @@ func TestBusRecoveryArbitratesStaleSnapshots(t *testing.T) {
 		live       resourcebus.Verb
 		listRV     string
 		listItemRV string
+		wantError  string
 	}{
 		{name: "live write omitted", live: resourcebus.VerbModified, listRV: "150"},
 		{name: "live write with older listed item", live: resourcebus.VerbModified, listRV: "150", listItemRV: "120"},
 		{name: "live delete with older listed item", live: resourcebus.VerbDeleted, listRV: "150", listItemRV: "120"},
-		{name: "live delete followed by opaque list", live: resourcebus.VerbDeleted, listRV: "opaque"},
-		{name: "live delete with older item in opaque list", live: resourcebus.VerbDeleted, listRV: "opaque", listItemRV: "120"},
+		{name: "live write omitted from opaque list", live: resourcebus.VerbModified, listRV: "opaque", wantError: "snapshot resource version"},
+		{name: "live write with older item in opaque list", live: resourcebus.VerbModified, listRV: "opaque", listItemRV: "120", wantError: "snapshot resource version"},
+		{name: "live delete followed by opaque list", live: resourcebus.VerbDeleted, listRV: "opaque", wantError: "snapshot resource version"},
+		{name: "live delete followed by opaque item", live: resourcebus.VerbDeleted, listRV: "300", listItemRV: "opaque", wantError: "item resource version"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sub := busSubscribeFunc(func(context.Context, schema.GroupVersionResource, string, func(context.Context, resourcebus.Event), ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
@@ -215,15 +218,43 @@ func TestBusRecoveryArbitratesStaleSnapshots(t *testing.T) {
 				item.SetResourceVersion(tc.listItemRV)
 				objects = []resource.Object{item}
 			}
-			require.NoError(t, informer.relist(t.Context()))
+			err = informer.relist(t.Context())
+			if tc.wantError != "" {
+				require.ErrorContains(t, err, tc.wantError)
+			} else {
+				require.NoError(t, err)
+			}
 			informer.applyLive(t.Context(), resourcebus.Event{Verb: resourcebus.VerbAdded, Namespace: id.Namespace, Name: id.Name, ResourceVersion: "160"})
+			informer.applyLive(t.Context(), resourcebus.Event{Verb: resourcebus.VerbAdded, Namespace: id.Namespace, Name: id.Name, ResourceVersion: "opaque"})
 			require.Equal(t, 2, seen)
 			if tc.live == resourcebus.VerbDeleted {
 				require.NotContains(t, informer.recovery.items, id)
+				recreated := listerObj(id.Name)
+				recreated.SetResourceVersion("250")
+				listRV, objects = "300", []resource.Object{recreated}
+				require.NoError(t, informer.relist(t.Context()))
+				require.Equal(t, 3, seen)
+				require.Equal(t, "250", informer.recovery.items[id].GetResourceVersion())
 			} else {
 				require.Equal(t, "200", informer.recovery.items[id].GetResourceVersion())
 			}
 		})
+	}
+}
+
+func TestBusRecoveryMechanismWorkerCount(t *testing.T) {
+	subscriber := busSubscribeFunc(func(context.Context, schema.GroupVersionResource, string, func(context.Context, resourcebus.Event), ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
+		return &testBusSubscription{}, nil
+	})
+	mechanism := NewBusMechanism(subscriber, BusMechanismOptions{})
+	clients := keyListerClientGenerator{Client: keyListerFallbackClient{}}
+	for _, tc := range []struct {
+		configured uint64
+		want       uint64
+	}{{0, 10}, {1, 1}, {3, 3}} {
+		informer, err := mechanism.NewInformer(listerTestKind, clients, InformerOptions{MaxConcurrentWorkers: tc.configured})
+		require.NoError(t, err)
+		require.Equal(t, tc.want, informer.(*BusInformer).recovery.opts.MaxConcurrentWorkers)
 	}
 }
 
@@ -236,7 +267,9 @@ func TestBusRecoveryRetainsOverflowDuringCooldown(t *testing.T) {
 		})
 		var lists atomic.Int64
 		informer, err := NewBusInformer(listerTestKind, sub, listerFunc(func(context.Context) ([]resource.Object, string, error) {
-			lists.Add(1)
+			if lists.Add(1) == 2 {
+				time.Sleep(2 * overflowRelistInterval)
+			}
 			return nil, "100", nil
 		}), BusInformerOptions{ResyncInterval: time.Hour})
 		require.NoError(t, err)
@@ -247,11 +280,11 @@ func TestBusRecoveryRetainsOverflowDuringCooldown(t *testing.T) {
 		informer.recovery.overflow()
 		synctest.Wait()
 		require.Equal(t, int64(2), lists.Load())
-		time.Sleep(time.Second)
 		informer.recovery.overflow()
+		time.Sleep(2 * overflowRelistInterval)
 		synctest.Wait()
-		require.Equal(t, int64(2), lists.Load(), "respect cooldown")
-		time.Sleep(30 * time.Second)
+		require.Equal(t, int64(2), lists.Load(), "cooldown starts after the slow LIST")
+		time.Sleep(overflowRelistInterval)
 		synctest.Wait()
 		require.Equal(t, int64(3), lists.Load(), "recover the second drop before the normal resync")
 		cancel()

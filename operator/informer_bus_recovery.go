@@ -57,11 +57,15 @@ func NewBusMechanism(subscriber resourcebus.Subscriber, defaults BusMechanismOpt
 		if err != nil {
 			return nil, err
 		}
+		workers := opts.MaxConcurrentWorkers
+		if workers == 0 {
+			workers = defaultConcurrentInformerWorkers
+		}
 		return NewBusInformer(kind, subscriber, lister, BusInformerOptions{
 			Namespace: opts.ListWatchOptions.Namespace, Group: defaults.Group,
 			ResyncInterval:     periodicOptions(opts, PeriodicMechanismOptions{ResyncInterval: defaults.ResyncInterval}).ResyncInterval,
 			AllowDegradedStart: defaults.AllowDegradedStart, EventTimeout: opts.EventTimeout,
-			MaxConcurrentWorkers: opts.MaxConcurrentWorkers, ErrorHandler: opts.ErrorHandler,
+			MaxConcurrentWorkers: workers, ErrorHandler: opts.ErrorHandler,
 		})
 	})
 }
@@ -73,8 +77,9 @@ func recoveryWatchOptions(group resourcebus.Group) WatchOptions {
 }
 
 // NewBusInformer subscribes to changes and periodically reconciles an identity
-// snapshot. The lister must cover the subscription's namespace. Numeric
-// positive resource versions must be monotonic across the subscription and LIST.
+// snapshot. The lister must cover the subscription's namespace. The LIST and
+// notifications must use the same increasing numeric resource versions.
+// An empty initial LIST can have snapshot version 0.
 func NewBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, lister ResourceLister, opts BusInformerOptions) (*BusInformer, error) {
 	if lister == nil {
 		return nil, errors.New("bus recovery requires a lister")
@@ -142,6 +147,7 @@ func (b *BusInformer) runRecovery(parent context.Context) error {
 	}
 
 	delay := time.Duration(0)
+	trigger := busRelistRequested
 	for ctx.Err() == nil {
 		timer := time.NewTimer(delay)
 		select {
@@ -151,7 +157,11 @@ func (b *BusInformer) runRecovery(parent context.Context) error {
 		case <-timer.C:
 		}
 		delay = r.opts.ResyncInterval
-		if err := b.relist(ctx); err != nil {
+		err := b.relist(ctx)
+		if trigger == busRelistOverflow {
+			r.nextOverflowRelist = time.Now().Add(overflowRelistInterval)
+		}
+		if err != nil {
 			if subscriptionRejected(err) {
 				return err
 			}
@@ -168,7 +178,8 @@ func (b *BusInformer) runRecovery(parent context.Context) error {
 			close(b.synced)
 		}
 
-		if !b.serveUntilRelist(ctx, delay) {
+		trigger = b.serveUntilRelist(ctx, delay)
+		if trigger == busRelistStopped {
 			break
 		}
 		delay = 0
@@ -201,7 +212,15 @@ func (b *BusInformer) recoverSubscription(ctx context.Context, cancel context.Ca
 
 const overflowRelistInterval = 30 * time.Second
 
-func (b *BusInformer) serveUntilRelist(ctx context.Context, delay time.Duration) bool {
+type busRelistTrigger uint8
+
+const (
+	busRelistStopped busRelistTrigger = iota
+	busRelistRequested
+	busRelistOverflow
+)
+
+func (b *BusInformer) serveUntilRelist(ctx context.Context, delay time.Duration) busRelistTrigger {
 	r := b.recovery
 	timer := time.NewTimer(wait.Jitter(delay, informerRetryJitter))
 	defer timer.Stop()
@@ -218,24 +237,22 @@ func (b *BusInformer) serveUntilRelist(ctx context.Context, delay time.Duration)
 		// Prioritize recovery even when events arrive continuously.
 		select {
 		case <-timer.C:
-			return true
+			return busRelistRequested
 		case <-r.relist:
-			return true
+			return busRelistRequested
 		case <-overflowReady:
-			r.nextOverflowRelist = time.Now().Add(overflowRelistInterval)
-			return true
+			return busRelistOverflow
 		default:
 		}
 		select {
 		case <-ctx.Done():
-			return false
+			return busRelistStopped
 		case <-timer.C:
-			return true
+			return busRelistRequested
 		case <-r.relist:
-			return true
+			return busRelistRequested
 		case <-overflowReady:
-			r.nextOverflowRelist = time.Now().Add(overflowRelistInterval)
-			return true
+			return busRelistOverflow
 		case <-overflowEvents:
 			if remaining := time.Until(r.nextOverflowRelist); remaining > 0 {
 				// A LIST already queued by the normal schedule or reconnect
@@ -245,13 +262,12 @@ func (b *BusInformer) serveUntilRelist(ctx context.Context, delay time.Duration)
 				overflowEvents = nil
 				continue
 			}
-			r.nextOverflowRelist = time.Now().Add(overflowRelistInterval)
-			return true
+			return busRelistOverflow
 		case event := <-b.events:
 			b.applyLive(ctx, event)
 		}
 	}
-	return false
+	return busRelistStopped
 }
 
 func (r *busRecovery) signalRelist() {
@@ -276,8 +292,12 @@ func (b *BusInformer) applyLive(ctx context.Context, event resourcebus.Event) {
 	id := resource.Identifier{Namespace: event.Namespace, Name: event.Name}
 	old := r.items[id]
 	version := numericVersion(event.ResourceVersion)
-	if version > 0 && (version <= r.listVersion || version <= r.deleted[id] ||
-		(old != nil && version <= numericVersion(old.GetResourceVersion()))) {
+	if version == 0 {
+		b.reportError(ctx, fmt.Errorf("bus recovery notification for %v has an invalid resource version %q", id, event.ResourceVersion))
+		return
+	}
+	if version <= r.listVersion || version <= r.deleted[id] ||
+		(old != nil && version <= numericVersion(old.GetResourceVersion())) {
 		return
 	}
 
@@ -293,9 +313,7 @@ func (b *BusInformer) applyLive(ctx context.Context, event resourcebus.Event) {
 		b.deliverChange(ctx, old, obj)
 	case resourcebus.VerbDeleted:
 		delete(r.items, id)
-		if version > 0 {
-			r.deleted[id] = version
-		}
+		r.deleted[id] = version
 		if old == nil {
 			old = newIdentityObject(b.kind, id.Namespace, id.Name, event.ResourceVersion)
 		}
@@ -315,7 +333,10 @@ func (b *BusInformer) relist(ctx context.Context) error {
 		return err
 	}
 	version := numericVersion(rv)
-	if version > 0 && version < r.listVersion {
+	if version == 0 && (rv != "0" || len(items) != 0) {
+		return fmt.Errorf("bus recovery LIST requires a numeric snapshot resource version, got %q", rv)
+	}
+	if version < r.listVersion {
 		return fmt.Errorf("bus recovery LIST version %q predates installed snapshot %d", rv, r.listVersion)
 	}
 	next := make(map[resource.Identifier]resource.Object, len(items))
@@ -324,6 +345,10 @@ func (b *BusInformer) relist(ctx context.Context) error {
 			return fmt.Errorf("bus recovery LIST at %q contains an item without identity", rv)
 		}
 		id := resource.Identifier{Namespace: item.GetNamespace(), Name: item.GetName()}
+		itemVersion := numericVersion(item.GetResourceVersion())
+		if itemVersion == 0 || itemVersion > version {
+			return fmt.Errorf("bus recovery LIST at %q has an invalid item resource version %q for %v", rv, item.GetResourceVersion(), id)
+		}
 		if _, duplicate := next[id]; duplicate {
 			return fmt.Errorf("bus recovery LIST at %q contains duplicate key %v", rv, id)
 		}
@@ -331,14 +356,11 @@ func (b *BusInformer) relist(ctx context.Context) error {
 	}
 	for id, obj := range next {
 		old := r.items[id]
-		if deleted := r.deleted[id]; deleted > version &&
-			(version > 0 || numericVersion(obj.GetResourceVersion()) <= deleted) {
-			// An opaque LIST cannot prove that an older or undated item
-			// was recreated after the live delete.
+		if r.deleted[id] > version {
 			delete(next, id)
 			continue
 		}
-		if version > 0 && old != nil && numericVersion(old.GetResourceVersion()) > version {
+		if old != nil && numericVersion(old.GetResourceVersion()) > version {
 			next[id] = old
 			continue
 		}
@@ -348,7 +370,7 @@ func (b *BusInformer) relist(ctx context.Context) error {
 		if next[id] != nil {
 			continue
 		}
-		if version > 0 && numericVersion(old.GetResourceVersion()) > version {
+		if numericVersion(old.GetResourceVersion()) > version {
 			next[id] = old
 			continue
 		}
@@ -359,7 +381,7 @@ func (b *BusInformer) relist(ctx context.Context) error {
 			delete(r.deleted, id)
 		}
 	}
-	r.items, r.listVersion = next, max(r.listVersion, version)
+	r.items, r.listVersion = next, version
 	return nil
 }
 
