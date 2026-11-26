@@ -84,31 +84,45 @@ type clientLister struct {
 var _ ResourceLister = (*clientLister)(nil)
 
 func (l *clientLister) List(ctx context.Context) ([]resource.Object, string, error) {
-	var (
-		out         []resource.Object
-		listRV      string
-		continueTok string
-	)
-	for {
+	return collectListPages(ctx, func(ctx context.Context, token string) (listPage, error) {
 		page := l.kind.ZeroListValue()
 		err := l.client.ListInto(ctx, l.opts.ListWatchOptions.Namespace, resource.ListOptions{
 			LabelFilters:   l.opts.ListWatchOptions.LabelFilters,
 			FieldSelectors: l.opts.ListWatchOptions.FieldSelectors,
 			Limit:          int(l.opts.PageSize),
-			Continue:       continueTok,
+			Continue:       token,
 		}, page)
 		if err != nil {
-			return nil, "", fmt.Errorf("failed to list %s: %w", l.kind.GroupVersionKind().String(), err)
+			return listPage{}, fmt.Errorf("failed to list %s: %w", l.kind.GroupVersionKind().String(), err)
 		}
-		// The continue token pins the version across pages, so the first page's dates the snapshot.
-		if continueTok == "" {
-			listRV = page.GetResourceVersion()
+		return listPage{objects: page.GetItems(), version: page.GetResourceVersion(), next: page.GetContinue()}, nil
+	})
+}
+
+type listPage struct {
+	objects []resource.Object
+	version string
+	next    string
+}
+
+func collectListPages(ctx context.Context, read func(context.Context, string) (listPage, error)) ([]resource.Object, string, error) {
+	var out []resource.Object
+	var version, token string
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, "", err
 		}
-		out = append(out, page.GetItems()...)
-		continueTok = page.GetContinue()
-		if continueTok == "" {
-			break
+		page, err := read(ctx, token)
+		if err != nil {
+			return nil, "", err
 		}
+		if token == "" {
+			version = page.version
+		}
+		out = append(out, page.objects...)
+		if page.next == "" {
+			return out, version, nil
+		}
+		token = page.next
 	}
-	return out, listRV, nil
 }

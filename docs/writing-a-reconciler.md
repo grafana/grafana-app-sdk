@@ -315,3 +315,16 @@ carries the last known object when one is available.
 
 If multiple replicas share a subscription group, each instance can miss a live
 event. Recovery catches up each replica's local snapshot.
+
+### Using client-go event handlers
+
+`operator.NewDeltaSource` adapts a bus or periodic informer to the
+`cache.ResourceEventHandler` callbacks used by client-go controllers. Register
+handlers before starting the source. The registration reports sync after the
+initial LIST callbacks complete. A deletion inferred from a re-list is passed
+as a client-go tombstone.
+
+`operator.NewPagedLister` adapts a typed client-go LIST function for these
+informers. Full-object delivery preserves native object types when the kind
+wraps them. Identity delivery preserves creation timestamps when the LIST
+supplies them, so age-based cleanup can still use them.

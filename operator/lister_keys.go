@@ -72,6 +72,7 @@ func keysListerFor(kind resource.Kind, factory KeyListerFactory, full ResourceLi
 
 // NewIdentityLister returns identities from keys, or projects the fallback LIST
 // when keys is nil or the adapter explicitly reports unsupported projection.
+// The fallback preserves creation timestamps when the full objects carry them.
 func NewIdentityLister(kind resource.Kind, keys ResourceKeyLister, fallback ResourceLister) (ResourceLister, error) {
 	if kind.Schema == nil || fallback == nil {
 		return nil, errors.New("identity lister requires a kind and fallback lister")
@@ -99,7 +100,9 @@ func (l identityLister) List(ctx context.Context) ([]resource.Object, string, er
 	}
 	identities := make([]resource.Object, 0, len(items))
 	for _, obj := range items {
-		identities = append(identities, l.kind.NewIdentityObject(obj.GetStaticMetadata().Identifier(), obj.GetResourceVersion()))
+		identity := l.kind.NewIdentityObject(obj.GetStaticMetadata().Identifier(), obj.GetResourceVersion())
+		identity.SetCreationTimestamp(obj.GetCreationTimestamp())
+		identities = append(identities, identity)
 	}
 	return identities, rv, nil
 }

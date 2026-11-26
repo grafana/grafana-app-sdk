@@ -5,8 +5,10 @@ import (
 	"errors"
 	"iter"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -19,6 +21,7 @@ func (f keyListFunc) ListKeys(ctx context.Context) (string, iter.Seq2[ResourceKe
 
 func TestIdentityListerFallback(t *testing.T) {
 	pageErr := errors.New("second page failed")
+	created := metav1.NewTime(time.Unix(123, 0))
 	for _, tc := range []struct {
 		name     string
 		err      error
@@ -45,7 +48,9 @@ func TestIdentityListerFallback(t *testing.T) {
 			fallbackCalled := false
 			fallback := listerFunc(func(context.Context) ([]resource.Object, string, error) {
 				fallbackCalled = true
-				return []resource.Object{listerObj("fallback")}, "150", nil
+				item := listerObj("fallback")
+				item.SetCreationTimestamp(created)
+				return []resource.Object{item}, "150", nil
 			})
 			lister, err := NewIdentityLister(listerTestKind, keys, fallback)
 			require.NoError(t, err)
@@ -61,6 +66,7 @@ func TestIdentityListerFallback(t *testing.T) {
 			require.Equal(t, tc.want, listerNames(objs))
 			if tc.fallback {
 				require.Equal(t, "150", rv)
+				require.Equal(t, created, objs[0].GetCreationTimestamp())
 			} else {
 				require.Equal(t, "123", rv)
 				require.Equal(t, "110", objs[0].GetResourceVersion())
