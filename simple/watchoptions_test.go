@@ -603,37 +603,22 @@ func TestApp_WatchOptions(t *testing.T) {
 		assert.Contains(t, err.Error(), `Live deliveries which are not "sharded"`)
 	})
 
-	t.Run("an opinionated watcher declaring a resync is refused", func(t *testing.T) {
-		_, err := NewApp(AppConfig{
-			InformerConfig: AppInformerConfig{
-				InformerOptions: operator.InformerOptions{CacheResyncInterval: time.Minute},
-			},
-			UnmanagedKinds: []AppUnmanagedKind{{
-				Kind:    testKind(),
-				Watcher: &Watcher{},
-				ReconcileOptions: UnmanagedKindReconcileOptions{
-					UseOpinionated: true,
-					WatchNeeds:     operator.WatchOptions{Live: &operator.WatchLiveOptions{}, Resync: &operator.WatchResyncOptions{}},
+	t.Run("an opinionated watcher or reconciler may declare a resync", func(t *testing.T) {
+		resyncing := UnmanagedKindReconcileOptions{
+			UseOpinionated: true,
+			WatchNeeds:     operator.WatchOptions{Live: &operator.WatchLiveOptions{}, Resync: &operator.WatchResyncOptions{}},
+		}
+		for _, kind := range []AppUnmanagedKind{
+			{Kind: testKind(), Watcher: &Watcher{}, ReconcileOptions: resyncing},
+			{Kind: testKind(), Reconciler: &Reconciler{}, ReconcileOptions: resyncing},
+		} {
+			createTestApp(t, AppConfig{
+				InformerConfig: AppInformerConfig{
+					InformerOptions: operator.InformerOptions{CacheResyncInterval: time.Minute},
 				},
-			}},
-		})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "declares a resync, which its opinionated watcher would never act on")
-
-		// The opinionated reconciler passes resyncs on, so the same declaration is served for one.
-		createTestApp(t, AppConfig{
-			InformerConfig: AppInformerConfig{
-				InformerOptions: operator.InformerOptions{CacheResyncInterval: time.Minute},
-			},
-			UnmanagedKinds: []AppUnmanagedKind{{
-				Kind:       testKind(),
-				Reconciler: &Reconciler{},
-				ReconcileOptions: UnmanagedKindReconcileOptions{
-					UseOpinionated: true,
-					WatchNeeds:     operator.WatchOptions{Live: &operator.WatchLiveOptions{}, Resync: &operator.WatchResyncOptions{}},
-				},
-			}},
-		})
+				UnmanagedKinds: []AppUnmanagedKind{kind},
+			})
+		}
 	})
 
 	t.Run("a kind needing a resync with no cadence anywhere is refused, naming both knobs", func(t *testing.T) {

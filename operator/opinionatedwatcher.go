@@ -48,7 +48,8 @@ type FinalizerUpdater interface {
 // Fully new resources call the `AddFunc` handler,
 // and previously-created call the `SyncFunc` handler.
 //
-// `Update` events which do not update anything in the spec or significant parts of the metadata are ignored.
+// `Update` events which do not update anything in the spec or significant parts of the metadata are ignored, except,
+// with OpinionatedWatcherConfig.HandleIdentical, one identical to the object already seen, which a resync delivers.
 //
 // OpinionatedWatcher contains unexported fields, and must be created with NewOpinionatedWatcher
 type OpinionatedWatcher struct {
@@ -61,6 +62,7 @@ type OpinionatedWatcher struct {
 	schema              resource.Schema
 	collectors          []prometheus.Collector
 	finalizerUpdater    finalizerUpdater
+	handleIdentical     bool
 }
 
 // FinalizerSupplier represents a function that creates string finalizer from provider schema.
@@ -83,6 +85,15 @@ type OpinionatedWatcherConfig struct {
 	// InProgressFinalizer supplies the finalizer used to indicate an incomplete action and prevent deletes until completion.
 	// If nil, InProgressFinalizerSupplier will be used.
 	InProgressFinalizer FinalizerSupplier
+	// HandleIdentical handles an identical update — the same resourceVersion on both sides, which only the object
+	// re-delivered unchanged carries, as a resync or a re-list after a broken watch delivers it — the way Add handles
+	// a re-listed object: SyncFunc for one already carrying the finalizer, the delete handling for one being deleted,
+	// and AddFunc for one never finished. Without it an identical update is skipped, with every other one leaving the
+	// generation unchanged.
+	//
+	// Set it when the kind declares a resync (WatchOptions.Resync), to give the handler its periodic chance to repair
+	// drift outside the object.
+	HandleIdentical bool
 }
 
 // NewOpinionatedWatcher sets up a new OpinionatedWatcher and returns a pointer to it.
@@ -115,6 +126,7 @@ func NewOpinionatedWatcher(sch resource.Schema, client PatchClient, config Opini
 		finalizer:           finalizer,
 		addPendingFinalizer: pendingAddFinalizer,
 		collectors:          make([]prometheus.Collector, 0),
+		handleIdentical:     config.HandleIdentical,
 	}, nil
 }
 
@@ -273,6 +285,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 // If the new object has a non-nil ObjectMetadata.DeletionTimestamp in its metadata, DeleteFunc will be called,
 // and the object's finalizer will be removed to allow kubernetes to hard delete it.
 // Otherwise, UpdateFunc is called, provided the update is non-trivial (that is, the metadata.Generation has changed).
+// With OpinionatedWatcherConfig.HandleIdentical, an identical update is passed to Add instead.
 //
 //nolint:funlen
 func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tgt resource.Object) error {
@@ -288,6 +301,13 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 
 	logger := logging.FromContext(ctx).With("action", "update", "component", "OpinionatedWatcher", "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())
 	logger.Debug("Handling update")
+
+	// Every write changes the resourceVersion, so the same one on both sides is the object re-delivered unchanged.
+	// resourceVersions may only be compared for equality, and an empty one identifies nothing.
+	if rv := tgt.GetResourceVersion(); o.handleIdentical && rv != "" && rv == src.GetResourceVersion() {
+		logger.Debug("Update re-delivers the object unchanged, handling it as a re-listed object")
+		return o.Add(ctx, tgt)
+	}
 
 	// Only fire off Update if the generation has changed (so skip subresource updates)
 	if tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration() {

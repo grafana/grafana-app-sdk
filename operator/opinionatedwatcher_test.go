@@ -589,6 +589,72 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 	})
 }
 
+func TestOpinionatedWatcher_Update_HandleIdentical(t *testing.T) {
+	ex := &resource.TypedSpecObject[string]{}
+	schema := resource.NewSimpleSchema("group", "version", ex, &resource.TypedList[*resource.TypedSpecObject[string]]{})
+	newWatcher := func(t *testing.T, handleIdentical bool) (*OpinionatedWatcher, *[]string) {
+		o, err := NewOpinionatedWatcher(schema, &mockPatchClient{}, OpinionatedWatcherConfig{HandleIdentical: handleIdentical})
+		require.NoError(t, err)
+		var called []string
+		o.AddFunc = func(context.Context, resource.Object) error { called = append(called, "add"); return nil }
+		o.UpdateFunc = func(context.Context, resource.Object, resource.Object) error {
+			called = append(called, "update")
+			return nil
+		}
+		o.DeleteFunc = func(context.Context, resource.Object) error { called = append(called, "delete"); return nil }
+		o.SyncFunc = func(context.Context, resource.Object) error { called = append(called, "sync"); return nil }
+		return o, &called
+	}
+	finalized := func(o *OpinionatedWatcher, resourceVersion string) resource.Object {
+		obj := schema.ZeroValue()
+		obj.SetGeneration(1)
+		obj.SetResourceVersion(resourceVersion)
+		obj.SetFinalizers([]string{o.finalizer})
+		return obj
+	}
+
+	t.Run("a resync of a handled object calls Sync", func(t *testing.T) {
+		o, called := newWatcher(t, true)
+		require.NoError(t, o.Update(context.TODO(), finalized(o, "5"), finalized(o, "5")))
+		assert.Equal(t, []string{"sync"}, *called)
+	})
+
+	t.Run("a resync of an object being deleted runs the delete handling", func(t *testing.T) {
+		o, called := newWatcher(t, true)
+		obj := finalized(o, "5")
+		dt := metav1.NewTime(time.Time{})
+		obj.SetDeletionTimestamp(&dt)
+		require.NoError(t, o.Update(context.TODO(), obj, obj.Copy()))
+		assert.Equal(t, []string{"delete"}, *called)
+	})
+
+	t.Run("a resync of an object never finished runs the add path", func(t *testing.T) {
+		o, called := newWatcher(t, true)
+		obj := finalized(o, "5")
+		obj.SetFinalizers(nil)
+		require.NoError(t, o.Update(context.TODO(), obj, obj.Copy()))
+		assert.Equal(t, []string{"add"}, *called)
+	})
+
+	t.Run("without HandleIdentical a resync is skipped", func(t *testing.T) {
+		o, called := newWatcher(t, false)
+		require.NoError(t, o.Update(context.TODO(), finalized(o, "5"), finalized(o, "5")))
+		assert.Empty(t, *called)
+	})
+
+	t.Run("a status write, changing the resourceVersion but not the generation, is still skipped", func(t *testing.T) {
+		o, called := newWatcher(t, true)
+		require.NoError(t, o.Update(context.TODO(), finalized(o, "5"), finalized(o, "6")))
+		assert.Empty(t, *called)
+	})
+
+	t.Run("an empty resourceVersion does not identify a resync", func(t *testing.T) {
+		o, called := newWatcher(t, true)
+		require.NoError(t, o.Update(context.TODO(), finalized(o, ""), finalized(o, "")))
+		assert.Empty(t, *called)
+	})
+}
+
 func TestOpinionatedWatcher_Delete(t *testing.T) {
 	ex := &resource.TypedSpecObject[string]{}
 	schema := resource.NewSimpleSchema("group", "version", ex, &resource.TypedList[*resource.TypedSpecObject[string]]{})
