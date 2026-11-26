@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -112,16 +110,12 @@ type InformerController struct {
 	// If using an OpinionatedWatcher or OpinionatedReconciler, this should be set to OpinionatedRetryDequeuePolicy,
 	// or something with similar logic, as the OpinionatedWatcher and OpinionatedReconciler trigger updates on adds which error,
 	// which will cause the add retry to be dequeued if RetryDequeuePolicy is absent.
-	RetryDequeuePolicy RetryDequeuePolicy
-	informers          *ListMap[string, Informer]
-	watchers           *ListMap[string, ResourceWatcher]
-	reconcilers        *ListMap[string, Reconciler]
-	toRetry            *ListMap[string, retryInfo]
-	retryProcessor     RetryProcessor
-	// deliverySeq numbers deliveries to superseding watchers in the order they start, and completions holds, per
-	// retry key, the latest such delivery which completed. See supersedingWatcher.
-	deliverySeq         atomic.Uint64
-	completions         sync.Map
+	RetryDequeuePolicy  RetryDequeuePolicy
+	informers           *ListMap[string, Informer]
+	watchers            *ListMap[string, ResourceWatcher]
+	reconcilers         *ListMap[string, Reconciler]
+	toRetry             *ListMap[string, retryInfo]
+	retryProcessor      RetryProcessor
 	retryTickerInterval time.Duration
 	runner              *app.DynamicMultiRunner
 	totalEvents         *prometheus.CounterVec
@@ -448,13 +442,9 @@ func (c *InformerController) informerAddFunc(resourceKind string) func(context.C
 			// Dequeue retries according to the RetryDequeuePolicy
 			c.dequeueIfRequired(retryKey, obj, ResourceActionCreate)
 
-			delivery := c.newDelivery(retryKey, watcher, ResourceActionCreate, func(callCtx context.Context) error {
-				return watcher.Add(callCtx, obj)
-			})
-
 			// Do the watcher's Add, check for error
 			c.wrapWatcherCall(string(ResourceActionCreate), obj.GetStaticMetadata().Kind, func() {
-				err := delivery.run(ctx)
+				err := watcher.Add(ctx, obj)
 				if err != nil {
 					c.watcherErrors.WithLabelValues(string(ResourceActionCreate), obj.GetStaticMetadata().Kind).Inc()
 				}
@@ -462,7 +452,9 @@ func (c *InformerController) informerAddFunc(resourceKind string) func(context.C
 					c.ErrorHandler(ctx, err) // TODO: improve ErrorHandler
 				}
 				if err != nil && c.RetryPolicy != nil {
-					c.queueRetry(retryKey, err, retryInformerEvent(ctx, delivery.retry), ResourceActionCreate, obj)
+					c.queueRetry(retryKey, err, retryInformerEvent(ctx, func(retryCtx context.Context) (*time.Duration, error) {
+						return nil, watcher.Add(retryCtx, obj)
+					}), ResourceActionCreate, obj)
 				}
 			})
 		})
@@ -503,25 +495,12 @@ func (c *InformerController) informerUpdateFunc(resourceKind string) func(contex
 			// Generate the unique key for this object
 			retryKey := c.keyForWatcherEvent(resourceKind, idx, newObj)
 
-			// To a superseding watcher, an identical update is a resync of the object, and a changed one may be its add
-			action := ResourceActionUpdate
-			superseding, tracked := asSupersedingWatcher(watcher)
-			if tracked && isIdenticalUpdate(oldObj, newObj) {
-				action = ResourceActionResync
-			} else if tracked && superseding.updateIsAdd(oldObj, newObj) {
-				action = ResourceActionCreate
-			}
-
 			// Dequeue retries according to the RetryDequeuePolicy
-			c.dequeueIfRequired(retryKey, newObj, action)
-
-			delivery := c.newDelivery(retryKey, watcher, action, func(callCtx context.Context) error {
-				return watcher.Update(callCtx, oldObj, newObj)
-			})
+			c.dequeueIfRequired(retryKey, newObj, ResourceActionUpdate)
 
 			// Do the watcher's Update, check for error
 			c.wrapWatcherCall(string(ResourceActionUpdate), newObj.GetStaticMetadata().Kind, func() {
-				err := delivery.run(ctx)
+				err := watcher.Update(ctx, oldObj, newObj)
 				if err != nil {
 					c.watcherErrors.WithLabelValues(string(ResourceActionUpdate), newObj.GetStaticMetadata().Kind).Inc()
 				}
@@ -529,7 +508,9 @@ func (c *InformerController) informerUpdateFunc(resourceKind string) func(contex
 					c.ErrorHandler(ctx, err)
 				}
 				if err != nil && c.RetryPolicy != nil {
-					c.queueRetry(retryKey, err, retryInformerEvent(ctx, delivery.retry), action, newObj)
+					c.queueRetry(retryKey, err, retryInformerEvent(ctx, func(retryCtx context.Context) (*time.Duration, error) {
+						return nil, watcher.Update(retryCtx, oldObj, newObj)
+					}), ResourceActionUpdate, newObj)
 				}
 			})
 		})
@@ -585,10 +566,6 @@ func (c *InformerController) informerDeleteFunc(resourceKind string) func(contex
 			// Do the watcher's Delete, check for error
 			c.wrapWatcherCall(string(ResourceActionDelete), obj.GetStaticMetadata().Kind, func() {
 				err := watcher.Delete(ctx, obj)
-				if err == nil {
-					// The object is gone, and with it any need to order deliveries to it
-					c.completions.Delete(retryKey)
-				}
 				if err != nil {
 					c.watcherErrors.WithLabelValues(string(ResourceActionDelete), obj.GetStaticMetadata().Kind).Inc()
 				}
@@ -642,87 +619,6 @@ func (c *InformerController) dequeueIfRequired(retryKey string, currentObjectSta
 		// If no RetryDequeuePolicy exists, dequeue all retries for the object
 		c.toRetry.RemoveKey(retryKey)
 	}
-}
-
-// supersedingWatcher is a watcher, an OpinionatedWatcher with HandleIdentical, which completes an object's add
-// whenever it handles the object as a re-listed Add, from a create, an identical update or a periodic re-list alike,
-// and reports through the call's context when a delivery did its work (see deliveryOutcome). The InformerController
-// numbers deliveries to it in the order they start, and drops a queued create or resync retry when it comes up once
-// a delivery which started after it has completed: replaying it would repeat the add, or sync stale data. A retry
-// already running when that delivery completes is not stopped.
-type supersedingWatcher interface {
-	handlesIdenticalUpdates() bool
-	updateIsAdd(src, tgt resource.Object) bool
-}
-
-func asSupersedingWatcher(watcher ResourceWatcher) (supersedingWatcher, bool) {
-	superseding, ok := watcher.(supersedingWatcher)
-	return superseding, ok && superseding.handlesIdenticalUpdates()
-}
-
-// watcherDelivery is one delivery to a watcher: run makes it, and retry is what a queued retry of it does.
-type watcherDelivery struct {
-	controller   *InformerController
-	key          string
-	seq          uint64
-	tracked      bool
-	supersedable bool
-	call         func(context.Context) error
-}
-
-func (c *InformerController) newDelivery(
-	key string, watcher ResourceWatcher, action ResourceAction, call func(context.Context) error,
-) watcherDelivery {
-	_, tracked := asSupersedingWatcher(watcher)
-	delivery := watcherDelivery{controller: c, key: key, call: call, tracked: tracked}
-	if tracked {
-		delivery.seq = c.deliverySeq.Add(1)
-		delivery.supersedable = action == ResourceActionCreate || action == ResourceActionResync
-	}
-	return delivery
-}
-
-func (d watcherDelivery) run(ctx context.Context) error {
-	if !d.tracked {
-		return d.call(ctx)
-	}
-	callCtx, outcome := withDeliveryOutcome(ctx)
-	err := d.call(callCtx)
-	if err == nil && outcome.completed {
-		d.controller.recordCompletion(d.key, d.seq)
-	}
-	return err
-}
-
-func (d watcherDelivery) retry(ctx context.Context) (*time.Duration, error) {
-	if d.supersedable && d.controller.completedSince(d.key, d.seq) {
-		return nil, nil
-	}
-	return nil, d.run(ctx)
-}
-
-func (c *InformerController) recordCompletion(key string, seq uint64) {
-	stored, _ := c.completions.LoadOrStore(key, &atomic.Uint64{})
-	latest, ok := stored.(*atomic.Uint64)
-	if !ok {
-		return
-	}
-	for {
-		current := latest.Load()
-		if seq <= current || latest.CompareAndSwap(current, seq) {
-			return
-		}
-	}
-}
-
-// completedSince reports whether a delivery for key which started after seq has completed.
-func (c *InformerController) completedSince(key string, seq uint64) bool {
-	stored, ok := c.completions.Load(key)
-	if !ok {
-		return false
-	}
-	latest, ok := stored.(*atomic.Uint64)
-	return ok && latest.Load() > seq
 }
 
 func (c *InformerController) doReconcile(ctx context.Context, reconciler Reconciler, req ReconcileRequest, retryKey string) {

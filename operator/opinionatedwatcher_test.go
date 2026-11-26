@@ -722,16 +722,6 @@ func (p *mockPatchClient) GetInto(ctx context.Context, identifier resource.Ident
 	return nil
 }
 
-func TestOpinionatedWatcher_IsSupersedingWithHandleIdentical(t *testing.T) {
-	schema := resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{})
-	for _, handles := range []bool{true, false} {
-		o, err := NewOpinionatedWatcher(schema, &mockPatchClient{}, OpinionatedWatcherConfig{HandleIdentical: handles})
-		require.NoError(t, err)
-		_, tracked := asSupersedingWatcher(o)
-		assert.Equal(t, handles, tracked)
-	}
-}
-
 // The informer hands watchers its cached objects, so finalizer patches must not write into them: a cached old object
 // would otherwise take the resourceVersion of the write, and its watch event would look like a resync.
 func TestOpinionatedWatcher_LeavesDeliveredObjectsUnchanged(t *testing.T) {
@@ -790,39 +780,4 @@ func TestOpinionatedWatcher_LeavesDeliveredObjectsUnchanged(t *testing.T) {
 		require.NoError(t, o.Update(context.TODO(), src, tgt))
 		unchanged(t, tgt, []string{o.finalizer})
 	})
-}
-
-// The controller supersedes queued retries only on deliveries which did their work, so a skipped update must not
-// report one.
-func TestOpinionatedWatcher_ReportsCompletedDeliveries(t *testing.T) {
-	schema := resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{})
-	o, err := NewOpinionatedWatcher(schema, &mockPatchClient{}, OpinionatedWatcherConfig{HandleIdentical: true})
-	require.NoError(t, err)
-	o.AddFunc = func(context.Context, resource.Object) error { return nil }
-	o.UpdateFunc = func(context.Context, resource.Object, resource.Object) error { return nil }
-	o.SyncFunc = func(context.Context, resource.Object) error { return nil }
-	object := func(rv string, generation int64, finalizers ...string) resource.Object {
-		obj := schema.ZeroValue()
-		obj.SetGeneration(generation)
-		obj.SetResourceVersion(rv)
-		obj.SetFinalizers(finalizers)
-		return obj
-	}
-	completed := func(deliver func(context.Context) error) bool {
-		ctx, outcome := withDeliveryOutcome(context.TODO())
-		require.NoError(t, deliver(ctx))
-		return outcome.completed
-	}
-
-	assert.True(t, completed(func(ctx context.Context) error { return o.Add(ctx, object("5", 1)) }), "an add")
-	assert.True(t, completed(func(ctx context.Context) error { return o.Add(ctx, object("5", 1, o.finalizer)) }), "a sync")
-	assert.True(t, completed(func(ctx context.Context) error {
-		return o.Update(ctx, object("5", 1, o.finalizer), object("5", 1, o.finalizer))
-	}), "a resync")
-	assert.True(t, completed(func(ctx context.Context) error {
-		return o.Update(ctx, object("5", 1, o.finalizer), object("6", 2, o.finalizer))
-	}), "an update")
-	assert.False(t, completed(func(ctx context.Context) error {
-		return o.Update(ctx, object("5", 1, o.finalizer), object("6", 1, o.finalizer))
-	}), "a skipped status write")
 }

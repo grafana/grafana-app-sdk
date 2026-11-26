@@ -51,6 +51,12 @@ type FinalizerUpdater interface {
 // `Update` events which do not update anything in the spec or significant parts of the metadata are ignored, except,
 // with OpinionatedWatcherConfig.HandleIdentical, one identical to the object already seen, which a resync delivers.
 //
+// Delivery is at least once, so handlers must be idempotent. A queued retry replays the object as it was when its
+// delivery failed, and the watcher cannot tell whether another delivery has handled the object since: a retry of a
+// failed add may call AddFunc again for an add a later delivery completed, as a re-list after a broken watch or a
+// restart can today. Finalizer patches are written to the watcher's own copy, never to the delivered object, which
+// may be the informer's cached one.
+//
 // OpinionatedWatcher contains unexported fields, and must be created with NewOpinionatedWatcher
 type OpinionatedWatcher struct {
 	AddFunc             func(ctx context.Context, object resource.Object) error
@@ -92,7 +98,8 @@ type OpinionatedWatcherConfig struct {
 	// generation unchanged.
 	//
 	// Set it when the kind declares a resync (WatchOptions.Resync), to give the handler its periodic chance to repair
-	// drift outside the object.
+	// drift outside the object. Each resync is then one more delivery to an at-least-once handler: AddFunc and
+	// SyncFunc must tolerate running again for an object they already handled.
 	HandleIdentical bool
 }
 
@@ -218,7 +225,6 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 				return err
 			}
 		}
-		markCompleted(ctx)
 		return nil
 	}
 
@@ -248,7 +254,6 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 				return err
 			}
 		}
-		markCompleted(ctx)
 		return nil
 	}
 
@@ -285,7 +290,6 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 		logger.Error("error adding finalizer", "error", err.Error(), "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
 		return fmt.Errorf("error adding finalizer: %w", err)
 	}
-	markCompleted(ctx)
 	return nil
 }
 
@@ -311,9 +315,10 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 	logger := logging.FromContext(ctx).With("action", "update", "component", "OpinionatedWatcher", "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())
 	logger.Debug("Handling update")
 
-	if o.handlesIdenticalUpdates() && isIdenticalUpdate(src, tgt) {
+	// Add is handed a copy, so a retry of this event still finds the two sides identical.
+	if o.handleIdentical && isIdenticalUpdate(src, tgt) {
 		logger.Debug("Update re-delivers the object unchanged, handling it as a re-listed object")
-		return o.Add(ctx, tgt)
+		return o.Add(ctx, tgt.Copy())
 	}
 
 	// Only fire off Update if the generation has changed (so skip subresource updates)
@@ -392,7 +397,6 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 				return err
 			}
 		}
-		markCompleted(ctx)
 		return nil
 	}
 
@@ -407,7 +411,6 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 		span.SetStatus(codes.Error, fmt.Sprintf("watcher update error: %s", err.Error()))
 		return err
 	}
-	markCompleted(ctx)
 	return nil
 }
 
@@ -456,22 +459,6 @@ func (o *OpinionatedWatcher) deleteFunc(ctx context.Context, object resource.Obj
 	return nil
 }
 
-// handlesIdenticalUpdates reports whether o handles an identical update as a re-listed Add. The InformerController
-// then treats such an update as a resync, and drops a queued create or resync retry of the object once a delivery
-// which started after it has completed (see deliveryOutcome).
-func (o *OpinionatedWatcher) handlesIdenticalUpdates() bool {
-	return o.handleIdentical
-}
-
-// updateIsAdd reports whether Update handles a changed tgt as an add: one it would not skip, which lacks the
-// watcher's finalizer and is not being deleted. A retry of such an update repeats an add, not an update.
-func (o *OpinionatedWatcher) updateIsAdd(src, tgt resource.Object) bool {
-	if tgt.GetGeneration() > 0 && src != nil && src.GetGeneration() == tgt.GetGeneration() {
-		return false
-	}
-	return tgt.GetDeletionTimestamp() == nil && !slices.Contains(o.getFinalizers(tgt), o.finalizer)
-}
-
 // isIdenticalUpdate reports whether an update re-delivers the object unchanged: every write changes the
 // resourceVersion, so the same one on both sides means nothing was written. resourceVersions may only be compared for
 // equality, and an empty one identifies nothing.
@@ -494,23 +481,4 @@ func (*OpinionatedWatcher) getFinalizers(object resource.Object) []string {
 		return object.GetFinalizers()
 	}
 	return make([]string, 0)
-}
-
-// deliveryOutcome is how a watcher tells the InformerController, through the call's context, that a delivery did the
-// work it stood for (an add, a sync, an update or a deletion) rather than skipping it.
-type deliveryOutcome struct {
-	completed bool
-}
-
-type deliveryOutcomeKey struct{}
-
-func withDeliveryOutcome(ctx context.Context) (context.Context, *deliveryOutcome) {
-	outcome := &deliveryOutcome{}
-	return context.WithValue(ctx, deliveryOutcomeKey{}, outcome), outcome
-}
-
-func markCompleted(ctx context.Context) {
-	if outcome, ok := ctx.Value(deliveryOutcomeKey{}).(*deliveryOutcome); ok {
-		outcome.completed = true
-	}
 }
