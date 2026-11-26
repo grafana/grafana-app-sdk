@@ -68,9 +68,7 @@ func TestNotificationMechanismDeliversWithoutClient(t *testing.T) {
 			publish = handler
 			return sub, nil
 		})
-		needs := WatchOptions{Live: &WatchLiveOptions{
-			Detail: WatchDetailIdentity, Distribution: WatchDistributionShared, NotificationOnly: true,
-		}}
+		needs := WatchOptions{Live: &WatchLiveOptions{Detail: WatchDetailIdentity, Distribution: WatchDistributionShared}}
 		inf, err := BuildInformer(InformerRequest{
 			Kind:     notificationKind,
 			Supplier: NewSelectingInformerSupplier(nil, NewNotificationMechanism(bus, resourcebus.Group{Name: "workers"})),
@@ -109,23 +107,32 @@ func TestNotificationMechanismDeliversWithoutClient(t *testing.T) {
 	})
 }
 
-func TestNotificationMechanismRequiresOptIn(t *testing.T) {
+func TestNotificationMechanismSelectsLiveOnlyNeeds(t *testing.T) {
 	bus := busSubscribeFunc(func(context.Context, schema.GroupVersionResource, string, func(context.Context, resourcebus.Event), ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
 		return &testBusSubscription{}, nil
 	})
 	mechanism := NewNotificationMechanism(bus, resourcebus.Group{})
-	options := InformerOptions{WatchNeeds: WatchOptions{Live: &WatchLiveOptions{Detail: WatchDetailIdentity}}}
-	t.Run("selection", func(t *testing.T) {
-		fallbackErr := errors.New("API watch selected")
-		supplier := NewSelectingInformerSupplier(func(resource.Kind, resource.ClientGenerator, InformerOptions) (Informer, error) {
-			return nil, fallbackErr
-		}, mechanism)
-		_, err := BuildInformer(InformerRequest{Kind: notificationKind, Supplier: supplier, Options: options})
+	fallbackErr := errors.New("API watch selected")
+	supplier := NewSelectingInformerSupplier(func(resource.Kind, resource.ClientGenerator, InformerOptions) (Informer, error) {
+		return nil, fallbackErr
+	}, mechanism)
+	request := InformerRequest{Kind: notificationKind, Supplier: supplier}
+	request.Options.WatchNeeds.Live = &WatchLiveOptions{Detail: WatchDetailIdentity}
+	t.Run("live only", func(t *testing.T) {
+		inf, err := BuildInformer(request)
+		require.NoError(t, err)
+		require.IsType(t, &busInformer{}, inf)
+	})
+	request.Options.WatchNeeds.Resync = &WatchResyncOptions{Detail: WatchDetailIdentity, Interval: time.Minute}
+	t.Run("live and resync", func(t *testing.T) {
+		_, err := BuildInformer(request)
 		require.ErrorIs(t, err, fallbackErr)
 	})
-	t.Run("direct construction", func(t *testing.T) {
-		_, err := mechanism.NewInformer(notificationKind, nil, options)
-		require.ErrorContains(t, err, "notification-only")
+	t.Run("incompatible custom supplier", func(t *testing.T) {
+		custom := request
+		custom.Supplier = mechanism.NewInformer
+		_, err := BuildInformer(custom)
+		require.ErrorContains(t, err, "resync=")
 	})
 }
 
@@ -279,7 +286,7 @@ func TestNotificationMechanismFallbackAndSelectionErrors(t *testing.T) {
 		fallbackCalled = true
 		return nil, errors.New("fallback reached")
 	}
-	needs := WatchOptions{Live: &WatchLiveOptions{Detail: WatchDetailIdentity, NotificationOnly: true}}
+	needs := WatchOptions{Live: &WatchLiveOptions{Detail: WatchDetailIdentity}}
 	supplier := NewSelectingInformerSupplier(fallback, NewNotificationMechanism(nil, resourcebus.Group{}))
 	_, err := supplier(notificationKind, nil, InformerOptions{WatchNeeds: needs})
 	require.ErrorContains(t, err, "fallback reached")

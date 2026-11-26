@@ -21,18 +21,14 @@ const (
 )
 
 // NewNotificationMechanism serves plain handlers that use bus events as wake-ups
-// and opt in with WatchLiveOptions.NotificationOnly. A nil subscriber disables
-// the mechanism.
+// and can tolerate missed notifications. A nil subscriber disables the mechanism.
 func NewNotificationMechanism(subscriber resourcebus.Subscriber, group resourcebus.Group) InformerMechanism {
 	if subscriber == nil {
 		return nil
 	}
-	return newBusMechanism(notificationWatchOptions(group), func(
+	return newBusMechanism(busWatchOptions(group), func(
 		kind resource.Kind, _ resource.ClientGenerator, opts InformerOptions,
 	) (Informer, error) {
-		if opts.WatchNeeds.Live == nil || !opts.WatchNeeds.Live.NotificationOnly {
-			return nil, errors.New("bus informer requires notification-only live opt-in")
-		}
 		return newBusInformer(kind, subscriber, group, opts)
 	})
 }
@@ -45,12 +41,6 @@ func newBusMechanism(provides WatchOptions, supplier InformerSupplier) InformerM
 
 func (unfilteredBusMechanism) supportsQuery(query ListWatchOptions) bool {
 	return len(query.LabelFilters) == 0 && len(query.FieldSelectors) == 0
-}
-
-func notificationWatchOptions(group resourcebus.Group) WatchOptions {
-	options := busWatchOptions(group)
-	options.Live.NotificationOnly = true
-	return options
 }
 
 func busWatchOptions(group resourcebus.Group) WatchOptions {
@@ -98,7 +88,7 @@ func newBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, group
 		synced: make(chan struct{}), stopped: make(chan struct{})}, nil
 }
 
-func (b *busInformer) WatchOptions() WatchOptions { return notificationWatchOptions(b.group) }
+func (b *busInformer) WatchOptions() WatchOptions { return busWatchOptions(b.group) }
 
 func (b *busInformer) AddEventHandler(handler ResourceWatcher) error {
 	b.mu.Lock()
@@ -257,7 +247,7 @@ func (b *busInformer) enqueue(ctx context.Context, event resourcebus.Event) {
 	select {
 	case b.events <- event:
 	default:
-		// A notification-only consumer explicitly accepts missed events.
+		// Notification-only delivery is best effort.
 	}
 }
 

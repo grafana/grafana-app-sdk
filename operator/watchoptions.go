@@ -25,10 +25,6 @@ type WatchLiveOptions struct {
 	Detail WatchDetail
 	// Distribution is how live deliveries may be divided across instances. Zero needs WatchDistributionAll.
 	Distribution WatchDistribution
-	// NotificationOnly lets a handler opt in to live wake-ups that can miss
-	// changes and deliver modifications through Add. A mechanism sets it when
-	// it provides these wake-ups without automatic recovery.
-	NotificationOnly bool
 }
 
 // WatchResyncOptions is one mechanism's periodic re-delivery of every object, or what a kind's handlers need of it.
@@ -90,9 +86,6 @@ func (o WatchOptions) RefusedDeliveries(provided WatchOptions) []string {
 	var refused []string
 	if haveLive != nil {
 		refused = append(refused, floorLive.refuses("Live", haveLive.detail(), haveLive.distribution())...)
-		if haveLive.NotificationOnly && (o.Live == nil || !o.Live.NotificationOnly) {
-			refused = append(refused, "notification-only live deliveries without opt-in")
-		}
 	}
 	if haveResync != nil {
 		refused = append(refused, floorResync.refuses("Resync", haveResync.detail(), haveResync.distribution())...)
@@ -143,9 +136,7 @@ func (o WatchOptions) WithDefaults() WatchOptions {
 	live, resync := o.channels()
 	defaulted := WatchOptions{}
 	if live != nil {
-		defaulted.Live = &WatchLiveOptions{
-			Detail: live.detail(), Distribution: live.distribution(), NotificationOnly: live.NotificationOnly,
-		}
+		defaulted.Live = &WatchLiveOptions{Detail: live.detail(), Distribution: live.distribution()}
 	}
 	if resync != nil {
 		defaulted.Resync = &WatchResyncOptions{
@@ -164,9 +155,6 @@ func (o WatchOptions) String() string {
 	described := "live=none"
 	if live != nil {
 		described = fmt.Sprintf("live=%s/%s", live.detail(), live.distribution())
-		if live.NotificationOnly {
-			described += "/notification-only"
-		}
 	}
 	if resync == nil {
 		return described + " resync=none"

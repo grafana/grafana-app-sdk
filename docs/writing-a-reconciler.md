@@ -215,9 +215,6 @@ leaving one of those unset never widens anything.
 `Shared` and `Sharded` read in opposite directions: `Shared` *permits* the work being divided, so anything satisfies
 it, while `Sharded` *requires* affinity and only a sharded mechanism provides it.
 
-Set `Live.NotificationOnly` for handlers that can tolerate missed notifications and handle modifications as
-`Add` wake-ups. This lets the selector use a notification-only mechanism when one is configured.
-
 `Resync.Interval` and `Resync.ListPageSize` say how often the resync should run and how large a page anything it
 lists should read. Zero takes the mechanism's own.
 
