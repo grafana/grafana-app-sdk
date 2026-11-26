@@ -138,24 +138,6 @@ func (b *BusInformer) WaitForSync(ctx context.Context) error {
 	}
 }
 
-func (b *BusInformer) HealthCheckName() string {
-	return "bus-informer-" + b.kind.GroupVersionKind().String()
-}
-
-func (b *BusInformer) HealthCheck(context.Context) error {
-	select {
-	case <-b.stopped:
-		return errors.New("bus informer has stopped")
-	default:
-	}
-	select {
-	case <-b.synced:
-		return nil
-	default:
-		return errors.New("bus subscription is not ready")
-	}
-}
-
 func (b *BusInformer) Run(ctx context.Context) error {
 	b.mu.Lock()
 	if b.started {
