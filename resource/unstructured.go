@@ -5,6 +5,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -19,6 +20,18 @@ type UnstructuredWrapper struct {
 // NewUnstructuredWrapper creates a new UnstructuredWrapper wrapping the provided unstructured.Unstructured resource
 func NewUnstructuredWrapper(obj *unstructured.Unstructured) *UnstructuredWrapper {
 	return &UnstructuredWrapper{obj}
+}
+
+// UnwrapObject returns the native dynamic object.
+func (u *UnstructuredWrapper) UnwrapObject() runtime.Object { return u.Unstructured }
+
+// WrapObject wraps a native dynamic object.
+func (*UnstructuredWrapper) WrapObject(obj runtime.Object) (Object, bool) {
+	native, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return nil, false
+	}
+	return NewUnstructuredWrapper(native), true
 }
 
 func (u *UnstructuredWrapper) GetSpec() any {

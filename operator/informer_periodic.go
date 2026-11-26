@@ -84,6 +84,11 @@ func NewPeriodicInformer(kind resource.Kind, lister ResourceLister, opts Periodi
 	return newPeriodicInformer(kind, lister, opts, WatchDetailFullObject)
 }
 
+// NewIdentityPeriodicInformer delivers identities from a complete scheduled LIST.
+func NewIdentityPeriodicInformer(kind resource.Kind, lister ResourceLister, opts PeriodicInformerOptions) (*PeriodicInformer, error) {
+	return newPeriodicInformer(kind, lister, opts, WatchDetailIdentity)
+}
+
 func newPeriodicInformer(kind resource.Kind, lister ResourceLister, opts PeriodicInformerOptions, detail WatchDetail) (*PeriodicInformer, error) {
 	if kind.Schema == nil || lister == nil {
 		return nil, errors.New("periodic informer requires a kind and lister")
@@ -185,6 +190,10 @@ func (p *PeriodicInformer) sweep(ctx context.Context) error {
 	objects, _, err := p.lister.List(ctx)
 	if err != nil {
 		return fmt.Errorf("periodic LIST: %w", err)
+	}
+	ctx = ContextWithDelivery(ctx, DeliveryRelist)
+	if !p.HasSynced() {
+		ctx = contextWithInitialList(ctx)
 	}
 	for _, obj := range objects {
 		for _, handler := range p.handlers {

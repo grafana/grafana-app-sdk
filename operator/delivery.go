@@ -73,3 +73,13 @@ func AnnouncedVersionFromContext(ctx context.Context) string {
 func ContextWithAnnouncedVersion(ctx context.Context, resourceVersion string) context.Context {
 	return context.WithValue(ctx, announcedVersionContextKey{}, resourceVersion)
 }
+
+type initialListContextKey struct{}
+
+func contextWithInitialList(ctx context.Context) context.Context {
+	return context.WithValue(ctx, initialListContextKey{}, struct{}{})
+}
+
+func isInitialList(ctx context.Context) bool {
+	return ctx.Value(initialListContextKey{}) != nil
+}
