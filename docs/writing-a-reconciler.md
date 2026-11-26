@@ -205,11 +205,14 @@ Set `WatchNeeds` in `ReconcileOptions` of the kind. It is an `operator.WatchOpti
 ```go
 operator.WatchOptions{
     // What the handlers need from the live channel. Nil means they do not need the live channel.
-    Live: &operator.WatchLiveOptions{Detail: ..., Distribution: ...},
+    Live: &operator.WatchLiveOptions{
+        Detail: ..., Distribution: ...,
+        Ignore: ..., IgnoreUnchanged: ..., // see "Leaving objects out of a delivery"
+    },
     // What the handlers need from the resync channel. Nil means they do not need a resync.
     Resync: &operator.WatchResyncOptions{
         Detail: ..., Distribution: ..., Interval: ..., ListPageSize: ...,
-        Ignore: ..., IgnoreUnchanged: ..., // see "Leaving objects out of a resync"
+        Ignore: ..., IgnoreUnchanged: ..., // see "Leaving objects out of a delivery"
     },
 }
 ```
@@ -275,22 +278,26 @@ page when the mechanism lists objects from the API. If you leave them at zero, t
 These two values are requests. The app does not use them to pick a mechanism, and a mechanism can ignore them.
 For example, the API watch ignores `ListPageSize` for its resync (see below).
 
-#### Leaving objects out of a resync
+#### Leaving objects out of a delivery
 
 > [!NOTE]
-> No built-in mechanism applies `Ignore` or `IgnoreUnchanged` yet. Today, every resync delivers every object, even if
-> you set these fields. You can set them now. Mechanisms that support them will start to use them.
+> No built-in mechanism applies `Ignore` or `IgnoreUnchanged` yet. Today, every delivery reaches your handlers, even
+> if you set these fields. You can set them now. Mechanisms that support them will start to use them.
 
-A resync delivers every object. Often, most of those objects need no work. Two optional fields let you say which
-objects a resync can leave out:
+Many deliveries need no work. For example, a resync delivers every object, even objects that did not change. A
+live update can be a write to `status` that your handlers do not care about. Each channel has two optional fields
+that let you say which objects it can leave out. They work the same way on both channels:
 
-* `Resync.Ignore` is a `WatchIgnoreFunc`. It looks at the current object only. If it returns `true`, the resync
-  can leave the object out.
-* `Resync.IgnoreUnchanged` is a `WatchUnchangedFunc`. It compares the object with the version that the mechanism
-  delivered last time. If it returns `true` (unchanged), the resync can leave the object out. Only a mechanism that
-  implements `operator.PreviousComparer` applies it.
+* `Ignore` is a `WatchIgnoreFunc`. It looks at the current object only. If it returns `true`, the channel can leave
+  the object out.
+* `IgnoreUnchanged` is a `WatchUnchangedFunc`. It compares the object with the version that was delivered last
+  time. If it returns `true` (unchanged), the channel can leave the object out. On the resync channel, only a
+  mechanism that implements `operator.PreviousComparer` applies it.
 
-Both fields are requests. A mechanism that does not apply them delivers the object anyway, and the app does not use
+Set them on `Live` (a `WatchLiveOptions`) to filter changes as they happen, on `Resync` (a `WatchResyncOptions`) to
+filter the scheduled deliveries, or on both. A function set on one channel does not apply to the other.
+
+These fields are requests. A mechanism that does not apply them delivers the object anyway, and the app does not use
 them to pick a mechanism. Some objects are never left out:
 
 * an object that is being deleted (it has a deletion timestamp),
@@ -311,14 +318,24 @@ The `operator` package has ready-made checks:
 For example:
 
 ```go
-Resync: &operator.WatchResyncOptions{
-    Interval:        time.Hour,
-    IgnoreUnchanged: operator.AllUnchanged(operator.SameGeneration, operator.SameLabels),
-},
+operator.WatchOptions{
+    // Live: skip updates that change neither the spec (generation) nor the labels.
+    Live: &operator.WatchLiveOptions{
+        IgnoreUnchanged: operator.AllUnchanged(operator.SameGeneration, operator.SameLabels),
+    },
+    // Resync: every hour, skip objects whose status already shows the current generation.
+    Resync: &operator.WatchResyncOptions{
+        Interval: time.Hour,
+        Ignore:   operator.AlreadyObserved(observedGeneration),
+    },
+}
 ```
 
-Leave `IgnoreUnchanged` nil if your handlers use the resync to repair drift, for example to recreate something
-outside the cluster that was removed. If unchanged objects are left out, that repair never runs.
+Here, `observedGeneration` is your own function. It reads the observed generation from the status of your kind and
+returns it, and `false` when the object has none.
+
+Leave `IgnoreUnchanged` nil on the resync if your handlers use the resync to repair drift, for example to recreate
+something outside the cluster that was removed. If unchanged objects are left out, that repair never runs.
 
 ### How the app picks a mechanism
 
