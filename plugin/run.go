@@ -284,27 +284,27 @@ func startRunner(runner app.Runnable, cfg *runConfig) (stop func()) {
 
 // resolveAuthenticator builds the authenticator from the environment when none was given,
 // logging a warning when requests cannot be verified.
-func (c *runConfig) resolveAuthenticator(manifestData *app.ManifestData) error {
-	if c.authenticator != nil {
+func (cfg *runConfig) resolveAuthenticator(manifestData *app.ManifestData) error {
+	if cfg.authenticator != nil {
 		return nil
 	}
-	authenticator, err := buildAuthenticator(c.pluginID, manifestData)
+	authenticator, err := buildAuthenticator(cfg.pluginID, manifestData)
 	switch {
 	case err == nil:
-		c.authenticator = authenticator
+		cfg.authenticator = authenticator
 	case !errors.Is(err, ErrNoSigningKeys):
 		return err
-	case !c.insecureSkipAuthentication:
+	case !cfg.insecureSkipAuthentication:
 		// Without an authenticator, the plugin v3 servers reject every request.
 		// Start anyway: hosts that never send plugin v3 requests, such as a
 		// Grafana that routes the App's API elsewhere, need not configure one.
 		logging.DefaultLogger.Warn("no authenticator configured: plugin protocol v3 requests will be rejected; set "+EnvVarGrafanaJWKSURL+" or "+EnvVarGrafanaJWKS+", or use WithAuthenticator; for local development, use WithInsecureSkipAuthentication or set "+EnvVarInsecureSkipAuthentication+"=true",
-			"pluginId", c.pluginID)
+			"pluginId", cfg.pluginID)
 	default:
 		// Authentication is explicitly skipped. Anything that can reach the
 		// plugin can then claim any identity, so make that visible.
 		logging.DefaultLogger.Warn("plugin protocol v3 requests are not verified: callers can claim any identity; use this only for local development",
-			"pluginId", c.pluginID)
+			"pluginId", cfg.pluginID)
 	}
 	return nil
 }
