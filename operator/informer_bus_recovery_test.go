@@ -167,9 +167,9 @@ func TestBusRecoveryRejectsOpaqueListAndKeepsNumericWatermark(t *testing.T) {
 		t.Error("a stale add resurrected a missing key")
 		return nil
 	}}))
-	require.NoError(t, informer.relist(t.Context()))
+	require.NoError(t, informer.relist(t.Context(), false))
 	version = "opaque"
-	require.ErrorContains(t, informer.relist(t.Context()), "snapshot resource version")
+	require.ErrorContains(t, informer.relist(t.Context(), false), "snapshot resource version")
 	informer.applyLive(t.Context(), resourcebus.Event{Verb: resourcebus.VerbAdded, Name: "item", ResourceVersion: "90"})
 }
 
@@ -211,7 +211,7 @@ func TestBusRecoveryArbitratesStaleSnapshots(t *testing.T) {
 				UpdateFunc: func(context.Context, resource.Object, resource.Object) error { seen++; return nil },
 				DeleteFunc: func(context.Context, resource.Object) error { seen++; return nil },
 			}))
-			require.NoError(t, informer.relist(t.Context()))
+			require.NoError(t, informer.relist(t.Context(), false))
 			informer.applyLive(t.Context(), resourcebus.Event{Verb: tc.live, Namespace: id.Namespace, Name: id.Name, ResourceVersion: "200"})
 			require.Equal(t, 2, seen)
 
@@ -221,7 +221,7 @@ func TestBusRecoveryArbitratesStaleSnapshots(t *testing.T) {
 				item.SetResourceVersion(tc.listItemRV)
 				objects = []resource.Object{item}
 			}
-			err = informer.relist(t.Context())
+			err = informer.relist(t.Context(), false)
 			if tc.wantError != "" {
 				require.ErrorContains(t, err, tc.wantError)
 			} else {
@@ -241,7 +241,7 @@ func TestBusRecoveryArbitratesStaleSnapshots(t *testing.T) {
 				recreated := listerObj(id.Name)
 				recreated.SetResourceVersion("250")
 				listRV, objects = "300", []resource.Object{recreated}
-				require.NoError(t, informer.relist(t.Context()))
+				require.NoError(t, informer.relist(t.Context(), false))
 				require.Equal(t, 3, seen)
 				require.Equal(t, "250", informer.recovery.items[id].GetResourceVersion())
 			} else {
@@ -296,6 +296,166 @@ func TestBusRecoveryRetainsOverflowDuringCooldown(t *testing.T) {
 		time.Sleep(overflowRelistInterval)
 		synctest.Wait()
 		require.Equal(t, int64(3), lists.Load(), "recover the second drop before the normal resync")
+		cancel()
+		require.NoError(t, <-done)
+	})
+}
+
+func TestBusRecoveryReconnectsDoNotPostponeScheduledResync(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		var reconnect func()
+		subscriber := busSubscribeFunc(func(_ context.Context, _ schema.GroupVersionResource, _ string, _ func(context.Context, resourcebus.Event), opts ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
+			reconnect = resourcebus.NewSubscribeConfig(opts...).OnReconnect
+			return &testBusSubscription{}, nil
+		})
+		version := "100"
+		lister := listerFunc(func(context.Context) ([]resource.Object, string, error) {
+			obj := listerObj("item")
+			obj.SetResourceVersion(version)
+			return []resource.Object{obj}, version, nil
+		})
+		informer, err := NewBusInformer(listerTestKind, subscriber, lister, BusInformerOptions{ResyncInterval: time.Minute})
+		require.NoError(t, err)
+		updates := make(chan string, 16)
+		require.NoError(t, informer.AddEventHandler(&SimpleWatcher{
+			UpdateFunc: func(_ context.Context, old, current resource.Object) error {
+				updates <- old.GetResourceVersion() + "->" + current.GetResourceVersion()
+				return nil
+			},
+		}))
+		done := make(chan error, 1)
+		go func() { done <- informer.Run(ctx) }()
+		require.NoError(t, informer.WaitForSync(ctx))
+		synctest.Wait()
+		version = "110"
+		for range 11 {
+			time.Sleep(5 * time.Second)
+			reconnect()
+			synctest.Wait()
+		}
+		informer.recovery.overflow()
+		synctest.Wait()
+		require.Len(t, updates, 1, "reconnects and overflow only deliver changes")
+		require.Equal(t, "100->110", <-updates)
+		// The initial scheduled interval, including jitter, has now passed.
+		time.Sleep(12 * time.Second)
+		synctest.Wait()
+		require.Len(t, updates, 1, "scheduled resync still delivers unchanged objects")
+		require.Equal(t, "110->110", <-updates)
+		cancel()
+		require.NoError(t, <-done)
+	})
+}
+
+func TestBusRecoveryWorkersDeliverSameKeyInOrderWithFreshTimeouts(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		var publish func(context.Context, resourcebus.Event)
+		var reconnect func()
+		subscriber := busSubscribeFunc(func(_ context.Context, _ schema.GroupVersionResource, _ string, handler func(context.Context, resourcebus.Event), opts ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
+			publish = handler
+			reconnect = resourcebus.NewSubscribeConfig(opts...).OnReconnect
+			return &testBusSubscription{}, nil
+		})
+		var items []resource.Object
+		lister := listerFunc(func(context.Context) ([]resource.Object, string, error) {
+			return items, "100", nil
+		})
+		const timeout = time.Second
+		informer, err := NewBusInformer(listerTestKind, subscriber, lister, BusInformerOptions{
+			ResyncInterval: time.Hour, EventTimeout: timeout, MaxConcurrentWorkers: 2,
+		})
+		require.NoError(t, err)
+		type delivery struct {
+			action    string
+			err       error
+			remaining time.Duration
+		}
+		received := make(chan delivery, 3)
+		record := func(ctx context.Context, action string) {
+			deadline, _ := ctx.Deadline()
+			received <- delivery{action, ctx.Err(), time.Until(deadline)}
+		}
+		release := make(chan struct{})
+		require.NoError(t, informer.AddEventHandler(&SimpleWatcher{
+			AddFunc: func(eventCtx context.Context, obj resource.Object) error {
+				record(eventCtx, "add:"+obj.GetResourceVersion())
+				select {
+				case <-release:
+				case <-ctx.Done():
+				}
+				return nil
+			},
+			UpdateFunc: func(eventCtx context.Context, old, current resource.Object) error {
+				record(eventCtx, "update:"+old.GetResourceVersion()+"->"+current.GetResourceVersion())
+				return nil
+			},
+			DeleteFunc: func(eventCtx context.Context, obj resource.Object) error {
+				record(eventCtx, "delete:"+obj.GetResourceVersion())
+				return nil
+			},
+		}))
+		done := make(chan error, 1)
+		go func() { done <- informer.Run(ctx) }()
+		require.NoError(t, informer.WaitForSync(ctx))
+		synctest.Wait()
+		item := listerObj("item")
+		item.SetResourceVersion("100")
+		items = []resource.Object{item}
+		reconnect()
+		require.Equal(t, delivery{"add:100", nil, timeout}, <-received)
+
+		publish(ctx, resourcebus.Event{Verb: resourcebus.VerbModified, Namespace: item.GetNamespace(), Name: item.GetName(), ResourceVersion: "110"})
+		publish(ctx, resourcebus.Event{Verb: resourcebus.VerbDeleted, Namespace: item.GetNamespace(), Name: item.GetName(), ResourceVersion: "120"})
+		synctest.Wait()
+		time.Sleep(2 * timeout)
+		close(release)
+		require.Equal(t, delivery{"update:100->110", nil, timeout}, <-received)
+		require.Equal(t, delivery{"delete:110", nil, timeout}, <-received)
+		cancel()
+		require.NoError(t, <-done)
+	})
+}
+
+func TestBusRecoveryCancelsBlockedWorkerEnqueue(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		var publish func(context.Context, resourcebus.Event)
+		subscriber := busSubscribeFunc(func(_ context.Context, _ schema.GroupVersionResource, _ string, handler func(context.Context, resourcebus.Event), _ ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
+			publish = handler
+			return &testBusSubscription{}, nil
+		})
+		lister := listerFunc(func(context.Context) ([]resource.Object, string, error) {
+			return nil, "100", nil
+		})
+		informer, err := NewBusInformer(listerTestKind, subscriber, lister, BusInformerOptions{
+			ResyncInterval: time.Hour, MaxConcurrentWorkers: 2,
+		})
+		require.NoError(t, err)
+		blocked := make(chan struct{})
+		require.NoError(t, informer.AddEventHandler(&SimpleWatcher{AddFunc: func(ctx context.Context, _ resource.Object) error {
+			close(blocked)
+			<-ctx.Done()
+			return nil
+		}}))
+		done := make(chan error, 1)
+		go func() { done <- informer.Run(ctx) }()
+		require.NoError(t, informer.WaitForSync(ctx))
+		publish(ctx, resourcebus.Event{Verb: resourcebus.VerbAdded, Name: "item", ResourceVersion: "110"})
+		<-blocked
+		publish(ctx, resourcebus.Event{Verb: resourcebus.VerbModified, Name: "item", ResourceVersion: "120"})
+		publish(ctx, resourcebus.Event{Verb: resourcebus.VerbDeleted, Name: "item", ResourceVersion: "130"})
+		synctest.Wait()
+		queued := 0
+		for _, queue := range informer.deliveries {
+			queued += len(queue)
+		}
+		require.Equal(t, 1, queued, "update is queued behind the blocked add")
+		require.Empty(t, informer.events, "delete has left the notification queue and is blocked on the worker queue")
 		cancel()
 		require.NoError(t, <-done)
 	})

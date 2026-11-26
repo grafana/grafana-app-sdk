@@ -146,21 +146,15 @@ func (b *BusInformer) runRecovery(parent context.Context) error {
 		defer b.closeSubscription(ctx, sub)
 	}
 
-	delay := time.Duration(0)
-	trigger := busRelistRequested
+	trigger := busRelistScheduled
+	var resyncAt, retryAt time.Time
 	for ctx.Err() == nil {
-		timer := time.NewTimer(delay)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return recoveryRunError(parent, ctx)
-		case <-timer.C:
-		}
-		delay = r.opts.ResyncInterval
-		err := b.relist(ctx)
+		err := b.relist(ctx, trigger != busRelistScheduled)
+		now := time.Now()
 		if trigger == busRelistOverflow {
-			r.nextOverflowRelist = time.Now().Add(overflowRelistInterval)
+			r.nextOverflowRelist = now.Add(overflowRelistInterval)
 		}
+		delay := r.opts.ResyncInterval
 		if err != nil {
 			if subscriptionRejected(err) {
 				return err
@@ -171,18 +165,27 @@ func (b *BusInformer) runRecovery(parent context.Context) error {
 			b.reportError(ctx, err)
 			delay = busRetryInterval
 			if !b.hasSynced() {
-				delay = wait.Jitter(delay, informerRetryJitter)
+				if !waitInformerInterval(ctx, delay) {
+					break
+				}
 				continue
 			}
-		} else if !b.hasSynced() {
-			close(b.synced)
+		} else {
+			retryAt = time.Time{}
+			if !b.hasSynced() {
+				close(b.synced)
+			}
 		}
 
-		trigger = b.serveUntilRelist(ctx, delay)
+		if trigger == busRelistScheduled {
+			resyncAt = now.Add(wait.Jitter(delay, informerRetryJitter))
+		} else if err != nil {
+			retryAt = now.Add(wait.Jitter(delay, informerRetryJitter))
+		}
+		trigger = b.serveUntilRelist(ctx, resyncAt, retryAt)
 		if trigger == busRelistStopped {
 			break
 		}
-		delay = 0
 	}
 	return recoveryRunError(parent, ctx)
 }
@@ -216,14 +219,21 @@ type busRelistTrigger uint8
 
 const (
 	busRelistStopped busRelistTrigger = iota
-	busRelistRequested
+	busRelistScheduled
+	busRelistCatchUp
 	busRelistOverflow
 )
 
-func (b *BusInformer) serveUntilRelist(ctx context.Context, delay time.Duration) busRelistTrigger {
+func (b *BusInformer) serveUntilRelist(ctx context.Context, resyncAt, retryAt time.Time) busRelistTrigger {
 	r := b.recovery
-	timer := time.NewTimer(wait.Jitter(delay, informerRetryJitter))
-	defer timer.Stop()
+	resync := time.NewTimer(time.Until(resyncAt))
+	defer resync.Stop()
+	var retry <-chan time.Time
+	if !retryAt.IsZero() {
+		timer := time.NewTimer(time.Until(retryAt))
+		defer timer.Stop()
+		retry = timer.C
+	}
 	var overflowTimer *time.Timer
 	defer func() {
 		if overflowTimer != nil {
@@ -234,23 +244,21 @@ func (b *BusInformer) serveUntilRelist(ctx context.Context, delay time.Duration)
 	var overflowReady <-chan time.Time
 
 	for ctx.Err() == nil {
-		// Prioritize recovery even when events arrive continuously.
+		// Once due, a full resync takes priority over other requests.
 		select {
-		case <-timer.C:
-			return busRelistRequested
-		case <-r.relist:
-			return busRelistRequested
-		case <-overflowReady:
-			return busRelistOverflow
+		case <-resync.C:
+			return busRelistScheduled
 		default:
 		}
 		select {
 		case <-ctx.Done():
 			return busRelistStopped
-		case <-timer.C:
-			return busRelistRequested
+		case <-resync.C:
+			return busRelistScheduled
+		case <-retry:
+			return busRelistCatchUp
 		case <-r.relist:
-			return busRelistRequested
+			return busRelistCatchUp
 		case <-overflowReady:
 			return busRelistOverflow
 		case <-overflowEvents:
@@ -323,7 +331,7 @@ func (b *BusInformer) applyLive(ctx context.Context, event resourcebus.Event) {
 	}
 }
 
-func (b *BusInformer) relist(ctx context.Context) error {
+func (b *BusInformer) relist(ctx context.Context, changesOnly bool) error {
 	r := b.recovery
 	items, rv, err := r.lister.List(ctx)
 	if err != nil {
@@ -364,6 +372,9 @@ func (b *BusInformer) relist(ctx context.Context) error {
 		}
 		if old != nil && numericVersion(old.GetResourceVersion()) > itemVersion {
 			next[id] = old
+			continue
+		}
+		if changesOnly && old != nil && old.GetResourceVersion() == obj.GetResourceVersion() {
 			continue
 		}
 		b.deliverChange(ctx, old, obj)
