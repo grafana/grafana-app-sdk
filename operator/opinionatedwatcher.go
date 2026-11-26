@@ -170,12 +170,13 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	logger := logging.FromContext(ctx).With("action", "add", "component", "OpinionatedWatcher", "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
 	logger.Debug("Handling add")
 
-	exists, err := o.readIfAddInProgress(ctx, object)
+	completed, err := o.addCompletedElsewhere(ctx, object)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("error reading object: %s", err.Error()))
 		return err
 	}
-	if !exists {
+	if completed {
+		logger.Debug("A later delivery completed this add, or the object is gone; nothing left to do")
 		return nil
 	}
 	finalizers := o.getFinalizers(object)
@@ -268,9 +269,11 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 		logger.Error("error adding in-progress finalizer", "error", err.Error(), "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
 		return fmt.Errorf("error adding in-progress finalizer: %w", err)
 	}
-	// A conflict while adding it re-reads the object, which may show the add completed by another delivery meanwhile.
+	// A conflict while adding it re-reads the object's metadata, which may show the add completed by another delivery
+	// meanwhile: this delivery is then stale, and only the in-progress finalizer it just wrote is left to undo.
 	if slices.Contains(o.getFinalizers(object), o.finalizer) {
-		return o.Add(ctx, object)
+		logger.Debug("A later delivery completed this add, removing the in-progress finalizer", "finalizer", o.addPendingFinalizer)
+		return o.finalizerUpdater.RemoveFinalizer(ctx, object, o.addPendingFinalizer)
 	}
 
 	err = o.addFunc(ctx, object)
@@ -293,21 +296,23 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	return nil
 }
 
-// readIfAddInProgress reads object as it is now when an earlier attempt left its in-progress finalizer on this copy of
-// it, as a queued retry of a failed add does: another delivery may have completed the add since, which must then be
-// synced rather than repeated. It reports false for an object which no longer exists.
-func (o *OpinionatedWatcher) readIfAddInProgress(ctx context.Context, object resource.Object) (bool, error) {
+// addCompletedElsewhere reports whether another delivery has completed the add of object, or the object is gone,
+// when an earlier attempt left its in-progress finalizer on this copy of it, as a queued retry of a failed add does.
+// Such a delivery is stale and must not call a handler. It reads a separate copy of the object, since a PatchClient
+// may read only metadata into it, and fresh metadata on a stale spec would make an inconsistent object.
+func (o *OpinionatedWatcher) addCompletedElsewhere(ctx context.Context, object resource.Object) (bool, error) {
 	finalizers := o.getFinalizers(object)
 	if !slices.Contains(finalizers, o.addPendingFinalizer) || slices.Contains(finalizers, o.finalizer) {
-		return true, nil
+		return false, nil
 	}
-	if err := o.finalizerUpdater.client.GetInto(ctx, object.GetStaticMetadata().Identifier(), object); err != nil {
+	current := object.Copy()
+	if err := o.finalizerUpdater.client.GetInto(ctx, object.GetStaticMetadata().Identifier(), current); err != nil {
 		if apierrors.IsNotFound(err) {
-			return false, nil
+			return true, nil
 		}
 		return false, fmt.Errorf("error reading object to resume an in-progress add: %w", err)
 	}
-	return true, nil
+	return slices.Contains(o.getFinalizers(current), o.finalizer), nil
 }
 
 // Update is part of implementing ResourceWatcher

@@ -678,7 +678,7 @@ func TestOpinionatedWatcher_Update_HandleIdentical(t *testing.T) {
 }
 
 // A queued retry of a failed add carries the in-progress finalizer its first attempt wrote. When a resync has completed
-// the add meanwhile, the retry must sync rather than call AddFunc again.
+// the add meanwhile, the retry is stale and must call no handler: not AddFunc again, nor SyncFunc on its old payload.
 func TestOpinionatedWatcher_Add_RetryAfterTheAddCompletedElsewhere(t *testing.T) {
 	ex := &resource.TypedSpecObject[string]{}
 	schema := resource.NewSimpleSchema("group", "version", ex, &resource.TypedList[*resource.TypedSpecObject[string]]{})
@@ -697,17 +697,25 @@ func TestOpinionatedWatcher_Add_RetryAfterTheAddCompletedElsewhere(t *testing.T)
 		obj.SetFinalizers(finalizers)
 		return obj
 	}
-
-	t.Run("a retry finding the add completed syncs", func(t *testing.T) {
-		client := &mockPatchClient{}
-		o, called := setup(t, client)
-		client.GetIntoFunc = func(_ context.Context, _ resource.Identifier, into resource.Object) error {
+	// completedAt mimics simple's watchPatcher, which reads only metadata: the add completed at generation 2.
+	completedAt := func(o *OpinionatedWatcher) func(context.Context, resource.Identifier, resource.Object) error {
+		return func(_ context.Context, _ resource.Identifier, into resource.Object) error {
+			into.SetGeneration(2)
 			into.SetResourceVersion("8")
 			into.SetFinalizers([]string{o.finalizer})
 			return nil
 		}
-		require.NoError(t, o.Add(context.TODO(), withFinalizers("6", o.addPendingFinalizer)))
-		assert.Equal(t, []string{"sync"}, *called)
+	}
+
+	t.Run("a retry finding the add completed, after a spec change, calls no handler and keeps its payload", func(t *testing.T) {
+		client := &mockPatchClient{}
+		o, called := setup(t, client)
+		client.GetIntoFunc = completedAt(o)
+		stale := withFinalizers("6", o.addPendingFinalizer)
+		require.NoError(t, o.Add(context.TODO(), stale))
+		assert.Empty(t, *called)
+		assert.Equal(t, int64(1), stale.GetGeneration(), "newer metadata must not be merged onto the old spec")
+		assert.Equal(t, []string{o.addPendingFinalizer}, stale.GetFinalizers())
 	})
 
 	t.Run("a retry finding the add still pending calls AddFunc again", func(t *testing.T) {
@@ -726,25 +734,26 @@ func TestOpinionatedWatcher_Add_RetryAfterTheAddCompletedElsewhere(t *testing.T)
 		assert.Empty(t, *called)
 	})
 
-	t.Run("a conflict adding the in-progress finalizer which shows the add completed syncs", func(t *testing.T) {
+	t.Run("a conflict adding the in-progress finalizer which shows the add completed undoes it", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			client := &mockPatchClient{}
 			o, called := setup(t, client)
-			conflicted := false
-			client.PatchIntoFunc = func(context.Context, resource.Identifier, resource.PatchRequest, resource.PatchOptions, resource.Object) error {
-				if !conflicted {
-					conflicted = true
+			var patches []resource.PatchRequest
+			client.PatchIntoFunc = func(_ context.Context, _ resource.Identifier, req resource.PatchRequest, _ resource.PatchOptions, into resource.Object) error {
+				patches = append(patches, req)
+				if len(patches) == 1 {
 					return &apierrors.StatusError{ErrStatus: metav1.Status{Code: http.StatusConflict, Reason: metav1.StatusReasonConflict}}
+				}
+				if len(patches) == 2 {
+					into.SetFinalizers(append(into.GetFinalizers(), o.addPendingFinalizer))
 				}
 				return nil
 			}
-			client.GetIntoFunc = func(_ context.Context, _ resource.Identifier, into resource.Object) error {
-				into.SetResourceVersion("8")
-				into.SetFinalizers([]string{o.finalizer})
-				return nil
-			}
+			client.GetIntoFunc = completedAt(o)
 			require.NoError(t, o.Add(context.TODO(), withFinalizers("5")))
-			assert.Equal(t, []string{"sync"}, *called)
+			assert.Empty(t, *called)
+			require.Len(t, patches, 3, "conflict, the in-progress finalizer, then its removal")
+			assert.Equal(t, []string{o.finalizer}, patches[2].Operations[0].Value)
 		})
 	})
 }
