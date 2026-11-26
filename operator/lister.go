@@ -50,14 +50,18 @@ func NewClientLister(client ListWatchClient, kind resource.Kind, opts ClientList
 }
 
 func clientListerFor(kind resource.Kind, clients resource.ClientGenerator, opts ClientListerOptions) (ResourceLister, error) {
-	if clients == nil {
-		return nil, errors.New("a client generator is required to list the kind")
-	}
-	client, err := clients.ClientFor(kind)
+	client, err := clientForList(kind, clients)
 	if err != nil {
 		return nil, err
 	}
 	return NewClientLister(client, kind, opts)
+}
+
+func clientForList(kind resource.Kind, clients resource.ClientGenerator) (resource.Client, error) {
+	if clients == nil {
+		return nil, errors.New("a client generator is required to list the kind")
+	}
+	return clients.ClientFor(kind)
 }
 
 func listOptionsFor(opts InformerOptions, defaultPageSize int64) ClientListerOptions {

@@ -490,8 +490,10 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 		assert.Equal(t, deleteErr, err)
 	})
 
-	t.Run("delete, patch error", func(t *testing.T) {
-		obj := schema.ZeroValue()
+	t.Run("delete with unchanged generation, patch error", func(t *testing.T) {
+		old := schema.ZeroValue()
+		old.SetGeneration(1)
+		obj := old.Copy()
 		dt := metav1.NewTime(time.Time{})
 		obj.SetDeletionTimestamp(&dt)
 		obj.SetFinalizers([]string{o.finalizer})
@@ -499,7 +501,9 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 			assert.Fail(t, "update should not be called")
 			return nil
 		}
+		deleted := false
 		o.DeleteFunc = func(c context.Context, object resource.Object) error {
+			deleted = true
 			assert.Equal(t, obj, object)
 			return nil
 		}
@@ -508,9 +512,30 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 			assert.Equal(t, resource.PatchOpReplace, request.Operations[0].Operation)
 			return patchErr
 		}
-		err := o.Update(context.TODO(), schema.ZeroValue(), obj)
+		err := o.Update(context.TODO(), old, obj)
+		assert.True(t, deleted)
 		expectedErr := NewFinalizerOperationError(patchErr, resource.PatchRequest{Operations: []resource.PatchOperation{{Path: "/metadata/finalizers", Operation: resource.PatchOpReplace, Value: []string{}}, {Path: "/metadata/resourceVersion", Operation: resource.PatchOpReplace, Value: obj.GetResourceVersion()}}})
 		assert.Equal(t, expectedErr, err)
+	})
+
+	t.Run("repeated deletion waits for LIST recovery", func(t *testing.T) {
+		obj := schema.ZeroValue()
+		obj.SetGeneration(1)
+		dt := metav1.Now()
+		obj.SetDeletionTimestamp(&dt)
+		obj.SetFinalizers([]string{o.finalizer})
+		deletes := 0
+		o.DeleteFunc = func(context.Context, resource.Object) error {
+			deletes++
+			return nil
+		}
+		client.PatchIntoFunc = func(context.Context, resource.Identifier, resource.PatchRequest, resource.PatchOptions, resource.Object) error {
+			return nil
+		}
+		require.NoError(t, o.Update(ContextWithDelivery(t.Context(), DeliveryLive), obj.Copy(), obj.Copy()))
+		require.Zero(t, deletes)
+		require.NoError(t, o.Update(ContextWithDelivery(t.Context(), DeliveryRelist), obj.Copy(), obj.Copy()))
+		require.Equal(t, 1, deletes)
 	})
 
 	t.Run("delete, patch RV mismatch", func(t *testing.T) {

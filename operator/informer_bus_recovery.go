@@ -15,6 +15,8 @@ import (
 
 // BusRecoveryOptions configures LIST recovery for an existing bus subscription.
 type BusRecoveryOptions struct {
+	Payload              BusPayload
+	Getter               BusObjectGetter
 	ResyncInterval       time.Duration
 	AllowDegradedStart   bool
 	MaxConcurrentWorkers uint64
@@ -23,50 +25,68 @@ type BusRecoveryOptions struct {
 // BusRecoveryDefaults supplies deployment defaults for LIST recovery. The
 // kind's WatchNeeds can set the resync interval and page size.
 type BusRecoveryDefaults struct {
+	Payload            BusPayload
 	ResyncInterval     time.Duration
 	PageSize           int64
 	AllowDegradedStart bool
 	KeyListerFactory   KeyListerFactory
 }
 
-// NewBusRecovery offers live identities and scheduled LIST recovery.
+// NewBusRecovery offers live events and scheduled LIST recovery.
 // A nil subscriber disables this option in the selector.
 func NewBusRecovery(subscriber resourcebus.Subscriber, group resourcebus.Group, defaults BusRecoveryDefaults) InformerMechanism {
 	if subscriber == nil {
 		return nil
 	}
-	return newBusMechanism(recoveryWatchOptions(group), func(
+	return newBusMechanism(recoveryWatchOptions(group, defaults.Payload), func(
 		kind resource.Kind, clients resource.ClientGenerator, opts InformerOptions,
 	) (Informer, error) {
 		bus, err := newBusInformer(kind, subscriber, busOptionsFor(group, opts))
 		if err != nil {
 			return nil, err
 		}
-		lister, err := identityClientLister(kind, clients, defaults.KeyListerFactory, listOptionsFor(opts, defaults.PageSize))
+		client, err := clientForList(kind, clients)
 		if err != nil {
 			return nil, err
+		}
+		listOpts := listOptionsFor(opts, defaults.PageSize)
+		lister, err := NewClientLister(client, kind, listOpts)
+		if err != nil {
+			return nil, err
+		}
+		if defaults.Payload == "" || defaults.Payload == PayloadIdentity {
+			lister, err = keysListerFor(kind, defaults.KeyListerFactory, lister, listOpts)
+			if err != nil {
+				return nil, err
+			}
 		}
 		workers := opts.MaxConcurrentWorkers
 		if workers == 0 {
 			workers = defaultConcurrentInformerWorkers
 		}
 		return wrapBusWithRecovery(bus, lister, BusRecoveryOptions{
+			Payload:              defaults.Payload,
+			Getter:               client,
 			ResyncInterval:       resyncIntervalOr(opts, defaults.ResyncInterval),
 			AllowDegradedStart:   defaults.AllowDegradedStart,
 			MaxConcurrentWorkers: workers,
-		}), nil
+		})
 	})
 }
 
-func recoveryWatchOptions(group resourcebus.Group) WatchOptions {
+func recoveryWatchOptions(group resourcebus.Group, payload BusPayload) WatchOptions {
 	provides := busWatchOptions(group)
-	provides.Resync = periodicWatchOptions(WatchDetailIdentity).Resync
+	if payload == PayloadHydrated {
+		provides.Live.Detail = WatchDetailFullObject
+	}
+	provides.Resync = periodicWatchOptions(provides.Live.Detail).Resync
 	return provides
 }
 
-// NewBusInformerWithRecovery subscribes to changes and periodically reconciles an identity
-// snapshot. The lister must cover the subscription's namespace. The LIST and
-// notifications must use the same increasing numeric resource versions.
+// NewBusInformerWithRecovery subscribes to changes and periodically reconciles a
+// snapshot. The lister must cover the subscription's namespace and return full
+// objects in hydrated mode. The LIST and notifications must use the same
+// increasing numeric resource versions.
 // An empty initial LIST can have snapshot version 0.
 func NewBusInformerWithRecovery(kind resource.Kind, subscriber resourcebus.Subscriber, lister ResourceLister, busOpts BusInformerOptions, recoveryOpts BusRecoveryOptions) (*BusInformerWithRecovery, error) {
 	if lister == nil {
@@ -76,10 +96,16 @@ func NewBusInformerWithRecovery(kind resource.Kind, subscriber resourcebus.Subsc
 	if err != nil {
 		return nil, err
 	}
-	return wrapBusWithRecovery(bus, lister, recoveryOpts), nil
+	return wrapBusWithRecovery(bus, lister, recoveryOpts)
 }
 
-func wrapBusWithRecovery(bus *busInformer, lister ResourceLister, opts BusRecoveryOptions) *BusInformerWithRecovery {
+func wrapBusWithRecovery(bus *busInformer, lister ResourceLister, opts BusRecoveryOptions) (*BusInformerWithRecovery, error) {
+	if opts.Payload == "" {
+		opts.Payload = PayloadIdentity
+	}
+	if err := validateBusPayload(opts); err != nil {
+		return nil, err
+	}
 	if opts.ResyncInterval <= 0 {
 		opts.ResyncInterval = defaultPeriodicInterval
 	}
@@ -87,7 +113,7 @@ func wrapBusWithRecovery(bus *busInformer, lister ResourceLister, opts BusRecove
 		busInformer: bus, lister: lister, opts: opts,
 		relistRequests: make(chan struct{}, 1), overflows: make(chan struct{}, 1),
 		items: make(map[resource.Identifier]resource.Object), deleted: make(map[resource.Identifier]int64),
-	}
+	}, nil
 }
 
 // BusInformerWithRecovery combines bus notifications with LIST recovery.
@@ -107,7 +133,9 @@ type BusInformerWithRecovery struct {
 }
 
 // WatchOptions describes the live and scheduled deliveries provided by the informer.
-func (b *BusInformerWithRecovery) WatchOptions() WatchOptions { return recoveryWatchOptions(b.group) }
+func (b *BusInformerWithRecovery) WatchOptions() WatchOptions {
+	return recoveryWatchOptions(b.group, b.opts.Payload)
+}
 
 // Schema returns the kind served by the informer.
 func (b *BusInformerWithRecovery) Schema() resource.Schema { return b.kind.Schema }
@@ -194,8 +222,9 @@ func (b *BusInformerWithRecovery) retrySubscription(ctx context.Context, cancel 
 }
 
 func (b *BusInformerWithRecovery) initialList(ctx context.Context) error {
+	listCtx := ContextWithDelivery(ctx, DeliveryRelist)
 	for ctx.Err() == nil {
-		err := b.relist(ctx, busRelistScheduled)
+		err := b.relist(listCtx, busRelistScheduled)
 		switch {
 		case err == nil:
 			close(b.synced)
@@ -221,7 +250,7 @@ func (b *BusInformerWithRecovery) watch(ctx context.Context) error {
 		if trigger == busRelistStopped {
 			return ctx.Err()
 		}
-		err := b.relist(ctx, trigger)
+		err := b.relist(ContextWithDelivery(ctx, DeliveryRelist), trigger)
 		now := time.Now()
 		if trigger == busRelistOverflow {
 			nextOverflowRelist = now.Add(overflowRelistInterval)
@@ -353,7 +382,19 @@ func (b *BusInformerWithRecovery) startDeliveryWorkers(ctx context.Context, work
 }
 
 func (b *BusInformerWithRecovery) deliverChange(ctx context.Context, old, current resource.Object) {
-	d := busDelivery{ctx: ctx, old: old, current: current}
+	if busObjectReplaced(old, current) {
+		b.queueDelivery(busDelivery{ctx: ctx, old: old})
+		old = nil
+	}
+	b.queueDelivery(busDelivery{ctx: ctx, old: old, current: current})
+}
+
+func busObjectReplaced(old, current resource.Object) bool {
+	return old != nil && current != nil && old.GetUID() != "" && current.GetUID() != "" && old.GetUID() != current.GetUID()
+}
+
+func (b *BusInformerWithRecovery) queueDelivery(d busDelivery) {
+	ctx, old, current := d.ctx, d.old, d.current
 	if len(b.deliveries) == 0 {
 		b.dispatchChange(d)
 		return

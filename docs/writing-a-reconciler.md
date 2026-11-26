@@ -291,7 +291,24 @@ the handler as an add, including objects it saw on the previous sweep. The next
 interval starts after dispatch finishes. A failed LIST triggers a retry and its
 partial results are discarded.
 
-Use a periodic LIST for work that needs to revisit existing objects, such as
-age-based cleanup. Use a live watch for work that needs to observe changes or
+Use a periodic LIST with a reconciler or plain watcher for work that needs to
+revisit existing objects, such as age-based cleanup. Use a live watch for work that needs to observe changes or
 deletions. A finalizer-aware handler can only process a pending deletion while
 the object still matches its LIST selectors.
+
+### Resource change bus
+
+Install `operator.NewBusNotifications` for plain handlers that treat
+notifications as wake-ups and tolerate missed events. It needs no LIST and uses
+`Add` for creates and modifications. Install `operator.NewBusRecovery` when
+the handler needs the initial state or recovery after dropped events. The
+recovery mechanism re-lists periodically and after reconnects. Offer recovery
+ahead of notification-only when both could satisfy a kind and it needs
+recovery. Use the API watch for kinds configured with selectors.
+
+Use `PayloadHydrated` when the handler needs full objects. Live writes fetch
+the current object with GET, and recovery uses a full LIST. A delete carries
+the last known object when one is available.
+
+If multiple replicas share a subscription group, each instance can miss a live
+event. Recovery catches up each replica's local snapshot.

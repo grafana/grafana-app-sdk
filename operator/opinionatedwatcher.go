@@ -289,8 +289,11 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 	logger := logging.FromContext(ctx).With("action", "update", "component", "OpinionatedWatcher", "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())
 	logger.Debug("Handling update")
 
-	// Only fire off Update if the generation has changed (so skip subresource updates)
-	if tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration() {
+	// A deletion can start without changing generation. A re-list can also
+	// recover cleanup that has not completed since the deletion started.
+	pendingDeletion := tgt.GetDeletionTimestamp() != nil &&
+		(src.GetDeletionTimestamp() == nil || DeliveryFromContext(ctx) == DeliveryRelist)
+	if !pendingDeletion && tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration() {
 		return nil
 	}
 
