@@ -276,7 +276,7 @@ page when the mechanism lists objects from the API. If you leave them at zero, t
 `InformerOptions.CacheResyncInterval` and `InformerOptions.WatchListPageSize` are used.
 
 These two values are requests. The app does not use them to pick a mechanism, and a mechanism can ignore them.
-For example, the API watch ignores `ListPageSize` for its resync (see below).
+For example, the API watch ignores `ListPageSize` (see below).
 
 #### Leaving objects out of a delivery
 
@@ -286,23 +286,30 @@ For example, the API watch ignores `ListPageSize` for its resync (see below).
 
 Many deliveries need no work. For example, a resync delivers every object, even objects that did not change. A
 live update can be a write to `status` that your handlers do not care about. Each channel has two optional fields
-that let you say which objects it can leave out. They work the same way on both channels:
+that let you say which objects it can leave out:
 
 * `Ignore` is a `WatchIgnoreFunc`. It looks at the current object only. If it returns `true`, the channel can leave
   the object out.
-* `IgnoreUnchanged` is a `WatchUnchangedFunc`. It compares the object with the version that was delivered last
-  time. If it returns `true` (unchanged), the channel can leave the object out. On the resync channel, only a
-  mechanism that implements `operator.PreviousComparer` applies it.
+* `IgnoreUnchanged` is a `WatchUnchangedFunc`. It compares the current object with a previous one. If it returns
+  `true` (unchanged), the channel can leave the object out.
 
-Set them on `Live` (a `WatchLiveOptions`) to filter changes as they happen, on `Resync` (a `WatchResyncOptions`) to
-filter the scheduled deliveries, or on both. A function set on one channel does not apply to the other.
+The two channels apply them a little differently:
+
+| | `Live` (`WatchLiveOptions`) | `Resync` (`WatchResyncOptions`) |
+| --- | --- | --- |
+| `Ignore` can leave out | adds and updates | any object in the resync |
+| `IgnoreUnchanged` can leave out | updates only | any object in the resync |
+| `IgnoreUnchanged` compares with | the previous object that the update carries | the object that was delivered last time. Only a mechanism that implements `operator.PreviousComparer` applies it |
+| always delivered | deletes. For `IgnoreUnchanged`, adds too | |
+
+A function set on one channel does not apply to the other.
 
 These fields are requests. A mechanism that does not apply them delivers the object anyway, and the app does not use
-them to pick a mechanism. Some objects are never left out:
+them to pick a mechanism. On both channels, some objects are never left out:
 
 * an object that is being deleted (it has a deletion timestamp),
-* for `IgnoreUnchanged`: an object with no earlier delivery, or with a missing or different UID (the object was
-  deleted and created again).
+* for `IgnoreUnchanged`: an object with no previous version to compare with, or with a missing or different UID (the
+  object was deleted and created again).
 
 The `operator` package has ready-made checks:
 
@@ -380,7 +387,8 @@ The API watch can resync only if a resync interval is set, either in `WatchNeeds
 `InformerOptions.CacheResyncInterval`. Its resync sends again the objects that are already in its in-memory cache.
 It does not list objects from the API. This has two effects:
 
-* It ignores `ListPageSize` for the resync.
+* It ignores `ListPageSize`. (It also ignores `InformerOptions.WatchListPageSize` and `UseWatchList`. Only
+  `CustomCacheInformer` uses them.)
 * It runs your handlers again for every object, but it cannot find changes that the live channel missed.
   A mechanism that lists objects from the API during its resync can find those changes.
 
@@ -392,6 +400,10 @@ as age-based cleanup. Use a live channel for work that must react to changes or 
 On each run (a "sweep"), the mechanism does one complete paginated LIST. Then it sends every object to your handlers
 as an add event, including objects that did not change since the last sweep. Note these details:
 
+* Because every object arrives as an add, a plain reconciler sees `ReconcileActionCreated` on every sweep, not
+  `ReconcileActionResynced`. Do not use the action to decide whether an object is new.
+* It calls your handlers one object at a time. It ignores `InformerOptions.MaxConcurrentWorkers`, so a slow handler
+  delays the whole sweep.
 * It does not send delete events. An object deleted between two sweeps is simply not in the next sweep.
 * The next interval starts after all objects of the sweep have been delivered.
 * If the LIST fails, the mechanism discards the objects it already read, reports the error, and tries again after
@@ -424,9 +436,15 @@ identity:
 * a created or modified object arrives as an add event,
 * a deleted object arrives as a delete event.
 
-It does not recover notifications that it misses. The bus delivers each notification at most once. If the app is
-not connected, or its queue (1000 notifications) is full, those notifications are lost. Use it only for handlers
-that can accept missed changes, or use `NewBusRecovery`.
+Note these limits:
+
+* It does not deliver objects that already exist when the app starts. It does no LIST. Your handlers see only the
+  objects that change after the subscription is ready.
+* It does not recover notifications that it misses. The bus delivers each notification at most once. If the app is
+  not connected, or its queue (1000 notifications) is full, those notifications are lost without an error.
+* It calls your handlers one notification at a time. It ignores `InformerOptions.MaxConcurrentWorkers`.
+
+Use it only for handlers that can accept these limits. Otherwise, use `NewBusRecovery`.
 
 The `resourcebus.Group` that you pass controls the distribution:
 
