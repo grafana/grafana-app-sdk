@@ -191,6 +191,8 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 			return err
 		}
 
+		// Finalizer patches write into the object, and it may be the informer's cached copy.
+		object = object.Copy()
 		// The remove finalizer code is shared by both our add and update handlers, as this logic can be hit from either
 		if slices.Contains(finalizers, o.finalizer) {
 			logger.Debug("Delete successful, removing finalizer", "finalizer", o.finalizer, "currentFinalizers", finalizers)
@@ -216,6 +218,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 				return err
 			}
 		}
+		markCompleted(ctx)
 		return nil
 	}
 
@@ -232,6 +235,8 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 		}
 		// If we somehow still have the add-pending finalizer, remove it
 		if slices.Contains(finalizers, o.addPendingFinalizer) {
+			// Finalizer patches write into the object, and it may be the informer's cached copy.
+			object = object.Copy()
 			logger.Debug("Add-pending finalizer still on object, removing", "finalizer", o.addPendingFinalizer, "currentFinalizers", finalizers)
 			err = o.finalizerUpdater.RemoveFinalizer(ctx, object, o.addPendingFinalizer)
 			if err != nil {
@@ -243,6 +248,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 				return err
 			}
 		}
+		markCompleted(ctx)
 		return nil
 	}
 
@@ -250,6 +256,8 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	// Call the add handler, and if it returns successfully (no error), add the finalizer.
 	// Before we call the downstream add, add an "add pending" finalizer to prevent us missing a delete during the add process (and/or its retries)
 	logger.Debug("Adding in-progress finalizer before add call", "finalizer", o.addPendingFinalizer, "currentFinalizers", finalizers)
+	// Finalizer patches write into the object, and it may be the informer's cached copy.
+	object = object.Copy()
 	err := o.finalizerUpdater.AddFinalizer(ctx, object, o.addPendingFinalizer)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("finalizer add error: %s", err.Error()))
@@ -277,6 +285,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 		logger.Error("error adding finalizer", "error", err.Error(), "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
 		return fmt.Errorf("error adding finalizer: %w", err)
 	}
+	markCompleted(ctx)
 	return nil
 }
 
@@ -302,11 +311,9 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 	logger := logging.FromContext(ctx).With("action", "update", "component", "OpinionatedWatcher", "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())
 	logger.Debug("Handling update")
 
-	// Add is handed a copy, since its finalizer patches write into the object: a retry of this event must still find
-	// the two sides identical.
 	if o.handlesIdenticalUpdates() && isIdenticalUpdate(src, tgt) {
 		logger.Debug("Update re-delivers the object unchanged, handling it as a re-listed object")
-		return o.Add(ctx, tgt.Copy())
+		return o.Add(ctx, tgt)
 	}
 
 	// Only fire off Update if the generation has changed (so skip subresource updates)
@@ -328,6 +335,8 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 		}
 		// Add the finalizer (which also updates `new` inline)
 		logger.Debug("Successful call to Add, add the finalizer to the object", "finalizer", o.finalizer)
+		// Finalizer patches write into the object, and it may be the informer's cached copy.
+		tgt = tgt.Copy()
 		err = o.finalizerUpdater.ReplaceFinalizer(ctx, tgt, o.addPendingFinalizer, o.finalizer)
 		if err != nil {
 			span.SetStatus(codes.Error, fmt.Sprintf("watcher add finalizer error: %s", err.Error()))
@@ -356,6 +365,8 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 			span.SetStatus(codes.Error, fmt.Sprintf("watcher delete error: %s", err.Error()))
 			return err
 		}
+		// Finalizer patches write into the object, and it may be the informer's cached copy.
+		tgt = tgt.Copy()
 
 		if slices.Contains(newFinalizers, o.finalizer) {
 			logger.Debug("Delete successful, removing finalizer", "finalizer", o.finalizer, "currentFinalizers", newFinalizers)
@@ -381,6 +392,7 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 				return err
 			}
 		}
+		markCompleted(ctx)
 		return nil
 	}
 
@@ -395,6 +407,7 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 		span.SetStatus(codes.Error, fmt.Sprintf("watcher update error: %s", err.Error()))
 		return err
 	}
+	markCompleted(ctx)
 	return nil
 }
 
@@ -443,10 +456,20 @@ func (o *OpinionatedWatcher) deleteFunc(ctx context.Context, object resource.Obj
 	return nil
 }
 
-// handlesIdenticalUpdates reports whether o handles an identical update as a re-listed Add, which completes whatever
-// add was outstanding for the object: the InformerController then retires a queued retry of that add.
+// handlesIdenticalUpdates reports whether o handles an identical update as a re-listed Add. The InformerController
+// then treats such an update as a resync, and drops a queued create or resync retry of the object once a delivery
+// which started after it has completed (see deliveryOutcome).
 func (o *OpinionatedWatcher) handlesIdenticalUpdates() bool {
 	return o.handleIdentical
+}
+
+// updateIsAdd reports whether Update handles a changed tgt as an add: one it would not skip, which lacks the
+// watcher's finalizer and is not being deleted. A retry of such an update repeats an add, not an update.
+func (o *OpinionatedWatcher) updateIsAdd(src, tgt resource.Object) bool {
+	if tgt.GetGeneration() > 0 && src != nil && src.GetGeneration() == tgt.GetGeneration() {
+		return false
+	}
+	return tgt.GetDeletionTimestamp() == nil && !slices.Contains(o.getFinalizers(tgt), o.finalizer)
 }
 
 // isIdenticalUpdate reports whether an update re-delivers the object unchanged: every write changes the
@@ -471,4 +494,23 @@ func (*OpinionatedWatcher) getFinalizers(object resource.Object) []string {
 		return object.GetFinalizers()
 	}
 	return make([]string, 0)
+}
+
+// deliveryOutcome is how a watcher tells the InformerController, through the call's context, that a delivery did the
+// work it stood for (an add, a sync, an update or a deletion) rather than skipping it.
+type deliveryOutcome struct {
+	completed bool
+}
+
+type deliveryOutcomeKey struct{}
+
+func withDeliveryOutcome(ctx context.Context) (context.Context, *deliveryOutcome) {
+	outcome := &deliveryOutcome{}
+	return context.WithValue(ctx, deliveryOutcomeKey{}, outcome), outcome
+}
+
+func markCompleted(ctx context.Context) {
+	if outcome, ok := ctx.Value(deliveryOutcomeKey{}).(*deliveryOutcome); ok {
+		outcome.completed = true
+	}
 }

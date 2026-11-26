@@ -1473,51 +1473,111 @@ func counterValueFromVec(t *testing.T, cv *prometheus.CounterVec, labelValues ..
 	return pb.GetCounter().GetValue()
 }
 
-// identicalHandlingWatcher handles an identical update as a re-listed Add, as an OpinionatedWatcher with
-// HandleIdentical does.
-type identicalHandlingWatcher struct {
-	SimpleWatcher
+// supersedingTestWatcher stands in for an OpinionatedWatcher with HandleIdentical: it reports a delivery as completed
+// whenever its function succeeds, unless skip says the delivery did nothing.
+type supersedingTestWatcher struct {
+	add        func() error
+	update     func() error
+	updateAdds bool
+	skip       bool
+	adds       int
+	updates    int
 }
 
-func (*identicalHandlingWatcher) handlesIdenticalUpdates() bool { return true }
+func (w *supersedingTestWatcher) Add(ctx context.Context, _ resource.Object) error {
+	w.adds++
+	return w.done(ctx, w.add)
+}
 
-// A failed add leaves a create retry queued. A resync which completes the add must retire it, or the retry repeats the
-// add's side effects; one which fails must leave it for the retry to do the add.
-func TestInformerController_ResyncRetiresSupersededRetries(t *testing.T) {
+func (w *supersedingTestWatcher) Update(ctx context.Context, _, _ resource.Object) error {
+	w.updates++
+	return w.done(ctx, w.update)
+}
+
+func (*supersedingTestWatcher) Delete(context.Context, resource.Object) error { return nil }
+
+func (w *supersedingTestWatcher) done(ctx context.Context, fn func() error) error {
+	if fn != nil {
+		if err := fn(); err != nil {
+			return err
+		}
+	}
+	if !w.skip {
+		markCompleted(ctx)
+	}
+	return nil
+}
+
+func (*supersedingTestWatcher) handlesIdenticalUpdates() bool { return true }
+
+func (w *supersedingTestWatcher) updateIsAdd(resource.Object, resource.Object) bool {
+	return w.updateAdds
+}
+
+// queuedRetry is a retry waiting in either backend, which a test runs itself rather than waiting for its turn.
+type queuedRetry struct {
+	action ResourceAction
+	run    func() (*time.Duration, error)
+}
+
+func queuedRetries(t *testing.T, c *InformerController) []queuedRetry {
+	t.Helper()
+	var queued []queuedRetry
+	if c.retryProcessor == nil {
+		c.toRetry.RangeAll(func(_ string, _ int, info retryInfo) {
+			queued = append(queued, queuedRetry{action: info.action, run: info.retryFunc})
+		})
+		return queued
+	}
+	processor, ok := c.retryProcessor.(*defaultRetryProcessor)
+	require.True(t, ok)
+	for _, w := range processor.workers {
+		w.mu.Lock()
+		for _, req := range w.queue {
+			queued = append(queued, queuedRetry{action: req.Action, run: req.RetryFunc})
+		}
+		w.mu.Unlock()
+	}
+	return queued
+}
+
+func runQueued(t *testing.T, c *InformerController, actions ...ResourceAction) {
+	t.Helper()
+	queued := queuedRetries(t, c)
+	for _, action := range actions {
+		found := false
+		for _, retry := range queued {
+			if retry.action == action {
+				_, _ = retry.run()
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "no queued %s retry", action)
+	}
+}
+
+// A create or resync retry replays an old state of the object. Once a delivery which started after it has done its
+// work, replaying it would repeat an add or sync stale data, so it must be dropped when it comes up; while nothing
+// newer has completed, it must run.
+func TestInformerController_SupersededRetries(t *testing.T) {
+	failing := errors.New("failed")
 	obj := &resource.TypedSpecObject[string]{}
 	obj.SetName("obj")
 	obj.SetResourceVersion("5")
 	obj.SetGeneration(1)
-	failing := errors.New("failed")
-
-	newController := func(t *testing.T, processor bool) (*InformerController, func() int) {
-		cfg := InformerControllerConfig{RetryDequeuePolicy: OpinionatedRetryDequeuePolicy}
-		if processor {
-			cfg.RetryProcessorConfig = &RetryProcessorConfig{}
-		}
-		c := NewInformerController(cfg)
-		c.RetryPolicy = func(error, int) (bool, time.Duration) { return true, time.Hour }
-		queued := func() int {
-			if c.retryProcessor != nil {
-				return c.retryProcessor.Len()
+	changed := obj.Copy()
+	changed.SetResourceVersion("6")
+	changed.SetGeneration(2)
+	failFirst := func(n int) func() error {
+		calls := 0
+		return func() error {
+			calls++
+			if calls <= n {
+				return failing
 			}
-			total := 0
-			for _, key := range c.toRetry.Keys() {
-				total += c.toRetry.KeySize(key)
-			}
-			return total
+			return nil
 		}
-		return c, queued
-	}
-	watcherFor := func(handlesIdentical bool, addErr, updateErr error) ResourceWatcher {
-		simple := SimpleWatcher{
-			AddFunc:    func(context.Context, resource.Object) error { return addErr },
-			UpdateFunc: func(context.Context, resource.Object, resource.Object) error { return updateErr },
-		}
-		if handlesIdentical {
-			return &identicalHandlingWatcher{SimpleWatcher: simple}
-		}
-		return &simple
 	}
 
 	for _, processor := range []bool{false, true} {
@@ -1525,56 +1585,111 @@ func TestInformerController_ResyncRetiresSupersededRetries(t *testing.T) {
 		if processor {
 			name = "retry processor"
 		}
+		newController := func(t *testing.T, watcher ResourceWatcher) *InformerController {
+			cfg := InformerControllerConfig{RetryDequeuePolicy: OpinionatedRetryDequeuePolicy}
+			if processor {
+				cfg.RetryProcessorConfig = &RetryProcessorConfig{}
+			}
+			c := NewInformerController(cfg)
+			c.RetryPolicy = func(error, int) (bool, time.Duration) { return true, time.Hour }
+			require.NoError(t, c.AddWatcher(watcher, "foo"))
+			return c
+		}
+		add := func(t *testing.T, c *InformerController, o resource.Object) {
+			require.NoError(t, c.informerAddFunc("foo")(t.Context(), o))
+		}
+		update := func(t *testing.T, c *InformerController, old, o resource.Object) {
+			require.NoError(t, c.informerUpdateFunc("foo")(t.Context(), old, o))
+		}
+
 		t.Run(name, func(t *testing.T) {
-			t.Run("a resync which succeeds retires a queued add", func(t *testing.T) {
-				c, queued := newController(t, processor)
-				require.NoError(t, c.AddWatcher(watcherFor(true, failing, nil), "foo"))
-				require.NoError(t, c.informerAddFunc("foo")(t.Context(), obj))
-				require.Equal(t, 1, queued())
-				require.NoError(t, c.informerUpdateFunc("foo")(t.Context(), obj, obj.Copy()))
-				assert.Equal(t, 0, queued())
+			t.Run("a resync which completes retires a failed add", func(t *testing.T) {
+				w := &supersedingTestWatcher{add: failFirst(1)}
+				c := newController(t, w)
+				add(t, c, obj)
+				update(t, c, obj, obj.Copy())
+				runQueued(t, c, ResourceActionCreate)
+				assert.Equal(t, 1, w.adds)
 			})
 
-			t.Run("a resync which fails keeps the queued add, and queues itself", func(t *testing.T) {
-				c, queued := newController(t, processor)
-				require.NoError(t, c.AddWatcher(watcherFor(true, failing, failing), "foo"))
-				require.NoError(t, c.informerAddFunc("foo")(t.Context(), obj))
-				require.NoError(t, c.informerUpdateFunc("foo")(t.Context(), obj, obj.Copy()))
-				assert.Equal(t, 2, queued())
+			t.Run("a re-listed add which completes retires a failed add", func(t *testing.T) {
+				w := &supersedingTestWatcher{add: failFirst(1)}
+				c := newController(t, w)
+				add(t, c, obj)
+				add(t, c, obj.Copy()) // as a periodic re-list delivers it
+				runQueued(t, c, ResourceActionCreate)
+				assert.Equal(t, 2, w.adds)
 			})
 
-			t.Run("a later resync which succeeds retires a failed one", func(t *testing.T) {
-				c, queued := newController(t, processor)
-				updateErr := failing
-				watcher := &identicalHandlingWatcher{SimpleWatcher: SimpleWatcher{
-					UpdateFunc: func(context.Context, resource.Object, resource.Object) error { return updateErr },
-				}}
-				require.NoError(t, c.AddWatcher(watcher, "foo"))
-				require.NoError(t, c.informerUpdateFunc("foo")(t.Context(), obj, obj.Copy()))
-				require.Equal(t, 1, queued())
-				updateErr = nil
-				newer := obj.Copy()
-				newer.SetResourceVersion("6") // a status write: the generation is unchanged
-				require.NoError(t, c.informerUpdateFunc("foo")(t.Context(), newer, newer.Copy()))
-				assert.Equal(t, 0, queued())
+			t.Run("a retry which completes retires its superseded sibling", func(t *testing.T) {
+				w := &supersedingTestWatcher{add: failFirst(1), update: failFirst(1)}
+				c := newController(t, w)
+				add(t, c, obj)
+				update(t, c, obj, obj.Copy())
+				require.Len(t, queuedRetries(t, c), 2)
+				runQueued(t, c, ResourceActionResync, ResourceActionCreate)
+				assert.Equal(t, 1, w.adds, "the add retry replays a state the resync retry already handled")
 			})
 
-			t.Run("a changed update leaves a queued add alone", func(t *testing.T) {
-				c, queued := newController(t, processor)
-				require.NoError(t, c.AddWatcher(watcherFor(true, failing, nil), "foo"))
-				require.NoError(t, c.informerAddFunc("foo")(t.Context(), obj))
-				changed := obj.Copy()
-				changed.SetResourceVersion("6")
-				require.NoError(t, c.informerUpdateFunc("foo")(t.Context(), obj, changed))
-				assert.Equal(t, 1, queued())
+			t.Run("an older delivery completing leaves a newer failed one to run", func(t *testing.T) {
+				w := &supersedingTestWatcher{update: failFirst(1)}
+				c := newController(t, w)
+				// An older delivery starts first, as a second informer's would, but completes after the newer one fails.
+				older := c.newDelivery(c.keyForWatcherEvent("foo", 0, obj), w, ResourceActionResync,
+					func(ctx context.Context) error { markCompleted(ctx); return nil })
+				update(t, c, obj, obj.Copy()) // the newer resync, which fails
+				require.Len(t, queuedRetries(t, c), 1)
+				require.NoError(t, older.run(t.Context()))
+				runQueued(t, c, ResourceActionResync)
+				assert.Equal(t, 2, w.updates)
 			})
 
-			t.Run("a watcher which does not handle identical updates keeps the queued add", func(t *testing.T) {
-				c, queued := newController(t, processor)
-				require.NoError(t, c.AddWatcher(watcherFor(false, failing, nil), "foo"))
-				require.NoError(t, c.informerAddFunc("foo")(t.Context(), obj))
-				require.NoError(t, c.informerUpdateFunc("foo")(t.Context(), obj, obj.Copy()))
-				assert.Equal(t, 1, queued())
+			t.Run("a generation-changing update which completes retires a failed resync", func(t *testing.T) {
+				w := &supersedingTestWatcher{update: failFirst(1)}
+				c := newController(t, w)
+				update(t, c, obj, obj.Copy())
+				update(t, c, obj, changed)
+				runQueued(t, c, ResourceActionResync)
+				assert.Equal(t, 2, w.updates, "the resync retry must not sync the old object")
+			})
+
+			t.Run("a failed update which adds is retried as an add, and retired by a completed resync", func(t *testing.T) {
+				w := &supersedingTestWatcher{update: failFirst(1), updateAdds: true}
+				c := newController(t, w)
+				update(t, c, obj, changed)
+				require.Equal(t, ResourceActionCreate, queuedRetries(t, c)[0].action)
+				w.updateAdds = false
+				update(t, c, changed, changed.Copy())
+				runQueued(t, c, ResourceActionCreate)
+				assert.Equal(t, 2, w.updates)
+			})
+
+			t.Run("a delivery which skips its work retires nothing", func(t *testing.T) {
+				w := &supersedingTestWatcher{add: failFirst(1)}
+				c := newController(t, w)
+				add(t, c, obj)
+				w.skip = true
+				update(t, c, obj, obj.Copy())
+				runQueued(t, c, ResourceActionCreate)
+				assert.Equal(t, 2, w.adds)
+			})
+
+			t.Run("a watcher which does not supersede keeps every retry", func(t *testing.T) {
+				adds := 0
+				c := newController(t, &SimpleWatcher{
+					AddFunc: func(context.Context, resource.Object) error {
+						adds++
+						if adds == 1 {
+							return failing
+						}
+						return nil
+					},
+					UpdateFunc: func(context.Context, resource.Object, resource.Object) error { return nil },
+				})
+				add(t, c, obj)
+				update(t, c, obj, obj.Copy())
+				runQueued(t, c, ResourceActionCreate)
+				assert.Equal(t, 2, adds)
 			})
 		})
 	}
