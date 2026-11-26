@@ -345,8 +345,7 @@ func (b *BusInformer) relist(ctx context.Context) error {
 			return fmt.Errorf("bus recovery LIST at %q contains an item without identity", rv)
 		}
 		id := resource.Identifier{Namespace: item.GetNamespace(), Name: item.GetName()}
-		itemVersion := numericVersion(item.GetResourceVersion())
-		if itemVersion == 0 || itemVersion > version {
+		if numericVersion(item.GetResourceVersion()) == 0 {
 			return fmt.Errorf("bus recovery LIST at %q has an invalid item resource version %q for %v", rv, item.GetResourceVersion(), id)
 		}
 		if _, duplicate := next[id]; duplicate {
@@ -356,11 +355,14 @@ func (b *BusInformer) relist(ctx context.Context) error {
 	}
 	for id, obj := range next {
 		old := r.items[id]
-		if r.deleted[id] > version {
+		// Grafana's first LIST page can see item writes committed after it
+		// reads the collection version. Use the item's own version when present.
+		itemVersion := numericVersion(obj.GetResourceVersion())
+		if r.deleted[id] >= itemVersion {
 			delete(next, id)
 			continue
 		}
-		if old != nil && numericVersion(old.GetResourceVersion()) > version {
+		if old != nil && numericVersion(old.GetResourceVersion()) > itemVersion {
 			next[id] = old
 			continue
 		}

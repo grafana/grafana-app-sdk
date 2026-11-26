@@ -175,15 +175,18 @@ func TestBusRecoveryRejectsOpaqueListAndKeepsNumericWatermark(t *testing.T) {
 
 func TestBusRecoveryArbitratesStaleSnapshots(t *testing.T) {
 	for _, tc := range []struct {
-		name       string
-		live       resourcebus.Verb
-		listRV     string
-		listItemRV string
-		wantError  string
+		name          string
+		live          resourcebus.Verb
+		listRV        string
+		listItemRV    string
+		wantError     string
+		wantNewerItem bool
 	}{
 		{name: "live write omitted", live: resourcebus.VerbModified, listRV: "150"},
 		{name: "live write with older listed item", live: resourcebus.VerbModified, listRV: "150", listItemRV: "120"},
 		{name: "live delete with older listed item", live: resourcebus.VerbDeleted, listRV: "150", listItemRV: "120"},
+		{name: "live write followed by a newer first-page item", live: resourcebus.VerbModified, listRV: "150", listItemRV: "250", wantNewerItem: true},
+		{name: "live delete followed by a recreated first-page item", live: resourcebus.VerbDeleted, listRV: "150", listItemRV: "250", wantNewerItem: true},
 		{name: "live write omitted from opaque list", live: resourcebus.VerbModified, listRV: "opaque", wantError: "snapshot resource version"},
 		{name: "live write with older item in opaque list", live: resourcebus.VerbModified, listRV: "opaque", listItemRV: "120", wantError: "snapshot resource version"},
 		{name: "live delete followed by opaque list", live: resourcebus.VerbDeleted, listRV: "opaque", wantError: "snapshot resource version"},
@@ -226,6 +229,12 @@ func TestBusRecoveryArbitratesStaleSnapshots(t *testing.T) {
 			}
 			informer.applyLive(t.Context(), resourcebus.Event{Verb: resourcebus.VerbAdded, Namespace: id.Namespace, Name: id.Name, ResourceVersion: "160"})
 			informer.applyLive(t.Context(), resourcebus.Event{Verb: resourcebus.VerbAdded, Namespace: id.Namespace, Name: id.Name, ResourceVersion: "opaque"})
+			if tc.wantNewerItem {
+				require.Equal(t, 3, seen)
+				require.Equal(t, tc.listItemRV, informer.recovery.items[id].GetResourceVersion())
+				require.Equal(t, int64(150), informer.recovery.listVersion, "an item version is not the collection version")
+				return
+			}
 			require.Equal(t, 2, seen)
 			if tc.live == resourcebus.VerbDeleted {
 				require.NotContains(t, informer.recovery.items, id)
