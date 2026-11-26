@@ -153,6 +153,17 @@ func TestRun(t *testing.T) {
 		if len(call.opts.ExtraPlugins) == 0 {
 			t.Error("expected ExtraPlugins to be set by Run")
 		}
+		// The plugin v2 calls get their middleware through the serve options.
+		if call.opts.Licensing == nil {
+			t.Fatal("expected Run to add the plugin v2 middleware")
+		}
+		serveOpts, err := call.opts.Licensing("my-app", backend.ServeOpts{})
+		if err != nil {
+			t.Fatalf("serve options decorator returned error: %v", err)
+		}
+		if len(serveOpts.HandlerMiddlewares) != 1 {
+			t.Errorf("expected 1 handler middleware, got %d", len(serveOpts.HandlerMiddlewares))
+		}
 	})
 
 	t.Run("passes manifest data, kube config and specific config to NewApp", func(t *testing.T) {
