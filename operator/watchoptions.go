@@ -25,6 +25,12 @@ type WatchLiveOptions struct {
 	Detail WatchDetail
 	// Distribution is how live deliveries may be divided across instances. Zero needs WatchDistributionAll.
 	Distribution WatchDistribution
+	// Ignore leaves out an add or update, judged on the current object alone. Deletes are always delivered. It is a
+	// request: a mechanism that doesn't apply it delivers the change anyway.
+	Ignore WatchIgnoreFunc
+	// IgnoreUnchanged leaves out an update it reports unchanged from the previous object the update carries. Adds and
+	// deletes are always delivered. It is a request: a mechanism that doesn't apply it delivers every update.
+	IgnoreUnchanged WatchUnchangedFunc
 }
 
 // WatchResyncOptions is one mechanism's periodic re-delivery of every object, or what a kind's handlers need of it.
@@ -143,7 +149,12 @@ func (o WatchOptions) WithDefaults() WatchOptions {
 	live, resync := o.channels()
 	defaulted := WatchOptions{}
 	if live != nil {
-		defaulted.Live = &WatchLiveOptions{Detail: live.detail(), Distribution: live.distribution()}
+		defaulted.Live = &WatchLiveOptions{
+			Detail:          live.detail(),
+			Distribution:    live.distribution(),
+			Ignore:          live.Ignore,
+			IgnoreUnchanged: live.IgnoreUnchanged,
+		}
 	}
 	if resync != nil {
 		defaulted.Resync = &WatchResyncOptions{
@@ -158,24 +169,30 @@ func (o WatchOptions) WithDefaults() WatchOptions {
 	return defaulted
 }
 
-// String names each channel as detail/distribution, and marks a resync's Ignore and IgnoreUnchanged.
+// String names each channel as detail/distribution, and marks each channel's Ignore and IgnoreUnchanged.
 func (o WatchOptions) String() string {
 	live, resync := o.channels()
 	described := "live=none"
 	if live != nil {
-		described = fmt.Sprintf("live=%s/%s", live.detail(), live.distribution())
+		described = fmt.Sprintf("live=%s/%s%s", live.detail(), live.distribution(),
+			ignoreMarks(live.Ignore, live.IgnoreUnchanged))
 	}
 	if resync == nil {
 		return described + " resync=none"
 	}
-	described = fmt.Sprintf("%s resync=%s/%s", described, resync.detail(), resync.distribution())
-	if resync.Ignore != nil {
-		described += "/ignore"
+	return fmt.Sprintf("%s resync=%s/%s%s", described, resync.detail(), resync.distribution(),
+		ignoreMarks(resync.Ignore, resync.IgnoreUnchanged))
+}
+
+func ignoreMarks(ignore WatchIgnoreFunc, ignoreUnchanged WatchUnchangedFunc) string {
+	marks := ""
+	if ignore != nil {
+		marks += "/ignore"
 	}
-	if resync.IgnoreUnchanged != nil {
-		described += "/ignore-unchanged"
+	if ignoreUnchanged != nil {
+		marks += "/ignore-unchanged"
 	}
-	return described
+	return marks
 }
 
 // channels defaults a WatchOptions describing neither to the live channel: a kind which says nothing needs changes
