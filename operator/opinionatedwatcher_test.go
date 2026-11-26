@@ -473,6 +473,66 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 		assert.Nil(t, err)
 	})
 
+	for _, test := range []struct {
+		name            string
+		resourceVersion string
+		hasFinalizer    bool
+		deleting        bool
+		wantCalls       []string
+	}{
+		{name: "same generation deletion", resourceVersion: "2", hasFinalizer: true, deleting: true, wantCalls: []string{"Delete", "patch replace"}},
+		{name: "cache resync", resourceVersion: "1", hasFinalizer: true, wantCalls: []string{"Sync"}},
+		{name: "same generation missing finalizer", resourceVersion: "2", wantCalls: []string{"patch add", "Add", "patch replace"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			client := &mockPatchClient{}
+			watcher, err := NewOpinionatedWatcher(schema, client, OpinionatedWatcherConfig{})
+			require.NoError(t, err)
+			old := schema.ZeroValue()
+			old.SetGeneration(1)
+			old.SetResourceVersion("1")
+			if test.hasFinalizer {
+				old.SetFinalizers([]string{watcher.finalizer})
+			}
+			event := old.Copy()
+			event.SetResourceVersion(test.resourceVersion)
+			if test.deleting {
+				now := metav1.Now()
+				event.SetDeletionTimestamp(&now)
+			}
+			original := event.Copy()
+			server := newFinalizerAPIServer(event)
+			var calls []string
+			client.GetIntoFunc = server.GetInto
+			client.PatchIntoFunc = func(ctx context.Context, id resource.Identifier, req resource.PatchRequest, opts resource.PatchOptions, into resource.Object) error {
+				calls = append(calls, "patch "+string(req.Operations[0].Operation))
+				return server.PatchInto(ctx, id, req, opts, into)
+			}
+			record := func(action string, obj resource.Object) error {
+				calls = append(calls, action)
+				assert.Equal(t, original, obj)
+				return nil
+			}
+			watcher.AddFunc = func(context.Context, resource.Object) error {
+				calls = append(calls, "Add")
+				assert.Equal(t, []string{watcher.addPendingFinalizer}, server.state().GetFinalizers(), "the pending finalizer must protect Add")
+				return nil
+			}
+			watcher.UpdateFunc = func(_ context.Context, _, obj resource.Object) error { return record("Update", obj) }
+			watcher.DeleteFunc = func(_ context.Context, obj resource.Object) error { return record("Delete", obj) }
+			watcher.SyncFunc = func(_ context.Context, obj resource.Object) error { return record("Sync", obj) }
+
+			require.NoError(t, watcher.Update(t.Context(), old, event))
+			assert.Equal(t, test.wantCalls, calls)
+			assert.Equal(t, original, event, "finalizer patches must leave the informer event untouched")
+			if test.deleting {
+				assert.Empty(t, server.state().GetFinalizers())
+			} else {
+				assert.Equal(t, []string{watcher.finalizer}, server.state().GetFinalizers())
+			}
+		})
+	}
+
 	t.Run("delete, not waiting on us", func(t *testing.T) {
 		o.UpdateFunc = func(ctx context.Context, old resource.Object, new resource.Object) error {
 			assert.Fail(t, "update should not be called")
@@ -1041,6 +1101,28 @@ func TestOpinionatedWatcher_Add_StaleObjects(t *testing.T) {
 		assert.Equal(t, 1, addCalls, "AddFunc should not be called for an object being deleted")
 		assert.Equal(t, 1, deleteCalls)
 		assert.Empty(t, f.server.state().GetFinalizers())
+	})
+
+	t.Run("failed Add recovered by its notification, then its retry", func(t *testing.T) {
+		// After a failed Add, delivering its in-progress patch tries the add again, and the controller's retry later
+		// calls Add with the object it was first given. The retry must see that the add finished.
+		f := newFixture(t, nil)
+		addErr := fmt.Errorf("downstream unavailable")
+		addCalls := 0
+		f.watcher.AddFunc = func(context.Context, resource.Object) error {
+			addCalls++
+			if addCalls == 1 {
+				return addErr
+			}
+			return nil
+		}
+		require.ErrorIs(t, f.watcher.Add(t.Context(), f.created), addErr)
+		replay(t, f)
+		require.Equal(t, 2, addCalls)
+
+		require.NoError(t, f.watcher.Add(t.Context(), f.created))
+		assert.Equal(t, 2, addCalls)
+		assert.Equal(t, []string{f.watcher.finalizer}, f.server.state().GetFinalizers())
 	})
 }
 

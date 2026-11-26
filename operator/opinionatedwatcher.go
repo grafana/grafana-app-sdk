@@ -372,8 +372,11 @@ func (o *OpinionatedWatcher) callbackObject(event, current resource.Object) reso
 	return event.Copy()
 }
 
-// Update handles deletion before generation filtering. Other updates with an unchanged
-// positive generation are ignored. Admitted updates recover missing finalizers through Add.
+// Update handles deletion and missing-finalizer recovery before filtering updates.
+// Deletion runs cleanup when an owned finalizer is present and removes it on success.
+// Missing finalizers use Add, with catch-up through UpdateFunc if a spec change
+// arrived before the completed finalizer. Cache resyncs use Sync. Finalizer-only
+// and other same-generation updates with a positive generation are ignored.
 //
 //nolint:funlen
 func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tgt resource.Object) error {
@@ -399,11 +402,6 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 		return o.cleanup(ctx, tgt)
 	}
 
-	// Only fire off Update if the generation has changed (so skip subresource updates)
-	if tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration() {
-		return nil
-	}
-
 	if !slices.Contains(newFinalizers, o.finalizer) {
 		// Either the add event was missed, or the original AddFunc call failed. Use the
 		// complete Add path so the in-progress finalizer protects the side effect.
@@ -418,6 +416,22 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 }
 
 func (o *OpinionatedWatcher) dispatchUpdate(ctx context.Context, span trace.Span, src, tgt resource.Object) error {
+	// A cache resync emits an update with the same resource version. It must call
+	// Sync even though the generation is unchanged so external state is verified.
+	if src.GetResourceVersion() != "" && src.GetResourceVersion() == tgt.GetResourceVersion() {
+		err := o.syncFunc(ctx, tgt)
+		if err != nil {
+			span.SetStatus(codes.Error, fmt.Sprintf("watcher sync error: %s", err.Error()))
+			return err
+		}
+		return nil
+	}
+
+	// Only fire off Update if the generation has changed (so skip subresource updates).
+	if tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration() {
+		return nil
+	}
+
 	err := o.updateFunc(ctx, src, tgt)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("watcher update error: %s", err.Error()))

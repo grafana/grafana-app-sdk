@@ -707,24 +707,55 @@ func TestApp_WatchOptions(t *testing.T) {
 		assert.Contains(t, err.Error(), `Live deliveries which are not "sharded"`)
 	})
 
-	t.Run("an opinionated watcher declaring a resync is refused", func(t *testing.T) {
-		_, err := NewApp(AppConfig{
+	t.Run("an opinionated watcher declaring a resync passes resyncs to its Sync", func(t *testing.T) {
+		const finalizer = "test-finalizer"
+		var handler operator.ResourceWatcher
+		var synced []resource.Object
+		createTestApp(t, AppConfig{
 			InformerConfig: AppInformerConfig{
-				InformerOptions: operator.InformerOptions{CacheResyncInterval: time.Minute},
+				InformerSupplier: func(resource.Kind, resource.ClientGenerator, operator.InformerOptions) (operator.Informer, error) {
+					return &mockInformer{AddEventHandlerFunc: func(h operator.ResourceWatcher) error {
+						handler = h
+						return nil
+					}}, nil
+				},
+				FinalizerSupplier: func(resource.Schema) string { return finalizer },
 			},
 			UnmanagedKinds: []AppUnmanagedKind{{
-				Kind:    testKind(),
-				Watcher: &Watcher{},
+				Kind: testKind(),
+				Watcher: &Watcher{
+					AddFunc: func(context.Context, resource.Object) error {
+						t.Error("a resync must not reach Add")
+						return nil
+					},
+					UpdateFunc: func(context.Context, resource.Object, resource.Object) error {
+						t.Error("a resync must not reach Update")
+						return nil
+					},
+					SyncFunc: func(_ context.Context, obj resource.Object) error {
+						synced = append(synced, obj)
+						return nil
+					},
+				},
 				ReconcileOptions: UnmanagedKindReconcileOptions{
 					UseOpinionated: true,
 					WatchNeeds:     operator.WatchOptions{Live: &operator.WatchLiveOptions{}, Resync: &operator.WatchResyncOptions{}},
 				},
 			}},
 		})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "declares a resync, which its opinionated watcher would never act on")
+		require.NotNil(t, handler, "the informer controller did not register a handler")
 
-		// The opinionated reconciler passes resyncs on, so the same declaration is served for one.
+		obj := &resource.UntypedObject{}
+		obj.SetName("test")
+		obj.SetGeneration(1)
+		obj.SetResourceVersion("1")
+		// The finalizer tells the watcher that Add already completed for this object.
+		obj.SetFinalizers([]string{finalizer})
+		require.NoError(t, handler.Update(t.Context(), obj.Copy(), obj))
+		assert.Equal(t, []resource.Object{obj}, synced)
+	})
+
+	t.Run("an opinionated reconciler can declare a resync", func(t *testing.T) {
 		createTestApp(t, AppConfig{
 			InformerConfig: AppInformerConfig{
 				InformerOptions: operator.InformerOptions{CacheResyncInterval: time.Minute},

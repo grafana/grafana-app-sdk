@@ -633,12 +633,11 @@ func (a *App) addInformerFor(kind AppUnmanagedKind) error {
 		FieldSelectors: kind.ReconcileOptions.FieldSelectors,
 	}
 	return a.watches.register(kind.Kind.GroupVersionKind().String(), operator.InformerRequest{
-		Kind:            kind.Kind,
-		Clients:         a.clientGenerator,
-		Supplier:        supplier,
-		Options:         opts,
-		Opinionated:     kind.ReconcileOptions.UseOpinionated,
-		DiscardsResyncs: kind.ReconcileOptions.UseOpinionated && kind.Watcher != nil,
+		Kind:        kind.Kind,
+		Clients:     a.clientGenerator,
+		Supplier:    supplier,
+		Options:     opts,
+		Opinionated: kind.ReconcileOptions.UseOpinionated,
 	}, a.informerController.AddInformer)
 }
 

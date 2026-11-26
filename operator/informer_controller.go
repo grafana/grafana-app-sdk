@@ -598,8 +598,8 @@ func (c *InformerController) dispatchWatcher(delivery context.Context, run *info
 	var err error
 	var syncRetry *watcherSyncRetry
 	c.wrapWatcherCall(string(action), kind, func() {
-		// A startup Add can call Sync. Record the actual failing callback
-		// without changing the action or error seen by policies.
+		// A startup Add and a cache Update can both call Sync. Record the
+		// actual failing callback without changing the action or error seen by policies.
 		if _, ok := watcher.(finalizerOwner); ok && obj.GetGeneration() == 0 && obj.GetDeletionTimestamp() == nil && action != ResourceActionDelete {
 			var failed atomic.Pointer[OpinionatedWatcher]
 			err = call(context.WithValue(ctx, syncFailureKey{}, &failed), old, obj)
@@ -638,7 +638,7 @@ func (c *InformerController) dispatchWatcher(delivery context.Context, run *info
 		}
 		if syncRetry != nil {
 			target := syncRetry.snapshot()
-			// Retry the failed Sync against the latest eligible snapshot.
+			// Equal versions deliver a cache Update as Sync, even after retargeting.
 			return nil, call(retryCtx, target, target)
 		}
 		return nil, call(c.cleanupContext(retryCtx, watcher, obj), old, obj)
