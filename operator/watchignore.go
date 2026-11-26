@@ -6,7 +6,8 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-// WatchIgnoreFunc reports whether a resync can leave out an object, judged on the current object alone.
+// WatchIgnoreFunc reports whether a live change or a resync can leave out an object, judged on the current object
+// alone.
 //
 // Experimental: this API may change in a minor release.
 type WatchIgnoreFunc func(current resource.Object) bool

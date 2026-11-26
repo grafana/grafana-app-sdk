@@ -96,3 +96,19 @@ func TestWatchUnchangedFunc_Unchanged(t *testing.T) {
 	identity.SetUID("")
 	assert.False(t, always.Unchanged(identity, identity.Copy()), "without a UID a replacement cannot be ruled out")
 }
+
+func TestWatchLiveOptions_checksUseTheSharedGuards(t *testing.T) {
+	live := WatchLiveOptions{
+		Ignore:          AlreadyObserved(func(resource.Object) (int64, bool) { return 1, true }),
+		IgnoreUnchanged: SameGeneration,
+	}
+	old, statusWrite := watchIgnoreObj("5", 1), watchIgnoreObj("6", 1)
+	assert.True(t, live.IgnoreUnchanged.Unchanged(old, statusWrite), "a status-only update can be left out")
+	assert.False(t, live.IgnoreUnchanged.Unchanged(old, watchIgnoreObj("7", 2)), "a spec update is delivered")
+	assert.False(t, live.IgnoreUnchanged.Unchanged(nil, statusWrite), "an add has no previous object")
+	assert.False(t, live.IgnoreUnchanged.Unchanged(old, deleting(watchIgnoreObj("8", 1))))
+	assert.True(t, live.Ignore.Ignores(statusWrite))
+	assert.False(t, live.Ignore.Ignores(deleting(watchIgnoreObj("8", 1))))
+	assert.False(t, WatchLiveOptions{}.Ignore.Ignores(statusWrite), "unset leaves out nothing")
+	assert.False(t, WatchLiveOptions{}.IgnoreUnchanged.Unchanged(old, statusWrite))
+}
