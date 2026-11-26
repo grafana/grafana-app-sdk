@@ -1432,6 +1432,48 @@ func TestInformerController_Run_WithRetryProcessorDequeue(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 		assert.Equal(t, int64(1), addCalls.Load(), "add retry should have been dequeued by update")
 	})
+
+	t.Run("deletion dequeues a stale resync retry", func(t *testing.T) {
+		// A failed resync queues a retry holding the object as it was. Once the object is being deleted and cleanup
+		// has run, replaying that retry would call Sync again and could recreate what cleanup removed. Another owner's
+		// finalizer keeps the object terminating, so no delete event comes to dequeue it, and the deletion update
+		// doesn't change the generation.
+		kind := "foo"
+		inf := &testInformer{}
+		// The retry delay is long so the retry never runs during the test, which checks the queue instead.
+		c := newTestControllerWithProcessor(func(err error, attempt int) (bool, time.Duration) {
+			return true, time.Second * 10
+		}, time.Millisecond*50)
+		c.RetryDequeuePolicy = OpinionatedRetryDequeuePolicy
+		sch := resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{})
+		obj := sch.ZeroValue()
+		obj.SetName("test")
+		obj.SetGeneration(1)
+		obj.SetResourceVersion("1")
+		obj.SetFinalizers([]string{DefaultFinalizerSupplier(sch), "other.example/cleanup"})
+		watcher, server := newTestWatcherWithServer(t, sch, obj)
+		watcher.SyncFunc = func(context.Context, resource.Object) error {
+			return errors.New("downstream unavailable")
+		}
+		var deleteCalls atomic.Int64
+		watcher.DeleteFunc = func(context.Context, resource.Object) error {
+			deleteCalls.Add(1)
+			return nil
+		}
+		require.NoError(t, c.AddWatcher(watcher, kind))
+		require.NoError(t, c.AddInformer(inf, kind))
+		go c.Run(t.Context())
+
+		// A resync delivers the object unchanged.
+		inf.FireUpdate(t.Context(), obj, obj)
+		require.Equal(t, 1, c.retryProcessor.Len(), "the failed resync should have queued a retry")
+
+		deletion := server.markDeleting()
+		inf.FireUpdate(t.Context(), deletion[0], deletion[1])
+		assert.Equal(t, int64(1), deleteCalls.Load())
+		assert.Equal(t, []string{"other.example/cleanup"}, server.state().GetFinalizers())
+		assert.Zero(t, c.retryProcessor.Len(), "the deletion should have dequeued the stale resync retry")
+	})
 }
 
 func waitForSignal(t *testing.T, signal <-chan struct{}, failure string) {
@@ -1527,8 +1569,7 @@ func TestInformerController_Run_OrdersDeletionAndResyncRetry(t *testing.T) {
 						},
 					})
 				}
-				// Startup Add calls Sync for an object that already carries the watcher finalizer.
-				inf.FireAdd(t.Context(), obj)
+				inf.FireUpdate(t.Context(), obj, obj)
 				require.EqualValues(t, 1, syncCalls.Load())
 				if test.blockOtherKey {
 					require.Equal(t, 2, c.retryProcessor.Len())
@@ -1756,6 +1797,164 @@ func TestInformerController_RetryTicker_DequeueDuringBatch(t *testing.T) {
 	})
 }
 
+func TestInformerController_Run_AddRetryAndPendingUpdate(t *testing.T) {
+	for _, test := range []struct {
+		name             string
+		retryFails       bool
+		cancelSpecChange bool
+		cancelNextUpdate bool
+	}{
+		{name: "completed retry suppresses pending update"},
+		{name: "failed retry permits recovery", retryFails: true},
+		{name: "live update follows deferred catch-up", cancelSpecChange: true},
+		{name: "update expiring behind catch-up still runs in order", cancelSpecChange: true, cancelNextUpdate: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				const kind = "foo"
+				// Admit one retry of the initial Add. A canceled delivery has
+				// never run and must survive even if the policy declines its error.
+				initialErr := errors.New("initial add failed")
+				catchupErr := errors.New("catch-up failed")
+				c := newTestControllerWithProcessor(func(err error, attempt int) (bool, time.Duration) {
+					if errors.Is(err, catchupErr) {
+						return attempt == 0, time.Hour
+					}
+					return errors.Is(err, initialErr) && attempt == 0, 0
+				}, time.Second)
+				c.RetryDequeuePolicy = OpinionatedRetryDequeuePolicy
+				schema := resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{})
+				obj := schema.ZeroValue()
+				obj.SetName("test")
+				obj.SetUID("original")
+				obj.SetResourceVersion("1")
+				obj.SetGeneration(1)
+				require.NoError(t, obj.SetSpec("original"))
+				watcher, server := newTestWatcherWithServer(t, schema, obj)
+				started := make(chan struct{})
+				unblock := make(chan struct{})
+				release := sync.OnceFunc(func() { close(unblock) })
+				defer release()
+				updated := make(chan struct{}, 1)
+				finishCatchup := make(chan struct{})
+				releaseCatchup := sync.OnceFunc(func() { close(finishCatchup) })
+				defer releaseCatchup()
+				applied := make(chan int64, 2)
+				var addCalls, updateCalls atomic.Int64
+				watcher.AddFunc = func(context.Context, resource.Object) error {
+					switch addCalls.Add(1) {
+					case 1:
+						return initialErr
+					case 2:
+						close(started)
+						<-unblock
+						if test.retryFails {
+							return errors.New("retry failed")
+						}
+					}
+					return nil
+				}
+				watcher.UpdateFunc = func(ctx context.Context, old, current resource.Object) error {
+					assert.NoError(t, ctx.Err())
+					if current.GetGeneration() == 2 {
+						assert.Equal(t, "original", old.GetSpec())
+						assert.Equal(t, "changed", current.GetSpec())
+					} else {
+						assert.Equal(t, "changed", old.GetSpec())
+						assert.Equal(t, "latest", current.GetSpec())
+					}
+					assert.Equal(t, server.state().GetResourceVersion(), current.GetResourceVersion())
+					updateCalls.Add(1)
+					if current.GetGeneration() == 2 {
+						updated <- struct{}{}
+						<-finishCatchup
+					}
+					applied <- current.GetGeneration()
+					if test.cancelNextUpdate && current.GetGeneration() == 2 {
+						// Generation 3 was delivered before this retry was queued.
+						// It must still supersede the failed catch-up.
+						return catchupErr
+					}
+					return nil
+				}
+				inf := &testInformer{}
+				require.NoError(t, c.AddWatcher(watcher, kind))
+				require.NoError(t, c.AddInformer(inf, kind))
+				runCtx, stop := context.WithCancel(t.Context())
+				defer stop()
+				go c.Run(runCtx)
+				inf.FireAdd(runCtx, obj)
+				waitForSignal(t, started, "Add retry did not start")
+				require.EqualValues(t, 2, addCalls.Load())
+				change := server.changesFrom(0)[0]
+				if test.cancelSpecChange {
+					change = server.change(func(obj resource.Object) {
+						obj.SetGeneration(2)
+						require.NoError(t, obj.SetSpec("changed"))
+					})
+				}
+				eventCtx, cancel := context.WithCancel(runCtx)
+				defer cancel()
+				done := make(chan struct{})
+				go func() { inf.FireUpdate(eventCtx, change[0], change[1]); close(done) }()
+				synctest.Wait()
+				require.EqualValues(t, 2, addCalls.Load(), "pending update overlapped the running retry")
+				if test.cancelSpecChange {
+					cancel()
+					synctest.Wait()
+					select {
+					case <-done:
+					default:
+						t.Fatal("canceled delivery is still waiting")
+					}
+				}
+				release()
+				<-done
+				if test.cancelSpecChange {
+					waitForSignal(t, updated, "spec update did not reach the watcher")
+					// The add has installed its finalizer. This notification takes
+					// the normal Update path while the catch-up is still writing.
+					next := server.change(func(obj resource.Object) {
+						obj.SetGeneration(3)
+						require.NoError(t, obj.SetSpec("latest"))
+					})
+					nextCtx, cancelNext := context.WithCancel(runCtx)
+					defer cancelNext()
+					result := make(chan error, 1)
+					go func() { result <- inf.handlers[0].Update(nextCtx, next[0], next[1]) }()
+					synctest.Wait()
+					require.EqualValues(t, 1, updateCalls.Load(), "generation 3 overtook the catch-up")
+					if test.cancelNextUpdate {
+						cancelNext()
+						require.ErrorIs(t, <-result, context.Canceled)
+					}
+					releaseCatchup()
+					if !test.cancelNextUpdate {
+						require.NoError(t, <-result)
+					}
+					synctest.Wait()
+					require.Len(t, applied, 2)
+					assert.EqualValues(t, 2, <-applied)
+					assert.EqualValues(t, 3, <-applied)
+					assert.Zero(t, c.retryProcessor.Len(), "superseded catch-up must not be retried")
+				}
+				synctest.Wait()
+				if test.retryFails {
+					assert.EqualValues(t, 3, addCalls.Load())
+				} else {
+					assert.EqualValues(t, 2, addCalls.Load())
+				}
+				assert.Equal(t, []string{watcher.finalizer}, server.state().GetFinalizers())
+				if test.cancelSpecChange {
+					assert.EqualValues(t, 2, updateCalls.Load())
+				} else {
+					assert.Zero(t, updateCalls.Load())
+				}
+			})
+		})
+	}
+}
+
 func TestInformerController_Update_FinalizerRemovalPreservesEventVersion(t *testing.T) {
 	schema := resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{})
 	obj := schema.ZeroValue()
@@ -1784,6 +1983,91 @@ func TestInformerController_Update_FinalizerRemovalPreservesEventVersion(t *test
 	// A shared informer reuses the last event's new object as the next old one.
 	inf.FireUpdate(t.Context(), deletion[1], server.state())
 	require.Equal(t, []ReconcileAction{ReconcileActionUpdated, ReconcileActionUpdated}, actions)
+}
+
+func TestInformerController_Run_InterruptedUpdateBeforeDelete(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		c := newTestControllerWithProcessor(func(_ error, attempt int) (bool, time.Duration) { return attempt == 0, 0 }, time.Second)
+		c.RetryDequeuePolicy = OpinionatedRetryDequeuePolicy
+		schema := resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{})
+		obj := schema.ZeroValue()
+		obj.SetName("item")
+		obj.SetUID("original")
+		obj.SetGeneration(1)
+		obj.SetResourceVersion("1")
+		obj.SetFinalizers([]string{DefaultFinalizerSupplier(schema)})
+		watcher, _ := newTestWatcherWithServer(t, schema, obj)
+		started, unblock := make(chan struct{}), make(chan struct{})
+		release := sync.OnceFunc(func() { close(unblock) })
+		defer release()
+		var syncCalls int
+		watcher.SyncFunc = func(context.Context, resource.Object) error {
+			syncCalls++
+			if syncCalls == 1 {
+				return errors.New("sync failed")
+			}
+			close(started)
+			<-unblock
+			return nil
+		}
+		var calls []string
+		watcher.UpdateFunc = func(context.Context, resource.Object, resource.Object) error {
+			calls = append(calls, "owner update")
+			return nil
+		}
+		later := &SimpleWatcher{
+			UpdateFunc: func(_ context.Context, _, obj resource.Object) error {
+				if obj.GetGeneration() == 2 {
+					calls = append(calls, "observer update")
+				}
+				return nil
+			},
+			DeleteFunc: func(context.Context, resource.Object) error {
+				calls = append(calls, "observer delete")
+				return nil
+			},
+		}
+		// A handler that completed before the timeout must not be replayed.
+		require.NoError(t, c.AddWatcher(&SimpleWatcher{UpdateFunc: func(_ context.Context, _, target resource.Object) error {
+			if target.GetGeneration() == 2 {
+				calls = append(calls, "first update")
+			}
+			return nil
+		}}, "kind"))
+		require.NoError(t, c.AddWatcher(watcher, "kind"))
+		require.NoError(t, c.AddWatcher(later, "kind"))
+		require.NoError(t, c.AddReconciler(&SimpleReconciler{ReconcileFunc: func(_ context.Context, req ReconcileRequest) (ReconcileResult, error) {
+			if req.Action != ReconcileActionResynced {
+				calls = append(calls, "reconcile "+string(ResourceActionFromReconcileAction(req.Action)))
+			}
+			return ReconcileResult{}, nil
+		}}, "kind"))
+		inf := &testInformer{}
+		require.NoError(t, c.AddInformer(inf, "kind"))
+		ctx, stop := context.WithCancel(t.Context())
+		defer stop()
+		go c.Run(ctx)
+		synctest.Wait()
+		handler := inf.handlers[0]
+		require.NoError(t, handler.Update(ctx, obj, obj))
+		<-started
+		next := obj.Copy()
+		next.SetGeneration(2)
+		next.SetResourceVersion("2")
+		require.NoError(t, next.SetSpec("changed"))
+		// Both deliveries expire behind the retry. Neither notification is
+		// replayed by the informer, including the final hard delete.
+		require.ErrorIs(t, withInformerEventTimeout(ctx, time.Second, func(ctx context.Context) error {
+			return handler.Update(ctx, obj, next)
+		}), context.DeadlineExceeded)
+		require.ErrorIs(t, withInformerEventTimeout(ctx, time.Second, func(ctx context.Context) error {
+			return handler.Delete(ctx, next)
+		}), context.DeadlineExceeded)
+		require.Equal(t, []string{"first update"}, calls)
+		release()
+		synctest.Wait()
+		require.Equal(t, []string{"first update", "owner update", "observer update", "reconcile UPDATE", "observer delete", "reconcile DELETE"}, calls)
+	})
 }
 
 func TestInformerController_Run_TerminatingUpdateOrder(t *testing.T) {
@@ -1844,12 +2128,12 @@ func TestInformerController_Run_TerminatingUpdateOrder(t *testing.T) {
 
 func TestInformerController_Run_GenerationZeroSyncRetry(t *testing.T) {
 	for _, test := range []struct {
-		name                  string
-		running, metadataOnly bool
+		name                           string
+		startup, running, metadataOnly bool
 	}{
-		{name: "queued startup sync follows a spec change"},
+		{name: "queued cache sync follows a spec change"},
 		{name: "queued sync survives a metadata change", metadataOnly: true},
-		{name: "running startup sync finishes before the update", running: true},
+		{name: "running startup sync finishes before the update", startup: true, running: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
@@ -1905,7 +2189,11 @@ func TestInformerController_Run_GenerationZeroSyncRetry(t *testing.T) {
 				go c.Run(ctx)
 				synctest.Wait()
 				handler := inf.handlers[0]
-				require.NoError(t, handler.Add(ctx, obj))
+				if test.startup {
+					require.NoError(t, handler.Add(ctx, obj))
+				} else {
+					require.NoError(t, handler.Update(ctx, obj, obj))
+				}
 				if test.running {
 					<-started
 				}
@@ -2070,10 +2358,8 @@ func TestInformerController_DeletionRetryWaitCancellation(t *testing.T) {
 				require.NoError(t, c.AddWatcher(watcher, kind))
 				var laterWatcherCalls atomic.Int64
 				require.NoError(t, c.AddWatcher(&SimpleWatcher{
-					AddFunc: func(_ context.Context, target resource.Object) error {
-						if target.GetDeletionTimestamp() != nil {
-							laterWatcherCalls.Add(1)
-						}
+					AddFunc: func(context.Context, resource.Object) error {
+						laterWatcherCalls.Add(1)
 						return nil
 					},
 					UpdateFunc: func(_ context.Context, _, target resource.Object) error {
@@ -2123,7 +2409,7 @@ func TestInformerController_DeletionRetryWaitCancellation(t *testing.T) {
 				run := source.run.Load()
 				update := inf.handlers[0].Update
 				add := inf.handlers[0].Add
-				require.NoError(t, add(runCtx, obj))
+				require.NoError(t, update(runCtx, obj, obj))
 
 				waitForSignal(t, started, "the resync retry did not start")
 
