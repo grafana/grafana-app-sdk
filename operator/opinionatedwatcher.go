@@ -8,6 +8,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/codes"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
@@ -169,6 +170,14 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	logger := logging.FromContext(ctx).With("action", "add", "component", "OpinionatedWatcher", "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
 	logger.Debug("Handling add")
 
+	exists, err := o.readIfAddInProgress(ctx, object)
+	if err != nil {
+		span.SetStatus(codes.Error, fmt.Sprintf("error reading object: %s", err.Error()))
+		return err
+	}
+	if !exists {
+		return nil
+	}
 	finalizers := o.getFinalizers(object)
 
 	// If we're pending deletion, check on the finalizers to see if it's waiting on us.
@@ -250,7 +259,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	// Call the add handler, and if it returns successfully (no error), add the finalizer.
 	// Before we call the downstream add, add an "add pending" finalizer to prevent us missing a delete during the add process (and/or its retries)
 	logger.Debug("Adding in-progress finalizer before add call", "finalizer", o.addPendingFinalizer, "currentFinalizers", finalizers)
-	err := o.finalizerUpdater.AddFinalizer(ctx, object, o.addPendingFinalizer)
+	err = o.finalizerUpdater.AddFinalizer(ctx, object, o.addPendingFinalizer)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("finalizer add error: %s", err.Error()))
 		if chk, ok := errors.AsType[FinalizerError](err); ok {
@@ -258,6 +267,10 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 		}
 		logger.Error("error adding in-progress finalizer", "error", err.Error(), "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
 		return fmt.Errorf("error adding in-progress finalizer: %w", err)
+	}
+	// A conflict while adding it re-reads the object, which may show the add completed by another delivery meanwhile.
+	if slices.Contains(o.getFinalizers(object), o.finalizer) {
+		return o.Add(ctx, object)
 	}
 
 	err = o.addFunc(ctx, object)
@@ -278,6 +291,23 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 		return fmt.Errorf("error adding finalizer: %w", err)
 	}
 	return nil
+}
+
+// readIfAddInProgress reads object as it is now when an earlier attempt left its in-progress finalizer on this copy of
+// it, as a queued retry of a failed add does: another delivery may have completed the add since, which must then be
+// synced rather than repeated. It reports false for an object which no longer exists.
+func (o *OpinionatedWatcher) readIfAddInProgress(ctx context.Context, object resource.Object) (bool, error) {
+	finalizers := o.getFinalizers(object)
+	if !slices.Contains(finalizers, o.addPendingFinalizer) || slices.Contains(finalizers, o.finalizer) {
+		return true, nil
+	}
+	if err := o.finalizerUpdater.client.GetInto(ctx, object.GetStaticMetadata().Identifier(), object); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("error reading object to resume an in-progress add: %w", err)
+	}
+	return true, nil
 }
 
 // Update is part of implementing ResourceWatcher
@@ -303,10 +333,11 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 	logger.Debug("Handling update")
 
 	// Every write changes the resourceVersion, so the same one on both sides is the object re-delivered unchanged.
-	// resourceVersions may only be compared for equality, and an empty one identifies nothing.
+	// resourceVersions may only be compared for equality, and an empty one identifies nothing. Add is handed a copy,
+	// since its finalizer patches write into the object: a retry of this event must still find the two sides identical.
 	if rv := tgt.GetResourceVersion(); o.handleIdentical && rv != "" && rv == src.GetResourceVersion() {
 		logger.Debug("Update re-delivers the object unchanged, handling it as a re-listed object")
-		return o.Add(ctx, tgt)
+		return o.Add(ctx, tgt.Copy())
 	}
 
 	// Only fire off Update if the generation has changed (so skip subresource updates)

@@ -2,10 +2,12 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -13,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sschema "k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -652,6 +655,97 @@ func TestOpinionatedWatcher_Update_HandleIdentical(t *testing.T) {
 		o, called := newWatcher(t, true)
 		require.NoError(t, o.Update(context.TODO(), finalized(o, ""), finalized(o, "")))
 		assert.Empty(t, *called)
+	})
+
+	t.Run("a retry of a failed resync still finds the two sides identical", func(t *testing.T) {
+		client := &mockPatchClient{PatchIntoFunc: func(_ context.Context, _ resource.Identifier, _ resource.PatchRequest, _ resource.PatchOptions, into resource.Object) error {
+			into.SetResourceVersion("6") // the in-progress finalizer write
+			return nil
+		}}
+		o, err := NewOpinionatedWatcher(schema, client, OpinionatedWatcherConfig{HandleIdentical: true})
+		require.NoError(t, err)
+		adds := 0
+		o.AddFunc = func(context.Context, resource.Object) error { adds++; return errors.New("add failed") }
+
+		src, tgt := finalized(o, "5"), finalized(o, "5")
+		src.SetFinalizers(nil)
+		tgt.SetFinalizers(nil)
+		require.Error(t, o.Update(context.TODO(), src, tgt))
+		require.Error(t, o.Update(context.TODO(), src, tgt), "the controller retries with the same pair")
+		assert.Equal(t, 2, adds)
+		assert.Equal(t, "5", tgt.GetResourceVersion())
+	})
+}
+
+// A queued retry of a failed add carries the in-progress finalizer its first attempt wrote. When a resync has completed
+// the add meanwhile, the retry must sync rather than call AddFunc again.
+func TestOpinionatedWatcher_Add_RetryAfterTheAddCompletedElsewhere(t *testing.T) {
+	ex := &resource.TypedSpecObject[string]{}
+	schema := resource.NewSimpleSchema("group", "version", ex, &resource.TypedList[*resource.TypedSpecObject[string]]{})
+	setup := func(t *testing.T, client *mockPatchClient) (*OpinionatedWatcher, *[]string) {
+		o, err := NewOpinionatedWatcher(schema, client, OpinionatedWatcherConfig{})
+		require.NoError(t, err)
+		var called []string
+		o.AddFunc = func(context.Context, resource.Object) error { called = append(called, "add"); return nil }
+		o.SyncFunc = func(context.Context, resource.Object) error { called = append(called, "sync"); return nil }
+		return o, &called
+	}
+	withFinalizers := func(resourceVersion string, finalizers ...string) resource.Object {
+		obj := schema.ZeroValue()
+		obj.SetGeneration(1)
+		obj.SetResourceVersion(resourceVersion)
+		obj.SetFinalizers(finalizers)
+		return obj
+	}
+
+	t.Run("a retry finding the add completed syncs", func(t *testing.T) {
+		client := &mockPatchClient{}
+		o, called := setup(t, client)
+		client.GetIntoFunc = func(_ context.Context, _ resource.Identifier, into resource.Object) error {
+			into.SetResourceVersion("8")
+			into.SetFinalizers([]string{o.finalizer})
+			return nil
+		}
+		require.NoError(t, o.Add(context.TODO(), withFinalizers("6", o.addPendingFinalizer)))
+		assert.Equal(t, []string{"sync"}, *called)
+	})
+
+	t.Run("a retry finding the add still pending calls AddFunc again", func(t *testing.T) {
+		client := &mockPatchClient{}
+		o, called := setup(t, client)
+		require.NoError(t, o.Add(context.TODO(), withFinalizers("6", o.addPendingFinalizer)))
+		assert.Equal(t, []string{"add"}, *called)
+	})
+
+	t.Run("a retry for an object which is gone does nothing", func(t *testing.T) {
+		client := &mockPatchClient{GetIntoFunc: func(context.Context, resource.Identifier, resource.Object) error {
+			return apierrors.NewNotFound(k8sschema.GroupResource{Group: "group", Resource: "objects"}, "obj")
+		}}
+		o, called := setup(t, client)
+		require.NoError(t, o.Add(context.TODO(), withFinalizers("6", o.addPendingFinalizer)))
+		assert.Empty(t, *called)
+	})
+
+	t.Run("a conflict adding the in-progress finalizer which shows the add completed syncs", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			client := &mockPatchClient{}
+			o, called := setup(t, client)
+			conflicted := false
+			client.PatchIntoFunc = func(context.Context, resource.Identifier, resource.PatchRequest, resource.PatchOptions, resource.Object) error {
+				if !conflicted {
+					conflicted = true
+					return &apierrors.StatusError{ErrStatus: metav1.Status{Code: http.StatusConflict, Reason: metav1.StatusReasonConflict}}
+				}
+				return nil
+			}
+			client.GetIntoFunc = func(_ context.Context, _ resource.Identifier, into resource.Object) error {
+				into.SetResourceVersion("8")
+				into.SetFinalizers([]string{o.finalizer})
+				return nil
+			}
+			require.NoError(t, o.Add(context.TODO(), withFinalizers("5")))
+			assert.Equal(t, []string{"sync"}, *called)
+		})
 	})
 }
 
