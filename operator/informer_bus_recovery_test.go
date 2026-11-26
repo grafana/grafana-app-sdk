@@ -43,7 +43,7 @@ func TestBusRecoveryAfterSubscriptionGap(t *testing.T) {
 			obj.SetResourceVersion(strconv.Itoa(lists * 100))
 			return []resource.Object{obj}, obj.GetResourceVersion(), nil
 		})
-		b, err := NewBusInformerWithRecovery(listerTestKind, subscriber, lister, BusInformerOptions{ResyncInterval: time.Hour})
+		b, err := NewBusInformerWithRecovery(listerTestKind, subscriber, lister, BusInformerOptions{}, BusRecoveryOptions{ResyncInterval: time.Hour})
 		require.NoError(t, err)
 		var deliveries []string
 		require.NoError(t, b.AddEventHandler(&SimpleWatcher{
@@ -115,7 +115,7 @@ func TestBusRecoverySchedulesRelistOnOverflow(t *testing.T) {
 				<-unblock
 			}
 			return nil, "5000", nil
-		}), BusInformerOptions{ResyncInterval: time.Hour})
+		}), BusInformerOptions{}, BusRecoveryOptions{ResyncInterval: time.Hour})
 		require.NoError(t, err)
 		done := make(chan error, 1)
 		go func() { done <- b.Run(ctx) }()
@@ -148,10 +148,9 @@ func TestBusRecoveryDegradedStartAndReconnect(t *testing.T) {
 		informer, err := NewBusInformerWithRecovery(listerTestKind, subscriber, listerFunc(func(context.Context) ([]resource.Object, string, error) {
 			lists.Add(1)
 			return nil, "100", nil
-		}), BusInformerOptions{
+		}), BusInformerOptions{ErrorHandler: func(context.Context, error) {}}, BusRecoveryOptions{
 			AllowDegradedStart: true,
 			ResyncInterval:     time.Hour,
-			ErrorHandler:       func(context.Context, error) {},
 		})
 		require.NoError(t, err)
 		done := make(chan error, 1)
@@ -176,7 +175,7 @@ func TestBusRecoveryRejectsOpaqueListAndKeepsNumericWatermark(t *testing.T) {
 	version := "100"
 	informer, err := NewBusInformerWithRecovery(listerTestKind, subscriber, listerFunc(func(context.Context) ([]resource.Object, string, error) {
 		return nil, version, nil
-	}), BusInformerOptions{})
+	}), BusInformerOptions{}, BusRecoveryOptions{})
 	require.NoError(t, err)
 	require.NoError(t, informer.AddEventHandler(&SimpleWatcher{AddFunc: func(context.Context, resource.Object) error {
 		t.Error("a stale add resurrected a missing key")
@@ -218,7 +217,7 @@ func TestBusRecoveryArbitratesStaleSnapshots(t *testing.T) {
 			objects := []resource.Object{initial}
 			informer, err := NewBusInformerWithRecovery(listerTestKind, sub, listerFunc(func(context.Context) ([]resource.Object, string, error) {
 				return objects, listRV, nil
-			}), BusInformerOptions{})
+			}), BusInformerOptions{}, BusRecoveryOptions{})
 			require.NoError(t, err)
 			seen := 0
 			require.NoError(t, informer.AddEventHandler(&SimpleWatcher{
@@ -266,19 +265,55 @@ func TestBusRecoveryArbitratesStaleSnapshots(t *testing.T) {
 	}
 }
 
-func TestBusRecoveryMechanismWorkerCount(t *testing.T) {
+func TestBusRecoveryBuildUsesKindWatchNeeds(t *testing.T) {
 	subscriber := busSubscribeFunc(func(context.Context, schema.GroupVersionResource, string, func(context.Context, resourcebus.Event), ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
 		return &testBusSubscription{}, nil
 	})
-	mechanism := NewBusMechanism(subscriber, BusMechanismOptions{})
+	group := resourcebus.Group{Name: "workers"}
+	var keyListOptions ClientListerOptions
+	recovery := NewBusRecovery(subscriber, group, BusRecoveryDefaults{
+		PageSize:       10,
+		ResyncInterval: time.Hour,
+		KeyListerFactory: func(_ resource.Kind, opts ClientListerOptions) (ResourceKeyLister, error) {
+			keyListOptions = opts
+			return nil, ErrProjectionUnsupported
+		},
+	})
+	supply := NewSelectingInformerSupplier(nil,
+		NewPeriodicList(PeriodicListOptions{}),
+		NewBusNotifications(subscriber, group),
+		recovery,
+	)
 	clients := keyListerClientGenerator{Client: keyListerFallbackClient{}}
+	live := &WatchLiveOptions{Detail: WatchDetailIdentity, Distribution: WatchDistributionShared}
+	resync := &WatchResyncOptions{Detail: WatchDetailIdentity, Interval: time.Minute, ListPageSize: 3}
+	liveOnly, err := supply(listerTestKind, clients, InformerOptions{WatchNeeds: WatchOptions{Live: live}})
+	require.NoError(t, err)
+	require.IsType(t, &busInformer{}, liveOnly)
+	resyncOnly, err := supply(listerTestKind, clients, InformerOptions{WatchNeeds: WatchOptions{Resync: resync}})
+	require.NoError(t, err)
+	require.IsType(t, &PeriodicInformer{}, resyncOnly)
+
 	for _, tc := range []struct {
 		configured uint64
 		want       uint64
 	}{{0, 10}, {1, 1}, {3, 3}} {
-		informer, err := mechanism.NewInformer(listerTestKind, clients, InformerOptions{MaxConcurrentWorkers: tc.configured})
+		informer, err := supply(listerTestKind, clients, InformerOptions{
+			WatchNeeds:           WatchOptions{Live: live, Resync: resync},
+			ListWatchOptions:     ListWatchOptions{Namespace: listerTestNamespace},
+			MaxConcurrentWorkers: tc.configured,
+		})
 		require.NoError(t, err)
-		require.Equal(t, tc.want, informer.(*BusInformerWithRecovery).opts.MaxConcurrentWorkers)
+		require.IsType(t, &BusInformerWithRecovery{}, informer)
+		bus := informer.(*BusInformerWithRecovery)
+		require.Equal(t, tc.want, bus.opts.MaxConcurrentWorkers)
+		require.Equal(t, time.Minute, bus.opts.ResyncInterval)
+		require.Equal(t, group, bus.group)
+		require.Equal(t, listerTestNamespace, bus.namespace)
+		require.Equal(t, ClientListerOptions{
+			ListWatchOptions: ListWatchOptions{Namespace: listerTestNamespace},
+			PageSize:         3,
+		}, keyListOptions)
 	}
 }
 
@@ -295,7 +330,7 @@ func TestBusRecoveryRetainsOverflowDuringCooldown(t *testing.T) {
 				time.Sleep(2 * overflowRelistInterval)
 			}
 			return nil, "100", nil
-		}), BusInformerOptions{ResyncInterval: time.Hour})
+		}), BusInformerOptions{}, BusRecoveryOptions{ResyncInterval: time.Hour})
 		require.NoError(t, err)
 		done := make(chan error, 1)
 		go func() { done <- informer.Run(ctx) }()
@@ -331,7 +366,7 @@ func TestBusRecoveryReconnectsDoNotPostponeScheduledResync(t *testing.T) {
 			obj.SetResourceVersion(version)
 			return []resource.Object{obj}, version, nil
 		})
-		informer, err := NewBusInformerWithRecovery(listerTestKind, subscriber, lister, BusInformerOptions{ResyncInterval: time.Minute})
+		informer, err := NewBusInformerWithRecovery(listerTestKind, subscriber, lister, BusInformerOptions{}, BusRecoveryOptions{ResyncInterval: time.Minute})
 		require.NoError(t, err)
 		updates := make(chan string, 16)
 		require.NoError(t, informer.AddEventHandler(&SimpleWatcher{
@@ -380,8 +415,8 @@ func TestBusRecoveryWorkersDeliverSameKeyInOrderWithFreshTimeouts(t *testing.T) 
 			return items, "100", nil
 		})
 		const timeout = time.Second
-		informer, err := NewBusInformerWithRecovery(listerTestKind, subscriber, lister, BusInformerOptions{
-			ResyncInterval: time.Hour, EventTimeout: timeout, MaxConcurrentWorkers: 2,
+		informer, err := NewBusInformerWithRecovery(listerTestKind, subscriber, lister, BusInformerOptions{EventTimeout: timeout}, BusRecoveryOptions{
+			ResyncInterval: time.Hour, MaxConcurrentWorkers: 2,
 		})
 		require.NoError(t, err)
 		type delivery struct {
@@ -447,7 +482,7 @@ func TestBusRecoveryCancelsBlockedWorkerEnqueue(t *testing.T) {
 		lister := listerFunc(func(context.Context) ([]resource.Object, string, error) {
 			return nil, "100", nil
 		})
-		informer, err := NewBusInformerWithRecovery(listerTestKind, subscriber, lister, BusInformerOptions{
+		informer, err := NewBusInformerWithRecovery(listerTestKind, subscriber, lister, BusInformerOptions{}, BusRecoveryOptions{
 			ResyncInterval: time.Hour, MaxConcurrentWorkers: 2,
 		})
 		require.NoError(t, err)

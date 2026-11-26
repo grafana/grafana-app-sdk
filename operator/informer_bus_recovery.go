@@ -13,45 +13,36 @@ import (
 	"github.com/grafana/grafana-app-sdk/resourcebus"
 )
 
-// BusInformerOptions configures notification delivery with LIST recovery.
-type BusInformerOptions struct {
-	Namespace            string
-	Group                resourcebus.Group
+// BusRecoveryOptions configures LIST recovery for an existing bus subscription.
+type BusRecoveryOptions struct {
 	ResyncInterval       time.Duration
 	AllowDegradedStart   bool
-	EventTimeout         time.Duration
 	MaxConcurrentWorkers uint64
-	ErrorHandler         func(context.Context, error)
 }
 
-// BusMechanismOptions supplies deployment defaults for a bus with LIST recovery.
-type BusMechanismOptions struct {
-	Group              resourcebus.Group
+// BusRecoveryDefaults supplies deployment defaults for LIST recovery. The
+// kind's WatchNeeds can set the resync interval and page size.
+type BusRecoveryDefaults struct {
 	ResyncInterval     time.Duration
 	PageSize           int64
 	AllowDegradedStart bool
 	KeyListerFactory   KeyListerFactory
 }
 
-// NewBusMechanism uses an identity snapshot to recover missed notifications.
-// A nil subscriber disables the mechanism.
-func NewBusMechanism(subscriber resourcebus.Subscriber, defaults BusMechanismOptions) InformerMechanism {
+// NewBusRecovery offers live identities and scheduled LIST recovery.
+// A nil subscriber disables this option in the selector.
+func NewBusRecovery(subscriber resourcebus.Subscriber, group resourcebus.Group, defaults BusRecoveryDefaults) InformerMechanism {
 	if subscriber == nil {
 		return nil
 	}
-	return newBusMechanism(recoveryWatchOptions(defaults.Group), func(
+	return newBusMechanism(recoveryWatchOptions(group), func(
 		kind resource.Kind, clients resource.ClientGenerator, opts InformerOptions,
 	) (Informer, error) {
-		if err := validateBusOptions(defaults.Group, opts.ListWatchOptions); err != nil {
-			return nil, err
-		}
-		full, err := periodicClientLister(kind, clients, opts, defaults.PageSize)
+		bus, err := newBusInformer(kind, subscriber, busOptionsFor(group, opts))
 		if err != nil {
 			return nil, err
 		}
-		lister, err := keysListerFor(kind, defaults.KeyListerFactory, full, ClientListerOptions{
-			ListWatchOptions: opts.ListWatchOptions, PageSize: listPageSize(opts, defaults.PageSize),
-		})
+		lister, err := identityClientLister(kind, clients, defaults.KeyListerFactory, listOptionsFor(opts, defaults.PageSize))
 		if err != nil {
 			return nil, err
 		}
@@ -59,12 +50,11 @@ func NewBusMechanism(subscriber resourcebus.Subscriber, defaults BusMechanismOpt
 		if workers == 0 {
 			workers = defaultConcurrentInformerWorkers
 		}
-		return NewBusInformerWithRecovery(kind, subscriber, lister, BusInformerOptions{
-			Namespace: opts.ListWatchOptions.Namespace, Group: defaults.Group,
-			ResyncInterval:     periodicOptions(opts, PeriodicMechanismOptions{ResyncInterval: defaults.ResyncInterval}).ResyncInterval,
-			AllowDegradedStart: defaults.AllowDegradedStart, EventTimeout: opts.EventTimeout,
-			MaxConcurrentWorkers: workers, ErrorHandler: opts.ErrorHandler,
-		})
+		return wrapBusWithRecovery(bus, lister, BusRecoveryOptions{
+			ResyncInterval:       resyncIntervalOr(opts, defaults.ResyncInterval),
+			AllowDegradedStart:   defaults.AllowDegradedStart,
+			MaxConcurrentWorkers: workers,
+		}), nil
 	})
 }
 
@@ -78,32 +68,33 @@ func recoveryWatchOptions(group resourcebus.Group) WatchOptions {
 // snapshot. The lister must cover the subscription's namespace. The LIST and
 // notifications must use the same increasing numeric resource versions.
 // An empty initial LIST can have snapshot version 0.
-func NewBusInformerWithRecovery(kind resource.Kind, subscriber resourcebus.Subscriber, lister ResourceLister, opts BusInformerOptions) (*BusInformerWithRecovery, error) {
+func NewBusInformerWithRecovery(kind resource.Kind, subscriber resourcebus.Subscriber, lister ResourceLister, busOpts BusInformerOptions, recoveryOpts BusRecoveryOptions) (*BusInformerWithRecovery, error) {
 	if lister == nil {
 		return nil, errors.New("bus recovery requires a lister")
 	}
-	b, err := newBusInformer(kind, subscriber, opts.Group, InformerOptions{
-		ListWatchOptions: ListWatchOptions{Namespace: opts.Namespace},
-		EventTimeout:     opts.EventTimeout, ErrorHandler: opts.ErrorHandler,
-	})
+	bus, err := newBusInformer(kind, subscriber, busOpts)
 	if err != nil {
 		return nil, err
 	}
+	return wrapBusWithRecovery(bus, lister, recoveryOpts), nil
+}
+
+func wrapBusWithRecovery(bus *busInformer, lister ResourceLister, opts BusRecoveryOptions) *BusInformerWithRecovery {
 	if opts.ResyncInterval <= 0 {
 		opts.ResyncInterval = defaultPeriodicInterval
 	}
 	return &BusInformerWithRecovery{
-		busInformer: b, lister: lister, opts: opts,
+		busInformer: bus, lister: lister, opts: opts,
 		relistRequests: make(chan struct{}, 1), overflows: make(chan struct{}, 1),
 		items: make(map[resource.Identifier]resource.Object), deleted: make(map[resource.Identifier]int64),
-	}, nil
+	}
 }
 
 // BusInformerWithRecovery combines bus notifications with LIST recovery.
 type BusInformerWithRecovery struct {
 	*busInformer
 	lister ResourceLister
-	opts   BusInformerOptions
+	opts   BusRecoveryOptions
 
 	relistRequests chan struct{}
 	overflows      chan struct{}

@@ -20,16 +20,16 @@ const (
 	busReadyTimeout  = 30 * time.Second
 )
 
-// NewNotificationMechanism serves plain handlers that use bus events as wake-ups
-// and can tolerate missed notifications. A nil subscriber disables the mechanism.
-func NewNotificationMechanism(subscriber resourcebus.Subscriber, group resourcebus.Group) InformerMechanism {
+// NewBusNotifications offers live identities to handlers that can tolerate
+// missed notifications. A nil subscriber disables this option in the selector.
+func NewBusNotifications(subscriber resourcebus.Subscriber, group resourcebus.Group) InformerMechanism {
 	if subscriber == nil {
 		return nil
 	}
 	return newBusMechanism(busWatchOptions(group), func(
 		kind resource.Kind, _ resource.ClientGenerator, opts InformerOptions,
 	) (Informer, error) {
-		return newBusInformer(kind, subscriber, group, opts)
+		return newBusInformer(kind, subscriber, busOptionsFor(group, opts))
 	})
 }
 
@@ -43,12 +43,36 @@ func (unfilteredBusMechanism) supportsQuery(query ListWatchOptions) bool {
 	return len(query.LabelFilters) == 0 && len(query.FieldSelectors) == 0
 }
 
+func (m unfilteredBusMechanism) NewInformer(kind resource.Kind, clients resource.ClientGenerator, opts InformerOptions) (Informer, error) {
+	if !m.supportsQuery(opts.ListWatchOptions) {
+		return nil, errors.New("bus informer does not support selectors; use the API watch")
+	}
+	return m.InformerMechanism.NewInformer(kind, clients, opts)
+}
+
 func busWatchOptions(group resourcebus.Group) WatchOptions {
 	distribution := WatchDistributionAll
 	if group.Name != "" {
 		distribution = WatchDistributionShared
 	}
 	return WatchOptions{Live: &WatchLiveOptions{Detail: WatchDetailIdentity, Distribution: distribution}}
+}
+
+// BusInformerOptions configures the subscription and its event handlers.
+type BusInformerOptions struct {
+	Namespace    string
+	Group        resourcebus.Group
+	EventTimeout time.Duration
+	ErrorHandler func(context.Context, error)
+}
+
+func busOptionsFor(group resourcebus.Group, opts InformerOptions) BusInformerOptions {
+	return BusInformerOptions{
+		Namespace:    opts.ListWatchOptions.Namespace,
+		Group:        group,
+		EventTimeout: opts.EventTimeout,
+		ErrorHandler: opts.ErrorHandler,
+	}
 }
 
 type busInformer struct {
@@ -68,27 +92,23 @@ type busInformer struct {
 	runErr   error
 }
 
-func newBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, group resourcebus.Group, opts InformerOptions) (*busInformer, error) {
+func newBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, opts BusInformerOptions) (*busInformer, error) {
 	if subscriber == nil || kind.Schema == nil {
 		return nil, errors.New("bus informer requires a kind and subscriber")
 	}
-	query := opts.ListWatchOptions
-	if err := validateBusOptions(group, query); err != nil {
+	if err := validateBusGroup(opts.Group); err != nil {
 		return nil, err
 	}
 	report := opts.ErrorHandler
 	if report == nil {
 		report = DefaultErrorHandler
 	}
-	return &busInformer{kind: kind, subscriber: subscriber, group: group, namespace: query.Namespace,
+	return &busInformer{kind: kind, subscriber: subscriber, group: opts.Group, namespace: opts.Namespace,
 		timeout: opts.EventTimeout, reportError: report, events: make(chan resourcebus.Event, busQueueSize),
 		synced: make(chan struct{}), stopped: make(chan struct{})}, nil
 }
 
-func validateBusOptions(group resourcebus.Group, query ListWatchOptions) error {
-	if !(unfilteredBusMechanism{}).supportsQuery(query) {
-		return errors.New("bus informer does not support selectors; use the API watch")
-	}
+func validateBusGroup(group resourcebus.Group) error {
 	if group.Name == "" && group.Delivery != resourcebus.GroupDeliveryDefault {
 		return errors.New("bus delivery policy requires a group name")
 	}
