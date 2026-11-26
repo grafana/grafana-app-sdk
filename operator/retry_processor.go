@@ -36,9 +36,10 @@ type RetryRequest struct {
 type RetryProcessor interface {
 	// Enqueue adds a retry request. It is routed to a worker based on hash(key).
 	Enqueue(req RetryRequest)
-	// Dequeue removes items for the given key that match the predicate.
+	// Dequeue cancels matching pending retries and prevents matching running retries
+	// from being rescheduled. It does not wait for their callbacks to finish.
 	Dequeue(key string, predicate func(RetryRequest) bool)
-	// DequeueAll removes all items for a key.
+	// DequeueAll applies Dequeue to all retries for the key.
 	DequeueAll(key string)
 	// Run starts all workers and blocks until ctx is canceled.
 	Run(ctx context.Context) error
@@ -60,6 +61,10 @@ type RetryProcessorConfig struct {
 // NewRetryProcessor creates a new defaultRetryProcessor.
 // retryPolicyFn is called to get the current RetryPolicy (allows dynamic updates).
 func NewRetryProcessor(cfg RetryProcessorConfig, retryPolicyFn func() RetryPolicy) RetryProcessor {
+	return newRetryProcessor(cfg, retryPolicyFn)
+}
+
+func newRetryProcessor(cfg RetryProcessorConfig, retryPolicyFn func() RetryPolicy) *defaultRetryProcessor {
 	if cfg.WorkerPoolSize <= 0 {
 		cfg.WorkerPoolSize = 4
 	}
@@ -74,6 +79,7 @@ func NewRetryProcessor(cfg RetryProcessorConfig, retryPolicyFn func() RetryPolic
 	for i := range workers {
 		workers[i] = &retryWorker{
 			queue:         make(retryPriorityQueue, 0),
+			active:        make(map[*retryAttempt]struct{}),
 			wake:          make(chan struct{}, 1),
 			checkInterval: cfg.CheckInterval,
 		}
@@ -144,11 +150,24 @@ func (p *defaultRetryProcessor) PrometheusCollectors() []prometheus.Collector {
 
 // Enqueue adds a retry request, routing it to a worker based on hash(key).
 func (p *defaultRetryProcessor) Enqueue(req RetryRequest) {
+	p.enqueue(req, nil)
+}
+
+type queuedRetry struct {
+	RetryRequest
+	syncRetry *watcherSyncRetry
+}
+
+func (p *defaultRetryProcessor) enqueue(req RetryRequest, syncRetry *watcherSyncRetry) {
 	p.processorMetrics.incEnqueuedTotal(req.Action)
 
+	if req.Object != nil {
+		// Dequeue can examine this snapshot while the callback is using its own object.
+		req.Object = req.Object.Copy()
+	}
 	w := p.workers[xxhash.Sum64([]byte(req.Key))%p.workerCount]
 	w.mu.Lock()
-	heap.Push(&w.queue, req)
+	heap.Push(&w.queue, queuedRetry{req, syncRetry})
 	w.mu.Unlock()
 
 	// Non-blocking wake signal
@@ -158,20 +177,30 @@ func (p *defaultRetryProcessor) Enqueue(req RetryRequest) {
 	}
 }
 
-// Dequeue removes items for the given key that match the predicate.
 func (p *defaultRetryProcessor) Dequeue(key string, predicate func(RetryRequest) bool) {
-	if predicate == nil {
-		p.DequeueAll(key)
-		return
-	}
+	p.dequeue(key, func(req queuedRetry) (bool, bool) {
+		discard := predicate == nil || predicate(req.RetryRequest)
+		return discard, discard
+	})
+}
+
+func (p *defaultRetryProcessor) DequeueAll(key string) {
+	p.Dequeue(key, nil)
+}
+
+// dequeue returns completion signals for matching running callbacks. Callers
+// that need to order another operation after them wait outside the worker lock.
+func (p *defaultRetryProcessor) dequeue(key string, decide func(queuedRetry) (discard, wait bool)) []<-chan struct{} {
 	w := p.workers[xxhash.Sum64([]byte(key))%p.workerCount]
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	filtered := make(retryPriorityQueue, 0, len(w.queue))
 	for _, req := range w.queue {
-		if req.Key == key && predicate(req) {
-			continue
+		if req.Key == key {
+			if discard, _ := decide(req); discard {
+				continue
+			}
 		}
 		filtered = append(filtered, req)
 	}
@@ -180,25 +209,22 @@ func (p *defaultRetryProcessor) Dequeue(key string, predicate func(RetryRequest)
 		w.queue = filtered
 		heap.Init(&w.queue)
 	}
-}
 
-// DequeueAll removes all items for the given key.
-func (p *defaultRetryProcessor) DequeueAll(key string) {
-	w := p.workers[xxhash.Sum64([]byte(key))%p.workerCount]
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	filtered := make(retryPriorityQueue, 0, len(w.queue))
-	for _, req := range w.queue {
-		if req.Key != key {
-			filtered = append(filtered, req)
+	var running []<-chan struct{}
+	for attempt := range w.active {
+		if attempt.request.Key != key {
+			continue
+		}
+		discard, wait := decide(attempt.request)
+		attempt.canceled = attempt.canceled || discard
+		if attempt.running && (wait || attempt.canceled) {
+			if attempt.done == nil {
+				attempt.done = make(chan struct{})
+			}
+			running = append(running, attempt.done)
 		}
 	}
-
-	if len(filtered) != len(w.queue) {
-		w.queue = filtered
-		heap.Init(&w.queue)
-	}
+	return running
 }
 
 // Run starts all workers and blocks until ctx is canceled.
@@ -219,6 +245,11 @@ func (p *defaultRetryProcessor) Len() int {
 	for _, w := range p.workers {
 		w.mu.Lock()
 		total += len(w.queue)
+		for attempt := range w.active {
+			if !attempt.started && !attempt.canceled {
+				total++
+			}
+		}
 		w.mu.Unlock()
 	}
 	return total
@@ -228,9 +259,23 @@ func (p *defaultRetryProcessor) Len() int {
 type retryWorker struct {
 	mu               sync.Mutex
 	queue            retryPriorityQueue
+	active           map[*retryAttempt]struct{}
 	wake             chan struct{}
 	checkInterval    time.Duration
 	processorMetrics *retryProcessorMetrics
+}
+
+// retryAttempt remains visible to dequeue until the worker decides whether to requeue it.
+// The worker lock protects its execution state and the completion signal.
+type retryAttempt struct {
+	request  queuedRetry
+	started  bool
+	running  bool
+	canceled bool
+	done     chan struct{}
+
+	// Only the goroutine processing this attempt accesses the requested requeue.
+	requeue *time.Duration
 }
 
 // run executes the worker loop, processing due retries on wake signals or periodic ticks.
@@ -256,13 +301,16 @@ func (w *retryWorker) processReady(retryPolicyFn func() RetryPolicy) {
 
 	// Phase 1 (LOCKED): Pop all items where retryAfter <= now
 	w.mu.Lock()
-	var ready []RetryRequest
+	var ready []retryAttempt
 	for w.queue.Len() > 0 && !w.queue[0].RetryAfter.After(now) {
-		req, ok := heap.Pop(&w.queue).(RetryRequest)
+		req, ok := heap.Pop(&w.queue).(queuedRetry)
 		if !ok {
 			continue
 		}
-		ready = append(ready, req)
+		ready = append(ready, retryAttempt{request: req})
+	}
+	for i := range ready {
+		w.active[&ready[i]] = struct{}{}
 	}
 	w.mu.Unlock()
 
@@ -270,72 +318,89 @@ func (w *retryWorker) processReady(retryPolicyFn func() RetryPolicy) {
 		return
 	}
 
-	// Phase 2 (UNLOCKED): Execute each RetryFunc
-	type result struct {
-		req     RetryRequest
-		requeue *time.Duration
-		err     error
-	}
-	results := make([]result, len(ready))
-	for i, req := range ready {
-		w.processorMetrics.observeWaitDuration(req.Action, req.RetryAfter)
-		requeue, err := req.RetryFunc()
-		results[i] = result{req: req, requeue: requeue, err: err}
+	for i := range ready {
+		w.execute(&ready[i])
 	}
 
 	// Phase 3 (LOCKED): Re-enqueue failures per RetryPolicy or RequeueAfter
 	w.mu.Lock()
 	policy := retryPolicyFn()
-	for _, res := range results {
-		switch {
-		case res.requeue != nil:
-			w.processorMetrics.incExecutionsTotal(res.req.Action, retryResultRequeue)
-			heap.Push(&w.queue, RetryRequest{
-				Key:        res.req.Key,
-				RetryAfter: time.Now().Add(*res.requeue),
-				RetryFunc:  res.req.RetryFunc,
-				Attempt:    res.req.Attempt, // Keep attempt count for explicit requeue
-				Action:     res.req.Action,
-				Object:     res.req.Object,
-				LastError:  res.err,
-			})
-		case res.err != nil:
-			ok, after := false, time.Duration(0)
-			if policy != nil {
-				ok, after = policy(res.err, res.req.Attempt+1)
-			}
-			if ok {
-				w.processorMetrics.incExecutionsTotal(res.req.Action, retryResultRetry)
-				heap.Push(&w.queue, RetryRequest{
-					Key:        res.req.Key,
-					RetryAfter: time.Now().Add(after),
-					RetryFunc:  res.req.RetryFunc,
-					Attempt:    res.req.Attempt + 1,
-					Action:     res.req.Action,
-					Object:     res.req.Object,
-					LastError:  res.err,
-				})
-			} else {
-				w.processorMetrics.incExecutionsTotal(res.req.Action, retryResultFailed)
-			}
-		default:
-			w.processorMetrics.incExecutionsTotal(res.req.Action, retryResultSuccess)
+	for i := range ready {
+		attempt := &ready[i]
+		delete(w.active, attempt)
+		if !attempt.canceled {
+			w.finish(attempt, policy)
 		}
 	}
 	w.mu.Unlock()
 }
 
+func (w *retryWorker) execute(attempt *retryAttempt) {
+	w.mu.Lock()
+	if attempt.canceled {
+		w.mu.Unlock()
+		return
+	}
+	attempt.started = true
+	attempt.running = true
+	w.mu.Unlock()
+
+	req := attempt.request
+	w.processorMetrics.observeWaitDuration(req.Action, req.RetryAfter)
+	requeue, err := req.RetryFunc()
+
+	w.mu.Lock()
+	attempt.requeue = requeue
+	attempt.request.LastError = err
+	attempt.running = false
+	if requeue == nil && err == nil {
+		delete(w.active, attempt)
+	}
+	if attempt.done != nil {
+		close(attempt.done)
+	}
+	w.mu.Unlock()
+}
+
+// finish accounts for an attempt and reschedules it when needed. The caller holds the worker lock.
+func (w *retryWorker) finish(attempt *retryAttempt, policy RetryPolicy) {
+	req := attempt.request
+	switch {
+	case attempt.requeue != nil:
+		w.processorMetrics.incExecutionsTotal(req.Action, retryResultRequeue)
+		req.RetryAfter = time.Now().Add(*attempt.requeue)
+	case req.LastError != nil:
+		req.Attempt++
+		if policy == nil {
+			w.processorMetrics.incExecutionsTotal(req.Action, retryResultFailed)
+			return
+		}
+		ok, after := policy(req.LastError, req.Attempt)
+		if !ok {
+			w.processorMetrics.incExecutionsTotal(req.Action, retryResultFailed)
+			return
+		}
+		w.processorMetrics.incExecutionsTotal(req.Action, retryResultRetry)
+		req.RetryAfter = time.Now().Add(after)
+	default:
+		w.processorMetrics.incExecutionsTotal(req.Action, retryResultSuccess)
+		return
+	}
+	heap.Push(&w.queue, req)
+}
+
 // retryPriorityQueue implements heap.Interface, sorted by RetryAfter (min-heap).
-type retryPriorityQueue []RetryRequest
+type retryPriorityQueue []queuedRetry
 
 func (pq retryPriorityQueue) Len() int           { return len(pq) }
 func (pq retryPriorityQueue) Less(i, j int) bool { return pq[i].RetryAfter.Before(pq[j].RetryAfter) }
 func (pq retryPriorityQueue) Swap(i, j int)      { pq[i], pq[j] = pq[j], pq[i] }
-func (pq *retryPriorityQueue) Push(x any)        { *pq = append(*pq, x.(RetryRequest)) }
+func (pq *retryPriorityQueue) Push(x any)        { *pq = append(*pq, x.(queuedRetry)) }
 func (pq *retryPriorityQueue) Pop() any {
 	old := *pq
 	n := len(old)
 	item := old[n-1]
+	old[n-1] = queuedRetry{}
 	*pq = old[:n-1]
 	return item
 }

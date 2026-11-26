@@ -5,15 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/grafana/grafana-app-sdk/metrics"
@@ -41,7 +44,7 @@ func TestInformerController_AddWatcher(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, 1, c.watchers.KeySize(k))
 		iw, _ := c.watchers.ItemAt(k, 0)
-		assert.Equal(t, w, iw)
+		assert.Equal(t, w, iw.handler)
 	})
 
 	t.Run("existing watchers", func(t *testing.T) {
@@ -53,14 +56,14 @@ func TestInformerController_AddWatcher(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, 1, c.watchers.KeySize(k))
 		iw1, _ := c.watchers.ItemAt(k, 0)
-		assert.Equal(t, w1, iw1)
+		assert.Equal(t, w1, iw1.handler)
 		err = c.AddWatcher(w2, k)
 		assert.Nil(t, err)
 		assert.Equal(t, 2, c.watchers.KeySize(k))
 		iw1, _ = c.watchers.ItemAt(k, 0)
 		iw2, _ := c.watchers.ItemAt(k, 1)
-		assert.Equal(t, w1, iw1)
-		assert.Equal(t, w2, iw2)
+		assert.Equal(t, w1, iw1.handler)
+		assert.Equal(t, w2, iw2.handler)
 	})
 }
 
@@ -114,21 +117,21 @@ func TestInformerController_RemoveWatcher(t *testing.T) {
 		iw1, _ := c.watchers.ItemAt(resourceKind, 0)
 		iw2, _ := c.watchers.ItemAt(resourceKind, 1)
 		iw3, _ := c.watchers.ItemAt(resourceKind, 2)
-		assert.Equal(t, w1, iw1)
-		assert.Equal(t, w2, iw2)
-		assert.Equal(t, w4, iw3)
+		assert.Equal(t, w1, iw1.handler)
+		assert.Equal(t, w2, iw2.handler)
+		assert.Equal(t, w4, iw3.handler)
 
 		c.RemoveWatcher(w1, resourceKind)
 		assert.Equal(t, 2, c.watchers.KeySize(resourceKind))
 		iw1, _ = c.watchers.ItemAt(resourceKind, 0)
 		iw2, _ = c.watchers.ItemAt(resourceKind, 1)
-		assert.Equal(t, w2, iw1)
-		assert.Equal(t, w4, iw2)
+		assert.Equal(t, w2, iw1.handler)
+		assert.Equal(t, w4, iw2.handler)
 
 		c.RemoveWatcher(w4, resourceKind)
 		assert.Equal(t, 1, c.watchers.KeySize(resourceKind))
 		iw1, _ = c.watchers.ItemAt(resourceKind, 0)
-		assert.Equal(t, w2, iw1)
+		assert.Equal(t, w2, iw1.handler)
 	})
 }
 
@@ -183,7 +186,7 @@ func TestInformerController_AddReconciler(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, 1, c.reconcilers.KeySize(k))
 		iw, _ := c.reconcilers.ItemAt(k, 0)
-		assert.Equal(t, r, iw)
+		assert.Equal(t, r, iw.handler)
 	})
 
 	t.Run("existing reconcilers", func(t *testing.T) {
@@ -195,14 +198,14 @@ func TestInformerController_AddReconciler(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, 1, c.reconcilers.KeySize(k))
 		ir1, _ := c.reconcilers.ItemAt(k, 0)
-		assert.Equal(t, r1, ir1)
+		assert.Equal(t, r1, ir1.handler)
 		err = c.AddReconciler(r2, k)
 		assert.Nil(t, err)
 		assert.Equal(t, 2, c.reconcilers.KeySize(k))
 		ir1, _ = c.reconcilers.ItemAt(k, 0)
 		ir2, _ := c.reconcilers.ItemAt(k, 1)
-		assert.Equal(t, r1, ir1)
-		assert.Equal(t, r2, ir2)
+		assert.Equal(t, r1, ir1.handler)
+		assert.Equal(t, r2, ir2.handler)
 	})
 }
 
@@ -256,21 +259,21 @@ func TestInformerController_RemoveReconciler(t *testing.T) {
 		ir1, _ := c.reconcilers.ItemAt(resourceKind, 0)
 		ir2, _ := c.reconcilers.ItemAt(resourceKind, 1)
 		ir3, _ := c.reconcilers.ItemAt(resourceKind, 2)
-		assert.Equal(t, r1, ir1)
-		assert.Equal(t, r2, ir2)
-		assert.Equal(t, r4, ir3)
+		assert.Equal(t, r1, ir1.handler)
+		assert.Equal(t, r2, ir2.handler)
+		assert.Equal(t, r4, ir3.handler)
 
 		c.RemoveReconciler(r1, resourceKind)
 		assert.Equal(t, 2, c.reconcilers.KeySize(resourceKind))
 		ir1, _ = c.reconcilers.ItemAt(resourceKind, 0)
 		ir2, _ = c.reconcilers.ItemAt(resourceKind, 1)
-		assert.Equal(t, r2, ir1)
-		assert.Equal(t, r4, ir2)
+		assert.Equal(t, r2, ir1.handler)
+		assert.Equal(t, r4, ir2.handler)
 
 		c.RemoveReconciler(r4, resourceKind)
 		assert.Equal(t, 1, c.reconcilers.KeySize(resourceKind))
 		ir1, _ = c.reconcilers.ItemAt(resourceKind, 0)
-		assert.Equal(t, r2, ir1)
+		assert.Equal(t, r2, ir1.handler)
 	})
 }
 
@@ -325,7 +328,7 @@ func TestInformerController_AddInformer(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, 1, c.informers.KeySize(k))
 		ii1, _ := c.informers.ItemAt(k, 0)
-		assert.Equal(t, i, ii1)
+		assert.Equal(t, i, ii1.Informer)
 	})
 
 	t.Run("existing informers", func(t *testing.T) {
@@ -337,14 +340,14 @@ func TestInformerController_AddInformer(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, 1, c.informers.KeySize(k))
 		ii1, _ := c.informers.ItemAt(k, 0)
-		assert.Equal(t, i1, ii1)
+		assert.Equal(t, i1, ii1.Informer)
 		err = c.AddInformer(i2, k)
 		assert.Nil(t, err)
 		assert.Equal(t, 2, c.informers.KeySize(k))
 		ii1, _ = c.informers.ItemAt(k, 0)
 		ii2, _ := c.informers.ItemAt(k, 1)
-		assert.Equal(t, i1, ii1)
-		assert.Equal(t, i2, ii2)
+		assert.Equal(t, i1, ii1.Informer)
+		assert.Equal(t, i2, ii2.Informer)
 	})
 }
 
@@ -563,7 +566,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		inf := &testInformer{}
 		c := NewInformerController(InformerControllerConfig{})
 		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
-			if attempt > 1 {
+			if attempt >= 1 {
 				return false, 0
 			}
 			return true, time.Millisecond * 50
@@ -603,7 +606,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		inf := &testInformer{}
 		c := NewInformerController(InformerControllerConfig{})
 		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
-			if attempt > 1 {
+			if attempt >= 1 {
 				return false, 0
 			}
 			return true, time.Millisecond * 50
@@ -1124,6 +1127,10 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 }
 
 func TestOpinionatedRetryDequeuePolicy(t *testing.T) {
+	deletedAt := metav1.Now()
+	live := &resource.TypedSpecObject[string]{ObjectMeta: metav1.ObjectMeta{Generation: 1}}
+	terminating := live.Copy()
+	terminating.SetDeletionTimestamp(&deletedAt)
 	tests := []struct {
 		name        string
 		newAction   ResourceAction
@@ -1184,6 +1191,41 @@ func TestOpinionatedRetryDequeuePolicy(t *testing.T) {
 			},
 			retryError: nil,
 			expected:   false,
+		},
+		{
+			// A deletion need not change the generation, so the deletion timestamp alone has to dequeue the retry.
+			name:        "deletion, retry of the earlier state with the same generation, should dequeue",
+			newAction:   ResourceActionUpdate,
+			newObject:   terminating,
+			retryAction: ResourceActionUpdate,
+			retryObject: live,
+			expected:    true,
+		},
+		{
+			name:        "deletion, create retry of the earlier state, should dequeue",
+			newAction:   ResourceActionUpdate,
+			newObject:   terminating,
+			retryAction: ResourceActionCreate,
+			retryObject: live,
+			expected:    true,
+		},
+		{
+			// A failed cleanup's own retry holds the deleting object.
+			name:        "deletion, retry of the deletion, shouldn't dequeue",
+			newAction:   ResourceActionUpdate,
+			newObject:   terminating,
+			retryAction: ResourceActionUpdate,
+			retryObject: terminating.Copy(),
+			expected:    false,
+		},
+		{
+			// Retries are keyed by namespace and name, so a delete retry belongs to an earlier object of that name.
+			name:        "deletion, delete retry, shouldn't dequeue",
+			newAction:   ResourceActionUpdate,
+			newObject:   terminating,
+			retryAction: ResourceActionDelete,
+			retryObject: live,
+			expected:    false,
 		},
 	}
 
@@ -1390,6 +1432,827 @@ func TestInformerController_Run_WithRetryProcessorDequeue(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 		assert.Equal(t, int64(1), addCalls.Load(), "add retry should have been dequeued by update")
 	})
+}
+
+func waitForSignal(t *testing.T, signal <-chan struct{}, failure string) {
+	t.Helper()
+	select {
+	case <-signal:
+	case <-time.After(10 * time.Second):
+		t.Fatal(failure)
+	}
+}
+
+func TestInformerController_Run_OrdersDeletionAndResyncRetry(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		concurrent    bool
+		blockOtherKey bool
+	}{
+		{name: "ready retry behind a different key", concurrent: true, blockOtherKey: true},
+		{name: "running retry for the deleting object", concurrent: true},
+		{name: "default ticker checks the completed retry error"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				const kind = "foo"
+				const otherFinalizer = "other.example/cleanup"
+				retryPolicy := func(_ error, attempt int) (bool, time.Duration) {
+					if attempt == 0 {
+						return true, 0
+					}
+					return true, time.Hour
+				}
+				var c *InformerController
+				if test.concurrent {
+					c = newTestControllerWithProcessor(retryPolicy, time.Second)
+				} else {
+					c = NewInformerController(InformerControllerConfig{RetryPolicy: retryPolicy})
+				}
+				sch := resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{})
+				obj := sch.ZeroValue()
+				obj.SetName("test")
+				obj.SetGeneration(1)
+				obj.SetResourceVersion("1")
+				obj.SetFinalizers([]string{DefaultFinalizerSupplier(sch), otherFinalizer})
+				watcher, server := newTestWatcherWithServer(t, sch, obj)
+
+				started := make(chan struct{})
+				unblock := make(chan struct{})
+				release := sync.OnceFunc(func() { close(unblock) })
+				defer release()
+				var syncCalls atomic.Int64
+				var externalState atomic.Bool
+				syncErr := errors.New("resync failed")
+				retryErr := errors.New("resync failed again")
+				c.RetryDequeuePolicy = OpinionatedRetryDequeuePolicy
+				var latestFailureSeen atomic.Bool
+				if !test.concurrent {
+					c.RetryDequeuePolicy = func(action ResourceAction, current resource.Object, retryAction ResourceAction, retryObj resource.Object, err error) bool {
+						// A custom policy can distinguish the retry's failure from
+						// the error that originally enqueued it.
+						latestFailureSeen.Store(errors.Is(err, retryErr))
+						return errors.Is(err, retryErr) && OpinionatedRetryDequeuePolicy(action, current, retryAction, retryObj, err)
+					}
+				}
+				watcher.SyncFunc = func(context.Context, resource.Object) error {
+					if syncCalls.Add(1) == 2 {
+						if !test.blockOtherKey {
+							close(started)
+							<-unblock
+						}
+						externalState.Store(true)
+						return retryErr
+					}
+					return syncErr
+				}
+				watcher.DeleteFunc = func(context.Context, resource.Object) error {
+					externalState.Store(false)
+					return nil
+				}
+				inf := &testInformer{}
+				require.NoError(t, c.AddWatcher(watcher, kind))
+				require.NoError(t, c.AddInformer(inf, kind))
+
+				// Queue both due requests before the single worker starts. The
+				// earlier request must run first and block the target's retry.
+				if test.blockOtherKey {
+					c.retryProcessor.Enqueue(RetryRequest{
+						Key:        "other-key",
+						RetryAfter: time.Now().Add(-time.Second),
+						RetryFunc: func() (*time.Duration, error) {
+							close(started)
+							<-unblock
+							return nil, nil
+						},
+					})
+				}
+				// Startup Add calls Sync for an object that already carries the watcher finalizer.
+				inf.FireAdd(t.Context(), obj)
+				require.EqualValues(t, 1, syncCalls.Load())
+				if test.blockOtherKey {
+					require.Equal(t, 2, c.retryProcessor.Len())
+				}
+
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				go c.Run(ctx)
+				waitForSignal(t, started, "the blocking retry did not start")
+
+				// The other finalizer keeps the resource terminating. A raw
+				// delete cannot mask a failure to invalidate stale retries.
+				externalState.Store(true)
+				deletion := server.markDeleting()
+				delivering := make(chan struct{})
+				cleaned := make(chan struct{})
+				go func() {
+					close(delivering)
+					inf.FireUpdate(ctx, deletion[0], deletion[1])
+					close(cleaned)
+				}()
+				<-delivering
+				synctest.Wait()
+				var cleanupRan bool
+				select {
+				case <-cleaned:
+					cleanupRan = true
+				default:
+				}
+				assert.Equal(t, test.blockOtherKey, cleanupRan,
+					"cleanup should wait only for a retry of the same object")
+				release()
+				<-cleaned
+				synctest.Wait()
+
+				assert.False(t, externalState.Load(), "stale resync recreated state after cleanup")
+				assert.Equal(t, []string{otherFinalizer}, server.state().GetFinalizers())
+				if test.concurrent {
+					assert.Zero(t, c.retryProcessor.Len(), "stale resync should not be rescheduled")
+				} else {
+					assert.True(t, latestFailureSeen.Load(), "dequeue should see the rescheduled attempt")
+					assert.Zero(t, c.toRetry.Size(), "stale resync should not be rescheduled")
+				}
+			})
+		})
+	}
+}
+
+func TestInformerController_Run_LegacyRetryHandoff(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		policy     RetryDequeuePolicy
+		hardDelete bool
+		remove     bool
+	}{
+		{name: "hard delete discards the failed retry", hardDelete: true},
+		{name: "ordinary watcher update waits for the retry", policy: OpinionatedRetryDequeuePolicy},
+		{name: "informer removal cancels deferred reconcile", policy: OpinionatedRetryDequeuePolicy, remove: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := NewInformerController(InformerControllerConfig{
+				RetryDequeuePolicy: test.policy,
+				RetryPolicy:        func(error, int) (bool, time.Duration) { return true, 0 },
+			})
+			c.retryTickerInterval = time.Millisecond
+			inf := &testInformer{}
+			require.NoError(t, c.AddInformer(inf, "kind"))
+			obj := &resource.TypedSpecObject[string]{}
+			obj.SetName("item")
+			obj.SetUID("original")
+			obj.SetResourceVersion("1")
+
+			started, unblock := make(chan struct{}), make(chan struct{})
+			release := sync.OnceFunc(func() { close(unblock) })
+			var adds atomic.Int64
+			add := func(context.Context, resource.Object) error {
+				switch adds.Add(1) {
+				case 1:
+					return errors.New("schedule retry")
+				case 2:
+					close(started)
+					<-unblock
+					if test.hardDelete {
+						return errors.New("superseded by delete")
+					}
+				}
+				return nil
+			}
+			deliveries := make(chan string, 3)
+			observe := func(_ context.Context, target resource.Object) error {
+				deliveries <- target.GetName()
+				return nil
+			}
+			if test.remove {
+				require.NoError(t, c.AddReconciler(&SimpleReconciler{ReconcileFunc: func(ctx context.Context, req ReconcileRequest) (ReconcileResult, error) {
+					if req.Action == ReconcileActionCreated {
+						return ReconcileResult{}, add(ctx, req.Object)
+					}
+					return ReconcileResult{}, observe(ctx, req.Object)
+				}}, "kind"))
+			} else {
+				require.NoError(t, c.AddWatcher(&SimpleWatcher{AddFunc: add, DeleteFunc: observe, UpdateFunc: func(ctx context.Context, _, target resource.Object) error {
+					return observe(ctx, target)
+				}}, "kind"))
+			}
+			ctx, stop := context.WithCancel(t.Context())
+			stopped := make(chan struct{})
+			go func() { defer close(stopped); _ = c.Run(ctx) }()
+			defer func() { stop(); release(); <-stopped }()
+			source, _ := c.informers.ItemAt("kind", 0)
+			require.Eventually(t, func() bool { return source.run.Load() != nil }, time.Second, time.Millisecond)
+			handler := inf.handlers[0]
+			require.NoError(t, handler.Add(ctx, obj))
+			select {
+			case <-started:
+			case <-time.After(time.Second):
+				t.Fatal("Add retry did not start")
+			}
+			// An unrelated object can still reach the same registration.
+			other := obj.Copy()
+			other.SetName("other")
+			other.SetUID("other")
+			require.NoError(t, handler.Delete(ctx, other))
+			require.Equal(t, "other", <-deliveries)
+
+			next := obj.Copy()
+			next.SetResourceVersion("2")
+			returned := make(chan error, 1)
+			go func() {
+				returned <- withInformerEventTimeout(ctx, 10*time.Millisecond, func(event context.Context) error {
+					if test.hardDelete {
+						return handler.Delete(event, next)
+					}
+					return handler.Update(event, obj, next)
+				})
+			}()
+			select {
+			case err := <-returned:
+				require.ErrorIs(t, err, context.DeadlineExceeded)
+			case <-time.After(time.Second):
+				t.Fatal("expired delivery is still blocked by the retry")
+			}
+			require.Empty(t, deliveries)
+			c.deliveryMu.Lock()
+			order := c.deliveries[deliveryKey{"kind", obj.GetStaticMetadata().Identifier()}]
+			c.deliveryMu.Unlock()
+			require.NotNil(t, order)
+			if test.remove {
+				c.RemoveInformer(inf, "kind")
+				require.Eventually(t, func() bool { return source.run.Load() == nil }, time.Second, time.Millisecond)
+			}
+			release()
+			select {
+			case <-order.done:
+			case <-time.After(time.Second):
+				t.Fatal("deferred delivery did not finish")
+			}
+			// Settlement removes the key. A discarded failure cannot run again.
+			require.Eventually(t, func() bool { return c.toRetry.Size() == 0 }, time.Second, time.Millisecond)
+			require.EqualValues(t, 2, adds.Load())
+			if test.remove {
+				require.Empty(t, deliveries)
+			} else {
+				require.Len(t, deliveries, 1)
+				require.Equal(t, "item", <-deliveries)
+			}
+		})
+	}
+}
+
+func TestInformerController_RetryTicker_DequeueDuringBatch(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const key = "watcher:item"
+		oldErr, retryErr := errors.New("first failure"), errors.New("retry failure")
+		c := NewInformerController(InformerControllerConfig{
+			RetryPolicy: func(error, int) (bool, time.Duration) { return true, 0 },
+			RetryDequeuePolicy: func(_ ResourceAction, obj resource.Object, action ResourceAction, _ resource.Object, err error) bool {
+				// The waiting Create is already obsolete. Decide the running
+				// Update's fate only when its latest error is available.
+				return obj.GetResourceVersion() == "2" && (action == ResourceActionCreate || errors.Is(err, retryErr))
+			},
+		})
+		obj := &resource.TypedSpecObject[string]{}
+		obj.SetResourceVersion("1")
+		entered, unblock := make(chan struct{}), make(chan struct{})
+		release := sync.OnceFunc(func() { close(unblock) })
+		defer release()
+		var calls []string
+		enqueue := func(action ResourceAction, run func() (*time.Duration, error)) {
+			c.enqueueRetry(RetryRequest{Key: key, Action: action, Object: obj, LastError: oldErr, RetryAfter: time.Now(), RetryFunc: run}, nil)
+		}
+		enqueue(ResourceActionUpdate, func() (*time.Duration, error) {
+			calls = append(calls, "running")
+			if len(calls) == 1 {
+				close(entered)
+				<-unblock
+			}
+			return nil, retryErr
+		})
+		enqueue(ResourceActionCreate, func() (*time.Duration, error) {
+			calls = append(calls, "superseded")
+			return nil, nil
+		})
+		ctx, stop := context.WithCancel(t.Context())
+		defer stop()
+		go c.retryTicker(ctx)
+		<-entered
+		event := obj.Copy()
+		event.SetResourceVersion("2")
+		done := c.dequeueIfRequired(key, event, ResourceActionUpdate)
+		require.Len(t, done, 1)
+		// Mutation after dequeue must not change the saved decision. Work
+		// enqueued subsequently for the same key must survive that decision.
+		event.SetResourceVersion("3")
+		enqueue(ResourceActionCreate, func() (*time.Duration, error) {
+			calls = append(calls, "new")
+			return nil, nil
+		})
+		release()
+		<-done[0]
+		time.Sleep(c.retryTickerInterval)
+		synctest.Wait()
+		require.Equal(t, []string{"running", "new"}, calls)
+		require.Zero(t, c.toRetry.Size())
+	})
+}
+
+func TestInformerController_Update_FinalizerRemovalPreservesEventVersion(t *testing.T) {
+	schema := resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{})
+	obj := schema.ZeroValue()
+	obj.SetName("item")
+	obj.SetUID("original")
+	obj.SetResourceVersion("1")
+	obj.SetGeneration(1)
+	// The second finalizer keeps the resource alive for the watch notification
+	// produced by removing our own finalizer.
+	obj.SetFinalizers([]string{DefaultFinalizerSupplier(schema), "example/other"})
+	watcher, server := newTestWatcherWithServer(t, schema, obj)
+	c := NewInformerController(DefaultInformerControllerConfig())
+	inf := &testInformer{}
+	require.NoError(t, c.AddInformer(inf, "kind"))
+	require.NoError(t, c.AddWatcher(watcher, "kind"))
+	var actions []ReconcileAction
+	require.NoError(t, c.AddReconciler(&SimpleReconciler{ReconcileFunc: func(_ context.Context, req ReconcileRequest) (ReconcileResult, error) {
+		actions = append(actions, req.Action)
+		return ReconcileResult{}, nil
+	}}, "kind"))
+
+	deletion := server.markDeleting()
+	original := deletion[1].Copy()
+	inf.FireUpdate(t.Context(), deletion[0], deletion[1])
+	require.Equal(t, original, deletion[1])
+	// A shared informer reuses the last event's new object as the next old one.
+	inf.FireUpdate(t.Context(), deletion[1], server.state())
+	require.Equal(t, []ReconcileAction{ReconcileActionUpdated, ReconcileActionUpdated}, actions)
+}
+
+func TestInformerController_Run_TerminatingUpdateOrder(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		c := NewInformerController(DefaultInformerControllerConfig())
+		inf := &testInformer{}
+		require.NoError(t, c.AddInformer(inf, "kind"))
+		started, unblock := make(chan struct{}), make(chan struct{})
+		release := sync.OnceFunc(func() { close(unblock) })
+		defer release()
+		completed := make(chan string, 2)
+		require.NoError(t, c.AddWatcher(&SimpleWatcher{UpdateFunc: func(_ context.Context, _, obj resource.Object) error {
+			if obj.GetResourceVersion() == "2" {
+				close(started)
+				<-unblock
+			}
+			completed <- obj.GetResourceVersion()
+			return nil
+		}}, "kind"))
+		ctx, stop := context.WithCancel(t.Context())
+		defer stop()
+		go c.Run(ctx)
+		synctest.Wait()
+		handler := inf.handlers[0]
+		old := &resource.TypedSpecObject[string]{}
+		old.SetName("item")
+		old.SetUID("original")
+		old.SetResourceVersion("1")
+		old.SetFinalizers([]string{"example/first", "example/second"})
+		obj := old.Copy()
+		now := metav1.Now()
+		obj.SetDeletionTimestamp(&now)
+		obj.SetResourceVersion("2")
+		expired, cancel := context.WithCancel(ctx)
+		cancel()
+		require.ErrorIs(t, handler.Update(expired, old, obj), context.Canceled)
+		<-started
+
+		// Another finalizer's removal can deliver a newer version while
+		// the observer is still handling the first terminating snapshot.
+		next := obj.Copy()
+		next.SetResourceVersion("3")
+		next.SetFinalizers([]string{"example/second"})
+		delivered := make(chan error, 1)
+		go func() { delivered <- handler.Update(ctx, obj, next) }()
+		synctest.Wait()
+		select {
+		case version := <-completed:
+			t.Fatalf("observer completed version %s while version 2 was blocked", version)
+		default:
+		}
+		release()
+		require.NoError(t, <-delivered)
+		require.Equal(t, "2", <-completed)
+		require.Equal(t, "3", <-completed)
+	})
+}
+
+func TestInformerController_Run_GenerationZeroSyncRetry(t *testing.T) {
+	for _, test := range []struct {
+		name                  string
+		running, metadataOnly bool
+	}{
+		{name: "queued startup sync follows a spec change"},
+		{name: "queued sync survives a metadata change", metadataOnly: true},
+		{name: "running startup sync finishes before the update", running: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				c := newTestControllerWithProcessor(func(_ error, attempt int) (bool, time.Duration) {
+					return attempt == 0, time.Second
+				}, time.Second)
+				c.RetryDequeuePolicy = OpinionatedRetryDequeuePolicy
+				// ConfigMap data lives outside spec and storage omits generation.
+				// Neither GetSpec nor generation can tell these versions apart.
+				type configMap = resource.WrappedObject[*corev1.ConfigMap]
+				obj := resource.NewWrappedObject(&corev1.ConfigMap{Data: map[string]string{"value": "original"}})
+				schema := resource.NewSimpleSchema("", "v1", obj, &resource.TypedList[*configMap]{}, resource.WithKind("ConfigMap"))
+				value := func(obj resource.Object) string { return obj.(*configMap).Object.Data["value"] }
+				obj.SetName("item")
+				obj.SetUID("original")
+				obj.SetResourceVersion("1")
+				obj.SetFinalizers([]string{DefaultFinalizerSupplier(schema)})
+				watcher, err := NewOpinionatedWatcher(schema, newFinalizerAPIServer(obj), OpinionatedWatcherConfig{})
+				require.NoError(t, err)
+				started, unblock := make(chan struct{}), make(chan struct{})
+				release := sync.OnceFunc(func() { close(unblock) })
+				defer release()
+				// Record both callback kind and payload. A metadata-only change
+				// still needs the failed Sync even if Update has already succeeded.
+				var calls []string
+				var mu sync.Mutex
+				record := func(action string, obj resource.Object) {
+					mu.Lock()
+					defer mu.Unlock()
+					calls = append(calls, fmt.Sprintf("%s %s %s", action, obj.GetResourceVersion(), value(obj)))
+				}
+				var syncCalls atomic.Int64
+				watcher.SyncFunc = func(_ context.Context, target resource.Object) error {
+					if syncCalls.Add(1) == 1 {
+						return errors.New("sync failed")
+					}
+					if test.running {
+						close(started)
+						<-unblock
+					}
+					record("sync", target)
+					return nil
+				}
+				watcher.UpdateFunc = func(_ context.Context, _, target resource.Object) error {
+					record("update", target)
+					return nil
+				}
+				inf := &testInformer{}
+				require.NoError(t, c.AddInformer(inf, "kind"))
+				require.NoError(t, c.AddWatcher(watcher, "kind"))
+				ctx, stop := context.WithCancel(t.Context())
+				defer stop()
+				go c.Run(ctx)
+				synctest.Wait()
+				handler := inf.handlers[0]
+				require.NoError(t, handler.Add(ctx, obj))
+				if test.running {
+					<-started
+				}
+				next := obj.Copy()
+				next.SetResourceVersion("2")
+				if test.metadataOnly {
+					next.SetLabels(map[string]string{"updated": "true"})
+				} else {
+					next.(*configMap).Object.Data["value"] = "changed"
+				}
+				delivered := make(chan error, 1)
+				go func() { delivered <- handler.Update(ctx, obj, next) }()
+				synctest.Wait()
+				if test.running {
+					select {
+					case <-delivered:
+						t.Fatal("update overtook the running Sync")
+					default:
+					}
+				}
+				release()
+				require.NoError(t, <-delivered)
+				time.Sleep(time.Second)
+				synctest.Wait()
+				if test.running {
+					require.Equal(t, []string{"sync 1 original", "update 2 changed"}, calls)
+				} else {
+					require.Equal(t, []string{"update 2 " + value(next), "sync 2 " + value(next)}, calls)
+				}
+			})
+		})
+	}
+}
+
+func TestInformerController_RemoveWatcher_CancelsRunningSyncRetry(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		runCtx, stop := context.WithCancel(t.Context())
+		defer stop()
+		c := newTestControllerWithProcessor(func(_ error, attempt int) (bool, time.Duration) {
+			return attempt == 0, 0
+		}, time.Second)
+		schema := resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{})
+		watcher, err := NewOpinionatedWatcher(schema, &mockPatchClient{}, OpinionatedWatcherConfig{})
+		require.NoError(t, err)
+		obj := schema.ZeroValue()
+		obj.SetName("item")
+		obj.SetFinalizers([]string{watcher.finalizer})
+		started, finished := make(chan struct{}), make(chan struct{})
+		calls := 0
+		watcher.SyncFunc = func(ctx context.Context, _ resource.Object) error {
+			calls++
+			if calls == 1 {
+				return errors.New("sync failed")
+			}
+			close(started)
+			<-ctx.Done()
+			close(finished)
+			return nil
+		}
+		inf := &testInformer{}
+		require.NoError(t, c.AddInformer(inf, "kind"))
+		require.NoError(t, c.AddWatcher(watcher, "kind"))
+		go c.Run(runCtx)
+		synctest.Wait()
+		// This informer uses its run context for events. Only removing the
+		// registration can interrupt the in-flight retry before shutdown.
+		inf.FireAdd(runCtx, obj)
+		<-started
+		c.RemoveWatcher(watcher, "kind")
+		synctest.Wait()
+		select {
+		case <-finished:
+		default:
+			t.Fatal("watcher removal left its retry running")
+		}
+		require.NoError(t, runCtx.Err())
+	})
+}
+
+func TestInformerController_DeletionRetryWaitCancellation(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		action ResourceAction
+	}{
+		{"startup without redelivery", ResourceActionCreate},
+		{"update without redelivery", ResourceActionUpdate},
+		{"redelivery", ResourceActionUpdate},
+		{"repeated canceled deliveries", ResourceActionUpdate},
+		{"same name recreated", ResourceActionUpdate},
+		{"deferred cleanup retries", ResourceActionCreate},
+		{"controller stops", ResourceActionUpdate},
+		{"informer removed", ResourceActionUpdate},
+		{"informer removed during cleanup", ResourceActionUpdate},
+		{"watcher removed", ResourceActionUpdate},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				const kind = "foo"
+				const redeliveries = 10
+				stoppedCleanup := errors.New("cleanup stopped")
+				c := newTestControllerWithProcessor(func(err error, attempt int) (bool, time.Duration) {
+					assert.NotErrorIs(t, err, stoppedCleanup, "work from the removed informer must not schedule a retry")
+					return attempt == 0, 0
+				}, time.Second)
+				c.RetryDequeuePolicy = OpinionatedRetryDequeuePolicy
+
+				schema := resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{})
+				obj := schema.ZeroValue()
+				obj.SetName("test")
+				obj.SetGeneration(1)
+				obj.SetResourceVersion("1")
+				obj.SetUID("original")
+				const secondFinalizer = "example/watcher"
+				const reconcilerFinalizer = "example/reconciler"
+				obj.SetFinalizers([]string{DefaultFinalizerSupplier(schema), secondFinalizer, reconcilerFinalizer})
+				watcher, server := newTestWatcherWithServer(t, schema, obj)
+
+				started := make(chan struct{})
+				unblock := make(chan struct{})
+				release := sync.OnceFunc(func() { close(unblock) })
+				defer release()
+				var eventTimeout time.Duration
+				if test.name == "deferred cleanup retries" {
+					// A periodic LIST reports terminating objects as Adds. Its
+					// deadline can expire before the running retry finishes.
+					eventTimeout = time.Second
+				}
+				checkCleanupContext := func(ctx context.Context) {
+					t.Helper()
+					assert.NoError(t, ctx.Err())
+					if eventTimeout > 0 {
+						deadline, ok := ctx.Deadline()
+						if assert.True(t, ok, "deferred cleanup and its retries need a fresh deadline") {
+							assert.Equal(t, eventTimeout, time.Until(deadline))
+						}
+					}
+				}
+				var syncCalls atomic.Int64
+				watcher.SyncFunc = func(context.Context, resource.Object) error {
+					if syncCalls.Add(1) == 1 {
+						return errors.New("resync failed")
+					}
+					close(started)
+					<-unblock
+					return nil
+				}
+				var deleteCalls atomic.Int64
+				watcher.DeleteFunc = func(ctx context.Context, target resource.Object) error {
+					checkCleanupContext(ctx)
+					if test.name == "same name recreated" {
+						assert.Equal(t, "replacement", string(target.GetUID()))
+					}
+					if deleteCalls.Add(1) == 1 && test.name == "deferred cleanup retries" {
+						return errors.New("cleanup unavailable")
+					}
+					if test.name == "informer removed during cleanup" {
+						<-ctx.Done()
+						return stoppedCleanup
+					}
+					return nil
+				}
+				require.NoError(t, c.AddWatcher(watcher, kind))
+				var laterWatcherCalls atomic.Int64
+				require.NoError(t, c.AddWatcher(&SimpleWatcher{
+					AddFunc: func(_ context.Context, target resource.Object) error {
+						if target.GetDeletionTimestamp() != nil {
+							laterWatcherCalls.Add(1)
+						}
+						return nil
+					},
+					UpdateFunc: func(_ context.Context, _, target resource.Object) error {
+						if target.GetDeletionTimestamp() != nil {
+							laterWatcherCalls.Add(1)
+						}
+						return nil
+					},
+				}, kind))
+
+				second, err := NewOpinionatedWatcher(schema, server, OpinionatedWatcherConfig{
+					Finalizer: func(resource.Schema) string { return secondFinalizer },
+				})
+				require.NoError(t, err)
+				var secondDeletes atomic.Int64
+				second.DeleteFunc = func(ctx context.Context, _ resource.Object) error {
+					checkCleanupContext(ctx)
+					if test.name != "watcher removed" {
+						assert.Positive(t, deleteCalls.Load(), "first watcher must dispatch before the second")
+					}
+					secondDeletes.Add(1)
+					return nil
+				}
+				require.NoError(t, c.AddWatcher(second, kind))
+				// The event can be canceled while the retry processor and
+				// the older callback are still alive.
+				runCtx, stop := context.WithCancel(t.Context())
+				defer stop()
+				reconciler, err := NewOpinionatedReconciler(server, reconcilerFinalizer)
+				require.NoError(t, err)
+				var reconcileDeletes atomic.Int64
+				reconciler.Wrap(&SimpleReconciler{ReconcileFunc: func(ctx context.Context, req ReconcileRequest) (ReconcileResult, error) {
+					if req.Action == ReconcileActionDeleted {
+						checkCleanupContext(ctx)
+						assert.EqualValues(t, 1, secondDeletes.Load(), "both watchers must dispatch before the reconciler")
+						reconcileDeletes.Add(1)
+					}
+					return ReconcileResult{}, nil
+				}})
+				require.NoError(t, c.AddReconciler(reconciler, kind))
+				inf := &testInformer{}
+				require.NoError(t, c.AddInformer(inf, kind))
+				go c.Run(runCtx)
+				synctest.Wait()
+				source, ok := c.informers.ItemAt(kind, 0)
+				require.True(t, ok)
+				run := source.run.Load()
+				update := inf.handlers[0].Update
+				add := inf.handlers[0].Add
+				require.NoError(t, add(runCtx, obj))
+
+				waitForSignal(t, started, "the resync retry did not start")
+
+				deletion := server.markDeleting()
+				deliver := func(ctx context.Context) error {
+					if test.action == ResourceActionCreate {
+						return add(ctx, deletion[1])
+					}
+					return update(ctx, deletion[0], deletion[1])
+				}
+				eventCtx, cancel := context.WithCancel(runCtx)
+				defer cancel()
+				canceledDelivery := make(chan error, 1)
+				go func() { canceledDelivery <- withInformerEventTimeout(eventCtx, eventTimeout, deliver) }()
+				synctest.Wait()
+				select {
+				case err := <-canceledDelivery:
+					t.Fatalf("deletion returned before cancellation or retry completion: %v", err)
+				default:
+				}
+				wantErr := context.Canceled
+				if eventTimeout > 0 {
+					time.Sleep(eventTimeout)
+					wantErr = context.DeadlineExceeded
+				} else {
+					cancel()
+				}
+				synctest.Wait()
+				select {
+				case err := <-canceledDelivery:
+					require.ErrorIs(t, err, wantErr)
+				default:
+					t.Fatal("deletion still waiting after cancellation")
+				}
+				assert.Zero(t, deleteCalls.Load())
+				assert.Zero(t, laterWatcherCalls.Load())
+				require.Equal(t, obj.GetFinalizers(), server.state().GetFinalizers())
+
+				// No new event is needed to finish the canceled delivery. A redelivery
+				// can race that work, and removal must cancel just the affected owner.
+				var redelivery chan error
+				switch test.name {
+				case "redelivery":
+					redelivery = make(chan error, 1)
+					go func() { redelivery <- deliver(runCtx) }()
+				case "repeated canceled deliveries":
+					// Startup Adds and live Updates retain the same cleanup while
+					// the retry is blocked, even when every delivery expires.
+					for range redeliveries {
+						require.ErrorIs(t, add(eventCtx, deletion[1]), context.Canceled)
+						require.ErrorIs(t, update(eventCtx, deletion[0], deletion[1]), context.Canceled)
+					}
+					synctest.Wait()
+					require.Len(t, run.cleanups, 1)
+					key := c.deliveries[deliveryKey{kind, obj.GetStaticMetadata().Identifier()}]
+					pending := run.cleanups[key].pending
+					pending = slices.DeleteFunc(slices.Clone(pending), func(d deferredDelivery) bool { return !d.cleanup })
+					require.Len(t, pending, 3, "the two watchers and one reconciler coalesce finalizer cleanup")
+					require.Len(t, pending[0].running, 1, "each notification saw the same blocked retry")
+					require.Empty(t, pending[1].running)
+					require.Empty(t, pending[2].running)
+				case "same name recreated":
+					// The informer missed the old object's removal. A startup Add
+					// for its terminating replacement must retain separate work.
+					server.change(func(target resource.Object) {
+						target.SetUID("replacement")
+						target.SetDeletionTimestamp(nil)
+					})
+					replacement := server.markDeleting()
+					require.ErrorIs(t, add(eventCtx, replacement[1]), context.Canceled)
+					synctest.Wait()
+					require.Len(t, run.cleanups, 2)
+				case "controller stops":
+					stop()
+				case "informer removed":
+					c.RemoveInformer(inf, kind)
+				case "watcher removed":
+					c.RemoveWatcher(watcher, kind)
+				}
+				synctest.Wait()
+				require.Zero(t, deleteCalls.Load())
+				release()
+				if test.name == "informer removed during cleanup" {
+					synctest.Wait()
+					require.EqualValues(t, 1, deleteCalls.Load(), "the callback must be in flight at removal")
+					c.RemoveInformer(inf, kind)
+				}
+				if redelivery != nil {
+					require.NoError(t, <-redelivery)
+				}
+				if test.name != "controller stops" && test.name != "informer removed" && test.name != "informer removed during cleanup" {
+					remaining := 0
+					if test.name == "watcher removed" {
+						remaining = 1
+					}
+					// Concurrent owners can hit an RV conflict. Wait for its
+					// backoff and the successful patch, beyond callback return.
+					require.Eventually(t, func() bool { return len(server.state().GetFinalizers()) == remaining }, 10*time.Second, time.Millisecond)
+				}
+				synctest.Wait()
+				assert.Empty(t, run.cleanups)
+				if test.name == "repeated canceled deliveries" {
+					assert.EqualValues(t, 1+2*redeliveries, laterWatcherCalls.Load(), "plain watchers receive each Add and Update")
+				}
+				switch test.name {
+				case "controller stops", "informer removed", "informer removed during cleanup":
+					if test.name != "informer removed during cleanup" {
+						assert.Zero(t, deleteCalls.Load())
+					}
+					assert.Zero(t, secondDeletes.Load())
+					assert.Zero(t, reconcileDeletes.Load())
+					assert.Equal(t, obj.GetFinalizers(), server.state().GetFinalizers())
+				case "watcher removed":
+					assert.Zero(t, deleteCalls.Load())
+					assert.EqualValues(t, 1, reconcileDeletes.Load())
+					assert.Equal(t, []string{watcher.finalizer}, server.state().GetFinalizers())
+				default:
+					expectedCalls := 1
+					if test.name == "deferred cleanup retries" {
+						expectedCalls = 2
+					}
+					assert.EqualValues(t, expectedCalls, deleteCalls.Load())
+					assert.EqualValues(t, 1, secondDeletes.Load())
+					assert.EqualValues(t, 1, reconcileDeletes.Load())
+					assert.Empty(t, server.state().GetFinalizers())
+				}
+			})
+		})
+	}
 }
 
 func TestInformerController_PrometheusCollectors(t *testing.T) {

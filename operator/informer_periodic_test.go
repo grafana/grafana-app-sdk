@@ -314,14 +314,13 @@ func TestPeriodicInformerControllerRetriesWithFreshTimeout(t *testing.T) {
 			require.NoError(t, informer.sweep(runCtx))
 			require.Len(t, attempts, 1)
 			require.ErrorIs(t, attempts[0].Err(), context.Canceled)
-			keys := controller.toRetry.Keys()
-			require.Len(t, keys, 1)
-			var retry retryInfo
-			controller.toRetry.RemoveItems(keys[0], func(item retryInfo) bool {
-				retry = item
-				return true
-			}, 1)
-			_, err = retry.retryFunc()
+			require.Equal(t, 1, controller.toRetry.Size())
+			var retry func() (*time.Duration, error)
+			for _, queue := range controller.toRetry.All() {
+				require.Len(t, queue.pending, 1)
+				retry = queue.pending[0].RetryFunc
+			}
+			_, err = retry()
 			require.NoError(t, err)
 			require.Len(t, attempts, 2)
 			require.NoError(t, attemptErrors[1])
@@ -331,7 +330,7 @@ func TestPeriodicInformerControllerRetriesWithFreshTimeout(t *testing.T) {
 			require.True(t, retryDeadline.After(originalDeadline))
 			// Shutdown also cancels any later attempt.
 			stop()
-			_, err = retry.retryFunc()
+			_, err = retry()
 			require.ErrorIs(t, err, context.Canceled)
 			require.Len(t, attempts, 2)
 		})

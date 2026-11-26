@@ -802,6 +802,83 @@ func TestOpinionatedWatcher_Delete(t *testing.T) {
 	assert.Nil(t, o.Delete(context.TODO(), schema.ZeroValue()))
 }
 
+func TestOpinionatedWatcher_DeletionRetries(t *testing.T) {
+	for _, event := range []string{"startup", "same generation update"} {
+		for _, owned := range []string{"normal", "pending", "both"} {
+			t.Run(event+"/"+owned, func(t *testing.T) {
+				schema := resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{})
+				client := &mockPatchClient{}
+				watcher, err := NewOpinionatedWatcher(schema, client, OpinionatedWatcherConfig{})
+				require.NoError(t, err)
+				obj := schema.ZeroValue()
+				obj.SetGeneration(1)
+				obj.SetResourceVersion("2")
+				now := metav1.Now()
+				obj.SetDeletionTimestamp(&now)
+				finalizers := []string{"other.example/cleanup", "finished.example/cleanup"}
+				if owned != "pending" {
+					finalizers = append(finalizers, watcher.finalizer)
+				}
+				if owned != "normal" {
+					finalizers = append(finalizers, watcher.addPendingFinalizer)
+				}
+				obj.SetFinalizers(finalizers)
+				server := newFinalizerAPIServer(obj)
+				client.GetIntoFunc = server.GetInto
+				old := schema.ZeroValue()
+				old.SetGeneration(1)
+				old.SetResourceVersion("1")
+				handle := func() error {
+					if event == "startup" {
+						return watcher.Add(t.Context(), obj)
+					}
+					return watcher.Update(t.Context(), old, obj)
+				}
+
+				deleteErr := fmt.Errorf("downstream unavailable")
+				patchErr := fmt.Errorf("apiserver unavailable")
+				deleteCalls, patchCalls := 0, 0
+				watcher.DeleteFunc = func(context.Context, resource.Object) error {
+					deleteCalls++
+					if deleteCalls == 1 {
+						return deleteErr
+					}
+					return nil
+				}
+				client.PatchIntoFunc = func(_ context.Context, _ resource.Identifier, _ resource.PatchRequest, _ resource.PatchOptions, _ resource.Object) error {
+					patchCalls++
+					return patchErr
+				}
+
+				require.ErrorIs(t, handle(), deleteErr)
+				require.Zero(t, patchCalls)
+				require.Equal(t, finalizers, obj.GetFinalizers())
+				require.ErrorIs(t, handle(), patchErr)
+				require.Equal(t, finalizers, obj.GetFinalizers())
+
+				// A concurrent owner finishes cleanup before our patch.
+				conflicted := false
+				client.PatchIntoFunc = func(ctx context.Context, id resource.Identifier, req resource.PatchRequest, opts resource.PatchOptions, into resource.Object) error {
+					if !conflicted {
+						conflicted = true
+						server.change(func(obj resource.Object) {
+							obj.SetFinalizers(slices.Delete(slices.Clone(obj.GetFinalizers()), 1, 2))
+						})
+					}
+					return server.PatchInto(ctx, id, req, opts, into)
+				}
+				require.NoError(t, handle())
+				require.True(t, conflicted)
+				require.Equal(t, []string{"other.example/cleanup"}, server.state().GetFinalizers())
+				require.Equal(t, finalizers, obj.GetFinalizers(), "keep the original event for a stale replay")
+				require.Equal(t, 3, deleteCalls)
+				require.NoError(t, handle())
+				require.Equal(t, 3, deleteCalls, "a completed finalizer must not repeat cleanup")
+			})
+		}
+	}
+}
+
 func TestOpinionatedWatcher_Update_ReplacementDuringCleanup(t *testing.T) {
 	schema := resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{})
 	client := &mockPatchClient{}
@@ -937,6 +1014,33 @@ func TestOpinionatedWatcher_Add_StaleObjects(t *testing.T) {
 		replay(t, f)
 		assert.Equal(t, 1, addCalls)
 		assert.Equal(t, []string{otherFinalizer, f.watcher.finalizer}, f.server.state().GetFinalizers())
+	})
+
+	t.Run("deletion after a failed Add, before its notification is delivered", func(t *testing.T) {
+		// With Add failed, only the in-progress finalizer is on, so when delivering its patch makes Add re-read the
+		// object, only the deletion timestamp says to stop. Cleanup is left to Update's deletion branch, which must
+		// run it once.
+		f := newFixture(t, nil)
+		addErr := fmt.Errorf("downstream unavailable")
+		addCalls, deleteCalls := 0, 0
+		f.watcher.AddFunc = func(context.Context, resource.Object) error {
+			addCalls++
+			if addCalls == 1 {
+				return addErr
+			}
+			return nil
+		}
+		f.watcher.DeleteFunc = func(context.Context, resource.Object) error {
+			deleteCalls++
+			return nil
+		}
+		require.ErrorIs(t, f.watcher.Add(t.Context(), f.created), addErr)
+		f.server.markDeleting()
+
+		replay(t, f)
+		assert.Equal(t, 1, addCalls, "AddFunc should not be called for an object being deleted")
+		assert.Equal(t, 1, deleteCalls)
+		assert.Empty(t, f.server.state().GetFinalizers())
 	})
 }
 

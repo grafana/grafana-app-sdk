@@ -101,10 +101,17 @@ func (l *ListMap[K, V]) AddItem(key K, items ...V) {
 
 // RemoveKey removes the key from the map. If the key has a list, the list is deleted.
 func (l *ListMap[K, V]) RemoveKey(key K) {
+	l.takeKey(key)
+}
+
+// takeKey detaches a registration list before canceling its handlers. Concurrent
+// additions for the same key belong to a new list.
+func (l *ListMap[K, V]) takeKey(key K) []V {
 	mux, _ := l.muxes.LoadOrStore(key, &sync.RWMutex{})
 	mux.Lock()
 	defer mux.Unlock()
-	l.internal.Delete(key)
+	list, _ := l.internal.LoadAndDelete(key)
+	return list
 }
 
 // RemoveItemAt removes a specific index from the list for a key. If the key or index does not exist, it is a no-op.
@@ -182,8 +189,9 @@ func (*ListMap[K, V]) remove(list []V, i int) []V {
 		}
 		return make([]V, 0)
 	case i == len(list)-1:
-		return list[:i]
+		return slices.Clip(list[:i])
 	default:
-		return append(list[:i], list[i+1:]...)
+		// Range may still be walking the previous slice.
+		return append(slices.Clip(list[:i]), list[i+1:]...)
 	}
 }
