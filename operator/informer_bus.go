@@ -51,8 +51,7 @@ func busWatchOptions(group resourcebus.Group) WatchOptions {
 	return WatchOptions{Live: &WatchLiveOptions{Detail: WatchDetailIdentity, Distribution: distribution}}
 }
 
-// BusInformer delivers bus events with optional LIST recovery.
-type BusInformer struct {
+type busInformer struct {
 	kind        resource.Kind
 	subscriber  resourcebus.Subscriber
 	group       resourcebus.Group
@@ -60,8 +59,6 @@ type BusInformer struct {
 	timeout     time.Duration
 	reportError func(context.Context, error)
 	events      chan resourcebus.Event
-	recovery    *busRecovery
-	deliveries  []chan busDelivery
 
 	mu       sync.Mutex
 	started  bool
@@ -71,7 +68,7 @@ type BusInformer struct {
 	runErr   error
 }
 
-func newBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, group resourcebus.Group, opts InformerOptions) (*BusInformer, error) {
+func newBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, group resourcebus.Group, opts InformerOptions) (*busInformer, error) {
 	if subscriber == nil || kind.Schema == nil {
 		return nil, errors.New("bus informer requires a kind and subscriber")
 	}
@@ -83,7 +80,7 @@ func newBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, group
 	if report == nil {
 		report = DefaultErrorHandler
 	}
-	return &BusInformer{kind: kind, subscriber: subscriber, group: group, namespace: query.Namespace,
+	return &busInformer{kind: kind, subscriber: subscriber, group: group, namespace: query.Namespace,
 		timeout: opts.EventTimeout, reportError: report, events: make(chan resourcebus.Event, busQueueSize),
 		synced: make(chan struct{}), stopped: make(chan struct{})}, nil
 }
@@ -101,15 +98,9 @@ func validateBusOptions(group resourcebus.Group, query ListWatchOptions) error {
 	return nil
 }
 
-// WatchOptions describes the live and scheduled deliveries provided by the informer.
-func (b *BusInformer) WatchOptions() WatchOptions {
-	if b.recovery != nil {
-		return recoveryWatchOptions(b.group)
-	}
-	return busWatchOptions(b.group)
-}
+func (b *busInformer) WatchOptions() WatchOptions { return busWatchOptions(b.group) }
 
-func (b *BusInformer) AddEventHandler(handler ResourceWatcher) error {
+func (b *busInformer) AddEventHandler(handler ResourceWatcher) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.started || handler == nil {
@@ -119,7 +110,7 @@ func (b *BusInformer) AddEventHandler(handler ResourceWatcher) error {
 	return nil
 }
 
-func (b *BusInformer) WaitForSync(ctx context.Context) error {
+func (b *busInformer) WaitForSync(ctx context.Context) error {
 	select {
 	case <-b.synced:
 		return nil
@@ -138,7 +129,29 @@ func (b *BusInformer) WaitForSync(ctx context.Context) error {
 	}
 }
 
-func (b *BusInformer) Run(ctx context.Context) error {
+func (b *busInformer) HealthCheckName() string {
+	return "bus-informer-" + b.kind.GroupVersionKind().String()
+}
+
+func (b *busInformer) HealthCheck(context.Context) error {
+	select {
+	case <-b.stopped:
+		return errors.New("bus informer has stopped")
+	default:
+	}
+	select {
+	case <-b.synced:
+		return nil
+	default:
+		return errors.New("bus subscription is not ready")
+	}
+}
+
+func (b *busInformer) Run(ctx context.Context) error {
+	return b.runOnce(ctx, b.run)
+}
+
+func (b *busInformer) runOnce(ctx context.Context, run func(context.Context) error) error {
 	b.mu.Lock()
 	if b.started {
 		b.mu.Unlock()
@@ -147,17 +160,13 @@ func (b *BusInformer) Run(ctx context.Context) error {
 	b.started = true
 	b.mu.Unlock()
 
-	if b.recovery != nil {
-		b.runErr = b.runRecovery(ctx)
-	} else {
-		b.runErr = b.run(ctx)
-	}
+	b.runErr = run(ctx)
 	close(b.stopped)
 	return b.runErr
 }
 
-func (b *BusInformer) run(ctx context.Context) error {
-	sub, err := b.subscribe(ctx)
+func (b *busInformer) run(ctx context.Context) error {
+	sub, err := b.subscribe(ctx, busSubscriptionHooks{})
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil
@@ -178,9 +187,14 @@ func (b *BusInformer) run(ctx context.Context) error {
 	return nil
 }
 
-func (b *BusInformer) subscribe(ctx context.Context) (resourcebus.Subscription, error) {
+type busSubscriptionHooks struct {
+	onReconnect func()
+	onOverflow  func()
+}
+
+func (b *busInformer) subscribe(ctx context.Context, hooks busSubscriptionHooks) (resourcebus.Subscription, error) {
 	for {
-		sub, err := b.openSubscription(ctx)
+		sub, err := b.openSubscription(ctx, hooks)
 		if err == nil || ctx.Err() != nil || subscriptionRejected(err) {
 			return sub, err
 		}
@@ -195,18 +209,22 @@ func (b *BusInformer) subscribe(ctx context.Context) (resourcebus.Subscription, 
 	}
 }
 
-func (b *BusInformer) openSubscription(ctx context.Context) (resourcebus.Subscription, error) {
+func (b *busInformer) openSubscription(ctx context.Context, hooks busSubscriptionHooks) (resourcebus.Subscription, error) {
 	attemptCtx, cancelAttempt := context.WithCancel(ctx)
+	opts := []resourcebus.SubscribeOption{resourcebus.WithGroup(b.group)}
+	if hooks.onReconnect != nil {
+		opts = append(opts, resourcebus.WithOnReconnect(func() {
+			if attemptCtx.Err() == nil {
+				hooks.onReconnect()
+			}
+		}))
+	}
 	sub, err := b.subscriber.Subscribe(attemptCtx, b.kind.GroupVersionResource(), b.namespace,
 		func(eventCtx context.Context, event resourcebus.Event) {
 			if attemptCtx.Err() == nil {
-				b.enqueue(eventCtx, event)
+				b.enqueue(eventCtx, event, hooks.onOverflow)
 			}
-		}, resourcebus.WithGroup(b.group), resourcebus.WithOnReconnect(func() {
-			if attemptCtx.Err() == nil {
-				b.reconnected()
-			}
-		}))
+		}, opts...)
 	if err != nil {
 		cancelAttempt()
 		if sub != nil {
@@ -238,7 +256,7 @@ func (s busSubscription) Close() error {
 	return s.Subscription.Close()
 }
 
-func (b *BusInformer) closeSubscription(ctx context.Context, sub resourcebus.Subscription) {
+func (b *busInformer) closeSubscription(ctx context.Context, sub resourcebus.Subscription) {
 	if err := sub.Close(); err != nil {
 		b.reportError(ctx, fmt.Errorf("close bus subscription: %w", err))
 	}
@@ -249,20 +267,20 @@ func subscriptionRejected(err error) bool {
 		apierrors.IsUnauthorized(err) || apierrors.IsForbidden(err)
 }
 
-func (b *BusInformer) enqueue(ctx context.Context, event resourcebus.Event) {
+func (b *busInformer) enqueue(ctx context.Context, event resourcebus.Event, onOverflow func()) {
 	if ctx.Err() != nil {
 		return
 	}
 	select {
 	case b.events <- event:
 	default:
-		if b.recovery != nil {
-			b.recovery.overflow()
+		if onOverflow != nil {
+			onOverflow()
 		}
 	}
 }
 
-func (b *BusInformer) handleNotification(ctx context.Context, event resourcebus.Event) {
+func (b *busInformer) handleNotification(ctx context.Context, event resourcebus.Event) {
 	if !b.acceptEvent(event) {
 		return
 	}
@@ -281,50 +299,11 @@ func (b *BusInformer) handleNotification(ctx context.Context, event resourcebus.
 	}
 }
 
-func (b *BusInformer) acceptEvent(event resourcebus.Event) bool {
+func (b *busInformer) acceptEvent(event resourcebus.Event) bool {
 	return event.Name != "" && (b.namespace == "" || b.namespace == event.Namespace)
 }
 
-func (b *BusInformer) hasSynced() bool {
-	select {
-	case <-b.synced:
-		return true
-	default:
-		return false
-	}
-}
-
-// Schema returns the kind served by the informer.
-func (b *BusInformer) Schema() resource.Schema { return b.kind.Schema }
-
-// HealthCheckName returns the name used by the SDK health endpoint.
-func (b *BusInformer) HealthCheckName() string {
-	return "bus-informer-" + b.kind.GroupVersionKind().String()
-}
-
-// HealthCheck reports whether initial sync has completed and the informer is running.
-func (b *BusInformer) HealthCheck(context.Context) error {
-	select {
-	case <-b.stopped:
-		if b.runErr != nil {
-			return b.runErr
-		}
-		return errors.New("bus informer has stopped")
-	default:
-		if !b.hasSynced() {
-			return errors.New("bus informer has not synced")
-		}
-		return nil
-	}
-}
-
-func (b *BusInformer) reconnected() {
-	if b.recovery != nil {
-		b.recovery.signalRelist()
-	}
-}
-
-func (b *BusInformer) dispatch(ctx context.Context, obj resource.Object, fn func(context.Context, ResourceWatcher, resource.Object) error) {
+func (b *busInformer) dispatch(ctx context.Context, obj resource.Object, fn func(context.Context, ResourceWatcher, resource.Object) error) {
 	for _, handler := range b.handlers {
 		if ctx.Err() != nil {
 			return

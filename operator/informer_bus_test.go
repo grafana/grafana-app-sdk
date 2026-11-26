@@ -121,7 +121,7 @@ func TestNotificationMechanismSelectsLiveOnlyNeeds(t *testing.T) {
 	t.Run("live only", func(t *testing.T) {
 		inf, err := BuildInformer(request)
 		require.NoError(t, err)
-		require.IsType(t, &BusInformer{}, inf)
+		require.IsType(t, &busInformer{}, inf)
 	})
 	request.Options.WatchNeeds.Resync = &WatchResyncOptions{Detail: WatchDetailIdentity, Interval: time.Minute}
 	t.Run("live and resync", func(t *testing.T) {

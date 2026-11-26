@@ -3,8 +3,6 @@ package operator
 import (
 	"context"
 	"errors"
-	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
@@ -61,7 +59,7 @@ func NewBusMechanism(subscriber resourcebus.Subscriber, defaults BusMechanismOpt
 		if workers == 0 {
 			workers = defaultConcurrentInformerWorkers
 		}
-		return NewBusInformer(kind, subscriber, lister, BusInformerOptions{
+		return NewBusInformerWithRecovery(kind, subscriber, lister, BusInformerOptions{
 			Namespace: opts.ListWatchOptions.Namespace, Group: defaults.Group,
 			ResyncInterval:     periodicOptions(opts, PeriodicMechanismOptions{ResyncInterval: defaults.ResyncInterval}).ResyncInterval,
 			AllowDegradedStart: defaults.AllowDegradedStart, EventTimeout: opts.EventTimeout,
@@ -76,11 +74,11 @@ func recoveryWatchOptions(group resourcebus.Group) WatchOptions {
 	return provides
 }
 
-// NewBusInformer subscribes to changes and periodically reconciles an identity
+// NewBusInformerWithRecovery subscribes to changes and periodically reconciles an identity
 // snapshot. The lister must cover the subscription's namespace. The LIST and
 // notifications must use the same increasing numeric resource versions.
 // An empty initial LIST can have snapshot version 0.
-func NewBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, lister ResourceLister, opts BusInformerOptions) (*BusInformer, error) {
+func NewBusInformerWithRecovery(kind resource.Kind, subscriber resourcebus.Subscriber, lister ResourceLister, opts BusInformerOptions) (*BusInformerWithRecovery, error) {
 	if lister == nil {
 		return nil, errors.New("bus recovery requires a lister")
 	}
@@ -94,123 +92,167 @@ func NewBusInformer(kind resource.Kind, subscriber resourcebus.Subscriber, liste
 	if opts.ResyncInterval <= 0 {
 		opts.ResyncInterval = defaultPeriodicInterval
 	}
-	b.recovery = &busRecovery{lister: lister, opts: opts, relist: make(chan struct{}, 1), overflowed: make(chan struct{}, 1),
-		items: make(map[resource.Identifier]resource.Object), deleted: make(map[resource.Identifier]int64)}
-	return b, nil
+	return &BusInformerWithRecovery{
+		busInformer: b, lister: lister, opts: opts,
+		relistRequests: make(chan struct{}, 1), overflows: make(chan struct{}, 1),
+		items: make(map[resource.Identifier]resource.Object), deleted: make(map[resource.Identifier]int64),
+	}, nil
 }
 
-type busRecovery struct {
-	lister             ResourceLister
-	opts               BusInformerOptions
-	relist             chan struct{}
-	overflowed         chan struct{}
-	nextOverflowRelist time.Time
+// BusInformerWithRecovery combines bus notifications with LIST recovery.
+type BusInformerWithRecovery struct {
+	*busInformer
+	lister ResourceLister
+	opts   BusInformerOptions
 
-	// The run loop alone mutates the snapshot and dispatches changes.
+	relistRequests chan struct{}
+	overflows      chan struct{}
+	deliveries     []chan busDelivery
+
+	// The run loop alone updates the snapshot and queues changes for delivery.
 	items       map[resource.Identifier]resource.Object
 	deleted     map[resource.Identifier]int64
 	listVersion int64
 }
 
-func (b *BusInformer) runRecovery(parent context.Context) error {
+// WatchOptions describes the live and scheduled deliveries provided by the informer.
+func (b *BusInformerWithRecovery) WatchOptions() WatchOptions { return recoveryWatchOptions(b.group) }
+
+// Schema returns the kind served by the informer.
+func (b *BusInformerWithRecovery) Schema() resource.Schema { return b.kind.Schema }
+
+// HealthCheck reports whether initial sync has completed and the informer is running.
+func (b *BusInformerWithRecovery) HealthCheck(context.Context) error {
+	select {
+	case <-b.stopped:
+		if b.runErr != nil {
+			return b.runErr
+		}
+		return errors.New("bus informer has stopped")
+	default:
+	}
+	select {
+	case <-b.synced:
+		return nil
+	default:
+		return errors.New("bus informer has not synced")
+	}
+}
+
+// Run starts the subscription and keeps the snapshot current until ctx is canceled.
+func (b *BusInformerWithRecovery) Run(ctx context.Context) error {
+	return b.runOnce(ctx, b.run)
+}
+
+func (b *BusInformerWithRecovery) run(parent context.Context) error {
 	ctx, cancel := context.WithCancelCause(parent)
 	var workers sync.WaitGroup
 	b.startDeliveryWorkers(ctx, &workers)
+	sub, err := b.startSubscription(ctx, cancel, &workers)
 	defer func() {
 		cancel(nil)
+		if sub != nil {
+			b.closeSubscription(ctx, sub)
+		}
 		workers.Wait()
 	}()
-	r := b.recovery
 
-	if r.opts.AllowDegradedStart {
-		sub, err := b.openSubscription(ctx)
-		switch {
-		case err == nil:
-			defer b.closeSubscription(ctx, sub)
-		case subscriptionRejected(err):
-			return err
-		default:
-			if ctx.Err() == nil {
-				b.reportError(ctx, err)
-				workers.Go(func() { b.recoverSubscription(ctx, cancel) })
-			}
-		}
-	} else {
-		sub, err := b.subscribe(ctx)
-		if err != nil {
-			if parent.Err() != nil {
-				return nil
-			}
-			return err
-		}
-		defer b.closeSubscription(ctx, sub)
+	if err == nil {
+		err = b.initialList(ctx)
 	}
-
-	trigger := busRelistScheduled
-	var resyncAt, retryAt time.Time
-	for ctx.Err() == nil {
-		err := b.relist(ctx, trigger != busRelistScheduled)
-		now := time.Now()
-		if trigger == busRelistOverflow {
-			r.nextOverflowRelist = now.Add(overflowRelistInterval)
-		}
-		delay := r.opts.ResyncInterval
-		if err != nil {
-			if subscriptionRejected(err) {
-				return err
-			}
-			if ctx.Err() != nil {
-				break
-			}
-			b.reportError(ctx, err)
-			delay = busRetryInterval
-			if !b.hasSynced() {
-				if !waitInformerInterval(ctx, delay) {
-					break
-				}
-				continue
-			}
-		} else {
-			retryAt = time.Time{}
-			if !b.hasSynced() {
-				close(b.synced)
-			}
-		}
-
-		if trigger == busRelistScheduled {
-			resyncAt = now.Add(wait.Jitter(delay, informerRetryJitter))
-		} else if err != nil {
-			retryAt = now.Add(wait.Jitter(delay, informerRetryJitter))
-		}
-		trigger = b.serveUntilRelist(ctx, resyncAt, retryAt)
-		if trigger == busRelistStopped {
-			break
-		}
+	if err == nil {
+		err = b.watch(ctx)
 	}
-	return recoveryRunError(parent, ctx)
-}
-
-func recoveryRunError(parent, run context.Context) error {
 	if parent.Err() != nil {
 		return nil
 	}
-	return context.Cause(run)
+	if cause := context.Cause(ctx); cause != nil {
+		return cause
+	}
+	return err
 }
 
-func (b *BusInformer) recoverSubscription(ctx context.Context, cancel context.CancelCauseFunc) {
+func (b *BusInformerWithRecovery) startSubscription(ctx context.Context, cancel context.CancelCauseFunc, workers *sync.WaitGroup) (resourcebus.Subscription, error) {
+	hooks := busSubscriptionHooks{onReconnect: b.requestRelist, onOverflow: b.recordOverflow}
+	if !b.opts.AllowDegradedStart {
+		return b.subscribe(ctx, hooks)
+	}
+	sub, err := b.openSubscription(ctx, hooks)
+	if err == nil || ctx.Err() != nil || subscriptionRejected(err) {
+		return sub, err
+	}
+	b.reportError(ctx, err)
+	workers.Go(func() { b.retrySubscription(ctx, cancel, hooks) })
+	return nil, nil
+}
+
+func (b *BusInformerWithRecovery) retrySubscription(ctx context.Context, cancel context.CancelCauseFunc, hooks busSubscriptionHooks) {
 	if !waitInformerInterval(ctx, busRetryInterval) {
 		return
 	}
-	sub, err := b.subscribe(ctx)
+	sub, err := b.subscribe(ctx, hooks)
 	if err != nil {
 		if ctx.Err() == nil {
 			cancel(err)
 		}
 		return
 	}
-	defer b.closeSubscription(ctx, sub)
-	b.recovery.signalRelist()
+	b.requestRelist()
 	<-ctx.Done()
+	b.closeSubscription(ctx, sub)
+}
+
+func (b *BusInformerWithRecovery) initialList(ctx context.Context) error {
+	for ctx.Err() == nil {
+		err := b.relist(ctx, busRelistScheduled)
+		switch {
+		case err == nil:
+			close(b.synced)
+			return nil
+		case subscriptionRejected(err):
+			return err
+		case ctx.Err() != nil:
+			return ctx.Err()
+		}
+		b.reportError(ctx, err)
+		if !waitInformerInterval(ctx, busRetryInterval) {
+			break
+		}
+	}
+	return ctx.Err()
+}
+
+func (b *BusInformerWithRecovery) watch(ctx context.Context) error {
+	resyncAt := time.Now().Add(wait.Jitter(b.opts.ResyncInterval, informerRetryJitter))
+	var retryAt, nextOverflowRelist time.Time
+	for {
+		trigger := b.serveUntilRelist(ctx, resyncAt, retryAt, nextOverflowRelist)
+		if trigger == busRelistStopped {
+			return ctx.Err()
+		}
+		err := b.relist(ctx, trigger)
+		now := time.Now()
+		if trigger == busRelistOverflow {
+			nextOverflowRelist = now.Add(overflowRelistInterval)
+		}
+		delay := b.opts.ResyncInterval
+		switch {
+		case ctx.Err() != nil:
+			return ctx.Err()
+		case subscriptionRejected(err):
+			return err
+		case err != nil:
+			b.reportError(ctx, err)
+			delay = busRetryInterval
+		default:
+			retryAt = time.Time{}
+		}
+		if trigger == busRelistScheduled {
+			resyncAt = now.Add(wait.Jitter(delay, informerRetryJitter))
+		} else if err != nil {
+			retryAt = now.Add(wait.Jitter(delay, informerRetryJitter))
+		}
+	}
 }
 
 const overflowRelistInterval = 30 * time.Second
@@ -224,8 +266,7 @@ const (
 	busRelistOverflow
 )
 
-func (b *BusInformer) serveUntilRelist(ctx context.Context, resyncAt, retryAt time.Time) busRelistTrigger {
-	r := b.recovery
+func (b *BusInformerWithRecovery) serveUntilRelist(ctx context.Context, resyncAt, retryAt, nextOverflowRelist time.Time) busRelistTrigger {
 	resync := time.NewTimer(time.Until(resyncAt))
 	defer resync.Stop()
 	var retry <-chan time.Time
@@ -240,7 +281,7 @@ func (b *BusInformer) serveUntilRelist(ctx context.Context, resyncAt, retryAt ti
 			overflowTimer.Stop()
 		}
 	}()
-	overflowEvents := (<-chan struct{})(r.overflowed)
+	overflowEvents := (<-chan struct{})(b.overflows)
 	var overflowReady <-chan time.Time
 
 	for ctx.Err() == nil {
@@ -257,12 +298,12 @@ func (b *BusInformer) serveUntilRelist(ctx context.Context, resyncAt, retryAt ti
 			return busRelistScheduled
 		case <-retry:
 			return busRelistCatchUp
-		case <-r.relist:
+		case <-b.relistRequests:
 			return busRelistCatchUp
 		case <-overflowReady:
 			return busRelistOverflow
 		case <-overflowEvents:
-			if remaining := time.Until(r.nextOverflowRelist); remaining > 0 {
+			if remaining := time.Until(nextOverflowRelist); remaining > 0 {
 				// A LIST already queued by the normal schedule or reconnect
 				// can cover this drop before the cooldown ends.
 				overflowTimer = time.NewTimer(remaining)
@@ -278,132 +319,18 @@ func (b *BusInformer) serveUntilRelist(ctx context.Context, resyncAt, retryAt ti
 	return busRelistStopped
 }
 
-func (r *busRecovery) signalRelist() {
+func (b *BusInformerWithRecovery) requestRelist() {
 	select {
-	case r.relist <- struct{}{}:
+	case b.relistRequests <- struct{}{}:
 	default:
 	}
 }
 
-func (r *busRecovery) overflow() {
+func (b *BusInformerWithRecovery) recordOverflow() {
 	select {
-	case r.overflowed <- struct{}{}:
+	case b.overflows <- struct{}{}:
 	default:
 	}
-}
-
-func (b *BusInformer) applyLive(ctx context.Context, event resourcebus.Event) {
-	if !b.acceptEvent(event) {
-		return
-	}
-	r := b.recovery
-	id := resource.Identifier{Namespace: event.Namespace, Name: event.Name}
-	old := r.items[id]
-	version := numericVersion(event.ResourceVersion)
-	if version == 0 {
-		b.reportError(ctx, fmt.Errorf("bus recovery notification for %v has an invalid resource version %q", id, event.ResourceVersion))
-		return
-	}
-	if version <= r.listVersion || version <= r.deleted[id] ||
-		(old != nil && version <= numericVersion(old.GetResourceVersion())) {
-		return
-	}
-
-	switch event.Verb {
-	case resourcebus.VerbAdded, resourcebus.VerbModified:
-		obj := newIdentityObject(b.kind, id.Namespace, id.Name, event.ResourceVersion)
-		r.items[id] = obj
-		delete(r.deleted, id)
-		if event.Verb == resourcebus.VerbAdded {
-			// A recreate can reach this group member even if its delete did not.
-			old = nil
-		}
-		b.deliverChange(ctx, old, obj)
-	case resourcebus.VerbDeleted:
-		delete(r.items, id)
-		r.deleted[id] = version
-		if old == nil {
-			old = newIdentityObject(b.kind, id.Namespace, id.Name, event.ResourceVersion)
-		}
-		b.deliverChange(ctx, old, nil)
-	default:
-		b.reportError(ctx, fmt.Errorf("unknown bus verb %q", event.Verb))
-	}
-}
-
-func (b *BusInformer) relist(ctx context.Context, changesOnly bool) error {
-	r := b.recovery
-	items, rv, err := r.lister.List(ctx)
-	if err != nil {
-		return fmt.Errorf("bus recovery LIST: %w", err)
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	version := numericVersion(rv)
-	if version == 0 && (rv != "0" || len(items) != 0) {
-		return fmt.Errorf("bus recovery LIST requires a numeric snapshot resource version, got %q", rv)
-	}
-	if version < r.listVersion {
-		return fmt.Errorf("bus recovery LIST version %q predates installed snapshot %d", rv, r.listVersion)
-	}
-	next := make(map[resource.Identifier]resource.Object, len(items))
-	for _, item := range items {
-		if item == nil || item.GetName() == "" {
-			return fmt.Errorf("bus recovery LIST at %q contains an item without identity", rv)
-		}
-		id := resource.Identifier{Namespace: item.GetNamespace(), Name: item.GetName()}
-		if numericVersion(item.GetResourceVersion()) == 0 {
-			return fmt.Errorf("bus recovery LIST at %q has an invalid item resource version %q for %v", rv, item.GetResourceVersion(), id)
-		}
-		if _, duplicate := next[id]; duplicate {
-			return fmt.Errorf("bus recovery LIST at %q contains duplicate key %v", rv, id)
-		}
-		next[id] = newIdentityObject(b.kind, id.Namespace, id.Name, item.GetResourceVersion())
-	}
-	for id, obj := range next {
-		old := r.items[id]
-		// Grafana's first LIST page can see item writes committed after it
-		// reads the collection version. Use the item's own version when present.
-		itemVersion := numericVersion(obj.GetResourceVersion())
-		if r.deleted[id] >= itemVersion {
-			delete(next, id)
-			continue
-		}
-		if old != nil && numericVersion(old.GetResourceVersion()) > itemVersion {
-			next[id] = old
-			continue
-		}
-		if changesOnly && old != nil && old.GetResourceVersion() == obj.GetResourceVersion() {
-			continue
-		}
-		b.deliverChange(ctx, old, obj)
-	}
-	for id, old := range r.items {
-		if next[id] != nil {
-			continue
-		}
-		if numericVersion(old.GetResourceVersion()) > version {
-			next[id] = old
-			continue
-		}
-		b.deliverChange(ctx, old, nil)
-	}
-	for id, deleted := range r.deleted {
-		if deleted <= version {
-			delete(r.deleted, id)
-		}
-	}
-	r.items, r.listVersion = next, version
-	return nil
-}
-
-func numericVersion(version string) int64 {
-	n, err := strconv.ParseInt(version, 10, 64)
-	if err != nil {
-		return 0
-	}
-	return max(0, n)
 }
 
 type busDelivery struct {
@@ -412,8 +339,8 @@ type busDelivery struct {
 	current resource.Object
 }
 
-func (b *BusInformer) startDeliveryWorkers(ctx context.Context, workers *sync.WaitGroup) {
-	count := b.recovery.opts.MaxConcurrentWorkers
+func (b *BusInformerWithRecovery) startDeliveryWorkers(ctx context.Context, workers *sync.WaitGroup) {
+	count := b.opts.MaxConcurrentWorkers
 	if count <= 1 {
 		return
 	}
@@ -434,7 +361,7 @@ func (b *BusInformer) startDeliveryWorkers(ctx context.Context, workers *sync.Wa
 	}
 }
 
-func (b *BusInformer) deliverChange(ctx context.Context, old, current resource.Object) {
+func (b *BusInformerWithRecovery) deliverChange(ctx context.Context, old, current resource.Object) {
 	d := busDelivery{ctx: ctx, old: old, current: current}
 	if len(b.deliveries) == 0 {
 		b.dispatchChange(d)
@@ -452,7 +379,7 @@ func (b *BusInformer) deliverChange(ctx context.Context, old, current resource.O
 	}
 }
 
-func (b *BusInformer) dispatchChange(d busDelivery) {
+func (b *BusInformerWithRecovery) dispatchChange(d busDelivery) {
 	for _, handler := range b.handlers {
 		if d.ctx.Err() != nil {
 			return

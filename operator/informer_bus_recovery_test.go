@@ -21,6 +21,7 @@ func TestBusRecoveryAfterSubscriptionGap(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		ready := make(chan struct{})
+		initialList := make(chan struct{})
 		var publish func(context.Context, resourcebus.Event)
 		var reconnect func()
 		subscriber := busSubscribeFunc(func(_ context.Context, _ schema.GroupVersionResource, _ string, fn func(context.Context, resourcebus.Event), opts ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
@@ -29,13 +30,20 @@ func TestBusRecoveryAfterSubscriptionGap(t *testing.T) {
 			return &testBusSubscription{ready: func(context.Context) error { <-ready; return nil }}, nil
 		})
 		lists := 0
-		lister := listerFunc(func(context.Context) ([]resource.Object, string, error) {
+		lister := listerFunc(func(ctx context.Context) ([]resource.Object, string, error) {
 			lists++
+			if lists == 1 {
+				select {
+				case <-initialList:
+				case <-ctx.Done():
+					return nil, "", ctx.Err()
+				}
+			}
 			obj := listerObj("item")
 			obj.SetResourceVersion(strconv.Itoa(lists * 100))
 			return []resource.Object{obj}, obj.GetResourceVersion(), nil
 		})
-		b, err := NewBusInformer(listerTestKind, subscriber, lister, BusInformerOptions{ResyncInterval: time.Hour})
+		b, err := NewBusInformerWithRecovery(listerTestKind, subscriber, lister, BusInformerOptions{ResyncInterval: time.Hour})
 		require.NoError(t, err)
 		var deliveries []string
 		require.NoError(t, b.AddEventHandler(&SimpleWatcher{
@@ -56,9 +64,15 @@ func TestBusRecoveryAfterSubscriptionGap(t *testing.T) {
 		go func() { done <- b.Run(ctx) }()
 		synctest.Wait()
 		require.Zero(t, lists)
+		require.Error(t, b.HealthCheck(ctx))
 		publish(ctx, resourcebus.Event{Verb: resourcebus.VerbDeleted, Namespace: listerTestNamespace, Name: "item", ResourceVersion: "50"})
 		close(ready)
+		synctest.Wait()
+		require.Equal(t, 1, lists)
+		require.Error(t, b.HealthCheck(ctx), "subscription readiness alone does not make recovery healthy")
+		close(initialList)
 		require.NoError(t, b.WaitForSync(ctx))
+		require.NoError(t, b.HealthCheck(ctx))
 		synctest.Wait()
 		require.Equal(t, []string{"add:100"}, deliveries)
 		// The next snapshot catches a change delivered to a different group member.
@@ -80,6 +94,7 @@ func TestBusRecoveryAfterSubscriptionGap(t *testing.T) {
 		require.Equal(t, []string{"add:100", "100->200", "delete:200", "add:260", "add:280"}, deliveries)
 		cancel()
 		require.NoError(t, <-done)
+		require.Error(t, b.HealthCheck(ctx))
 	})
 }
 
@@ -94,7 +109,7 @@ func TestBusRecoverySchedulesRelistOnOverflow(t *testing.T) {
 		})
 		calls := 0
 		unblock := make(chan struct{})
-		b, err := NewBusInformer(listerTestKind, subscriber, listerFunc(func(context.Context) ([]resource.Object, string, error) {
+		b, err := NewBusInformerWithRecovery(listerTestKind, subscriber, listerFunc(func(context.Context) ([]resource.Object, string, error) {
 			calls++
 			if calls == 1 {
 				<-unblock
@@ -130,7 +145,7 @@ func TestBusRecoveryDegradedStartAndReconnect(t *testing.T) {
 			return recovered, nil
 		})
 		var lists atomic.Int64
-		informer, err := NewBusInformer(listerTestKind, subscriber, listerFunc(func(context.Context) ([]resource.Object, string, error) {
+		informer, err := NewBusInformerWithRecovery(listerTestKind, subscriber, listerFunc(func(context.Context) ([]resource.Object, string, error) {
 			lists.Add(1)
 			return nil, "100", nil
 		}), BusInformerOptions{
@@ -159,7 +174,7 @@ func TestBusRecoveryRejectsOpaqueListAndKeepsNumericWatermark(t *testing.T) {
 		return &testBusSubscription{}, nil
 	})
 	version := "100"
-	informer, err := NewBusInformer(listerTestKind, subscriber, listerFunc(func(context.Context) ([]resource.Object, string, error) {
+	informer, err := NewBusInformerWithRecovery(listerTestKind, subscriber, listerFunc(func(context.Context) ([]resource.Object, string, error) {
 		return nil, version, nil
 	}), BusInformerOptions{})
 	require.NoError(t, err)
@@ -167,9 +182,9 @@ func TestBusRecoveryRejectsOpaqueListAndKeepsNumericWatermark(t *testing.T) {
 		t.Error("a stale add resurrected a missing key")
 		return nil
 	}}))
-	require.NoError(t, informer.relist(t.Context(), false))
+	require.NoError(t, informer.relist(t.Context(), busRelistScheduled))
 	version = "opaque"
-	require.ErrorContains(t, informer.relist(t.Context(), false), "snapshot resource version")
+	require.ErrorContains(t, informer.relist(t.Context(), busRelistScheduled), "snapshot resource version")
 	informer.applyLive(t.Context(), resourcebus.Event{Verb: resourcebus.VerbAdded, Name: "item", ResourceVersion: "90"})
 }
 
@@ -201,7 +216,7 @@ func TestBusRecoveryArbitratesStaleSnapshots(t *testing.T) {
 			initial := listerObj(id.Name)
 			initial.SetResourceVersion("100")
 			objects := []resource.Object{initial}
-			informer, err := NewBusInformer(listerTestKind, sub, listerFunc(func(context.Context) ([]resource.Object, string, error) {
+			informer, err := NewBusInformerWithRecovery(listerTestKind, sub, listerFunc(func(context.Context) ([]resource.Object, string, error) {
 				return objects, listRV, nil
 			}), BusInformerOptions{})
 			require.NoError(t, err)
@@ -211,7 +226,7 @@ func TestBusRecoveryArbitratesStaleSnapshots(t *testing.T) {
 				UpdateFunc: func(context.Context, resource.Object, resource.Object) error { seen++; return nil },
 				DeleteFunc: func(context.Context, resource.Object) error { seen++; return nil },
 			}))
-			require.NoError(t, informer.relist(t.Context(), false))
+			require.NoError(t, informer.relist(t.Context(), busRelistScheduled))
 			informer.applyLive(t.Context(), resourcebus.Event{Verb: tc.live, Namespace: id.Namespace, Name: id.Name, ResourceVersion: "200"})
 			require.Equal(t, 2, seen)
 
@@ -221,7 +236,7 @@ func TestBusRecoveryArbitratesStaleSnapshots(t *testing.T) {
 				item.SetResourceVersion(tc.listItemRV)
 				objects = []resource.Object{item}
 			}
-			err = informer.relist(t.Context(), false)
+			err = informer.relist(t.Context(), busRelistScheduled)
 			if tc.wantError != "" {
 				require.ErrorContains(t, err, tc.wantError)
 			} else {
@@ -231,21 +246,21 @@ func TestBusRecoveryArbitratesStaleSnapshots(t *testing.T) {
 			informer.applyLive(t.Context(), resourcebus.Event{Verb: resourcebus.VerbAdded, Namespace: id.Namespace, Name: id.Name, ResourceVersion: "opaque"})
 			if tc.wantNewerItem {
 				require.Equal(t, 3, seen)
-				require.Equal(t, tc.listItemRV, informer.recovery.items[id].GetResourceVersion())
-				require.Equal(t, int64(150), informer.recovery.listVersion, "an item version is not the collection version")
+				require.Equal(t, tc.listItemRV, informer.items[id].GetResourceVersion())
+				require.Equal(t, int64(150), informer.listVersion, "an item version is not the collection version")
 				return
 			}
 			require.Equal(t, 2, seen)
 			if tc.live == resourcebus.VerbDeleted {
-				require.NotContains(t, informer.recovery.items, id)
+				require.NotContains(t, informer.items, id)
 				recreated := listerObj(id.Name)
 				recreated.SetResourceVersion("250")
 				listRV, objects = "300", []resource.Object{recreated}
-				require.NoError(t, informer.relist(t.Context(), false))
+				require.NoError(t, informer.relist(t.Context(), busRelistScheduled))
 				require.Equal(t, 3, seen)
-				require.Equal(t, "250", informer.recovery.items[id].GetResourceVersion())
+				require.Equal(t, "250", informer.items[id].GetResourceVersion())
 			} else {
-				require.Equal(t, "200", informer.recovery.items[id].GetResourceVersion())
+				require.Equal(t, "200", informer.items[id].GetResourceVersion())
 			}
 		})
 	}
@@ -263,7 +278,7 @@ func TestBusRecoveryMechanismWorkerCount(t *testing.T) {
 	}{{0, 10}, {1, 1}, {3, 3}} {
 		informer, err := mechanism.NewInformer(listerTestKind, clients, InformerOptions{MaxConcurrentWorkers: tc.configured})
 		require.NoError(t, err)
-		require.Equal(t, tc.want, informer.(*BusInformer).recovery.opts.MaxConcurrentWorkers)
+		require.Equal(t, tc.want, informer.(*BusInformerWithRecovery).opts.MaxConcurrentWorkers)
 	}
 }
 
@@ -275,7 +290,7 @@ func TestBusRecoveryRetainsOverflowDuringCooldown(t *testing.T) {
 			return &testBusSubscription{}, nil
 		})
 		var lists atomic.Int64
-		informer, err := NewBusInformer(listerTestKind, sub, listerFunc(func(context.Context) ([]resource.Object, string, error) {
+		informer, err := NewBusInformerWithRecovery(listerTestKind, sub, listerFunc(func(context.Context) ([]resource.Object, string, error) {
 			if lists.Add(1) == 2 {
 				time.Sleep(2 * overflowRelistInterval)
 			}
@@ -286,10 +301,10 @@ func TestBusRecoveryRetainsOverflowDuringCooldown(t *testing.T) {
 		go func() { done <- informer.Run(ctx) }()
 		require.NoError(t, informer.WaitForSync(ctx))
 
-		informer.recovery.overflow()
+		informer.recordOverflow()
 		synctest.Wait()
 		require.Equal(t, int64(2), lists.Load())
-		informer.recovery.overflow()
+		informer.recordOverflow()
 		time.Sleep(2 * overflowRelistInterval)
 		synctest.Wait()
 		require.Equal(t, int64(2), lists.Load(), "cooldown starts after the slow LIST")
@@ -316,7 +331,7 @@ func TestBusRecoveryReconnectsDoNotPostponeScheduledResync(t *testing.T) {
 			obj.SetResourceVersion(version)
 			return []resource.Object{obj}, version, nil
 		})
-		informer, err := NewBusInformer(listerTestKind, subscriber, lister, BusInformerOptions{ResyncInterval: time.Minute})
+		informer, err := NewBusInformerWithRecovery(listerTestKind, subscriber, lister, BusInformerOptions{ResyncInterval: time.Minute})
 		require.NoError(t, err)
 		updates := make(chan string, 16)
 		require.NoError(t, informer.AddEventHandler(&SimpleWatcher{
@@ -335,7 +350,7 @@ func TestBusRecoveryReconnectsDoNotPostponeScheduledResync(t *testing.T) {
 			reconnect()
 			synctest.Wait()
 		}
-		informer.recovery.overflow()
+		informer.recordOverflow()
 		synctest.Wait()
 		require.Len(t, updates, 1, "reconnects and overflow only deliver changes")
 		require.Equal(t, "100->110", <-updates)
@@ -365,7 +380,7 @@ func TestBusRecoveryWorkersDeliverSameKeyInOrderWithFreshTimeouts(t *testing.T) 
 			return items, "100", nil
 		})
 		const timeout = time.Second
-		informer, err := NewBusInformer(listerTestKind, subscriber, lister, BusInformerOptions{
+		informer, err := NewBusInformerWithRecovery(listerTestKind, subscriber, lister, BusInformerOptions{
 			ResyncInterval: time.Hour, EventTimeout: timeout, MaxConcurrentWorkers: 2,
 		})
 		require.NoError(t, err)
@@ -432,7 +447,7 @@ func TestBusRecoveryCancelsBlockedWorkerEnqueue(t *testing.T) {
 		lister := listerFunc(func(context.Context) ([]resource.Object, string, error) {
 			return nil, "100", nil
 		})
-		informer, err := NewBusInformer(listerTestKind, subscriber, lister, BusInformerOptions{
+		informer, err := NewBusInformerWithRecovery(listerTestKind, subscriber, lister, BusInformerOptions{
 			ResyncInterval: time.Hour, MaxConcurrentWorkers: 2,
 		})
 		require.NoError(t, err)
