@@ -41,6 +41,14 @@ import (
 //		}
 //	}
 //
+// Plugin protocol v2 calls (query, stream, health and resource calls) are
+// authenticated with the same authenticator when they carry the caller's access
+// token (X-Access-Token): their handlers' clients then act on behalf of the
+// caller. A token that does not verify fails the call. A call without a token
+// is let through with no identity, acting as the plugin, and a warning is
+// logged. CallResource handlers also get the app instance settings as
+// resource.RouteRequestInfo (see resource.RouteRequestInfoFrom).
+//
 // If the App needs to talk to the Kubernetes API server, the rest.Config
 // can be overridden via WithKubeConfig. Without one from WithKubeConfig or
 // BuildKubeConfig, the App's runner is not started, since its informers and
@@ -62,7 +70,8 @@ import (
 //
 // WithManageOpts allows further customization of how the plugin backend is
 // managed, such as enabling GRPC settings or tracing opts. Note that
-// ManageOpts.ExtraPlugins is reserved for appadapter and cannot be set:
+// ManageOpts.ExtraPlugins is reserved for appadapter and cannot be set, and that
+// Run adds its plugin v2 middleware after a ManageOpts.Licensing decorator:
 //
 //	err := plugin.Run(
 //		myapp.Provider(),
@@ -154,15 +163,9 @@ func Run(provider app.Provider, opts ...RunOption) error {
 		cfg.appFunc = newStubAppInstance
 	}
 
-	// Set ExtraPlugins to handle the plugin v3 interfaces.
-	if len(cfg.manageOpts.ExtraPlugins) > 0 {
-		return errors.New("ExtraPlugins cannot be overridden")
+	if err := cfg.serve(a); err != nil {
+		return err
 	}
-	serveOpts := appadapter.ServeOpts(a)
-	serveOpts.Authenticator = cfg.authenticator
-	serveOpts.PluginID = cfg.pluginID
-	serveOpts.InsecureSkipAuthentication = cfg.insecureSkipAuthentication
-	cfg.manageOpts.ExtraPlugins = serveOpts.PluginSet()
 
 	// Start any background operations that the App requires, if it can reach
 	// the API server. Without a kube config, they would only fail repeatedly.
@@ -265,4 +268,38 @@ func (stubInstance) CheckHealth(_ context.Context, _ *backend.CheckHealthRequest
 
 func newStubAppInstance(_ context.Context, _ backend.AppInstanceSettings) (instancemgmt.Instance, error) {
 	return stubInstance{}, nil
+}
+
+// serve sets the manage options that serve a: ExtraPlugins for the plugin v3
+// interfaces, and a middleware that authenticates the plugin v2 calls the same
+// way, and gives resource handlers the app instance
+// settings as RouteRequestInfo.
+func (cfg *runConfig) serve(a app.App) error {
+	if len(cfg.manageOpts.ExtraPlugins) > 0 {
+		return errors.New("ExtraPlugins cannot be overridden")
+	}
+	serveOpts := appadapter.ServeOpts(a)
+	serveOpts.Authenticator = cfg.authenticator
+	serveOpts.PluginID = cfg.pluginID
+	serveOpts.InsecureSkipAuthentication = cfg.insecureSkipAuthentication
+	cfg.manageOpts.ExtraPlugins = serveOpts.PluginSet()
+	cfg.manageOpts.Licensing = withV2Middleware(cfg.manageOpts.Licensing, newV2Middleware(cfg.v2Auth()))
+	return nil
+}
+
+// withV2Middleware returns a ServeOptsDecorator that applies decorate, if set,
+// and then adds middleware to the plugin v2 handlers. ManageOpts has no other
+// way to add a handler middleware; the plugin SDK runs it inside its default
+// middleware, next to the instance's handlers.
+func withV2Middleware(decorate backend.ServeOptsDecorator, middleware backend.HandlerMiddleware) backend.ServeOptsDecorator {
+	return func(pluginID string, opts backend.ServeOpts) (backend.ServeOpts, error) {
+		if decorate != nil {
+			var err error
+			if opts, err = decorate(pluginID, opts); err != nil {
+				return opts, err
+			}
+		}
+		opts.HandlerMiddlewares = append(opts.HandlerMiddlewares, middleware)
+		return opts, nil
+	}
 }
