@@ -243,6 +243,13 @@ func TestWatchOptions_String(t *testing.T) {
 	assert.Equal(t, "live=none resync=full-object/all/ignore/ignore-unchanged", WatchOptions{
 		Resync: &WatchResyncOptions{Ignore: AlreadyObserved(nil), IgnoreUnchanged: SameGeneration},
 	}.String())
+	assert.Equal(t, "live=full-object/all/ignore-unchanged resync=none", WatchOptions{
+		Live: &WatchLiveOptions{IgnoreUnchanged: SameGeneration},
+	}.String())
+	assert.Equal(t, "live=full-object/all/ignore resync=full-object/all", WatchOptions{
+		Live:   &WatchLiveOptions{Ignore: AlreadyObserved(nil)},
+		Resync: &WatchResyncOptions{},
+	}.String())
 }
 
 func TestWatchOptions_WithDefaults_keepsTheResyncChecks(t *testing.T) {
@@ -250,6 +257,26 @@ func TestWatchOptions_WithDefaults_keepsTheResyncChecks(t *testing.T) {
 	defaulted := declared.WithDefaults().Resync
 	assert.NotNil(t, defaulted.Ignore)
 	assert.NotNil(t, defaulted.IgnoreUnchanged)
+}
+
+func TestWatchOptions_WithDefaults_keepsTheLiveChecks(t *testing.T) {
+	declared := WatchOptions{Live: &WatchLiveOptions{Ignore: AlreadyObserved(nil), IgnoreUnchanged: SameGeneration}}
+	defaulted := declared.WithDefaults().Live
+	assert.NotNil(t, defaulted.Ignore)
+	assert.NotNil(t, defaulted.IgnoreUnchanged)
+	assert.Equal(t, WatchDetailFullObject, defaulted.Detail)
+	assert.Equal(t, WatchDistributionAll, defaulted.Distribution)
+}
+
+func TestWatchOptions_SatisfiedBy_ignoresTheChecks(t *testing.T) {
+	checks := WatchOptions{
+		Live:   &WatchLiveOptions{Ignore: AlreadyObserved(nil), IgnoreUnchanged: SameGeneration},
+		Resync: &WatchResyncOptions{Ignore: AlreadyObserved(nil), IgnoreUnchanged: SameGeneration},
+	}
+	plain := WatchOptions{Live: &WatchLiveOptions{}, Resync: &WatchResyncOptions{}}
+	assert.True(t, checks.SatisfiedBy(plain), "the checks are requests, so a mechanism without them still serves")
+	assert.True(t, plain.SatisfiedBy(checks))
+	assert.Empty(t, checks.RefusedDeliveries(plain))
 }
 
 func TestWatchDetail_SatisfiedBy(t *testing.T) {
