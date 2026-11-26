@@ -50,6 +50,15 @@ func TestNewOpinionatedReconciler(t *testing.T) {
 	})
 }
 
+type cleanupReadClient struct {
+	*mockPatchClient
+}
+
+func (c *cleanupReadClient) Get(ctx context.Context, id resource.Identifier) (resource.Object, error) {
+	obj := &resource.TypedSpecObject[map[string]string]{}
+	return obj, c.GetInto(ctx, id, obj)
+}
+
 func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 	finalizer := "finalizer"
 	t.Run("normal add", func(t *testing.T) {

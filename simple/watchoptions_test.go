@@ -1,15 +1,119 @@
 package simple
 
 import (
+	"context"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
+
+func TestAppAndOperator_OpinionatedWatcherCatchUp(t *testing.T) {
+	const finalizer = "test-finalizer"
+	const pendingFinalizer = "examples-wip"
+	kind := resource.Kind{
+		Schema: resource.NewSimpleSchema("example.com", "v1", &resource.TypedSpecStatusObject[string, string]{},
+			&resource.TypedList[*resource.TypedSpecStatusObject[string, string]]{}, resource.WithKind("Example"), resource.WithPlural("examples")),
+		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+	}
+	for _, entryPoint := range []string{"NewApp", "WatchKind"} {
+		t.Run(entryPoint, func(t *testing.T) {
+			// A pending-finalizer event is queued while Add is running. By the
+			// time it arrives, the completed object has fresh spec and status.
+			config := rest.Config{
+				Host:    "https://example.invalid",
+				APIPath: "/apis",
+				Transport: watcherTestTransport(func(req *http.Request) (*http.Response, error) {
+					assert.Equal(t, http.MethodGet, req.Method)
+					assert.Equal(t, "/apis/example.com/v1/namespaces/default/examples/test", req.URL.Path)
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Header:     http.Header{"Content-Type": {"application/json"}},
+						Body: io.NopCloser(strings.NewReader(`{
+							"apiVersion": "example.com/v1", "kind": "Example",
+							"metadata": {"name": "test", "namespace": "default", "uid": "test-uid",
+								"resourceVersion": "4", "generation": 2, "finalizers": ["test-finalizer"]},
+							"spec": "changed", "status": "from the server"
+						}`)),
+					}, nil
+				}),
+			}
+			var handler operator.ResourceWatcher
+			supplier := func(resource.Kind, resource.ClientGenerator, operator.InformerOptions) (operator.Informer, error) {
+				return &mockInformer{AddEventHandlerFunc: func(h operator.ResourceWatcher) error {
+					handler = h
+					return nil
+				}}, nil
+			}
+			updateCalls := 0
+			watcher := &Watcher{
+				AddFunc: func(context.Context, resource.Object) error {
+					t.Error("Add already completed")
+					return nil
+				},
+				UpdateFunc: func(_ context.Context, _, obj resource.Object) error {
+					updateCalls++
+					current, ok := obj.(*resource.TypedSpecStatusObject[string, string])
+					require.True(t, ok, "the read should decode the watched kind")
+					assert.Equal(t, "4", current.GetResourceVersion())
+					assert.Equal(t, "changed", current.Spec)
+					assert.Equal(t, "from the server", current.Status)
+					return nil
+				},
+			}
+			supplyFinalizer := func(resource.Schema) string { return finalizer }
+			if entryPoint == "NewApp" {
+				createTestApp(t, AppConfig{
+					KubeConfig: config,
+					InformerConfig: AppInformerConfig{
+						InformerSupplier:            supplier,
+						FinalizerSupplier:           supplyFinalizer,
+						InProgressFinalizerSupplier: func(resource.Schema) string { return pendingFinalizer },
+					},
+					UnmanagedKinds: []AppUnmanagedKind{{
+						Kind: kind, Watcher: watcher, ReconcileOptions: UnmanagedKindReconcileOptions{UseOpinionated: true},
+					}},
+				})
+			} else {
+				op, err := NewOperator(OperatorConfig{
+					KubeConfig: config, InformerSupplier: supplier, FinalizerGenerator: supplyFinalizer,
+				})
+				require.NoError(t, err)
+				require.NoError(t, op.WatchKind(kind, watcher, operator.ListWatchOptions{}))
+			}
+			require.NotNil(t, handler)
+
+			old := kind.ZeroValue()
+			old.SetName("test")
+			old.SetNamespace("default")
+			old.SetUID("test-uid")
+			old.SetFinalizers([]string{pendingFinalizer})
+			old.SetGeneration(1)
+			old.SetResourceVersion("2")
+			require.NoError(t, old.SetSpec("original"))
+			current := old.Copy()
+			current.SetGeneration(2)
+			current.SetResourceVersion("3")
+			require.NoError(t, current.SetSpec("changed"))
+			require.NoError(t, handler.Update(t.Context(), old, current))
+			assert.Equal(t, 1, updateCalls)
+		})
+	}
+}
+
+type watcherTestTransport func(*http.Request) (*http.Response, error)
+
+func (f watcherTestTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
 
 func TestApp_WatchOptions(t *testing.T) {
 	// Each mechanism is labelled so a kind served by the API watch is told apart from one served by an offer which

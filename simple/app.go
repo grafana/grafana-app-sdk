@@ -671,7 +671,7 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		if kind.Watcher != nil {
 			watcher := kind.Watcher
 			if kind.ReconcileOptions.UseOpinionated {
-				op, err := operator.NewOpinionatedWatcher(kind.Kind, &watchPatcher{a.patcher.ForKind(kind.Kind.GroupVersionKind().GroupKind())}, operator.OpinionatedWatcherConfig{
+				op, err := operator.NewOpinionatedWatcher(kind.Kind, newWatcherPatcher(a.patcher, a.clientGenerator, kind.Kind), operator.OpinionatedWatcherConfig{
 					Finalizer:           a.getFinalizer,
 					InProgressFinalizer: a.getInProgressFinalizer,
 				})
@@ -980,6 +980,29 @@ var _ operator.PatchClient = &watchPatcher{}
 
 type watchPatcher struct {
 	patcher *k8s.DynamicKindPatcher
+}
+
+type watcherPatcher struct {
+	watchPatcher
+	clients resource.ClientGenerator
+	kind    resource.Kind
+}
+
+func newWatcherPatcher(patcher *k8s.DynamicPatcher, clients resource.ClientGenerator, kind resource.Kind) *watcherPatcher {
+	return &watcherPatcher{
+		watchPatcher: watchPatcher{patcher: patcher.ForKind(kind.GroupVersionKind().GroupKind())},
+		clients:      clients,
+		kind:         kind,
+	}
+}
+
+// Get reads the full object for a watcher callback using the watched version.
+func (w *watcherPatcher) Get(ctx context.Context, id resource.Identifier) (resource.Object, error) {
+	client, err := w.clients.ClientFor(w.kind)
+	if err != nil {
+		return nil, err
+	}
+	return client.Get(ctx, id)
 }
 
 func (w *watchPatcher) PatchInto(ctx context.Context, identifier resource.Identifier, req resource.PatchRequest, options resource.PatchOptions, into resource.Object) error {
