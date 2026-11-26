@@ -452,11 +452,9 @@ func (c *InformerController) informerAddFunc(resourceKind string) func(context.C
 					c.ErrorHandler(ctx, err) // TODO: improve ErrorHandler
 				}
 				if err != nil && c.RetryPolicy != nil {
-					c.queueRetry(retryKey, err, func() (*time.Duration, error) {
-						ctx, span := GetTracer().Start(ctx, "controller-retry")
-						defer span.End()
-						return nil, watcher.Add(ctx, obj)
-					}, ResourceActionCreate, obj)
+					c.queueRetry(retryKey, err, retryInformerEvent(ctx, func(retryCtx context.Context) (*time.Duration, error) {
+						return nil, watcher.Add(retryCtx, obj)
+					}), ResourceActionCreate, obj)
 				}
 			})
 		})
@@ -510,11 +508,9 @@ func (c *InformerController) informerUpdateFunc(resourceKind string) func(contex
 					c.ErrorHandler(ctx, err)
 				}
 				if err != nil && c.RetryPolicy != nil {
-					c.queueRetry(retryKey, err, func() (*time.Duration, error) {
-						ctx, span := GetTracer().Start(ctx, "controller-retry")
-						defer span.End()
-						return nil, watcher.Update(ctx, oldObj, newObj)
-					}, ResourceActionUpdate, newObj)
+					c.queueRetry(retryKey, err, retryInformerEvent(ctx, func(retryCtx context.Context) (*time.Duration, error) {
+						return nil, watcher.Update(retryCtx, oldObj, newObj)
+					}), ResourceActionUpdate, newObj)
 				}
 			})
 		})
@@ -577,11 +573,9 @@ func (c *InformerController) informerDeleteFunc(resourceKind string) func(contex
 					c.ErrorHandler(ctx, err) // TODO: improve ErrorHandler
 				}
 				if err != nil && c.RetryPolicy != nil {
-					c.queueRetry(retryKey, err, func() (*time.Duration, error) {
-						ctx, span := GetTracer().Start(ctx, "controller-retry")
-						defer span.End()
-						return nil, watcher.Delete(ctx, obj)
-					}, ResourceActionDelete, obj)
+					c.queueRetry(retryKey, err, retryInformerEvent(ctx, func(retryCtx context.Context) (*time.Duration, error) {
+						return nil, watcher.Delete(retryCtx, obj)
+					}), ResourceActionDelete, obj)
 				}
 			})
 		})
@@ -649,30 +643,31 @@ func (c *InformerController) doReconcile(ctx context.Context, reconciler Reconci
 	if res.State != nil {
 		req.State = res.State
 	}
+	if err == nil && res.RequeueAfter == nil {
+		return
+	}
+	retry := retryInformerEvent(ctx, func(retryCtx context.Context) (*time.Duration, error) {
+		result, err := reconciler.Reconcile(retryCtx, req)
+		return result.RequeueAfter, err
+	})
 	if res.RequeueAfter != nil {
 		// If RequeueAfter is non-nil, add a retry to the queue for now+RequeueAfter
 		if c.retryProcessor != nil {
 			c.retryProcessor.Enqueue(RetryRequest{
 				Key:        retryKey,
 				RetryAfter: time.Now().Add(*res.RequeueAfter),
-				RetryFunc: func() (*time.Duration, error) {
-					res, err := reconciler.Reconcile(ctx, req)
-					return res.RequeueAfter, err
-				},
-				Action:    ResourceActionFromReconcileAction(req.Action),
-				Object:    req.Object,
-				LastError: err,
+				RetryFunc:  retry,
+				Action:     ResourceActionFromReconcileAction(req.Action),
+				Object:     req.Object,
+				LastError:  err,
 			})
 		} else {
 			c.toRetry.AddItem(retryKey, retryInfo{
 				retryAfter: time.Now().Add(*res.RequeueAfter),
-				retryFunc: func() (*time.Duration, error) {
-					res, err := reconciler.Reconcile(ctx, req)
-					return res.RequeueAfter, err
-				},
-				action: ResourceActionFromReconcileAction(req.Action),
-				object: req.Object,
-				err:    err,
+				retryFunc:  retry,
+				action:     ResourceActionFromReconcileAction(req.Action),
+				object:     req.Object,
+				err:        err,
 			})
 		}
 	} else if err != nil {
@@ -682,12 +677,7 @@ func (c *InformerController) doReconcile(ctx context.Context, reconciler Reconci
 			// Call the ErrorHandler function as well if it's set
 			c.ErrorHandler(ctx, err)
 		}
-		c.queueRetry(retryKey, err, func() (*time.Duration, error) {
-			ctx, span := GetTracer().Start(ctx, "controller-retry")
-			defer span.End()
-			res, err := reconciler.Reconcile(ctx, req)
-			return res.RequeueAfter, err
-		}, ResourceActionFromReconcileAction(req.Action), req.Object)
+		c.queueRetry(retryKey, err, retry, ResourceActionFromReconcileAction(req.Action), req.Object)
 	}
 }
 
