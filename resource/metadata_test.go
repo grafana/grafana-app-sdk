@@ -259,3 +259,23 @@ func TestWriteGrafanaAnnotation(t *testing.T) {
 		})
 	}
 }
+
+func TestGetAnnotationFirst(t *testing.T) {
+	tests := []struct {
+		name        string
+		annotations map[string]string
+		keys        []string
+		expected    string
+	}{
+		{name: "nil map", annotations: nil, keys: []string{"a"}, expected: ""},
+		{name: "no keys present", annotations: map[string]string{"x": "y"}, keys: []string{"a", "b"}, expected: ""},
+		{name: "first key wins", annotations: map[string]string{"a": "1", "b": "2"}, keys: []string{"a", "b"}, expected: "1"},
+		{name: "falls back to second key", annotations: map[string]string{"b": "2"}, keys: []string{"a", "b"}, expected: "2"},
+		{name: "present but empty first key wins", annotations: map[string]string{"a": "", "b": "2"}, keys: []string{"a", "b"}, expected: ""},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, GetAnnotationFirst(test.annotations, test.keys...))
+		})
+	}
+}

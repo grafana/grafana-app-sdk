@@ -176,8 +176,7 @@ func (o *AppManifest) GetCreatedBy() string {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
-
-	return o.ObjectMeta.Annotations["grafana.com/createdBy"]
+	return resource.GetAnnotationFirst(o.ObjectMeta.Annotations, "grafana.app/createdBy", "grafana.com/createdBy")
 }
 
 func (o *AppManifest) SetCreatedBy(createdBy string) {
@@ -209,8 +208,7 @@ func (o *AppManifest) GetUpdatedBy() string {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
-
-	return o.ObjectMeta.Annotations["grafana.com/updatedBy"]
+	return resource.GetAnnotationFirst(o.ObjectMeta.Annotations, "grafana.app/updatedBy", "grafana.com/updatedBy")
 }
 
 func (o *AppManifest) SetUpdatedBy(updatedBy string) {

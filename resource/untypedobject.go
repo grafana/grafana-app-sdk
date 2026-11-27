@@ -186,8 +186,9 @@ func (u *UntypedObject) GetCommonMetadata() CommonMetadata {
 				// HMMMM
 			}
 		}
-		createdBy = u.Annotations[AnnotationCreatedBy]
-		updatedBy = u.Annotations[AnnotationUpdatedBy]
+		// Prefer the keys set by Grafana (grafana.app/), falling back to the legacy grafana.com/ keys
+		createdBy = GetAnnotationFirst(u.Annotations, AnnotationPrefixGrafanaApp+"createdBy", AnnotationCreatedBy)
+		updatedBy = GetAnnotationFirst(u.Annotations, AnnotationPrefixGrafanaApp+"updatedBy", AnnotationUpdatedBy)
 	}
 	return CommonMetadata{
 		UID:               string(u.UID),
