@@ -273,8 +273,9 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 // and calls the underlying UpdateFunc or DeleteFunc based on internal logic.
 // If the new object has a non-nil ObjectMetadata.DeletionTimestamp in its metadata, DeleteFunc will be called,
 // and the object's finalizer will be removed to allow kubernetes to hard delete it.
-// A recovery LIST can retry initialization if the object still lacks the watcher's finalizer.
-// Updates with a changed or unknown generation can reach UpdateFunc.
+// Bus notifications can deliver a deletion that starts without a generation change, and a recovery LIST can
+// retry cleanup or initialization. Updates with a changed or unknown generation can reach UpdateFunc.
+// For stock watch deliveries, an update that adds the watcher's finalizer is ignored.
 //
 //nolint:funlen
 func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tgt resource.Object) error {
@@ -291,11 +292,10 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 	logger := logging.FromContext(ctx).With("action", "update", "component", "OpinionatedWatcher", "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())
 	logger.Debug("Handling update")
 
-	// A deletion can start without changing generation. A re-list can also
-	// recover cleanup that has not completed since the deletion started.
-	fromRelist := DeliveryFromContext(ctx) == DeliveryRelist
+	delivery := DeliveryFromContext(ctx)
+	fromRelist := delivery == DeliveryRelist
 	deleting := tgt.GetDeletionTimestamp() != nil
-	pendingDeletion := deleting && (src.GetDeletionTimestamp() == nil || fromRelist)
+	pendingDeletion := deleting && busDeliveryNeedsCleanup(delivery, src)
 	sameGeneration := tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration()
 	newFinalizers := o.getFinalizers(tgt)
 	if fromRelist && !deleting && !slices.Contains(newFinalizers, o.finalizer) {
@@ -382,12 +382,28 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 		return nil
 	}
 
+	if o.suppressFinalizerUpdate(delivery, src, newFinalizers) {
+		logger.Debug("Finalizer add update, ignoring")
+		return nil
+	}
+
 	err := o.updateFunc(ctx, src, tgt)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("watcher update error: %s", err.Error()))
 		return err
 	}
 	return nil
+}
+
+// A live event handles the start of deletion. A re-list can also retry unfinished cleanup.
+func busDeliveryNeedsCleanup(delivery Delivery, old resource.Object) bool {
+	return delivery == DeliveryRelist || (delivery == DeliveryLive && old.GetDeletionTimestamp() == nil)
+}
+
+// Stock watches keep suppressing updates that add the watcher's finalizer.
+func (o *OpinionatedWatcher) suppressFinalizerUpdate(delivery Delivery, old resource.Object, finalizers []string) bool {
+	return delivery != DeliveryLive && delivery != DeliveryRelist &&
+		slices.Contains(finalizers, o.finalizer) && !slices.Contains(o.getFinalizers(old), o.finalizer)
 }
 
 func (o *OpinionatedWatcher) refreshUnfinishedObject(ctx context.Context, listed resource.Object) (resource.Object, error) {

@@ -514,7 +514,9 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 			assert.Equal(t, resource.PatchOpReplace, request.Operations[0].Operation)
 			return patchErr
 		}
-		err := o.Update(context.TODO(), old, obj)
+		require.NoError(t, o.Update(t.Context(), old, obj))
+		assert.False(t, deleted, "stock watch skips same-generation updates")
+		err := o.Update(ContextWithDelivery(t.Context(), DeliveryLive), old, obj)
 		assert.True(t, deleted)
 		expectedErr := NewFinalizerOperationError(patchErr, resource.PatchRequest{Operations: []resource.PatchOperation{{Path: "/metadata/finalizers", Operation: resource.PatchOpReplace, Value: []string{}}, {Path: "/metadata/resourceVersion", Operation: resource.PatchOpReplace, Value: obj.GetResourceVersion()}}})
 		assert.Equal(t, expectedErr, err)
@@ -601,6 +603,8 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 				return nil
 			}
 			require.NoError(t, o.Update(t.Context(), old, updated))
+			require.False(t, called, "stock watch skips updates that add the finalizer")
+			require.NoError(t, o.Update(ContextWithDelivery(t.Context(), DeliveryLive), old, updated))
 			require.Equal(t, tc.wantUpdate, called)
 		})
 	}
