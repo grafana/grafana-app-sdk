@@ -272,7 +272,8 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 // and calls the underlying UpdateFunc or DeleteFunc based on internal logic.
 // If the new object has a non-nil ObjectMetadata.DeletionTimestamp in its metadata, DeleteFunc will be called,
 // and the object's finalizer will be removed to allow kubernetes to hard delete it.
-// Otherwise, UpdateFunc is called, provided the update is non-trivial (that is, the metadata.Generation has changed).
+// A recovery LIST can retry initialization if the object still lacks the watcher's finalizer.
+// Updates with a changed or unknown generation can reach UpdateFunc.
 //
 //nolint:funlen
 func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tgt resource.Object) error {
@@ -291,16 +292,18 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 
 	// A deletion can start without changing generation. A re-list can also
 	// recover cleanup that has not completed since the deletion started.
-	pendingDeletion := tgt.GetDeletionTimestamp() != nil &&
-		(src.GetDeletionTimestamp() == nil || DeliveryFromContext(ctx) == DeliveryRelist)
-	sameGeneration := src.GetGeneration() == tgt.GetGeneration()
-	if !pendingDeletion && tgt.GetGeneration() > 0 && sameGeneration {
+	fromRelist := DeliveryFromContext(ctx) == DeliveryRelist
+	deleting := tgt.GetDeletionTimestamp() != nil
+	pendingDeletion := deleting && (src.GetDeletionTimestamp() == nil || fromRelist)
+	newFinalizers := o.getFinalizers(tgt)
+	if !pendingDeletion && tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration() {
+		// A failed Add leaves the object in the informer's snapshot, so the
+		// next LIST sees it as an update even though initialization is pending.
+		if fromRelist && !deleting && !slices.Contains(newFinalizers, o.finalizer) {
+			return o.Add(ctx, tgt)
+		}
 		return nil
 	}
-
-	// TODO: finalizers part of object metadata?
-	oldFinalizers := o.getFinalizers(src)
-	newFinalizers := o.getFinalizers(tgt)
 	if !slices.Contains(newFinalizers, o.finalizer) && tgt.GetDeletionTimestamp() == nil {
 		// Either the add somehow snuck past us (unlikely), or the original AddFunc call failed, and should be retried.
 		// Either way, we need to try calling AddFunc
@@ -365,12 +368,6 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 				return err
 			}
 		}
-		return nil
-	}
-
-	// Ignore our finalizer addition only if the generation stayed the same.
-	if sameGeneration && !slices.Contains(oldFinalizers, o.finalizer) && slices.Contains(newFinalizers, o.finalizer) {
-		logger.Debug("Finalizer add update, ignoring")
 		return nil
 	}
 

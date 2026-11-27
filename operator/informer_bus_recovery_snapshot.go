@@ -85,11 +85,11 @@ func (b *BusInformerWithRecovery) readSnapshot(ctx context.Context) (map[resourc
 	}
 	next := make(map[resource.Identifier]resource.Object, len(items))
 	for _, item := range items {
+		if item != nil && b.namespace != "" && b.namespace != item.GetNamespace() {
+			continue
+		}
 		if item == nil || item.GetName() == "" {
 			return nil, 0, fmt.Errorf("bus recovery LIST at %q contains an item without identity", rv)
-		}
-		if b.namespace != "" && b.namespace != item.GetNamespace() {
-			return nil, 0, fmt.Errorf("bus recovery LIST at %q returned namespace %q outside %q", rv, item.GetNamespace(), b.namespace)
 		}
 		id := resource.Identifier{Namespace: item.GetNamespace(), Name: item.GetName()}
 		if numericVersion(item.GetResourceVersion()) == 0 {

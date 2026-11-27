@@ -35,6 +35,8 @@ type BusRecoveryDefaults struct {
 
 // NewBusRecovery offers live events and scheduled LIST recovery.
 // Full-object delivery uses the same kind-specific client for GET and LIST.
+// Use resource.NamespaceAll in ListWatchOptions for a cluster-wide subscription
+// and LIST.
 // A nil subscriber disables this option in the selector.
 func NewBusRecovery(subscriber resourcebus.Subscriber, group resourcebus.Group, defaults BusRecoveryDefaults) InformerMechanism {
 	if subscriber == nil {
@@ -94,8 +96,9 @@ func recoveryWatchOptions(group resourcebus.Group, detail WatchDetail) WatchOpti
 
 // NewBusInformerWithRecovery delivers resource identities from notifications
 // and a caller-supplied recovery lister. The lister must cover the
-// subscription's namespace. The LIST and notifications must use the same
-// increasing numeric resource versions. An empty initial LIST can have
+// subscription's namespace. Items outside that namespace are ignored.
+// The LIST and notifications must use the same increasing numeric resource
+// versions. An empty initial LIST can have
 // snapshot version 0. Use NewBusRecovery for full-object delivery.
 func NewBusInformerWithRecovery(kind resource.Kind, subscriber resourcebus.Subscriber, lister ResourceLister, busOpts BusInformerOptions, recoveryOpts BusRecoveryOptions) (*BusInformerWithRecovery, error) {
 	if lister == nil {

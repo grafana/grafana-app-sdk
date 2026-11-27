@@ -811,3 +811,87 @@ func TestHydrationChecksGetResponse(t *testing.T) {
 		})
 	}
 }
+
+func TestBusRecoveryFiltersSnapshotToSubscriptionNamespace(t *testing.T) {
+	first := listerObj("item")
+	first.SetResourceVersion("10")
+	second := first.Copy()
+	second.SetNamespace("other")
+	second.SetResourceVersion("11")
+	firstID := first.GetStaticMetadata().Identifier()
+	secondID := second.GetStaticMetadata().Identifier()
+	subscriber := busSubscribeFunc(func(context.Context, schema.GroupVersionResource, string, func(context.Context, resourcebus.Event), ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
+		return &testBusSubscription{}, nil
+	})
+	for _, tc := range []struct {
+		name      string
+		namespace string
+		want      []resource.Identifier
+	}{
+		{name: "one namespace", namespace: firstID.Namespace, want: []resource.Identifier{firstID}},
+		{name: "all namespaces", want: []resource.Identifier{firstID, secondID}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			informer, err := NewBusInformerWithRecovery(listerTestKind, subscriber, listerFunc(func(context.Context) ([]resource.Object, string, error) {
+				return []resource.Object{first, second}, "12", nil
+			}), BusInformerOptions{Namespace: tc.namespace}, BusRecoveryOptions{})
+			require.NoError(t, err)
+			var delivered []resource.Identifier
+			require.NoError(t, informer.AddEventHandler(&SimpleWatcher{AddFunc: func(_ context.Context, obj resource.Object) error {
+				delivered = append(delivered, obj.GetStaticMetadata().Identifier())
+				return nil
+			}}))
+
+			require.NoError(t, informer.relist(t.Context(), busRelistScheduled))
+			require.ElementsMatch(t, tc.want, delivered)
+			require.Len(t, informer.items, len(tc.want))
+			require.EqualValues(t, 12, informer.listVersion)
+		})
+	}
+}
+
+func TestBusRecoveryBuildsClusterWideList(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		first := listerObj("item")
+		first.SetResourceVersion("10")
+		second := first.Copy()
+		second.SetNamespace("other")
+		second.SetResourceVersion("11")
+
+		subscriber := busSubscribeFunc(func(_ context.Context, _ schema.GroupVersionResource, namespace string, _ func(context.Context, resourcebus.Event), _ ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
+			assert.Equal(t, resource.NamespaceAll, namespace)
+			return &testBusSubscription{}, nil
+		})
+		client := keyListerFallbackClient{list: func(_ context.Context, namespace string, _ resource.ListOptions, into resource.ListObject) error {
+			assert.Equal(t, resource.NamespaceAll, namespace)
+			into.SetItems([]resource.Object{first, second})
+			into.SetResourceVersion("12")
+			return nil
+		}}
+		mechanism := NewBusRecovery(subscriber, resourcebus.Group{}, BusRecoveryDefaults{Detail: WatchDetailFullObject})
+		informer, err := mechanism.NewInformer(listerTestKind, keyListerClientGenerator{Client: client}, InformerOptions{
+			ListWatchOptions:     ListWatchOptions{Namespace: resource.NamespaceAll},
+			MaxConcurrentWorkers: 1,
+		})
+		require.NoError(t, err)
+		delivered := make(chan resource.Identifier, 2)
+		require.NoError(t, informer.AddEventHandler(&SimpleWatcher{AddFunc: func(_ context.Context, obj resource.Object) error {
+			delivered <- obj.GetStaticMetadata().Identifier()
+			return nil
+		}}))
+
+		done := make(chan error, 1)
+		go func() { done <- informer.Run(ctx) }()
+		syncCtx, cancelSync := context.WithTimeout(ctx, time.Second)
+		defer cancelSync()
+		require.NoError(t, informer.WaitForSync(syncCtx))
+		require.Len(t, delivered, 2)
+		require.ElementsMatch(t, []resource.Identifier{first.GetStaticMetadata().Identifier(), second.GetStaticMetadata().Identifier()},
+			[]resource.Identifier{<-delivered, <-delivered})
+		cancel()
+		require.NoError(t, <-done)
+	})
+}

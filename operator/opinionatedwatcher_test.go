@@ -571,40 +571,71 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 		assert.True(t, deleteCalled)
 	})
 
-	t.Run("finalizer update event", func(t *testing.T) {
-		obj := schema.ZeroValue()
-		obj.SetFinalizers([]string{o.finalizer})
+	for _, tc := range []struct {
+		name       string
+		before     int64
+		after      int64
+		wantUpdate bool
+	}{
+		{name: "finalizer added with unchanged generation", before: 1, after: 1},
+		{name: "finalizer added along with a spec update", before: 1, after: 2, wantUpdate: true},
+		{name: "finalizer added with unknown generations", wantUpdate: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			old := schema.ZeroValue()
+			old.SetGeneration(tc.before)
+			require.NoError(t, old.SetSpec("old spec"))
+			updated := old.Copy()
+			updated.SetGeneration(tc.after)
+			updated.SetFinalizers([]string{o.finalizer})
+			if tc.wantUpdate {
+				require.NoError(t, updated.SetSpec("new spec"))
+			}
+			called := false
+			o.UpdateFunc = func(_ context.Context, before, after resource.Object) error {
+				called = true
+				assert.Equal(t, "old spec", before.GetSpec())
+				assert.Equal(t, "new spec", after.GetSpec())
+				return nil
+			}
+			require.NoError(t, o.Update(t.Context(), old, updated))
+			require.Equal(t, tc.wantUpdate, called)
+		})
+	}
 
-		o.UpdateFunc = func(ctx context.Context, old resource.Object, new resource.Object) error {
-			assert.Fail(t, "update should not be called")
+	t.Run("recovery LIST retries failed initialization", func(t *testing.T) {
+		item := schema.ZeroValue()
+		item.SetGeneration(1)
+		old := item.Copy()
+		client.PatchIntoFunc = func(_ context.Context, _ resource.Identifier, req resource.PatchRequest, _ resource.PatchOptions, obj resource.Object) error {
+			switch req.Operations[0].Operation {
+			case resource.PatchOpAdd:
+				obj.SetFinalizers([]string{o.addPendingFinalizer})
+			case resource.PatchOpReplace:
+				obj.SetFinalizers([]string{o.finalizer})
+			}
 			return nil
 		}
-		o.DeleteFunc = func(ctx context.Context, object resource.Object) error {
-			assert.Fail(t, "delete should not be called")
+		attempts := 0
+		o.AddFunc = func(context.Context, resource.Object) error {
+			attempts++
+			if attempts == 1 {
+				return fmt.Errorf("initialization failed")
+			}
+			return nil
+		}
+		o.UpdateFunc = func(context.Context, resource.Object, resource.Object) error {
+			t.Error("initialization should use Add")
 			return nil
 		}
 
-		err := o.Update(context.TODO(), schema.ZeroValue(), obj)
-		assert.Nil(t, err)
-	})
-
-	t.Run("finalizer added along with a spec update", func(t *testing.T) {
-		old := schema.ZeroValue()
-		old.SetGeneration(1)
-		require.NoError(t, old.SetSpec("old spec"))
-		updated := old.Copy()
-		updated.SetGeneration(2)
-		updated.SetFinalizers([]string{o.finalizer})
-		require.NoError(t, updated.SetSpec("new spec"))
-		called := false
-		o.UpdateFunc = func(_ context.Context, before, after resource.Object) error {
-			called = true
-			assert.Equal(t, "old spec", before.GetSpec())
-			assert.Equal(t, "new spec", after.GetSpec())
-			return nil
-		}
-		require.NoError(t, o.Update(t.Context(), old, updated))
-		require.True(t, called)
+		require.ErrorContains(t, o.Add(t.Context(), item), "initialization failed")
+		require.Equal(t, []string{o.addPendingFinalizer}, item.GetFinalizers())
+		require.NoError(t, o.Update(t.Context(), old, item))
+		require.Equal(t, 1, attempts, "a live same-generation update should not retry Add")
+		require.NoError(t, o.Update(ContextWithDelivery(t.Context(), DeliveryRelist), old, item))
+		require.Equal(t, 2, attempts)
+		require.Equal(t, []string{o.finalizer}, item.GetFinalizers())
 	})
 
 	t.Run("update", func(t *testing.T) {
