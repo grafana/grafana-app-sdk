@@ -42,7 +42,7 @@ require (
 	golang.org/x/mod v0.43.0
 	golang.org/x/net v0.63.0
 	golang.org/x/sync v0.25.0
-	golang.org/x/tools v0.52.1-0.20261106145633-d407941a339a
+	golang.org/x/tools v0.53.0
 	gomodules.xyz/jsonpatch/v3 v3.0.1
 	google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf v1.36.12
