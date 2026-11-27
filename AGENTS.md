@@ -917,6 +917,7 @@ The codebase is actively being optimized for production scale (10k-50k resources
 **Essential Documentation**:
 - Tutorial: `/docs/tutorials/issue-tracker/README.md` (start here!)
 - Reconcilers: `/docs/writing-a-reconciler.md`
+- Optimizing watches (watch needs, periodic LIST, bus): `/docs/optimizing-watches.md`
 - Admission control: `/docs/admission-control.md`
 - CUE kinds: `/docs/custom-kinds/writing-kinds.md`
 - Code generation: `/docs/code-generation.md`
