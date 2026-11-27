@@ -10,36 +10,35 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-// InformerSupplier is a function which creates an Informer for a kind. The options carry what the kind's handlers
-// need, as WatchNeeds, so a supplier can both configure what it builds — see InformerOptions.ResyncOptions — and
-// choose what to build.
+// InformerSupplier creates an Informer for a kind. options.WatchNeeds holds what the kind's handlers need, so a
+// supplier can use it to configure the informer (see InformerOptions.ResyncOptions) or to choose which informer to
+// build.
 type InformerSupplier func(
 	kind resource.Kind, clients resource.ClientGenerator, options InformerOptions,
 ) (Informer, error)
 
-// InformerMechanism is a way of watching a kind which says what it gives that kind's handlers, so several can be
-// selected between. Implement it on a supplier which knows its own configuration — an event bus knows its payload
-// and delivery group — so what it advertises cannot drift from what it builds. It answers per kind, since what it
-// can provide may depend on the kind.
+// InformerMechanism is a way to watch a kind that also says what it provides. NewSelectingInformerSupplier uses it
+// to choose between mechanisms. What it provides can depend on the kind.
 //
 // Experimental: this API may change in a minor release.
 type InformerMechanism interface {
-	// WatchOptions is what the informers this mechanism builds give a kind's handlers.
+	// WatchOptions returns what the informers built for kind provide to its handlers.
 	WatchOptions(kind resource.Kind) WatchOptions
-	// NewInformer builds the informer for a kind, as an InformerSupplier does.
+	// NewInformer builds the informer for kind, like an InformerSupplier.
 	NewInformer(kind resource.Kind, clients resource.ClientGenerator, options InformerOptions) (Informer, error)
 }
 
-// PreviousComparer is implemented by a mechanism, and the informers it builds, that can apply
-// WatchResyncOptions.IgnoreUnchanged against the last delivered object. Its resync must be undivided or sharded, and
-// its deliveries must carry the object's metadata.
+// PreviousComparer is implemented by a mechanism, and by the informers it builds, when it can apply
+// WatchResyncOptions.IgnoreUnchanged by comparing each object with its last delivery. Its resync must go to every
+// instance or be sharded, and its deliveries must contain at least metadata. Nothing checks these rules yet.
 //
 // Experimental: this API may change in a minor release.
 type PreviousComparer interface {
 	ComparesPrevious() bool
 }
 
-// NewInformerMechanism presents a supplier whose provision is fixed as an InformerMechanism.
+// NewInformerMechanism returns an InformerMechanism that builds informers with supplier and provides the same
+// WatchOptions for every kind.
 //
 // Experimental: this API may change in a minor release.
 func NewInformerMechanism(provides WatchOptions, supplier InformerSupplier) InformerMechanism {
@@ -61,17 +60,15 @@ func (f fixedMechanism) NewInformer(
 	return f.supplier(kind, clients, options)
 }
 
-// NewSelectingInformerSupplier returns an InformerSupplier which gives each kind the first of these mechanisms
-// whose advertisement satisfies what that kind's handlers need, asking each what it provides for that kind. A nil
-// mechanism is skipped, which is how one whose transport is switched off is listed.
+// NewSelectingInformerSupplier returns an InformerSupplier that gives each kind the first mechanism whose
+// WatchOptions satisfy the kind's WatchNeeds. It skips nil mechanisms, and mechanisms that cannot serve the kind's
+// query (the bus mechanisms do not support label or field selectors).
 //
-// Order the list by increasing capability and each kind takes the cheapest thing which serves it: a re-list, which
-// only re-delivers everything on a schedule; then a bus which only notifies; then one with a re-list of its own,
-// which does both.
+// List the mechanisms from cheapest to most capable, so each kind gets the cheapest one that works. For example: a
+// periodic LIST, then bus notifications, then a bus with recovery.
 //
-// A kind no mechanism satisfies is built by fallback, which must be able to build an informer for any kind — when
-// it is nil such a kind is an error rather than a panic. The informer a mechanism builds is passed through
-// InformerWithWatchOptions, so its advertisement survives an informer which does not describe itself.
+// A kind that no mechanism satisfies is built by fallback, which must work for any kind. If fallback is nil, such a
+// kind returns an error. The selection is not logged.
 //
 // Experimental: this API may change in a minor release.
 func NewSelectingInformerSupplier(fallback InformerSupplier, mechanisms ...InformerMechanism) InformerSupplier {
@@ -102,17 +99,11 @@ func NewSelectingInformerSupplier(fallback InformerSupplier, mechanisms ...Infor
 	}
 }
 
-// InformerWithWatchOptions returns inf unchanged when inf itself says what it provides, and otherwise an informer
-// which says provides on its behalf, so a mechanism's advertisement is not lost to an informer which does not
-// describe itself.
+// InformerWithWatchOptions returns inf unchanged if inf implements WatchOptionsInformer. Otherwise it wraps inf in
+// an informer that reports provides. It checks only inf itself, not the informers that inf wraps.
 //
-// Only inf counts, not what it wraps: a mechanism which builds on top of a stock informer provides what the mechanism
-// says, not what the informer underneath it would say on its own. InformerWatchOptions does follow the chain, since
-// there it is reading a wrapper which changed nothing — the two directions are deliberately different.
-//
-// The wrapper is observable: it forwards the optional interfaces InformerController reads, but a caller which
-// type-asserts the informer back to a concrete type will not find it. A nil informer is returned as nil, so a
-// supplier which returns one still fails where it is added rather than panicking on first use.
+// The wrapper forwards metrics and health checks. A caller that type-asserts the result to a concrete informer type
+// will not find it. A nil inf returns nil.
 //
 // Experimental: this API may change in a minor release.
 func InformerWithWatchOptions(inf Informer, provides WatchOptions) Informer {
@@ -125,9 +116,8 @@ func InformerWithWatchOptions(inf Informer, provides WatchOptions) Informer {
 	return advertisedInformer{Informer: inf, provides: provides}
 }
 
-// advertisedInformer carries what its mechanism said it provides. It forwards the optional interfaces
-// InformerController reads, so wrapping costs the informer neither its metrics nor its health checks; it
-// deliberately does not implement health.Check itself, which would add one the informer does not have.
+// advertisedInformer reports what its mechanism provides. It forwards the informer's metrics and health checks. It
+// does not implement health.Check itself, so it adds no health check of its own.
 type advertisedInformer struct {
 	Informer
 	provides WatchOptions

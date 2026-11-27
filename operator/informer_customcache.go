@@ -90,14 +90,14 @@ type CustomCacheInformer struct {
 	processor      *informerProcessor
 	schema         resource.Kind
 	runContext     context.Context
-	// Resolved from opts.ResyncOptions(), kept beside opts so a reader can still tell what the caller set.
+	// Resolved from opts.ResyncOptions(). opts keeps what the caller set.
 	resyncInterval time.Duration
 	listPageSize   int64
 }
 
-// WatchOptions is what this informer gives a kind's handlers: each change as it happens, carrying the whole object,
-// to every instance. It resyncs as well when a cadence was resolved, re-delivering what its store holds rather than
-// reading the API.
+// WatchOptions returns what this informer provides: live changes with the full object, to every instance. If a
+// resync interval is set, it also provides a resync, which delivers the stored objects again without reading the
+// API.
 //
 // Experimental: this API may change in a minor release.
 func (c *CustomCacheInformer) WatchOptions() WatchOptions {
@@ -124,7 +124,7 @@ func NewCustomCacheInformer(
 		opts.ProcessorBufferSize = processorBufferSize
 	}
 
-	// Resolved once, so the timeout below, the resync period and what this informer advertises all agree.
+	// Resolve once, so the timeout, the resync period, and WatchOptions use the same value.
 	var resyncInterval time.Duration
 	var listPageSize int64
 	if resolved := opts.ResyncOptions(); resolved != nil {
@@ -135,8 +135,7 @@ func NewCustomCacheInformer(
 	if resyncInterval < 0 {
 		resyncInterval = 0
 	}
-	// A resync re-delivers what the store can enumerate, and a memcached store without key tracking enumerates
-	// nothing: there is neither a resync to run nor one to advertise.
+	// A memcached store without key tracking cannot list its objects, so it cannot resync.
 	if memcached, ok := store.(*MemcachedStore); ok && !memcached.trackKeys {
 		resyncInterval = 0
 	}

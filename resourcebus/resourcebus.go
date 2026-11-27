@@ -1,9 +1,9 @@
-// Package resourcebus describes the contract between an app and a bus which announces resource changes out of band
-// of the kubernetes watch, such as a message bus the storage layer publishes change notifications to. It is what an
-// informer subscribes to in place of a watch.
+// Package resourcebus defines the interface between an app and a bus that announces resource changes outside the
+// Kubernetes watch, such as a message bus that the storage layer publishes to. The bus informers in the operator
+// package subscribe to it instead of a watch.
 //
-// It is deliberately a leaf package: it depends on the standard library and apimachinery's schema types only, so an
-// adapter for a concrete bus can implement it without taking on the rest of the SDK.
+// An adapter for a specific bus implements Subscriber. This package depends only on the standard library and
+// apimachinery's schema types, so an adapter does not need the rest of the SDK.
 //
 // Experimental: the resource change bus is a work in progress. Its APIs may change or be removed
 // without notice. Use it only for experimentation.
@@ -16,49 +16,45 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// Verb is the kind of change an Event announces.
+// Verb is the type of change that an Event announces.
 type Verb string
 
 const (
-	// VerbAdded announces an object which has been created.
+	// VerbAdded announces that an object was created.
 	VerbAdded Verb = "added"
-	// VerbModified announces an object which has been updated. A delete which only sets a deletion timestamp
-	// (so that finalizers can run) is a modification, not a VerbDeleted.
+	// VerbModified announces that an object was updated. A delete that only sets the deletion timestamp (so that
+	// finalizers can run) is a VerbModified, not a VerbDeleted.
 	VerbModified Verb = "modified"
-	// VerbDeleted announces an object which has been removed from storage.
+	// VerbDeleted announces that an object was removed from storage.
 	VerbDeleted Verb = "deleted"
 )
 
-// Event is a single change announcement. It carries the object's identity, and whatever metadata the publisher
-// announces with it, but never the object: a subscriber which needs that reads it from the API, because the bus is a
-// signal that something changed, not a replica of storage.
+// Event announces one change. It contains the object's identity, but never the object. A subscriber that needs the
+// object reads it from the API.
 //
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type Event struct {
-	// Verb is the kind of change which occurred.
+	// Verb is the type of change.
 	Verb Verb
 	// Namespace of the changed object. Empty for cluster-scoped kinds.
 	Namespace string
 	// Name of the changed object.
 	Name string
-	// ResourceVersion the change was written at. It is opaque, as the kubernetes API contract requires:
-	// consumers which need to order changes must document their own assumption about its format,
-	// and degrade when it does not hold.
+	// ResourceVersion is the version that the change was written at. Treat it as opaque. A consumer that orders
+	// changes by it must document what format it expects. NewBusRecovery expects increasing integers.
 	ResourceVersion string
 }
 
-// ErrSubscriptionRejected identifies a permanent subscription failure, such
-// as an authorization error or unsupported delivery policy. Adapters should
-// wrap it so the informer can surface the failure without retrying.
+// ErrSubscriptionRejected marks a permanent subscription failure, such as missing permissions or an unsupported
+// delivery mode. Wrap it in the error, so the informer stops and reports the error instead of retrying.
 var ErrSubscriptionRejected = errors.New("resource bus subscription rejected")
 
-// Subscriber opens subscriptions to a bus which announces resource changes.
+// Subscriber opens subscriptions to a bus that announces resource changes.
 //
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type Subscriber interface {
-	// Subscribe delivers at-most-once change notifications to the given resource in the given namespace (an empty namespace means every
-	// namespace) to handler until ctx is done or the returned Subscription is closed.
-	// handler must not block: it is called on the delivery path.
+	// Subscribe delivers change notifications for gvr in namespace to handler, at most once each, until ctx is done
+	// or the Subscription is closed. An empty namespace means every namespace. handler must not block.
 	Subscribe(ctx context.Context, gvr schema.GroupVersionResource, namespace string,
 		handler func(context.Context, Event), opts ...SubscribeOption) (Subscription, error)
 }
@@ -67,75 +63,71 @@ type Subscriber interface {
 //
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type Subscription interface {
-	// WaitReady blocks until the subscription is able to receive events, or ctx is done.
-	// ctx must carry a deadline: an implementation which cannot report readiness can otherwise wait indefinitely.
+	// WaitReady blocks until the subscription can receive events, or until ctx is done. ctx always has a deadline.
 	WaitReady(ctx context.Context) error
-	// Close stops delivery to the handler and releases the subscription's resources.
+	// Close stops delivery to the handler and releases the subscription.
 	Close() error
 }
 
-// GroupDelivery is how a bus shares delivery of an event among the members of a Group.
+// GroupDelivery is how a bus shares events among the members of a Group.
 //
-// A Subscriber which cannot provide the requested delivery must fail the subscription rather than substituting
-// another: the difference decides whether an event reaches one member or all of them, so a silent substitution would
-// either duplicate every event across the members or drop the events a member was meant to handle.
+// A Subscriber that cannot provide the requested delivery must return an error. It must not use a different delivery
+// mode instead, because that would duplicate or drop events.
 //
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type GroupDelivery string
 
 const (
-	// GroupDeliveryDefault leaves the sharing to the bus, which is what a subscriber asks for when it needs the
-	// members to divide the events between them and does not care how.
+	// GroupDeliveryDefault lets the bus decide how the members divide the events. It still divides them: it does
+	// not mean broadcast.
 	GroupDeliveryDefault GroupDelivery = ""
-	// GroupDeliveryRoundRobin asks the bus to hand each event to one member, with no affinity between an
-	// object and the member which handles its events.
+	// GroupDeliveryRoundRobin sends each event to one member, with no affinity between an object and a member.
 	GroupDeliveryRoundRobin GroupDelivery = "round-robin"
 )
 
-// Group shares live delivery among subscribers. A notification is delivered to
-// at most one member of the group. A member that needs a complete view must
-// recover missed changes separately. An empty group selects broadcast delivery.
+// Group shares delivery among subscribers. Each notification goes to at most one member, so a member that needs
+// every change must recover missed changes another way. An empty Name means broadcast: every subscriber gets every
+// notification.
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type Group struct {
-	// Name identifies the group. Subscribers which pass the same name for the same resource and namespace share
-	// delivery; an empty name is no group.
+	// Name identifies the group. Subscribers with the same Name, resource, and namespace share delivery. An empty
+	// Name means no group.
 	Name string
-	// Delivery is how the bus shares events among the members. An empty value leaves it to the bus.
+	// Delivery is how the bus shares events among the members. Empty means GroupDeliveryDefault.
 	Delivery GroupDelivery
 }
 
-// SubscribeConfig is the set of options a Subscriber applies to one subscription.
+// SubscribeConfig holds the options for one subscription. Build it with NewSubscribeConfig.
 //
 // Experimental: the resource change bus is a work in progress and may change or be removed without notice.
 type SubscribeConfig struct {
-	// Group is the group of subscribers this subscription joins, which share delivery between them rather than each
-	// receiving every event. A zero Group subscribes outside any group. See Group.
+	// Group is the group that this subscription joins. A zero Group means no group, so this subscriber gets every
+	// event.
 	Group Group
-	// OnReconnect is called each time the subscription is re-established after a gap. Events published during the gap
-	// were never delivered, so a consumer uses this to trigger whatever recovery it has. It must not block.
+	// OnReconnect is called each time the subscription connects again after a gap. Events from the gap are lost, so
+	// the consumer can use it to start a recovery. It must not block.
 	OnReconnect func()
 }
 
 // SubscribeOption configures one subscription.
 type SubscribeOption func(*SubscribeConfig)
 
-// WithGroup joins the subscription to a group of subscribers which share delivery. See Group.
+// WithGroup joins the subscription to group. See Group.
 func WithGroup(group Group) SubscribeOption {
 	return func(cfg *SubscribeConfig) {
 		cfg.Group = group
 	}
 }
 
-// WithOnReconnect registers a callback invoked each time the subscription is re-established after a gap.
-// See SubscribeConfig.OnReconnect.
+// WithOnReconnect sets fn as SubscribeConfig.OnReconnect.
 func WithOnReconnect(fn func()) SubscribeOption {
 	return func(cfg *SubscribeConfig) {
 		cfg.OnReconnect = fn
 	}
 }
 
-// NewSubscribeConfig applies opts in order and returns the resulting config, so that Subscriber implementations
-// resolve options the same way.
+// NewSubscribeConfig applies opts in order and returns the result. Subscriber implementations should use it to read
+// their options.
 func NewSubscribeConfig(opts ...SubscribeOption) SubscribeConfig {
 	cfg := SubscribeConfig{}
 	for _, opt := range opts {

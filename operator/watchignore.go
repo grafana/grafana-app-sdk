@@ -6,24 +6,25 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-// WatchIgnoreFunc reports whether a live change or a resync can leave out an object, judged on the current object
-// alone.
+// WatchIgnoreFunc reports whether a live change or a resync can leave out an object, based on the current object
+// only. It returns true to leave the object out.
 //
 // Experimental: this API may change in a minor release.
 type WatchIgnoreFunc func(current resource.Object) bool
 
-// Ignores applies f. It never leaves out an object being deleted, and a nil f leaves out nothing.
+// Ignores calls f. It never leaves out an object that is being deleted. A nil f leaves out nothing.
 func (f WatchIgnoreFunc) Ignores(current resource.Object) bool {
 	return f != nil && current.GetDeletionTimestamp() == nil && f(current)
 }
 
-// WatchUnchangedFunc reports whether an object is unchanged since its last delivery, as far as the handlers care.
+// WatchUnchangedFunc reports whether an object is unchanged since its previous version, for the fields your handlers
+// use. It returns true to leave the object out.
 //
 // Experimental: this API may change in a minor release.
 type WatchUnchangedFunc func(previous, current resource.Object) bool
 
-// Unchanged applies f. An object being deleted, with no previous delivery, without a UID, or with a different UID
-// (a replacement) is never unchanged, and a nil f reports nothing unchanged.
+// Unchanged calls f. It reports a change when f is nil, when previous is nil, when the object is being deleted, or
+// when the UID is missing or different (the object was deleted and created again).
 func (f WatchUnchangedFunc) Unchanged(previous, current resource.Object) bool {
 	if f == nil || previous == nil || current.GetDeletionTimestamp() != nil {
 		return false
@@ -34,7 +35,8 @@ func (f WatchUnchangedFunc) Unchanged(previous, current resource.Object) bool {
 	return f(previous, current)
 }
 
-// SameResourceVersion reports an object unchanged when its resourceVersion is the same, meaning nobody wrote to it.
+// SameResourceVersion reports an object unchanged when its resourceVersion is the same, which means nobody wrote to
+// it.
 //
 // Experimental: this API may change in a minor release.
 func SameResourceVersion(previous, current resource.Object) bool {
@@ -42,8 +44,8 @@ func SameResourceVersion(previous, current resource.Object) bool {
 	return rv != "" && rv == previous.GetResourceVersion()
 }
 
-// SameGeneration reports an object unchanged when its generation is the same, so status and metadata writes are
-// left out. Without a generation, it compares resourceVersions.
+// SameGeneration reports an object unchanged when its generation is the same, so writes to status and metadata are
+// left out. If either object has no generation, it compares resourceVersion instead.
 //
 // Experimental: this API may change in a minor release.
 func SameGeneration(previous, current resource.Object) bool {
@@ -67,8 +69,8 @@ func SameAnnotations(previous, current resource.Object) bool {
 	return maps.Equal(previous.GetAnnotations(), current.GetAnnotations())
 }
 
-// AllUnchanged reports an object unchanged only when every check does. With no checks, or a nil one, it reports a
-// change.
+// AllUnchanged reports an object unchanged only when every check reports it unchanged. With no checks, or with a
+// nil check, it reports a change.
 //
 // Experimental: this API may change in a minor release.
 func AllUnchanged(checks ...WatchUnchangedFunc) WatchUnchangedFunc {
@@ -85,8 +87,9 @@ func AllUnchanged(checks ...WatchUnchangedFunc) WatchUnchangedFunc {
 	}
 }
 
-// AlreadyObserved leaves out an object whose observedGeneration, read by the given accessor, equals its generation.
-// It keeps the object when either is missing.
+// AlreadyObserved returns a WatchIgnoreFunc that leaves out an object when its observed generation equals its
+// generation. observedGeneration reads the observed generation from the object, and returns false if there is none.
+// The object is kept when either value is missing.
 //
 // Experimental: this API may change in a minor release.
 func AlreadyObserved(observedGeneration func(obj resource.Object) (int64, bool)) WatchIgnoreFunc {

@@ -13,15 +13,17 @@ import (
 	"github.com/grafana/grafana-app-sdk/resourcebus"
 )
 
-// BusRecoveryOptions configures LIST recovery for an existing bus subscription.
+// BusRecoveryOptions configures NewBusInformerWithRecovery. Zero ResyncInterval uses 5 minutes.
+// MaxConcurrentWorkers of 0 or 1 calls handlers one at a time.
 type BusRecoveryOptions struct {
 	ResyncInterval       time.Duration
 	AllowDegradedStart   bool
 	MaxConcurrentWorkers uint64
 }
 
-// BusRecoveryDefaults supplies deployment defaults for LIST recovery. The
-// kind's WatchNeeds can set the resync interval and page size.
+// BusRecoveryDefaults holds defaults for NewBusRecovery. The kind's WatchNeeds.Resync and the app's InformerOptions
+// win over ResyncInterval and PageSize. KeyListerFactory is optional, as in NewPeriodicKeysList. AllowDegradedStart
+// lets the informer start with only the LIST when the bus is not available.
 type BusRecoveryDefaults struct {
 	ResyncInterval     time.Duration
 	PageSize           int64
@@ -29,8 +31,12 @@ type BusRecoveryDefaults struct {
 	KeyListerFactory   KeyListerFactory
 }
 
-// NewBusRecovery offers live identities and scheduled LIST recovery.
-// A nil subscriber disables this option in the selector.
+// NewBusRecovery returns a mechanism that delivers bus notifications as identities on the live channel, and uses
+// LIST requests to find changes the bus missed. It provides a resync of identities to every instance.
+//
+// It lists at startup, on each resync interval, after the bus reconnects, and after its queue overflows. The LIST and
+// the notifications must use the same numeric, increasing resourceVersions. It does not support label or field
+// selectors. If subscriber is nil, it returns nil, and NewSelectingInformerSupplier skips it.
 func NewBusRecovery(subscriber resourcebus.Subscriber, group resourcebus.Group, defaults BusRecoveryDefaults) InformerMechanism {
 	if subscriber == nil {
 		return nil
@@ -64,10 +70,9 @@ func recoveryWatchOptions(group resourcebus.Group) WatchOptions {
 	return provides
 }
 
-// NewBusInformerWithRecovery subscribes to changes and periodically reconciles an identity
-// snapshot. The lister must cover the subscription's namespace. The LIST and
-// notifications must use the same increasing numeric resource versions.
-// An empty initial LIST can have snapshot version 0.
+// NewBusInformerWithRecovery returns the informer that NewBusRecovery builds. The lister must cover the
+// subscription's namespace. The LIST and the notifications must use the same numeric, increasing resourceVersions. An
+// empty LIST can have the snapshot version "0".
 func NewBusInformerWithRecovery(kind resource.Kind, subscriber resourcebus.Subscriber, lister ResourceLister, busOpts BusInformerOptions, recoveryOpts BusRecoveryOptions) (*BusInformerWithRecovery, error) {
 	if lister == nil {
 		return nil, errors.New("bus recovery requires a lister")
@@ -90,7 +95,9 @@ func wrapBusWithRecovery(bus *busInformer, lister ResourceLister, opts BusRecove
 	}
 }
 
-// BusInformerWithRecovery combines bus notifications with LIST recovery.
+// BusInformerWithRecovery delivers bus notifications and uses LIST requests to recover missed changes. It keeps a
+// snapshot of identities, not full objects. Events for one object always go to the same worker, so they stay in
+// order.
 type BusInformerWithRecovery struct {
 	*busInformer
 	lister ResourceLister
@@ -100,19 +107,19 @@ type BusInformerWithRecovery struct {
 	overflows      chan struct{}
 	deliveries     []chan busDelivery
 
-	// The run loop alone updates the snapshot and queues changes for delivery.
+	// Only the run loop updates these fields.
 	items       map[resource.Identifier]resource.Object
 	deleted     map[resource.Identifier]int64
 	listVersion int64
 }
 
-// WatchOptions describes the live and scheduled deliveries provided by the informer.
+// WatchOptions returns what the informer provides: live identities, and a resync of identities.
 func (b *BusInformerWithRecovery) WatchOptions() WatchOptions { return recoveryWatchOptions(b.group) }
 
-// Schema returns the kind served by the informer.
+// Schema returns the schema of the informer's kind.
 func (b *BusInformerWithRecovery) Schema() resource.Schema { return b.kind.Schema }
 
-// HealthCheck reports whether initial sync has completed and the informer is running.
+// HealthCheck returns an error until the first LIST is done, and after the informer stops.
 func (b *BusInformerWithRecovery) HealthCheck(context.Context) error {
 	select {
 	case <-b.stopped:
@@ -130,7 +137,7 @@ func (b *BusInformerWithRecovery) HealthCheck(context.Context) error {
 	}
 }
 
-// Run starts the subscription and keeps the snapshot current until ctx is canceled.
+// Run subscribes to the bus, does the first LIST, and delivers changes until ctx is canceled.
 func (b *BusInformerWithRecovery) Run(ctx context.Context) error {
 	return b.runOnce(ctx, b.run)
 }
@@ -295,8 +302,7 @@ func (b *BusInformerWithRecovery) serveUntilRelist(ctx context.Context, resyncAt
 			return busRelistOverflow
 		case <-overflowEvents:
 			if remaining := time.Until(nextOverflowRelist); remaining > 0 {
-				// A LIST already queued by the normal schedule or reconnect
-				// can cover this drop before the cooldown ends.
+				// Wait for the cooldown. A scheduled or reconnect LIST may cover the drop first.
 				overflowTimer = time.NewTimer(remaining)
 				overflowReady = overflowTimer.C
 				overflowEvents = nil
@@ -376,8 +382,7 @@ func (b *BusInformerWithRecovery) dispatchChange(d busDelivery) {
 			return
 		}
 		err := withInformerEventTimeout(d.ctx, b.timeout, handler, func(ctx context.Context) error {
-			// The snapshot and queued deliveries own their objects. A watcher may
-			// mutate the copies it receives, including finalizer updates.
+			// Handlers get copies, because they may change the objects they receive.
 			switch {
 			case d.current == nil:
 				return handler.Delete(ctx, d.old.Copy())

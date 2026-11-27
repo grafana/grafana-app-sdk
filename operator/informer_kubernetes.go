@@ -37,9 +37,9 @@ type KubernetesBasedInformer struct {
 	resyncInterval        time.Duration
 }
 
-// WatchOptions is what this informer gives a kind's handlers: each change as it happens, carrying the whole object,
-// to every instance. It resyncs as well when a cadence was resolved, re-delivering its cache rather than reading the
-// API — so it re-evaluates every object but discovers nothing the watch did not deliver.
+// WatchOptions returns what this informer provides: live changes with the full object, to every instance. If a
+// resync interval is set, it also provides a resync. The resync delivers the cached objects again without reading
+// the API, so it cannot find changes that the watch missed.
 //
 // Experimental: this API may change in a minor release.
 func (k *KubernetesBasedInformer) WatchOptions() WatchOptions {
@@ -65,7 +65,8 @@ type InformerOptions struct {
 	// This is distinct from a full resync, as no information is fetched from the API server.
 	// Changes to this value after run() is called will not take effect.
 	// An empty value will disable cache resyncs.
-	// A kind which states WatchNeeds.Resync.Interval gets that instead; see ResyncOptions.
+	// It is also the fallback resync interval for the periodic LIST and bus recovery mechanisms.
+	// WatchNeeds.Resync.Interval overrides it for one kind; see ResyncOptions.
 	CacheResyncInterval time.Duration
 	// EventTimeout is the timeout for an event to be processed.
 	// If an event is not processed within this timeout, it will be dropped.
@@ -87,7 +88,8 @@ type InformerOptions struct {
 	// Paginated list is less efficient and depending on the actual size of objects
 	// might result in an increased memory consumption of the APIServer.
 	//
-	// Defaults to false. Requires Kubernetes 1.27+ when enabled.
+	// Defaults to false. Requires Kubernetes 1.27+ when enabled. KubernetesBasedInformer ignores it. CustomCacheInformer
+	// uses it.
 	// See https://github.com/kubernetes/enhancements/tree/master/keps/sig-api-machinery/3157-watch-list#design-details
 	UseWatchList bool
 	// WatchListPageSize is the requested chunk size for paginated LIST operations.
@@ -95,7 +97,8 @@ type InformerOptions struct {
 	// Recommended values: 5000-10000 for most use cases.
 	// Note: This only affects traditional LIST operations. It does NOT apply to watch-list streaming (UseWatchList).
 	// An empty value (0) will use client-go's default pagination behavior based on resource version.
-	// A kind which states WatchNeeds.Resync.ListPageSize gets that instead; see ResyncOptions.
+	// KubernetesBasedInformer ignores it. CustomCacheInformer and the LIST mechanisms use it; the LIST mechanisms use
+	// DefaultListerPageSize when it is 0. WatchNeeds.Resync.ListPageSize overrides it for one kind; see ResyncOptions.
 	WatchListPageSize int64
 	// MaxConcurrentWorkers is the maximum number of concurrent workers for event processing in ConcurrentInformer.
 	// Each worker maintains a queue of events which are processed sequentially.
@@ -108,23 +111,20 @@ type InformerOptions struct {
 	// ResourceKind is used as the "kind" label on queue depth metrics.
 	// When empty, the label value defaults to an empty string.
 	ResourceKind string
-	// WatchNeeds is what the kind's handlers need of the changes they are watched by, for a mechanism to configure
-	// itself from. It wins over the overlapping fields above, which are the app-wide fallbacks; ResyncOptions
-	// resolves the two.
+	// WatchNeeds is what the kind's handlers need. A supplier can use it to choose and configure the informer. Its
+	// resync fields override CacheResyncInterval and WatchListPageSize for this kind; see ResyncOptions.
 	//
 	// Experimental: this API may change in a minor release.
 	WatchNeeds WatchOptions
 }
 
-// ResyncOptions is the resync an informer built from these options should run, and the page size any listing it
-// does should read: WatchNeeds.Resync where the kind stated a figure, CacheResyncInterval and WatchListPageSize
-// where it did not, each falling back on its own. Read
-// this, not CacheResyncInterval, wherever the effective cadence is used.
+// ResyncOptions returns the resync interval and list page size to use. Each value comes from WatchNeeds.Resync when
+// it is non-zero, and otherwise from CacheResyncInterval or WatchListPageSize. Use it instead of reading
+// CacheResyncInterval directly.
 //
-// A nil WatchNeeds.Resync states nothing, so it does not switch the app-wide resync off. The result is nil only
-// when neither side asked for a resync; an Interval of 0 means one was asked for with no cadence to run it at,
-// which each mechanism answers for itself. A negative figure stated by the kind is still a figure, so it is not
-// replaced by the app-wide one: it resolves to zero, since a negative cadence is no cadence.
+// It returns nil when neither the kind nor the app asks for a resync. A nil WatchNeeds.Resync does not turn off the
+// app's resync. An Interval of 0 in the result means a resync was asked for without an interval. A negative value
+// from the kind becomes 0, not the app's value.
 //
 // Experimental: this API may change in a minor release.
 func (o InformerOptions) ResyncOptions() *WatchResyncOptions {
@@ -154,7 +154,7 @@ func NewKubernetesBasedInformer(
 		return nil, errors.New("client cannot be nil")
 	}
 
-	// Resolved once, so the timeout below and the resync period agree.
+	// Resolve once, so the timeout and the resync period use the same value.
 	var resync time.Duration
 	if resolved := options.ResyncOptions(); resolved != nil {
 		resync = resolved.Interval

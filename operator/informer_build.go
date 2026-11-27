@@ -7,29 +7,28 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-// InformerRequest is what building one kind's informer takes. It holds no policy of its own: Supplier is what
-// decides, and the caller resolves it.
+// InformerRequest holds what BuildInformer needs to build the informer for one kind. Supplier decides which
+// informer to build.
 //
 // Experimental: this API may change in a minor release.
 type InformerRequest struct {
 	Kind     resource.Kind
 	Clients  resource.ClientGenerator
 	Supplier InformerSupplier
-	// Options is the informer's configuration, with Options.WatchNeeds the kind's declaration as given. It is
-	// defaulted in a copy, so a declaration is never defaulted in place.
+	// Options configures the informer. Options.WatchNeeds is the kind's declaration. BuildInformer fills in its
+	// defaults on a copy.
 	Options InformerOptions
-	// Opinionated states that the kind's handler is wrapped in its Opinionated variant, which reads the deletion
-	// timestamp, the finalizer list and the generation off the object on the event.
+	// Opinionated is true when the kind's handler is an opinionated reconciler or watcher. These read the deletion
+	// timestamp, the finalizers, and the generation from each event, so they need at least metadata.
 	Opinionated bool
-	// DiscardsResyncs states that the kind's handler drops a resync delivery, as an OpinionatedWatcher does: it skips
-	// an update whose generation is unchanged, which is how a resync arrives. Declaring a resync for such a handler
-	// is refused rather than accepted and never delivered.
+	// DiscardsResyncs is true when the kind's handler drops resync deliveries, as an OpinionatedWatcher does (it skips
+	// updates with an unchanged generation). BuildInformer rejects a Resync declaration for such a handler.
 	DiscardsResyncs bool
 }
 
-// BuildInformer asks the request's supplier for the kind's informer, handing it the kind's needs as
-// InformerOptions.WatchNeeds, and reports an error when an informer which says what it provides provides less than
-// those needs.
+// BuildInformer builds the kind's informer with req.Supplier, passing the kind's needs in InformerOptions.WatchNeeds.
+// It returns an error if the declaration is invalid for the handler, or if the informer reports that it provides
+// less than the kind needs.
 //
 // Experimental: this API may change in a minor release.
 func BuildInformer(req InformerRequest) (Informer, error) {
@@ -48,11 +47,9 @@ func BuildInformer(req InformerRequest) (Informer, error) {
 	return inf, nil
 }
 
-// validate rejects a declaration no mechanism which satisfies it could serve: the Opinionated variants read the
-// deletion timestamp, the finalizer list and the generation off the object, so a kind declaring less than metadata
-// alongside one is a contradiction rather than something to quietly upgrade. Since every channel is held to what the
-// kind declared (see WatchOptions.RefusedDeliveries), this also keeps every delivery to such a kind at metadata or
-// more, so selection needs no knowledge of the handler.
+// validate rejects declarations that the kind's handler cannot use: a resync for a handler that drops resyncs, and
+// less than metadata for an opinionated handler. Because RefusedDeliveries holds every channel to the declared
+// detail, this also keeps every delivery to an opinionated handler at metadata or more.
 func (r InformerRequest) validate() error {
 	if r.DiscardsResyncs && r.Options.WatchNeeds.Resync != nil {
 		return fmt.Errorf("kind '%s' declares a resync, which its opinionated watcher would never act on: it skips"+
@@ -72,16 +69,16 @@ func (r InformerRequest) validate() error {
 	return nil
 }
 
-// checkProvision reports an error when an informer which says what it provides provides less than its kind's
-// handlers need. One which says nothing is not checked: nothing can be read off it.
+// checkProvision returns an error when the informer reports that it provides less than the kind needs. An informer
+// that does not report what it provides is not checked.
 func (r InformerRequest) checkProvision(inf Informer) error {
 	needs := r.Options.WatchNeeds
 	provided, stated := InformerWatchOptions(inf)
 	if !stated {
 		return nil
 	}
-	// Every channel the mechanism delivers on reaches an opinionated wrapper, including one this kind did not ask
-	// for and so did not have compared, and identities on any of them break its deletion handling.
+	// Every channel reaches an opinionated handler, including channels the kind did not ask for. Identities on any
+	// channel break its deletion handling.
 	if channels := channelsBelowMetadata(provided); r.Opinionated && len(channels) > 0 {
 		return fmt.Errorf("informer for kind '%s' carries less than the object's metadata on its %s channel, which"+
 			" reaches its opinionated reconciler or watcher whether the kind asked for that channel or not and"+
@@ -102,7 +99,7 @@ func (r InformerRequest) checkProvision(inf Informer) error {
 			needs)
 	}
 	remedy := ""
-	// The one need nothing anywhere was configured for: a resync with no cadence to run it at.
+	// Suggest a fix when the kind needs a resync but no interval is set anywhere.
 	resolved := r.Options.ResyncOptions()
 	if needs.Resync != nil && provided.Resync == nil && (resolved == nil || resolved.Interval == 0) {
 		remedy = "; set WatchNeeds.Resync.Interval for the kind, or InformerOptions.CacheResyncInterval for the" +

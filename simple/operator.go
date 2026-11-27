@@ -30,11 +30,10 @@ type OperatorConfig struct {
 	// the finalizer name MUST be 63 chars or fewer, and should be unique to the operator
 	FinalizerGenerator          func(kind resource.Schema) string
 	InformerCacheResyncInterval time.Duration
-	// InformerSupplier builds the informers for the kinds this operator watches. If left unset, a plain
-	// KubernetesBasedInformer is used, which calls handlers one at a time; a supplier set here decides its own
-	// concurrency, as DefaultInformerSupplier does by wrapping in a ConcurrentInformer. It is given each kind's
-	// needs as InformerOptions.WatchNeeds, so operator.NewSelectingInformerSupplier can be used to select a mechanism per
-	// kind, as an App does.
+	// InformerSupplier builds the informers for the kinds this operator watches. If unset, the operator uses a plain
+	// KubernetesBasedInformer, which calls handlers one at a time. (DefaultInformerSupplier adds a ConcurrentInformer.)
+	// It receives each kind's needs in InformerOptions.WatchNeeds. Use operator.NewSelectingInformerSupplier to choose
+	// a watch mechanism for each kind.
 	//
 	// Experimental: this API may change in a minor release.
 	InformerSupplier InformerSupplier
@@ -217,8 +216,8 @@ func (o *Operator) ClientGenerator() resource.ClientGenerator {
 //
 // * Expose a prometheus metrics endpoint if configured
 func (o *Operator) Run(ctx context.Context) error {
-	// WatchKind and ReconcileKind build their informers after NewOperator gathered what the controller had, so
-	// anything they brought with them is registered here. The exporter skips what it already holds.
+	// Register the collectors of informers added by WatchKind and ReconcileKind after NewOperator. The exporter
+	// skips collectors it already has.
 	if o.metricsExporter != nil {
 		if err := o.metricsExporter.RegisterCollectors(o.controller.PrometheusCollectors()...); err != nil {
 			return err
@@ -243,8 +242,8 @@ func (o *Operator) RegisterMetricsCollectors(collectors ...prometheus.Collector)
 	return o.metricsExporter.RegisterCollectors(collectors...)
 }
 
-// kubernetesInformerSupplier builds the informer an Operator used before it took a supplier: a plain watch, whose
-// handlers are called one at a time rather than through a ConcurrentInformer's workers.
+// kubernetesInformerSupplier builds the default informer for an Operator: a plain KubernetesBasedInformer, which
+// calls handlers one at a time.
 func kubernetesInformerSupplier(
 	kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions,
 ) (operator.Informer, error) {
@@ -258,7 +257,7 @@ func kubernetesInformerSupplier(
 	return operator.NewKubernetesBasedInformer(kind, client, options)
 }
 
-// KindWatchOption configures how one kind is watched, beyond the query ListWatchOptions describes.
+// KindWatchOption configures how WatchKind or ReconcileKind watches one kind, in addition to ListWatchOptions.
 //
 // Experimental: this API may change in a minor release.
 type KindWatchOption func(*kindWatchSettings)
@@ -267,9 +266,9 @@ type kindWatchSettings struct {
 	watchNeeds operator.WatchOptions
 }
 
-// WithWatchNeeds states what a kind's handlers need of the changes they are watched by, which the operator passes
-// to its InformerSupplier so that a selecting one can pick the mechanism which satisfies them, and whichever
-// mechanism is built can configure itself from them. See operator.WatchOptions.
+// WithWatchNeeds sets what the kind's handlers need. The operator passes it to its InformerSupplier as
+// InformerOptions.WatchNeeds. Handlers in an Operator are always opinionated, so needs cannot use
+// operator.WatchDetailIdentity, and WatchKind cannot declare a Resync. See operator.WatchOptions.
 //
 // Experimental: this API may change in a minor release.
 func WithWatchNeeds(needs operator.WatchOptions) KindWatchOption {
@@ -278,8 +277,8 @@ func WithWatchNeeds(needs operator.WatchOptions) KindWatchOption {
 	}
 }
 
-// addInformerForKind builds the informer for a kind and adds it to the controller under its key. forWatcher states
-// that the kind's handler is an OpinionatedWatcher rather than an OpinionatedReconciler.
+// addInformerForKind builds the informer for a kind and adds it to the controller under its key. forWatcher is true
+// for an OpinionatedWatcher, and false for an OpinionatedReconciler.
 func (o *Operator) addInformerForKind(
 	kind resource.Kind, options operator.ListWatchOptions, opts []KindWatchOption, forWatcher bool,
 ) error {
@@ -310,8 +309,7 @@ func (o *Operator) addInformerForKind(
 }
 
 // WatchKind will watch the specified kind (schema) with opinionated logic, passing the relevant events on to the SyncWatcher.
-// You can configure the query used for watching the kind using ListWatchOptions, and what the watcher needs of the
-// changes it is watched by with WithWatchNeeds.
+// Set the query with ListWatchOptions, and what the watcher needs with WithWatchNeeds.
 func (o *Operator) WatchKind(
 	kind resource.Kind, watcher SyncWatcher, options operator.ListWatchOptions, opts ...KindWatchOption,
 ) error {
@@ -345,8 +343,7 @@ func (o *Operator) WatchKind(
 }
 
 // ReconcileKind will watch the specified kind (schema) with opinionated logic, passing the events on to the provided Reconciler.
-// You can configure the query used for watching the kind using ListWatchOptions, and what the reconciler needs of
-// the changes it is watched by with WithWatchNeeds.
+// Set the query with ListWatchOptions, and what the reconciler needs with WithWatchNeeds.
 func (o *Operator) ReconcileKind(
 	kind resource.Kind, reconciler operator.Reconciler, options operator.ListWatchOptions, opts ...KindWatchOption,
 ) error {
