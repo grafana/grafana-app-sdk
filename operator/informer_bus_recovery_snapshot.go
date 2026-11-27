@@ -32,6 +32,7 @@ func (b *BusInformerWithRecovery) applyLive(ctx context.Context, event resourceb
 		if err != nil {
 			if ctx.Err() == nil {
 				b.reportError(ctx, fmt.Errorf("read bus event %s/%s: %w", id.Namespace, id.Name, err))
+				b.requestRateLimitedRelist()
 			}
 			return
 		}
@@ -46,11 +47,11 @@ func (b *BusInformerWithRecovery) applyLive(ctx context.Context, event resourceb
 		delete(b.items, id)
 		b.deleted[id] = version
 		if old == nil {
-			if b.opts.Payload == PayloadHydrated {
+			if b.opts.Detail == WatchDetailFullObject {
 				// The object is gone and the informer never held a safe payload.
 				return
 			}
-			old = newIdentityObject(b.kind, id.Namespace, id.Name, event.ResourceVersion)
+			old = b.kind.NewIdentityObject(id, event.ResourceVersion)
 		}
 		b.deliverChange(ctx, old, nil)
 	default:
@@ -97,7 +98,7 @@ func (b *BusInformerWithRecovery) readSnapshot(ctx context.Context) (map[resourc
 		if _, duplicate := next[id]; duplicate {
 			return nil, 0, fmt.Errorf("bus recovery LIST at %q contains duplicate key %v", rv, id)
 		}
-		next[id] = b.listObject(item)
+		next[id] = b.snapshotObject(item)
 	}
 	return next, version, nil
 }

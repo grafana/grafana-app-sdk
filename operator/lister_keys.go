@@ -99,7 +99,7 @@ func (l identityLister) List(ctx context.Context) ([]resource.Object, string, er
 	}
 	identities := make([]resource.Object, 0, len(items))
 	for _, obj := range items {
-		identities = append(identities, newIdentityObject(l.kind, obj.GetNamespace(), obj.GetName(), obj.GetResourceVersion()))
+		identities = append(identities, l.kind.NewIdentityObject(obj.GetStaticMetadata().Identifier(), obj.GetResourceVersion()))
 	}
 	return identities, rv, nil
 }
@@ -117,19 +117,11 @@ func (l identityLister) listKeys(ctx context.Context) ([]resource.Object, string
 		if key.Name == "" {
 			return nil, "", fmt.Errorf("keys snapshot at %q contains an empty name", rv)
 		}
-		items = append(items, newIdentityObject(l.kind, key.Namespace, key.Name, key.ResourceVersion))
+		id := resource.Identifier{Namespace: key.Namespace, Name: key.Name}
+		items = append(items, l.kind.NewIdentityObject(id, key.ResourceVersion))
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, "", err
 	}
 	return items, rv, nil
-}
-
-func newIdentityObject(kind resource.Kind, namespace, name, rv string) resource.Object {
-	obj := kind.ZeroValue()
-	obj.SetGroupVersionKind(kind.GroupVersionKind())
-	obj.SetNamespace(namespace)
-	obj.SetName(name)
-	obj.SetResourceVersion(rv)
-	return obj
 }

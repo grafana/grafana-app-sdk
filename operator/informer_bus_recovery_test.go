@@ -336,10 +336,10 @@ func TestBusRecoveryRetainsOverflowDuringCooldown(t *testing.T) {
 		go func() { done <- informer.Run(ctx) }()
 		require.NoError(t, informer.WaitForSync(ctx))
 
-		informer.recordOverflow()
+		informer.requestRateLimitedRelist()
 		synctest.Wait()
 		require.Equal(t, int64(2), lists.Load())
-		informer.recordOverflow()
+		informer.requestRateLimitedRelist()
 		time.Sleep(2 * overflowRelistInterval)
 		synctest.Wait()
 		require.Equal(t, int64(2), lists.Load(), "cooldown starts after the slow LIST")
@@ -385,7 +385,7 @@ func TestBusRecoveryReconnectsDoNotPostponeScheduledResync(t *testing.T) {
 			reconnect()
 			synctest.Wait()
 		}
-		informer.recordOverflow()
+		informer.requestRateLimitedRelist()
 		synctest.Wait()
 		require.Len(t, updates, 1, "reconnects and overflow only deliver changes")
 		require.Equal(t, "100->110", <-updates)

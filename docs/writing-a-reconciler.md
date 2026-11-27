@@ -306,9 +306,12 @@ recovery mechanism re-lists periodically and after reconnects. Offer recovery
 ahead of notification-only when both could satisfy a kind and it needs
 recovery. Use the API watch for kinds configured with selectors.
 
-Use `PayloadHydrated` when the handler needs full objects. Live writes fetch
-the current object with GET, and recovery uses a full LIST. A delete carries
-the last known object when one is available.
+Set bus recovery's `Detail` to `WatchDetailFullObject` when the handler needs
+full objects. Live writes fetch
+the current object with GET, and recovery uses a full LIST. The GET uses the
+configured event timeout, or 30 seconds by default. A failed GET requests a
+recovery LIST using the same 30-second cooldown as queue overflow. A delete
+carries the last known object when one is available.
 
 If multiple replicas share a subscription group, each instance can miss a live
 event. Recovery catches up each replica's local snapshot.

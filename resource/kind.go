@@ -70,6 +70,17 @@ func (k *Kind) Write(obj Object, out io.Writer, encoding KindEncoding) error {
 	return codec.Write(out, obj)
 }
 
+// NewIdentityObject creates an object of this kind with its namespace, name,
+// and resource version set. Other fields retain the kind's zero values.
+func (k Kind) NewIdentityObject(id Identifier, resourceVersion string) Object {
+	obj := k.ZeroValue()
+	obj.SetGroupVersionKind(k.GroupVersionKind())
+	obj.SetNamespace(id.Namespace)
+	obj.SetName(id.Name)
+	obj.SetResourceVersion(resourceVersion)
+	return obj
+}
+
 // GroupVersionKind is a convenience method that assembles a schema.GroupVersionKind from Group(), Version(), and Kind()
 func (k Kind) GroupVersionKind() schema.GroupVersionKind {
 	if k.Schema == nil {

@@ -305,7 +305,8 @@ func (b *busInformer) handleNotification(ctx context.Context, event resourcebus.
 		return
 	}
 	ctx = ContextWithAnnouncedVersion(ContextWithDelivery(ctx, DeliveryLive), event.ResourceVersion)
-	obj := newIdentityObject(b.kind, event.Namespace, event.Name, event.ResourceVersion)
+	id := resource.Identifier{Namespace: event.Namespace, Name: event.Name}
+	obj := b.kind.NewIdentityObject(id, event.ResourceVersion)
 	switch event.Verb {
 	case resourcebus.VerbAdded, resourcebus.VerbModified:
 		b.dispatch(ctx, obj, func(ctx context.Context, w ResourceWatcher, target resource.Object) error {

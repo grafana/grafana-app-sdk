@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -22,10 +23,12 @@ func (f busGetFunc) Get(ctx context.Context, id resource.Identifier) (resource.O
 
 func TestHydrationRecognizesRecreatedObject(t *testing.T) {
 	existing := listerObj("item")
+	existing.SetGroupVersionKind(schema.GroupVersionKind{Group: listerTestKind.Group()})
 	existing.SetUID("old")
 	existing.SetResourceVersion("10")
 	existing.Spec = map[string]any{"value": "old"}
 	recreated := listerObj("item")
+	recreated.SetGroupVersionKind(schema.GroupVersionKind{})
 	recreated.SetUID("new")
 	recreated.SetResourceVersion("13")
 	recreated.Spec = map[string]any{"value": "new"}
@@ -36,7 +39,7 @@ func TestHydrationRecognizesRecreatedObject(t *testing.T) {
 		return []resource.Object{existing}, existing.GetResourceVersion(), nil
 	})
 	b, err := NewBusInformerWithRecovery(listerTestKind, sub, lister, BusInformerOptions{}, BusRecoveryOptions{
-		Payload: PayloadHydrated,
+		Detail: WatchDetailFullObject,
 		Getter: busGetFunc(func(context.Context, resource.Identifier) (resource.Object, error) {
 			return recreated, nil
 		}),
@@ -67,6 +70,11 @@ func TestHydrationRecognizesRecreatedObject(t *testing.T) {
 		b.applyLive(t.Context(), event)
 	}
 	require.Equal(t, []string{"add", "delete", "add"}, kinds)
+	for _, delivered := range objects {
+		require.Equal(t, listerTestKind.GroupVersionKind(), delivered.GroupVersionKind())
+	}
+	require.Empty(t, existing.GroupVersionKind().Kind)
+	require.Empty(t, recreated.GroupVersionKind())
 	require.Equal(t, existing.GetSpec(), objects[0].GetSpec())
 	require.Equal(t, existing.GetUID(), objects[1].GetUID())
 	require.Equal(t, existing.GetSpec(), objects[1].GetSpec())
@@ -75,43 +83,134 @@ func TestHydrationRecognizesRecreatedObject(t *testing.T) {
 }
 
 func TestHydrationTimeoutAllowsRecoveryToProceed(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		configured time.Duration
+		deadline   time.Duration
+	}{
+		{name: "configured timeout", configured: time.Second, deadline: time.Second},
+		{name: "default timeout", deadline: 30 * time.Second},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				var publish func(context.Context, resourcebus.Event)
+				sub := busSubscribeFunc(func(_ context.Context, _ schema.GroupVersionResource, _ string, fn func(context.Context, resourcebus.Event), _ ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
+					publish = fn
+					return &testBusSubscription{}, nil
+				})
+				var lists atomic.Int64
+				item := listerObj("stalled")
+				item.SetResourceVersion("101")
+				item.Spec = map[string]any{"value": "recovered"}
+				errorsSeen := make(chan error, 1)
+				informer, err := NewBusInformerWithRecovery(listerTestKind, sub, listerFunc(func(context.Context) ([]resource.Object, string, error) {
+					if lists.Add(1) == 1 {
+						return nil, "100", nil
+					}
+					return []resource.Object{item}, "101", nil
+				}), BusInformerOptions{
+					EventTimeout: tc.configured,
+					ErrorHandler: func(_ context.Context, err error) { errorsSeen <- err },
+				}, BusRecoveryOptions{
+					Detail: WatchDetailFullObject, ResyncInterval: time.Hour,
+					Getter: busGetFunc(func(ctx context.Context, _ resource.Identifier) (resource.Object, error) {
+						<-ctx.Done()
+						return nil, ctx.Err()
+					}),
+				})
+				require.NoError(t, err)
+				deliveries := make(chan resource.Object, 1)
+				require.NoError(t, informer.AddEventHandler(&SimpleWatcher{AddFunc: func(ctx context.Context, obj resource.Object) error {
+					if DeliveryFromContext(ctx) == DeliveryRelist {
+						deliveries <- obj
+					}
+					return nil
+				}}))
+				done := make(chan error, 1)
+				go func() { done <- informer.Run(ctx) }()
+				require.NoError(t, informer.WaitForSync(ctx))
+				publish(ctx, resourcebus.Event{Verb: resourcebus.VerbAdded, Namespace: item.GetNamespace(), Name: item.GetName(), ResourceVersion: "101"})
+				time.Sleep(tc.deadline - time.Millisecond)
+				synctest.Wait()
+				require.EqualValues(t, 1, lists.Load())
+				require.Empty(t, errorsSeen)
+				time.Sleep(time.Millisecond)
+				synctest.Wait()
+				require.Len(t, errorsSeen, 1)
+				require.ErrorIs(t, <-errorsSeen, context.DeadlineExceeded)
+				require.EqualValues(t, 2, lists.Load())
+				require.Len(t, deliveries, 1)
+				require.Equal(t, item.GetSpec(), (<-deliveries).GetSpec())
+				cancel()
+				require.NoError(t, <-done)
+			})
+		})
+	}
+}
+
+func TestHydrationFailuresShareRecoveryCooldown(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		var publish func(context.Context, resourcebus.Event)
-		var reconnect func()
-		sub := busSubscribeFunc(func(_ context.Context, _ schema.GroupVersionResource, _ string, fn func(context.Context, resourcebus.Event), opts ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
+		sub := busSubscribeFunc(func(_ context.Context, _ schema.GroupVersionResource, _ string, fn func(context.Context, resourcebus.Event), _ ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
 			publish = fn
-			reconnect = resourcebus.NewSubscribeConfig(opts...).OnReconnect
 			return &testBusSubscription{}, nil
 		})
-		var lists atomic.Int64
-		errorsSeen := make(chan error, 1)
+		var lists, failures atomic.Int64
 		informer, err := NewBusInformerWithRecovery(listerTestKind, sub, listerFunc(func(context.Context) ([]resource.Object, string, error) {
 			lists.Add(1)
 			return nil, "100", nil
-		}), BusInformerOptions{
-			EventTimeout: time.Second,
-			ErrorHandler: func(_ context.Context, err error) { errorsSeen <- err },
-		}, BusRecoveryOptions{
-			Payload: PayloadHydrated, ResyncInterval: time.Hour,
-			Getter: busGetFunc(func(ctx context.Context, _ resource.Identifier) (resource.Object, error) {
-				<-ctx.Done()
-				return nil, ctx.Err()
+		}), BusInformerOptions{ErrorHandler: func(context.Context, error) { failures.Add(1) }}, BusRecoveryOptions{
+			Detail: WatchDetailFullObject, ResyncInterval: time.Hour,
+			Getter: busGetFunc(func(context.Context, resource.Identifier) (resource.Object, error) {
+				return nil, errors.New("transient GET failure")
 			}),
 		})
 		require.NoError(t, err)
 		done := make(chan error, 1)
 		go func() { done <- informer.Run(ctx) }()
 		require.NoError(t, informer.WaitForSync(ctx))
-		publish(ctx, resourcebus.Event{Verb: resourcebus.VerbAdded, Name: "stalled", ResourceVersion: "101"})
+		event := resourcebus.Event{Verb: resourcebus.VerbAdded, Name: "item", ResourceVersion: "101"}
+		publish(ctx, event)
 		synctest.Wait()
-		reconnect()
-		time.Sleep(2 * time.Second)
+		require.EqualValues(t, 2, lists.Load())
+		for range 3 {
+			publish(ctx, event)
+		}
 		synctest.Wait()
-		require.Equal(t, int64(2), lists.Load())
-		require.ErrorIs(t, <-errorsSeen, context.DeadlineExceeded)
+		require.EqualValues(t, 4, failures.Load())
+		require.EqualValues(t, 2, lists.Load())
+		time.Sleep(overflowRelistInterval)
+		synctest.Wait()
+		require.EqualValues(t, 3, lists.Load())
 		cancel()
 		require.NoError(t, <-done)
+	})
+}
+
+func TestBusRecoveryDeliveryDetail(t *testing.T) {
+	subscriber := busSubscribeFunc(func(context.Context, schema.GroupVersionResource, string, func(context.Context, resourcebus.Event), ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
+		return &testBusSubscription{}, nil
+	})
+	lister := listerFunc(func(context.Context) ([]resource.Object, string, error) {
+		return nil, "0", nil
+	})
+
+	t.Run("identity by default", func(t *testing.T) {
+		b, err := NewBusInformerWithRecovery(listerTestKind, subscriber, lister, BusInformerOptions{}, BusRecoveryOptions{})
+		require.NoError(t, err)
+		require.Equal(t, WatchDetailIdentity, b.WatchOptions().Live.Detail)
+		require.Equal(t, WatchDetailIdentity, b.WatchOptions().Resync.Detail)
+	})
+	t.Run("full objects require a getter", func(t *testing.T) {
+		_, err := NewBusInformerWithRecovery(listerTestKind, subscriber, lister, BusInformerOptions{}, BusRecoveryOptions{Detail: WatchDetailFullObject})
+		require.ErrorContains(t, err, "object getter")
+	})
+	t.Run("unsupported metadata", func(t *testing.T) {
+		_, err := NewBusInformerWithRecovery(listerTestKind, subscriber, lister, BusInformerOptions{}, BusRecoveryOptions{Detail: WatchDetailMetadata})
+		require.ErrorContains(t, err, "unsupported bus recovery detail")
 	})
 }
