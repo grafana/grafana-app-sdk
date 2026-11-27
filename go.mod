@@ -19,12 +19,12 @@ require (
 	github.com/emicklei/go-restful/v3 v3.14.0
 	github.com/getkin/kin-openapi v0.153.0
 	github.com/go-jose/go-jose/v4 v4.1.9
-	github.com/grafana/authlib v0.0.0-20261120113603-423cd15e9545
-	github.com/grafana/authlib/types v0.0.0-20261120113603-423cd15e9545
+	github.com/grafana/authlib v0.0.0-20261123164828-55facb65d32c
+	github.com/grafana/authlib/types v0.0.0-20261123164828-55facb65d32c
 	github.com/grafana/codejen v0.0.4
 	github.com/grafana/cog v0.2.4
 	github.com/grafana/grafana-app-sdk/logging v0.0.0 // placeholder: rewritten to the release version on the tagged commit by scripts/release.sh
-	github.com/grafana/grafana-plugin-sdk-go v0.303.1-0.20261127070932-685ec2b73a16
+	github.com/grafana/grafana-plugin-sdk-go v0.303.1-0.20261127071424-cc169de99355
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-plugin v1.8.0
 	github.com/prometheus/client_golang v1.25.0
@@ -167,7 +167,7 @@ require (
 	golang.org/x/text v0.44.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
 	gomodules.xyz/orderedmap v0.1.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20261110000943-09e21b237f2c // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20261118221215-c8830f628b3f // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261118221215-c8830f628b3f // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/apiserver v0.37.2 // indirect
