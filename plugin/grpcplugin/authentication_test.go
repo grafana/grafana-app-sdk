@@ -77,7 +77,8 @@ func TestServerAuthentication(t *testing.T) {
 								return nil, authn.ErrMissingRequiredToken
 							}
 							require.Equal(t, tt.token, token)
-							return info, tt.authErr
+							// Authenticators keep the token on the AuthInfo they return.
+							return &testCallerInfo{AuthInfo: info, access: token}, tt.authErr
 						})
 					}
 					if tt.fallback {
