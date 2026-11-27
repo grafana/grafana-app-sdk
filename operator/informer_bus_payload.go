@@ -14,29 +14,8 @@ import (
 
 const defaultHydrationTimeout = 30 * time.Second
 
-// BusObjectGetter reads the object named by a bus notification. Get must honor
-// context cancellation so a stalled read does not block LIST recovery.
-type BusObjectGetter interface {
-	Get(context.Context, resource.Identifier) (resource.Object, error)
-}
-
-func validateBusRecoveryDetail(opts BusRecoveryOptions) error {
-	switch opts.Detail {
-	case WatchDetailIdentity:
-		return nil
-	case WatchDetailFullObject:
-	default:
-		return fmt.Errorf("unsupported bus recovery detail %q", opts.Detail)
-	}
-	if opts.Getter == nil {
-		return errors.New("full-object bus recovery requires an object getter")
-	}
-	return nil
-}
-
 func (b *BusInformerWithRecovery) liveObject(ctx context.Context, event resourcebus.Event, id resource.Identifier) (resource.Object, error) {
-	opts := b.opts
-	if opts.Detail == WatchDetailIdentity {
+	if b.getObject == nil {
 		return b.kind.NewIdentityObject(id, event.ResourceVersion), nil
 	}
 	timeout := b.timeout
@@ -45,7 +24,7 @@ func (b *BusInformerWithRecovery) liveObject(ctx context.Context, event resource
 	}
 	readCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	obj, err := opts.Getter.Get(readCtx, id)
+	obj, err := b.getObject(readCtx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +42,7 @@ func (b *BusInformerWithRecovery) liveObject(ctx context.Context, event resource
 }
 
 func (b *BusInformerWithRecovery) snapshotObject(obj resource.Object) resource.Object {
-	if b.opts.Detail == WatchDetailFullObject {
+	if b.getObject != nil {
 		owned := obj.Copy()
 		gvk := obj.GroupVersionKind()
 		if filled := withFallbackGVK(gvk, b.kind.GroupVersionKind()); filled != gvk {

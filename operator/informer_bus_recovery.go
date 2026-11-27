@@ -3,6 +3,7 @@ package operator
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -15,11 +16,6 @@ import (
 
 // BusRecoveryOptions configures LIST recovery for an existing bus subscription.
 type BusRecoveryOptions struct {
-	// Detail controls what handlers receive. Zero means WatchDetailIdentity.
-	Detail WatchDetail
-	// Getter is required for WatchDetailFullObject. NewBusRecovery supplies it
-	// from the same client it uses for LIST.
-	Getter               BusObjectGetter
 	ResyncInterval       time.Duration
 	AllowDegradedStart   bool
 	MaxConcurrentWorkers uint64
@@ -37,14 +33,21 @@ type BusRecoveryDefaults struct {
 }
 
 // NewBusRecovery offers live events and scheduled LIST recovery.
+// Full-object delivery uses the same kind-specific client for GET and LIST.
 // A nil subscriber disables this option in the selector.
 func NewBusRecovery(subscriber resourcebus.Subscriber, group resourcebus.Group, defaults BusRecoveryDefaults) InformerMechanism {
 	if subscriber == nil {
 		return nil
 	}
+	fullObjects := defaults.Detail == WatchDetailFullObject
 	return newBusMechanism(recoveryWatchOptions(group, defaults.Detail), func(
 		kind resource.Kind, clients resource.ClientGenerator, opts InformerOptions,
 	) (Informer, error) {
+		switch defaults.Detail {
+		case "", WatchDetailIdentity, WatchDetailFullObject:
+		default:
+			return nil, fmt.Errorf("unsupported bus recovery detail %q", defaults.Detail)
+		}
 		bus, err := newBusInformer(kind, subscriber, busOptionsFor(group, opts))
 		if err != nil {
 			return nil, err
@@ -58,7 +61,10 @@ func NewBusRecovery(subscriber resourcebus.Subscriber, group resourcebus.Group, 
 		if err != nil {
 			return nil, err
 		}
-		if defaults.Detail == "" || defaults.Detail == WatchDetailIdentity {
+		var getObject func(context.Context, resource.Identifier) (resource.Object, error)
+		if fullObjects {
+			getObject = client.Get
+		} else {
 			lister, err = keysListerFor(kind, defaults.KeyListerFactory, lister, listOpts)
 			if err != nil {
 				return nil, err
@@ -69,12 +75,10 @@ func NewBusRecovery(subscriber resourcebus.Subscriber, group resourcebus.Group, 
 			workers = defaultConcurrentInformerWorkers
 		}
 		return wrapBusWithRecovery(bus, lister, BusRecoveryOptions{
-			Detail:               defaults.Detail,
-			Getter:               client,
 			ResyncInterval:       resyncIntervalOr(opts, defaults.ResyncInterval),
 			AllowDegradedStart:   defaults.AllowDegradedStart,
 			MaxConcurrentWorkers: workers,
-		})
+		}, getObject), nil
 	})
 }
 
@@ -87,13 +91,11 @@ func recoveryWatchOptions(group resourcebus.Group, detail WatchDetail) WatchOpti
 	return provides
 }
 
-// NewBusInformerWithRecovery subscribes to changes and periodically reconciles a
-// snapshot. The lister must cover the subscription's namespace and return full
-// objects in hydrated mode. The LIST and notifications must use the same
-// increasing numeric resource versions.
-// An empty initial LIST can have snapshot version 0. When requesting full
-// objects, supply a Getter for live notifications. The lister is only used
-// for snapshots.
+// NewBusInformerWithRecovery delivers resource identities from notifications
+// and a caller-supplied recovery lister. The lister must cover the
+// subscription's namespace. The LIST and notifications must use the same
+// increasing numeric resource versions. An empty initial LIST can have
+// snapshot version 0. Use NewBusRecovery for full-object delivery.
 func NewBusInformerWithRecovery(kind resource.Kind, subscriber resourcebus.Subscriber, lister ResourceLister, busOpts BusInformerOptions, recoveryOpts BusRecoveryOptions) (*BusInformerWithRecovery, error) {
 	if lister == nil {
 		return nil, errors.New("bus recovery requires a lister")
@@ -102,31 +104,29 @@ func NewBusInformerWithRecovery(kind resource.Kind, subscriber resourcebus.Subsc
 	if err != nil {
 		return nil, err
 	}
-	return wrapBusWithRecovery(bus, lister, recoveryOpts)
+	return wrapBusWithRecovery(bus, lister, recoveryOpts, nil), nil
 }
 
-func wrapBusWithRecovery(bus *busInformer, lister ResourceLister, opts BusRecoveryOptions) (*BusInformerWithRecovery, error) {
-	if opts.Detail == "" {
-		opts.Detail = WatchDetailIdentity
-	}
-	if err := validateBusRecoveryDetail(opts); err != nil {
-		return nil, err
-	}
+func wrapBusWithRecovery(
+	bus *busInformer, lister ResourceLister, opts BusRecoveryOptions,
+	getObject func(context.Context, resource.Identifier) (resource.Object, error),
+) *BusInformerWithRecovery {
 	if opts.ResyncInterval <= 0 {
 		opts.ResyncInterval = defaultPeriodicInterval
 	}
 	return &BusInformerWithRecovery{
-		busInformer: bus, lister: lister, opts: opts,
+		busInformer: bus, lister: lister, opts: opts, getObject: getObject,
 		relistRequests: make(chan struct{}, 1), overflows: make(chan struct{}, 1),
 		items: make(map[resource.Identifier]resource.Object), deleted: make(map[resource.Identifier]int64),
-	}, nil
+	}
 }
 
 // BusInformerWithRecovery combines bus notifications with LIST recovery.
 type BusInformerWithRecovery struct {
 	*busInformer
-	lister ResourceLister
-	opts   BusRecoveryOptions
+	lister    ResourceLister
+	opts      BusRecoveryOptions
+	getObject func(context.Context, resource.Identifier) (resource.Object, error)
 
 	relistRequests chan struct{}
 	overflows      chan struct{}
@@ -140,7 +140,11 @@ type BusInformerWithRecovery struct {
 
 // WatchOptions describes the live and scheduled deliveries provided by the informer.
 func (b *BusInformerWithRecovery) WatchOptions() WatchOptions {
-	return recoveryWatchOptions(b.group, b.opts.Detail)
+	detail := WatchDetailIdentity
+	if b.getObject != nil {
+		detail = WatchDetailFullObject
+	}
+	return recoveryWatchOptions(b.group, detail)
 }
 
 // Schema returns the kind served by the informer.

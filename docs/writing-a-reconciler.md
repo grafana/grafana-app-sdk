@@ -306,9 +306,9 @@ recovery mechanism re-lists periodically and after reconnects. Offer recovery
 ahead of notification-only when both could satisfy a kind and it needs
 recovery. Use the API watch for kinds configured with selectors.
 
-Set bus recovery's `Detail` to `WatchDetailFullObject` when the handler needs
-full objects. Live writes fetch
-the current object with GET, and recovery uses a full LIST. The GET uses the
+Set `BusRecoveryDefaults.Detail` to `WatchDetailFullObject` when a handler
+needs full objects. `NewBusRecovery` uses the same client to GET the current
+object for live writes and to run a full LIST for recovery. The GET uses the
 configured event timeout, or 30 seconds by default. A failed GET requests a
 recovery LIST using the same 30-second cooldown as queue overflow. A delete
 carries the last known object when one is available.

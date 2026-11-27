@@ -47,7 +47,7 @@ func (b *BusInformerWithRecovery) applyLive(ctx context.Context, event resourceb
 		delete(b.items, id)
 		b.deleted[id] = version
 		if old == nil {
-			if b.opts.Detail == WatchDetailFullObject {
+			if b.getObject != nil {
 				// The object is gone and the informer never held a safe payload.
 				return
 			}
