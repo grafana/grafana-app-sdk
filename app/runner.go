@@ -248,9 +248,8 @@ func (s *SingletonRunner) HealthChecks() []health.Check {
 }
 
 type dynamicMultiRunnerTuple struct {
-	runner       Runnable
-	cancelFunc   context.CancelFunc
-	mainTimedOut bool
+	runner     Runnable
+	cancelFunc context.CancelFunc
 }
 
 // DynamicMultiRunner is a MultiRunner that allows for adding and removing Runnable instances after Run is called.
@@ -289,12 +288,10 @@ func (d *DynamicMultiRunner) Run(ctx context.Context) error {
 	}
 	d.running = true
 	d.errs = make(chan error)
-	defer close(d.errs)
 	d.wg = &sync.WaitGroup{}
 	var cancel context.CancelFunc
 	d.runCtx, cancel = context.WithCancel(ctx)
 	for idx := range d.runners {
-		d.runners[idx].mainTimedOut = false // Reset this in case we're in a new Run() after a timeout on the previous
 		d.runTuple(d.runners[idx])
 	}
 	d.runMux.Unlock()
@@ -309,7 +306,6 @@ func (d *DynamicMultiRunner) Run(ctx context.Context) error {
 				cancel()
 				if d.ExitWait != nil {
 					if waitOrTimeout(d.wg, *d.ExitWait) {
-						d.setTimedOut(true)
 						return errors.Join(ErrRunnerExitTimeout, err)
 					}
 				} else {
@@ -321,7 +317,6 @@ func (d *DynamicMultiRunner) Run(ctx context.Context) error {
 			cancel()
 			if d.ExitWait != nil {
 				if waitOrTimeout(d.wg, *d.ExitWait) {
-					d.setTimedOut(true)
 					return ErrRunnerExitTimeout
 				}
 			} else {
@@ -329,14 +324,6 @@ func (d *DynamicMultiRunner) Run(ctx context.Context) error {
 			}
 			return nil
 		}
-	}
-}
-
-func (d *DynamicMultiRunner) setTimedOut(val bool) {
-	d.runMux.Lock()
-	defer d.runMux.Unlock()
-	for idx := range d.runners {
-		d.runners[idx].mainTimedOut = val
 	}
 }
 
@@ -402,14 +389,15 @@ func (d *DynamicMultiRunner) HealthChecks() []health.Check {
 	return checks
 }
 func (d *DynamicMultiRunner) runTuple(tpl *dynamicMultiRunnerTuple) {
-	d.wg.Add(1)
-	ctx, cancel := context.WithCancel(d.runCtx) //nolint:gosec
+	wg, errs, runCtx := d.wg, d.errs, d.runCtx
+	ctx, cancel := context.WithCancel(runCtx) //nolint:gosec
 	tpl.cancelFunc = cancel
-	go func() {
-		err := tpl.runner.Run(ctx)
-		d.wg.Done()
-		if err != nil && !tpl.mainTimedOut { // Only send the error if main isn't timed out (otherwise the channel is closed)
-			d.errs <- err
+	wg.Go(func() {
+		if err := tpl.runner.Run(ctx); err != nil {
+			select {
+			case errs <- err:
+			case <-runCtx.Done():
+			}
 		}
-	}()
+	})
 }

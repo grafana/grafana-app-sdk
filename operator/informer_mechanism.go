@@ -30,6 +30,15 @@ type InformerMechanism interface {
 	NewInformer(kind resource.Kind, clients resource.ClientGenerator, options InformerOptions) (Informer, error)
 }
 
+// PreviousComparer is implemented by a mechanism, and the informers it builds, that can apply
+// WatchResyncOptions.IgnoreUnchanged against the last delivered object. Its resync must be undivided or sharded, and
+// its deliveries must carry the object's metadata.
+//
+// Experimental: this API may change in a minor release.
+type PreviousComparer interface {
+	ComparesPrevious() bool
+}
+
 // NewInformerMechanism presents a supplier whose provision is fixed as an InformerMechanism.
 //
 // Experimental: this API may change in a minor release.
@@ -69,6 +78,10 @@ func NewSelectingInformerSupplier(fallback InformerSupplier, mechanisms ...Infor
 	return func(kind resource.Kind, clients resource.ClientGenerator, options InformerOptions) (Informer, error) {
 		for _, mechanism := range mechanisms {
 			if mechanism == nil {
+				continue
+			}
+			if scoped, ok := mechanism.(interface{ supportsQuery(ListWatchOptions) bool }); ok &&
+				!scoped.supportsQuery(options.ListWatchOptions) {
 				continue
 			}
 			provides := mechanism.WatchOptions(kind)
