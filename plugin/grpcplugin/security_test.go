@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"errors"
 	"testing"
 	"time"
 
@@ -57,16 +56,6 @@ func TestServerRejectsCredentialConfusion(t *testing.T) {
 			})
 		}
 	}
-}
-
-func TestAuthenticationDoesNotExposeInternalErrors(t *testing.T) {
-	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-access-token", "valid"))
-	_, _, err := serverAuth{authenticator: authenticatorFunc(func(context.Context, authn.TokenProvider) (types.AuthInfo, error) {
-		return nil, errors.New("fetching https://internal-signer?credential=secret failed")
-	})}.authenticate(ctx)
-	require.Equal(t, codes.Internal, status.Code(err))
-	require.NotContains(t, err.Error(), "secret")
-	require.NotContains(t, err.Error(), "internal-signer")
 }
 
 func TestServerRequestScope(t *testing.T) {

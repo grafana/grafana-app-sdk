@@ -22,12 +22,14 @@ type ServeOpts struct {
 	ConversionServer pluginv3.ConversionServiceServer
 	RouteServer      pluginv3.RouteServiceServer
 
-	// Authenticator must verify the access token's signature and allowed audiences,
-	// for example authn.NewAccessTokenAuthenticator. Requests require a single
-	// access token, with no separate ID token. The wrappers check the requested
-	// group and namespaces against AuthInfo. Handlers remain responsible for
-	// resource authorization and object validation.
-	// If nil, every request is rejected unless InsecureSkipAuthentication is set.
+	// Authenticator is the authenticator the plugin SDK verifies each request's
+	// access token with (backend.ServeOpts.Authentication, which plugin.Run
+	// sets): its server rejects a request without a single access token, or
+	// with a separate ID token, before it reaches a service. The wrappers then
+	// check the requested group and namespaces against the caller's AuthInfo.
+	// Handlers remain responsible for resource authorization and object
+	// validation. If nil, every request is rejected unless
+	// InsecureSkipAuthentication is set.
 	Authenticator authn.Authenticator
 
 	// PluginID, when set, is accepted as an access token audience covering every
@@ -77,10 +79,10 @@ func (opts ServeOpts) PluginSet() plugin.PluginSet {
 	}
 
 	// A nil Authenticator rejects requests unless authentication is explicitly skipped.
-	auth := serverAuth{authenticator: opts.Authenticator, pluginID: opts.PluginID}
-	if opts.Authenticator == nil && opts.InsecureSkipAuthentication {
-		auth.authenticator = authn.NewAccessTokenAuthenticator(authn.NewUnsafeAccessTokenVerifier(authn.VerifierConfig{}))
-		auth.insecure = true
+	auth := serverAuth{
+		verifies: opts.Authenticator != nil,
+		pluginID: opts.PluginID,
+		insecure: opts.Authenticator == nil && opts.InsecureSkipAuthentication,
 	}
 	admissionServer = &authenticatedAdmissionServer{admissionServer, auth}
 	conversionServer = &authenticatedConversionServer{conversionServer, auth}
