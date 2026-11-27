@@ -14,11 +14,15 @@ type eventTimeout struct {
 	duration time.Duration
 }
 
-func withInformerEventTimeout(ctx context.Context, timeout time.Duration, fn func(context.Context) error) error {
+func withInformerEventTimeout(ctx context.Context, timeout time.Duration, handler ResourceWatcher, fn func(context.Context) error) error {
 	if timeout <= 0 {
 		return fn(ctx)
 	}
 	budget := eventTimeout{parent: ctx, duration: timeout}
+	if _, queued := handler.(*concurrentWatcher); queued {
+		// The queue carries the budget. The worker starts its deadline.
+		return fn(context.WithValue(ctx, eventTimeoutContextKey{}, budget))
+	}
 	attempt, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	return fn(context.WithValue(attempt, eventTimeoutContextKey{}, budget))

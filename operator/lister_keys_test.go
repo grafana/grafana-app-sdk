@@ -116,12 +116,12 @@ func TestKeysPeriodicMechanismFactory(t *testing.T) {
 				return nil
 			}}
 			factoryCalled := false
-			mechanism := NewKeysPeriodicMechanism(func(kind resource.Kind, opts ClientListerOptions) (ResourceKeyLister, error) {
+			mechanism := NewPeriodicKeysList(func(kind resource.Kind, opts ClientListerOptions) (ResourceKeyLister, error) {
 				factoryCalled = true
 				require.Equal(t, listerTestKind, kind)
 				require.Equal(t, ClientListerOptions{ListWatchOptions: query, PageSize: 7}, opts)
 				return nil, tc.factoryErr
-			}, PeriodicMechanismOptions{PageSize: 3})
+			}, PeriodicListOptions{PageSize: 3})
 			supplier := NewSelectingInformerSupplier(nil, mechanism)
 			informer, err := supplier(listerTestKind, keyListerClientGenerator{Client: client}, options)
 			require.True(t, factoryCalled)

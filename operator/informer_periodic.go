@@ -18,20 +18,20 @@ const (
 	informerRetryJitter          = 0.1
 )
 
-// PeriodicMechanismOptions sets defaults for scheduled LIST delivery. A kind's
+// PeriodicListOptions sets defaults for scheduled LIST delivery. A kind's
 // resync settings and the app's informer settings take precedence.
-type PeriodicMechanismOptions struct {
+type PeriodicListOptions struct {
 	ResyncInterval time.Duration
 	PageSize       int64
 	RetryInterval  time.Duration
 }
 
-// NewPeriodicMechanism delivers full objects from a paginated LIST on a schedule.
-func NewPeriodicMechanism(defaults PeriodicMechanismOptions) InformerMechanism {
+// NewPeriodicList offers scheduled delivery of full objects from a paginated LIST.
+func NewPeriodicList(defaults PeriodicListOptions) InformerMechanism {
 	return NewInformerMechanism(periodicWatchOptions(WatchDetailFullObject), func(
 		kind resource.Kind, clients resource.ClientGenerator, opts InformerOptions,
 	) (Informer, error) {
-		lister, err := periodicClientLister(kind, clients, opts, defaults.PageSize)
+		lister, err := clientListerFor(kind, clients, listOptionsFor(opts, defaults.PageSize))
 		if err != nil {
 			return nil, err
 		}
@@ -43,37 +43,16 @@ func periodicWatchOptions(detail WatchDetail) WatchOptions {
 	return WatchOptions{Resync: &WatchResyncOptions{Detail: detail, Distribution: WatchDistributionAll}}
 }
 
-func periodicOptions(opts InformerOptions, defaults PeriodicMechanismOptions) PeriodicInformerOptions {
-	interval := defaults.ResyncInterval
-	if resync := opts.ResyncOptions(); resync != nil && resync.Interval > 0 {
-		interval = resync.Interval
-	}
-	return PeriodicInformerOptions{ResyncInterval: interval, RetryInterval: defaults.RetryInterval,
+func periodicOptions(opts InformerOptions, defaults PeriodicListOptions) PeriodicInformerOptions {
+	return PeriodicInformerOptions{ResyncInterval: resyncIntervalOr(opts, defaults.ResyncInterval), RetryInterval: defaults.RetryInterval,
 		EventTimeout: opts.EventTimeout, ErrorHandler: opts.ErrorHandler}
 }
 
-func periodicClientLister(kind resource.Kind, clients resource.ClientGenerator, opts InformerOptions, pageSize int64) (ResourceLister, error) {
-	if clients == nil {
-		return nil, errors.New("a client generator is required to list the kind")
+func resyncIntervalOr(opts InformerOptions, fallback time.Duration) time.Duration {
+	if resync := opts.ResyncOptions(); resync != nil && resync.Interval > 0 {
+		return resync.Interval
 	}
-	client, err := clients.ClientFor(kind)
-	if err != nil {
-		return nil, err
-	}
-	return NewClientLister(client, kind, ClientListerOptions{
-		ListWatchOptions: opts.ListWatchOptions, PageSize: listPageSize(opts, pageSize),
-	})
-}
-
-func listPageSize(opts InformerOptions, pageSize int64) int64 {
-	requested := opts.WatchListPageSize
-	if resync := opts.ResyncOptions(); resync != nil {
-		requested = resync.ListPageSize
-	}
-	if requested > 0 {
-		return requested
-	}
-	return pageSize
+	return fallback
 }
 
 // PeriodicInformerOptions configures a scheduled LIST. EventTimeout bounds each
@@ -216,7 +195,7 @@ func (p *PeriodicInformer) sweep(ctx context.Context) error {
 			if len(p.handlers) > 1 {
 				delivered = obj.Copy()
 			}
-			err := withInformerEventTimeout(ctx, p.opts.EventTimeout, func(eventCtx context.Context) error {
+			err := withInformerEventTimeout(ctx, p.opts.EventTimeout, handler, func(eventCtx context.Context) error {
 				return handler.Add(eventCtx, delivered)
 			})
 			if err != nil {

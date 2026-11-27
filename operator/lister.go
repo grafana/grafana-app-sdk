@@ -49,6 +49,28 @@ func NewClientLister(client ListWatchClient, kind resource.Kind, opts ClientList
 	return &clientLister{client: client, kind: kind, opts: opts}, nil
 }
 
+func clientListerFor(kind resource.Kind, clients resource.ClientGenerator, opts ClientListerOptions) (ResourceLister, error) {
+	if clients == nil {
+		return nil, errors.New("a client generator is required to list the kind")
+	}
+	client, err := clients.ClientFor(kind)
+	if err != nil {
+		return nil, err
+	}
+	return NewClientLister(client, kind, opts)
+}
+
+func listOptionsFor(opts InformerOptions, defaultPageSize int64) ClientListerOptions {
+	pageSize := opts.WatchListPageSize
+	if resync := opts.ResyncOptions(); resync != nil {
+		pageSize = resync.ListPageSize
+	}
+	if pageSize <= 0 {
+		pageSize = defaultPageSize
+	}
+	return ClientListerOptions{ListWatchOptions: opts.ListWatchOptions, PageSize: pageSize}
+}
+
 type clientLister struct {
 	client ListWatchClient
 	kind   resource.Kind

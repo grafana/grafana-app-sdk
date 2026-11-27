@@ -228,9 +228,9 @@ simple.AppConfig{
     InformerConfig: simple.AppInformerConfig{
         InformerSupplier: operator.NewSelectingInformerSupplier(
             simple.DefaultInformerSupplier, // what a kind none of them satisfies is watched by
-            myReListMechanism,              // no live channel: only re-delivers everything on a schedule
-            myNotifyOnlyMechanism,          // live metadata, and no resync
-            myEventBusWithResyncMechanism,  // both, at the cost of a subscription and a re-list
+            operator.NewPeriodicList(operator.PeriodicListOptions{}),
+            operator.NewBusNotifications(subscriber, group),
+            operator.NewBusRecovery(subscriber, group, operator.BusRecoveryDefaults{}),
         ),
     },
     ManagedKinds: []simple.AppManagedKind{{
@@ -285,7 +285,7 @@ but no handler reads that cache through `operator.Informer`.
 
 ### Periodic LIST
 
-Offer `operator.NewPeriodicMechanism` to handle kinds that request only a
+Offer `operator.NewPeriodicList` to handle kinds that request only a
 `Resync`. The mechanism completes a paginated LIST and delivers each object to
 the handler as an add, including objects it saw on the previous sweep. The next
 interval starts after dispatch finishes. A failed LIST triggers a retry and its
