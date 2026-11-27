@@ -48,7 +48,14 @@ type FinalizerUpdater interface {
 // Fully new resources call the `AddFunc` handler,
 // and previously-created call the `SyncFunc` handler.
 //
-// `Update` events which do not update anything in the spec or significant parts of the metadata are ignored.
+// `Update` events which do not update anything in the spec or significant parts of the metadata are ignored, except,
+// with OpinionatedWatcherConfig.HandleIdentical, one identical to the object already seen, which a resync delivers.
+//
+// Delivery is at least once, so handlers must be idempotent. A queued retry replays the object as it was when its
+// delivery failed, and the watcher cannot tell whether another delivery has handled the object since: a retry of a
+// failed add may call AddFunc again for an add a later delivery completed, as a re-list after a broken watch or a
+// restart can today. Finalizer patches are written to the watcher's own copy, never to the delivered object, which
+// may be the informer's cached one.
 //
 // OpinionatedWatcher contains unexported fields, and must be created with NewOpinionatedWatcher
 type OpinionatedWatcher struct {
@@ -61,6 +68,7 @@ type OpinionatedWatcher struct {
 	schema              resource.Schema
 	collectors          []prometheus.Collector
 	finalizerUpdater    finalizerUpdater
+	handleIdentical     bool
 }
 
 // FinalizerSupplier represents a function that creates string finalizer from provider schema.
@@ -83,6 +91,16 @@ type OpinionatedWatcherConfig struct {
 	// InProgressFinalizer supplies the finalizer used to indicate an incomplete action and prevent deletes until completion.
 	// If nil, InProgressFinalizerSupplier will be used.
 	InProgressFinalizer FinalizerSupplier
+	// HandleIdentical handles an identical update — the same resourceVersion on both sides, which only the object
+	// re-delivered unchanged carries, as a resync or a re-list after a broken watch delivers it — the way Add handles
+	// a re-listed object: SyncFunc for one already carrying the finalizer, the delete handling for one being deleted,
+	// and AddFunc for one never finished. Without it an identical update is skipped, with every other one leaving the
+	// generation unchanged.
+	//
+	// Set it when the kind declares a resync (WatchOptions.Resync), to give the handler its periodic chance to repair
+	// drift outside the object. Each resync is then one more delivery to an at-least-once handler: AddFunc and
+	// SyncFunc must tolerate running again for an object they already handled.
+	HandleIdentical bool
 }
 
 // NewOpinionatedWatcher sets up a new OpinionatedWatcher and returns a pointer to it.
@@ -115,6 +133,7 @@ func NewOpinionatedWatcher(sch resource.Schema, client PatchClient, config Opini
 		finalizer:           finalizer,
 		addPendingFinalizer: pendingAddFinalizer,
 		collectors:          make([]prometheus.Collector, 0),
+		handleIdentical:     config.HandleIdentical,
 	}, nil
 }
 
@@ -179,6 +198,8 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 			return err
 		}
 
+		// Finalizer patches write into the object, and it may be the informer's cached copy.
+		object = object.Copy()
 		// The remove finalizer code is shared by both our add and update handlers, as this logic can be hit from either
 		if slices.Contains(finalizers, o.finalizer) {
 			logger.Debug("Delete successful, removing finalizer", "finalizer", o.finalizer, "currentFinalizers", finalizers)
@@ -220,6 +241,8 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 		}
 		// If we somehow still have the add-pending finalizer, remove it
 		if slices.Contains(finalizers, o.addPendingFinalizer) {
+			// Finalizer patches write into the object, and it may be the informer's cached copy.
+			object = object.Copy()
 			logger.Debug("Add-pending finalizer still on object, removing", "finalizer", o.addPendingFinalizer, "currentFinalizers", finalizers)
 			err = o.finalizerUpdater.RemoveFinalizer(ctx, object, o.addPendingFinalizer)
 			if err != nil {
@@ -238,6 +261,8 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	// Call the add handler, and if it returns successfully (no error), add the finalizer.
 	// Before we call the downstream add, add an "add pending" finalizer to prevent us missing a delete during the add process (and/or its retries)
 	logger.Debug("Adding in-progress finalizer before add call", "finalizer", o.addPendingFinalizer, "currentFinalizers", finalizers)
+	// Finalizer patches write into the object, and it may be the informer's cached copy.
+	object = object.Copy()
 	err := o.finalizerUpdater.AddFinalizer(ctx, object, o.addPendingFinalizer)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("finalizer add error: %s", err.Error()))
@@ -273,6 +298,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 // If the new object has a non-nil ObjectMetadata.DeletionTimestamp in its metadata, DeleteFunc will be called,
 // and the object's finalizer will be removed to allow kubernetes to hard delete it.
 // Otherwise, UpdateFunc is called, provided the update is non-trivial (that is, the metadata.Generation has changed).
+// With OpinionatedWatcherConfig.HandleIdentical, an identical update is passed to Add instead.
 //
 //nolint:funlen
 func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tgt resource.Object) error {
@@ -288,6 +314,12 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 
 	logger := logging.FromContext(ctx).With("action", "update", "component", "OpinionatedWatcher", "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())
 	logger.Debug("Handling update")
+
+	// Add is handed a copy, so a retry of this event still finds the two sides identical.
+	if o.handleIdentical && isIdenticalUpdate(src, tgt) {
+		logger.Debug("Update re-delivers the object unchanged, handling it as a re-listed object")
+		return o.Add(ctx, tgt.Copy())
+	}
 
 	// Only fire off Update if the generation has changed (so skip subresource updates)
 	if tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration() {
@@ -308,6 +340,8 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 		}
 		// Add the finalizer (which also updates `new` inline)
 		logger.Debug("Successful call to Add, add the finalizer to the object", "finalizer", o.finalizer)
+		// Finalizer patches write into the object, and it may be the informer's cached copy.
+		tgt = tgt.Copy()
 		err = o.finalizerUpdater.ReplaceFinalizer(ctx, tgt, o.addPendingFinalizer, o.finalizer)
 		if err != nil {
 			span.SetStatus(codes.Error, fmt.Sprintf("watcher add finalizer error: %s", err.Error()))
@@ -336,6 +370,8 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 			span.SetStatus(codes.Error, fmt.Sprintf("watcher delete error: %s", err.Error()))
 			return err
 		}
+		// Finalizer patches write into the object, and it may be the informer's cached copy.
+		tgt = tgt.Copy()
 
 		if slices.Contains(newFinalizers, o.finalizer) {
 			logger.Debug("Delete successful, removing finalizer", "finalizer", o.finalizer, "currentFinalizers", newFinalizers)
@@ -421,6 +457,14 @@ func (o *OpinionatedWatcher) deleteFunc(ctx context.Context, object resource.Obj
 	}
 	// TODO: log?
 	return nil
+}
+
+// isIdenticalUpdate reports whether an update re-delivers the object unchanged: every write changes the
+// resourceVersion, so the same one on both sides means nothing was written. resourceVersions may only be compared for
+// equality, and an empty one identifies nothing.
+func isIdenticalUpdate(src, tgt resource.Object) bool {
+	rv := tgt.GetResourceVersion()
+	return src != nil && rv != "" && rv == src.GetResourceVersion()
 }
 
 // syncFunc is a wrapper for SyncFunc which makes a nil check to avoid panics

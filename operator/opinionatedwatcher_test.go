@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -359,16 +360,19 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 			o.SetResourceVersion(strconv.Itoa(attempts))
 			return nil
 		}
-		addCalled := false
+		var added resource.Object
 		o.AddFunc = func(c context.Context, object resource.Object) error {
-			addCalled = true
+			added = object
 			return nil
 		}
 		err := o.Add(context.TODO(), obj)
 		assert.NoError(t, err)
-		assert.Equal(t, 4, attempts)                   // 3 attempts for the WIP finalizer, then 1 for the final finalizer
-		assert.Equal(t, "2", obj.GetResourceVersion()) // After the second attempt, we don't call GetInto anymore because the patch isn't rejected
-		assert.True(t, addCalled)
+		assert.Equal(t, 4, attempts) // 3 attempts for the WIP finalizer, then 1 for the final finalizer
+		require.NotNil(t, added)
+		// After the second attempt, we don't call GetInto anymore because the patch isn't rejected. The patches go to the
+		// watcher's own copy, so the delivered object is left as it was.
+		assert.Equal(t, "2", added.GetResourceVersion())
+		assert.Equal(t, "", obj.GetResourceVersion())
 	})
 
 	t.Run("add finalizer, second patch error", func(t *testing.T) {
@@ -530,8 +534,10 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 			}
 			return nil
 		}
+		var patched resource.Object
 		client.GetIntoFunc = func(ctx context.Context, i resource.Identifier, o resource.Object) error {
 			o.SetResourceVersion(strconv.Itoa(attempts))
+			patched = o
 			return nil
 		}
 		deleteCalled := false
@@ -542,7 +548,11 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 		err := o.Update(context.TODO(), schema.ZeroValue(), obj)
 		assert.NoError(t, err)
 		assert.Equal(t, 3, attempts)
-		assert.Equal(t, "2", obj.GetResourceVersion()) // After the second attempt, we don't call GetInto anymore because the patch isn't rejected
+		require.NotNil(t, patched)
+		// After the second attempt, we don't call GetInto anymore because the patch isn't rejected. The patches go to the
+		// watcher's own copy, so the delivered object is left as it was.
+		assert.Equal(t, "2", patched.GetResourceVersion())
+		assert.Equal(t, "", obj.GetResourceVersion())
 		assert.True(t, deleteCalled)
 	})
 
@@ -589,6 +599,91 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 	})
 }
 
+func TestOpinionatedWatcher_Update_HandleIdentical(t *testing.T) {
+	ex := &resource.TypedSpecObject[string]{}
+	schema := resource.NewSimpleSchema("group", "version", ex, &resource.TypedList[*resource.TypedSpecObject[string]]{})
+	newWatcher := func(t *testing.T, handleIdentical bool) (*OpinionatedWatcher, *[]string) {
+		o, err := NewOpinionatedWatcher(schema, &mockPatchClient{}, OpinionatedWatcherConfig{HandleIdentical: handleIdentical})
+		require.NoError(t, err)
+		var called []string
+		o.AddFunc = func(context.Context, resource.Object) error { called = append(called, "add"); return nil }
+		o.UpdateFunc = func(context.Context, resource.Object, resource.Object) error {
+			called = append(called, "update")
+			return nil
+		}
+		o.DeleteFunc = func(context.Context, resource.Object) error { called = append(called, "delete"); return nil }
+		o.SyncFunc = func(context.Context, resource.Object) error { called = append(called, "sync"); return nil }
+		return o, &called
+	}
+	finalized := func(o *OpinionatedWatcher, resourceVersion string) resource.Object {
+		obj := schema.ZeroValue()
+		obj.SetGeneration(1)
+		obj.SetResourceVersion(resourceVersion)
+		obj.SetFinalizers([]string{o.finalizer})
+		return obj
+	}
+
+	t.Run("a resync of a handled object calls Sync", func(t *testing.T) {
+		o, called := newWatcher(t, true)
+		require.NoError(t, o.Update(context.TODO(), finalized(o, "5"), finalized(o, "5")))
+		assert.Equal(t, []string{"sync"}, *called)
+	})
+
+	t.Run("a resync of an object being deleted runs the delete handling", func(t *testing.T) {
+		o, called := newWatcher(t, true)
+		obj := finalized(o, "5")
+		dt := metav1.NewTime(time.Time{})
+		obj.SetDeletionTimestamp(&dt)
+		require.NoError(t, o.Update(context.TODO(), obj, obj.Copy()))
+		assert.Equal(t, []string{"delete"}, *called)
+	})
+
+	t.Run("a resync of an object never finished runs the add path", func(t *testing.T) {
+		o, called := newWatcher(t, true)
+		obj := finalized(o, "5")
+		obj.SetFinalizers(nil)
+		require.NoError(t, o.Update(context.TODO(), obj, obj.Copy()))
+		assert.Equal(t, []string{"add"}, *called)
+	})
+
+	t.Run("without HandleIdentical a resync is skipped", func(t *testing.T) {
+		o, called := newWatcher(t, false)
+		require.NoError(t, o.Update(context.TODO(), finalized(o, "5"), finalized(o, "5")))
+		assert.Empty(t, *called)
+	})
+
+	t.Run("a status write, changing the resourceVersion but not the generation, is still skipped", func(t *testing.T) {
+		o, called := newWatcher(t, true)
+		require.NoError(t, o.Update(context.TODO(), finalized(o, "5"), finalized(o, "6")))
+		assert.Empty(t, *called)
+	})
+
+	t.Run("an empty resourceVersion does not identify a resync", func(t *testing.T) {
+		o, called := newWatcher(t, true)
+		require.NoError(t, o.Update(context.TODO(), finalized(o, ""), finalized(o, "")))
+		assert.Empty(t, *called)
+	})
+
+	t.Run("a retry of a failed resync still finds the two sides identical", func(t *testing.T) {
+		client := &mockPatchClient{PatchIntoFunc: func(_ context.Context, _ resource.Identifier, _ resource.PatchRequest, _ resource.PatchOptions, into resource.Object) error {
+			into.SetResourceVersion("6") // the in-progress finalizer write
+			return nil
+		}}
+		o, err := NewOpinionatedWatcher(schema, client, OpinionatedWatcherConfig{HandleIdentical: true})
+		require.NoError(t, err)
+		adds := 0
+		o.AddFunc = func(context.Context, resource.Object) error { adds++; return errors.New("add failed") }
+
+		src, tgt := finalized(o, "5"), finalized(o, "5")
+		src.SetFinalizers(nil)
+		tgt.SetFinalizers(nil)
+		require.Error(t, o.Update(context.TODO(), src, tgt))
+		require.Error(t, o.Update(context.TODO(), src, tgt), "the controller retries with the same pair")
+		assert.Equal(t, 2, adds)
+		assert.Equal(t, "5", tgt.GetResourceVersion())
+	})
+}
+
 func TestOpinionatedWatcher_Delete(t *testing.T) {
 	ex := &resource.TypedSpecObject[string]{}
 	schema := resource.NewSimpleSchema("group", "version", ex, &resource.TypedList[*resource.TypedSpecObject[string]]{})
@@ -625,4 +720,64 @@ func (p *mockPatchClient) GetInto(ctx context.Context, identifier resource.Ident
 		return p.GetIntoFunc(ctx, identifier, into)
 	}
 	return nil
+}
+
+// The informer hands watchers its cached objects, so finalizer patches must not write into them: a cached old object
+// would otherwise take the resourceVersion of the write, and its watch event would look like a resync.
+func TestOpinionatedWatcher_LeavesDeliveredObjectsUnchanged(t *testing.T) {
+	schema := resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{})
+	client := &mockPatchClient{PatchIntoFunc: func(_ context.Context, _ resource.Identifier, _ resource.PatchRequest, _ resource.PatchOptions, into resource.Object) error {
+		into.SetResourceVersion("6")
+		into.SetFinalizers(append(into.GetFinalizers(), "written"))
+		return nil
+	}}
+	o, err := NewOpinionatedWatcher(schema, client, OpinionatedWatcherConfig{})
+	require.NoError(t, err)
+	o.AddFunc = func(context.Context, resource.Object) error { return nil }
+	o.UpdateFunc = func(context.Context, resource.Object, resource.Object) error { return nil }
+	o.DeleteFunc = func(context.Context, resource.Object) error { return nil }
+	o.SyncFunc = func(context.Context, resource.Object) error { return nil }
+	unchanged := func(t *testing.T, obj resource.Object, finalizers []string) {
+		t.Helper()
+		assert.Equal(t, "5", obj.GetResourceVersion())
+		assert.Equal(t, finalizers, obj.GetFinalizers())
+	}
+	object := func(generation int64, finalizers ...string) resource.Object {
+		obj := schema.ZeroValue()
+		obj.SetGeneration(generation)
+		obj.SetResourceVersion("5")
+		obj.SetFinalizers(finalizers)
+		return obj
+	}
+	deleting := func(obj resource.Object) resource.Object {
+		dt := metav1.NewTime(time.Time{})
+		obj.SetDeletionTimestamp(&dt)
+		return obj
+	}
+
+	t.Run("Add of a new object", func(t *testing.T) {
+		obj := object(1)
+		require.NoError(t, o.Add(context.TODO(), obj))
+		unchanged(t, obj, nil)
+	})
+	t.Run("Add of an object being deleted", func(t *testing.T) {
+		obj := deleting(object(1, o.finalizer))
+		require.NoError(t, o.Add(context.TODO(), obj))
+		unchanged(t, obj, []string{o.finalizer})
+	})
+	t.Run("Add of a handled object with a leftover in-progress finalizer", func(t *testing.T) {
+		obj := object(1, o.finalizer, o.addPendingFinalizer)
+		require.NoError(t, o.Add(context.TODO(), obj))
+		unchanged(t, obj, []string{o.finalizer, o.addPendingFinalizer})
+	})
+	t.Run("Update which adds", func(t *testing.T) {
+		src, tgt := object(1), object(2)
+		require.NoError(t, o.Update(context.TODO(), src, tgt))
+		unchanged(t, tgt, nil)
+	})
+	t.Run("Update of an object being deleted", func(t *testing.T) {
+		src, tgt := object(1, o.finalizer), deleting(object(2, o.finalizer))
+		require.NoError(t, o.Update(context.TODO(), src, tgt))
+		unchanged(t, tgt, []string{o.finalizer})
+	})
 }
