@@ -57,6 +57,18 @@ func NewWrappedObject[T WrappedObjectType](underlying T) *WrappedObject[T] {
 	}
 }
 
+// UnwrapObject returns the native Kubernetes object inside this wrapper.
+func (o *WrappedObject[T]) UnwrapObject() runtime.Object { return o.Object }
+
+// WrapObject wraps a native Kubernetes object of the same type.
+func (*WrappedObject[T]) WrapObject(obj runtime.Object) (Object, bool) {
+	native, ok := obj.(T)
+	if !ok {
+		return nil, false
+	}
+	return NewWrappedObject(native), true
+}
+
 func (o *WrappedObject[T]) MarshalJSON() ([]byte, error) {
 	return json.Marshal(o.Object)
 }

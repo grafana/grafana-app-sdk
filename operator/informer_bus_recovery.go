@@ -236,11 +236,14 @@ func (b *BusInformerWithRecovery) retrySubscription(ctx context.Context, cancel 
 }
 
 func (b *BusInformerWithRecovery) initialList(ctx context.Context) error {
-	listCtx := ContextWithDelivery(ctx, DeliveryRelist)
+	listCtx := contextWithInitialList(ContextWithDelivery(ctx, DeliveryRelist))
 	for ctx.Err() == nil {
 		err := b.relist(listCtx, busRelistScheduled)
 		switch {
 		case err == nil:
+			if err := b.waitForInitialDeliveries(ctx); err != nil {
+				return err
+			}
 			close(b.synced)
 			return nil
 		case subscriptionRejected(err):
@@ -405,7 +408,9 @@ func (b *BusInformerWithRecovery) snapshotObject(obj resource.Object) resource.O
 		}
 		return owned
 	}
-	return b.kind.NewIdentityObject(obj.GetStaticMetadata().Identifier(), obj.GetResourceVersion())
+	identity := b.kind.NewIdentityObject(obj.GetStaticMetadata().Identifier(), obj.GetResourceVersion())
+	identity.SetCreationTimestamp(obj.GetCreationTimestamp())
+	return identity
 }
 
 func withFallbackGVK(gvk, fallback schema.GroupVersionKind) schema.GroupVersionKind {
@@ -425,6 +430,7 @@ type busDelivery struct {
 	ctx     context.Context
 	old     resource.Object
 	current resource.Object
+	flushed chan struct{}
 }
 
 func (b *BusInformerWithRecovery) startDeliveryWorkers(ctx context.Context, workers *sync.WaitGroup) {
@@ -442,11 +448,33 @@ func (b *BusInformerWithRecovery) startDeliveryWorkers(ctx context.Context, work
 				case <-ctx.Done():
 					return
 				case d := <-queue:
-					b.dispatchChange(d)
+					if d.flushed != nil {
+						close(d.flushed)
+					} else {
+						b.dispatchChange(d)
+					}
 				}
 			}
 		})
 	}
+}
+
+// Each worker reaches its marker after finishing its earlier LIST callbacks.
+func (b *BusInformerWithRecovery) waitForInitialDeliveries(ctx context.Context) error {
+	for _, queue := range b.deliveries {
+		flushed := make(chan struct{})
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case queue <- busDelivery{flushed: flushed}:
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-flushed:
+		}
+	}
+	return ctx.Err()
 }
 
 func (b *BusInformerWithRecovery) deliverChange(ctx context.Context, old, current resource.Object) {
