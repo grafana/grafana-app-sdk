@@ -8,6 +8,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/codes"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
@@ -295,13 +296,23 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 	fromRelist := DeliveryFromContext(ctx) == DeliveryRelist
 	deleting := tgt.GetDeletionTimestamp() != nil
 	pendingDeletion := deleting && (src.GetDeletionTimestamp() == nil || fromRelist)
+	sameGeneration := tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration()
 	newFinalizers := o.getFinalizers(tgt)
-	if !pendingDeletion && tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration() {
-		// A failed Add leaves the object in the informer's snapshot, so the
-		// next LIST sees it as an update even though initialization is pending.
-		if fromRelist && !deleting && !slices.Contains(newFinalizers, o.finalizer) {
-			return o.Add(ctx, tgt)
+	if fromRelist && !deleting && !slices.Contains(newFinalizers, o.finalizer) {
+		// Initialization may have finished while this LIST delivery was queued.
+		current, err := o.refreshUnfinishedObject(ctx, tgt)
+		if current == nil {
+			return err
 		}
+		newFinalizers = o.getFinalizers(current)
+		if current.GetDeletionTimestamp() != nil || !slices.Contains(newFinalizers, o.finalizer) {
+			return o.Add(ctx, current)
+		}
+		// If this delivery also carried a spec change, use the refreshed object
+		// for the update now that initialization is known to be complete.
+		tgt = current
+	}
+	if !pendingDeletion && sameGeneration {
 		return nil
 	}
 	if !slices.Contains(newFinalizers, o.finalizer) && tgt.GetDeletionTimestamp() == nil {
@@ -377,6 +388,30 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 		return err
 	}
 	return nil
+}
+
+func (o *OpinionatedWatcher) refreshUnfinishedObject(ctx context.Context, listed resource.Object) (resource.Object, error) {
+	id := listed.GetStaticMetadata().Identifier()
+	current := o.schema.ZeroValue()
+	current.SetGroupVersionKind(listed.GroupVersionKind())
+	if err := o.finalizerUpdater.client.GetInto(ctx, id, current); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read unfinished object %s/%s: %w", id.Namespace, id.Name, err)
+	}
+	if current.GetStaticMetadata().Identifier() != id {
+		return nil, fmt.Errorf("response does not match unfinished object %s/%s", id.Namespace, id.Name)
+	}
+	if uid := listed.GetUID(); uid != "" {
+		if uid != current.GetUID() {
+			return nil, nil
+		}
+	} else if version := listed.GetResourceVersion(); version == "" || version != current.GetResourceVersion() {
+		// Without a UID, only an exact version can confirm this is the same object.
+		return nil, nil
+	}
+	return current, nil
 }
 
 // Delete exists to implement ResourceWatcher,

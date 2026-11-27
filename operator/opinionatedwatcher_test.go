@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -606,14 +608,22 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 	t.Run("recovery LIST retries failed initialization", func(t *testing.T) {
 		item := schema.ZeroValue()
 		item.SetGeneration(1)
+		item.SetUID("original")
 		old := item.Copy()
 		client.PatchIntoFunc = func(_ context.Context, _ resource.Identifier, req resource.PatchRequest, _ resource.PatchOptions, obj resource.Object) error {
 			switch req.Operations[0].Operation {
 			case resource.PatchOpAdd:
 				obj.SetFinalizers([]string{o.addPendingFinalizer})
 			case resource.PatchOpReplace:
+				assert.Equal(t, o.finalizer, req.Operations[0].Value)
 				obj.SetFinalizers([]string{o.finalizer})
 			}
+			return nil
+		}
+		client.GetIntoFunc = func(_ context.Context, _ resource.Identifier, into resource.Object) error {
+			into.SetUID(item.GetUID())
+			into.SetGeneration(item.GetGeneration())
+			into.SetFinalizers(slices.Clone(item.GetFinalizers()))
 			return nil
 		}
 		attempts := 0
@@ -635,7 +645,7 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 		require.Equal(t, 1, attempts, "a live same-generation update should not retry Add")
 		require.NoError(t, o.Update(ContextWithDelivery(t.Context(), DeliveryRelist), old, item))
 		require.Equal(t, 2, attempts)
-		require.Equal(t, []string{o.finalizer}, item.GetFinalizers())
+		require.Equal(t, []string{o.addPendingFinalizer}, item.GetFinalizers(), "the LIST object stays unchanged")
 	})
 
 	t.Run("update", func(t *testing.T) {
@@ -700,4 +710,75 @@ func (p *mockPatchClient) GetInto(ctx context.Context, identifier resource.Ident
 		return p.GetIntoFunc(ctx, identifier, into)
 	}
 	return nil
+}
+
+func TestOpinionatedWatcherRefreshesUnfinishedRelistObjects(t *testing.T) {
+	kind := resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{})
+	for _, tc := range []struct {
+		name       string
+		uid        string
+		generation int64
+		completed  bool
+		want       []string
+	}{
+		{name: "already completed", uid: "original", generation: 1, completed: true},
+		{name: "already completed with a spec change", uid: "original", generation: 2, completed: true, want: []string{"update"}},
+		{name: "replacement", uid: "replacement", generation: 2},
+		{name: "unfinished with a spec change", uid: "original", generation: 2, want: []string{"protect", "add", "complete"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			old := kind.ZeroValue()
+			old.SetName("item")
+			old.SetNamespace("default")
+			old.SetUID("original")
+			old.SetResourceVersion("10")
+			old.SetGeneration(1)
+			listed := old.Copy()
+			listed.SetResourceVersion("11")
+			listed.SetGeneration(tc.generation)
+			require.NoError(t, listed.SetSpec("listed"))
+
+			var calls []string
+			client := &mockPatchClient{}
+			watcher, err := NewOpinionatedWatcher(kind, client, OpinionatedWatcherConfig{})
+			require.NoError(t, err)
+			client.GetIntoFunc = func(_ context.Context, id resource.Identifier, into resource.Object) error {
+				assert.Equal(t, listed.GetStaticMetadata().Identifier(), id)
+				into.SetName(id.Name)
+				into.SetNamespace(id.Namespace)
+				into.SetUID(types.UID(tc.uid))
+				into.SetGeneration(tc.generation)
+				into.SetResourceVersion("12")
+				if tc.completed {
+					into.SetFinalizers([]string{watcher.finalizer})
+				}
+				return into.SetSpec("current")
+			}
+			client.PatchIntoFunc = func(_ context.Context, _ resource.Identifier, req resource.PatchRequest, _ resource.PatchOptions, into resource.Object) error {
+				switch req.Operations[0].Operation {
+				case resource.PatchOpAdd:
+					calls = append(calls, "protect")
+					into.SetFinalizers([]string{watcher.addPendingFinalizer})
+				case resource.PatchOpReplace:
+					calls = append(calls, "complete")
+				}
+				return nil
+			}
+			watcher.AddFunc = func(_ context.Context, obj resource.Object) error {
+				calls = append(calls, "add")
+				assert.Equal(t, "current", obj.GetSpec())
+				assert.Contains(t, obj.GetFinalizers(), watcher.addPendingFinalizer)
+				return nil
+			}
+			watcher.UpdateFunc = func(_ context.Context, _, obj resource.Object) error {
+				calls = append(calls, "update")
+				assert.Equal(t, "current", obj.GetSpec())
+				return nil
+			}
+
+			require.NoError(t, watcher.Update(ContextWithDelivery(t.Context(), DeliveryRelist), old, listed))
+			assert.Equal(t, tc.want, calls)
+			assert.Empty(t, listed.GetFinalizers())
+		})
+	}
 }
