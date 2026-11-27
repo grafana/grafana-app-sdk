@@ -588,6 +588,25 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 		assert.Nil(t, err)
 	})
 
+	t.Run("finalizer added along with a spec update", func(t *testing.T) {
+		old := schema.ZeroValue()
+		old.SetGeneration(1)
+		require.NoError(t, old.SetSpec("old spec"))
+		updated := old.Copy()
+		updated.SetGeneration(2)
+		updated.SetFinalizers([]string{o.finalizer})
+		require.NoError(t, updated.SetSpec("new spec"))
+		called := false
+		o.UpdateFunc = func(_ context.Context, before, after resource.Object) error {
+			called = true
+			assert.Equal(t, "old spec", before.GetSpec())
+			assert.Equal(t, "new spec", after.GetSpec())
+			return nil
+		}
+		require.NoError(t, o.Update(t.Context(), old, updated))
+		require.True(t, called)
+	})
+
 	t.Run("update", func(t *testing.T) {
 		obj := schema.ZeroValue()
 		obj.SetFinalizers([]string{o.finalizer})

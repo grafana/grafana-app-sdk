@@ -293,7 +293,8 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 	// recover cleanup that has not completed since the deletion started.
 	pendingDeletion := tgt.GetDeletionTimestamp() != nil &&
 		(src.GetDeletionTimestamp() == nil || DeliveryFromContext(ctx) == DeliveryRelist)
-	if !pendingDeletion && tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration() {
+	sameGeneration := src.GetGeneration() == tgt.GetGeneration()
+	if !pendingDeletion && tgt.GetGeneration() > 0 && sameGeneration {
 		return nil
 	}
 
@@ -367,8 +368,8 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 		return nil
 	}
 
-	// Check if this was us adding our finalizer. If it was, we can ignore it.
-	if !slices.Contains(oldFinalizers, o.finalizer) && slices.Contains(newFinalizers, o.finalizer) {
+	// Ignore our finalizer addition only if the generation stayed the same.
+	if sameGeneration && !slices.Contains(oldFinalizers, o.finalizer) && slices.Contains(newFinalizers, o.finalizer) {
 		logger.Debug("Finalizer add update, ignoring")
 		return nil
 	}

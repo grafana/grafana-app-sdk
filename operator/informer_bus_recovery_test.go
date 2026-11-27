@@ -733,3 +733,81 @@ func TestBusRecoveryDeliveryDetail(t *testing.T) {
 		require.ErrorContains(t, err, "unsupported bus recovery detail")
 	})
 }
+
+func TestHydrationChecksGetResponse(t *testing.T) {
+	item := listerObj("item")
+	item.SetResourceVersion("10")
+	id := item.GetStaticMetadata().Identifier()
+	object := func(name, namespace, version string) resource.Object {
+		obj := listerObj(name)
+		obj.SetNamespace(namespace)
+		obj.SetResourceVersion(version)
+		return obj
+	}
+	cases := []struct {
+		name     string
+		response resource.Object
+		wantErr  string
+	}{
+		{name: "nil response", wantErr: "does not match the notification identity"},
+		{name: "wrong name", response: object("other", id.Namespace, "11"), wantErr: "does not match the notification identity"},
+		{name: "wrong namespace", response: object(id.Name, "other", "11"), wantErr: "does not match the notification identity"},
+		{name: "invalid version", response: object(id.Name, id.Namespace, "invalid"), wantErr: "invalid resource version"},
+		{name: "older version", response: item, wantErr: "predates announced version"},
+		{name: "equal version", response: object(id.Name, id.Namespace, "11")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			subscriber := busSubscribeFunc(func(context.Context, schema.GroupVersionResource, string, func(context.Context, resourcebus.Event), ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
+				return &testBusSubscription{}, nil
+			})
+			var reported []error
+			bus := newHydrationTestInformer(t, subscriber, InformerOptions{
+				ErrorHandler: func(_ context.Context, err error) { reported = append(reported, err) },
+			}, hydrationTestClient{
+				list: func(context.Context) ([]resource.Object, string, error) {
+					return []resource.Object{item}, "10", nil
+				},
+				get: func(context.Context, resource.Identifier) (resource.Object, error) {
+					return tc.response, nil
+				},
+			})
+			var delivered []resource.Object
+			require.NoError(t, bus.AddEventHandler(&SimpleWatcher{
+				AddFunc: func(_ context.Context, current resource.Object) error {
+					delivered = append(delivered, current)
+					return nil
+				},
+				UpdateFunc: func(_ context.Context, _, current resource.Object) error {
+					delivered = append(delivered, current)
+					return nil
+				},
+				DeleteFunc: func(_ context.Context, current resource.Object) error {
+					delivered = append(delivered, current)
+					return nil
+				},
+			}))
+			require.NoError(t, bus.relist(t.Context(), busRelistScheduled))
+			installed := bus.items[id]
+			delivered = nil
+
+			bus.applyLive(t.Context(), resourcebus.Event{
+				Verb: resourcebus.VerbModified, Namespace: id.Namespace, Name: id.Name, ResourceVersion: "11",
+			})
+			if tc.wantErr != "" {
+				require.Len(t, reported, 1)
+				require.ErrorContains(t, reported[0], tc.wantErr)
+				require.Empty(t, delivered)
+				require.Len(t, bus.items, 1)
+				require.Same(t, installed, bus.items[id])
+				require.Len(t, bus.overflows, 1)
+				return
+			}
+			require.Empty(t, reported)
+			require.Empty(t, bus.overflows)
+			require.Len(t, delivered, 1)
+			require.Equal(t, "11", delivered[0].GetResourceVersion())
+			require.Equal(t, "11", bus.items[id].GetResourceVersion())
+		})
+	}
+}
