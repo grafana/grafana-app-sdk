@@ -100,7 +100,8 @@ type BusInformerWithRecovery struct {
 	overflows      chan struct{}
 	deliveries     []chan busDelivery
 
-	// The run loop alone updates the snapshot and queues changes for delivery.
+	// The run loop alone writes the snapshot. The lock protects Snapshot readers.
+	snapshotMu  sync.RWMutex
 	items       map[resource.Identifier]resource.Object
 	deleted     map[resource.Identifier]int64
 	listVersion int64
