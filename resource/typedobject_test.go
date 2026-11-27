@@ -207,3 +207,17 @@ func TestTypedObject_SetSubresource(t *testing.T) {
 		assert.Equal(t, fmt.Errorf("subresource map has an unassignable key type of 'int'"), o2.SetSubresource("1", "bar"))
 	})
 }
+
+func TestTypedObject_Copy(t *testing.T) {
+	type spec struct {
+		Title string `json:"title"`
+	}
+	o := &TypedObject[spec, TestCatalog]{
+		Spec:         spec{Title: "foo"},
+		Subresources: TestCatalog{A: "bar", B: 2},
+	}
+	cpy, ok := o.Copy().(*TypedObject[spec, TestCatalog])
+	assert.True(t, ok)
+	assert.Equal(t, o.Spec, cpy.Spec)
+	assert.Equal(t, o.Subresources, cpy.Subresources)
+}
