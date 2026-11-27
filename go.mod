@@ -24,7 +24,7 @@ require (
 	github.com/grafana/codejen v0.0.4
 	github.com/grafana/cog v0.2.4
 	github.com/grafana/grafana-app-sdk/logging v0.0.0 // placeholder: rewritten to the release version on the tagged commit by scripts/release.sh
-	github.com/grafana/grafana-plugin-sdk-go v0.303.1-0.20261127073936-1f49d56eea90
+	github.com/grafana/grafana-plugin-sdk-go v0.303.1
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-plugin v1.8.0
 	github.com/prometheus/client_golang v1.25.0
