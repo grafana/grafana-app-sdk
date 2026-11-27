@@ -17,7 +17,7 @@ import (
 
 // PatchClient is a Client capable of making PatchInto requests. This is used by OpinionatedWatch to update finalizers.
 // To refresh an object after a recovery LIST, OpinionatedWatcher uses Get if the client provides it.
-// Otherwise, GetInto must populate the entire object for that read.
+// Get must return a fresh object the watcher can modify. Otherwise, GetInto must populate the entire object for that read.
 type PatchClient interface {
 	PatchInto(context.Context, resource.Identifier, resource.PatchRequest, resource.PatchOptions, resource.Object) error
 	GetInto(context.Context, resource.Identifier, resource.Object) error
@@ -439,6 +439,10 @@ func (o *OpinionatedWatcher) refreshUnfinishedObject(ctx context.Context, listed
 	} else if version := listed.GetResourceVersion(); version == "" || version != current.GetResourceVersion() {
 		// Without a UID, only an exact version can confirm this is the same object.
 		return nil, nil
+	}
+	gvk := current.GroupVersionKind()
+	if filled := withFallbackGVK(gvk, listed.GroupVersionKind()); filled != gvk {
+		current.SetGroupVersionKind(filled)
 	}
 	return current, nil
 }
