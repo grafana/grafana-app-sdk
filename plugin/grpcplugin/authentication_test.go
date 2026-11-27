@@ -16,6 +16,8 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"github.com/grafana/grafana-plugin-sdk-go/backend/auth"
+
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
 
@@ -60,7 +62,8 @@ func TestServerAuthentication(t *testing.T) {
 						gotInfo, ok := types.AuthInfoFrom(got)
 						require.Equal(t, !tt.disabled, ok)
 						if !tt.disabled {
-							require.Same(t, info, gotInfo.(*authenticatedAuthInfo).AuthInfo)
+							require.Equal(t, info.GetNamespace(), gotInfo.GetNamespace())
+							require.Equal(t, info.GetAudience(), gotInfo.GetAudience())
 							require.Equal(t, tt.token, gotInfo.GetAccessToken())
 						}
 						return tt.handlerErr
@@ -74,7 +77,8 @@ func TestServerAuthentication(t *testing.T) {
 								return nil, authn.ErrMissingRequiredToken
 							}
 							require.Equal(t, tt.token, token)
-							return info, tt.authErr
+							// Authenticators keep the token on the AuthInfo they return.
+							return &testCallerInfo{AuthInfo: info, access: token}, tt.authErr
 						})
 					}
 					if tt.fallback {
@@ -101,15 +105,20 @@ func TestServerAuthentication(t *testing.T) {
 					routeReq := &pluginv3.CallRouteRequest{}
 					routeReq.SetGroup(delegationGroup)
 					routeReq.SetNamespace("stacks-1")
-					switch service {
-					case pluginKeyAdmission:
-						_, err = plugins[service].(*admissionGRPCPlugin).server.AdmissionReview(ctx, admissionReq)
-					case pluginKeyConversion:
-						_, err = plugins[service].(*conversionGRPCPlugin).server.ConvertObjects(ctx, conversionReq)
-					case pluginKeyRouter:
-						stream := &authenticationTestStream{ctx: ctx}
-						err = plugins[service].(*routeGRPCPlugin).server.CallRoute(routeReq, stream)
-						require.Equal(t, called, stream.sent)
+					// The plugin SDK's server authenticates the request before
+					// it reaches the service.
+					ctx, err = auth.NewRequestAuthenticator(auth.Settings{Authenticator: opts.Authenticator, InsecureSkipAuthentication: opts.InsecureSkipAuthentication}).AuthenticateMetadata(ctx)
+					if err == nil {
+						switch service {
+						case pluginKeyAdmission:
+							_, err = plugins[service].(*admissionGRPCPlugin).server.AdmissionReview(ctx, admissionReq)
+						case pluginKeyConversion:
+							_, err = plugins[service].(*conversionGRPCPlugin).server.ConvertObjects(ctx, conversionReq)
+						case pluginKeyRouter:
+							stream := &authenticationTestStream{ctx: ctx}
+							err = plugins[service].(*routeGRPCPlugin).server.CallRoute(routeReq, stream)
+							require.Equal(t, called, stream.sent)
+						}
 					}
 					require.Equal(t, tt.want, status.Code(err))
 					require.Equal(t, !tt.fallback && !tt.noAuthenticator && (tt.disabled || (tt.token != "" && tt.authErr == nil)), called)
@@ -152,10 +161,26 @@ type authenticationTestStream struct {
 func (s *authenticationTestStream) Context() context.Context               { return s.ctx }
 func (s *authenticationTestStream) Send(*pluginv3.CallRouteResponse) error { s.sent = true; return nil }
 
-func TestAuthenticateRejectsMissingIdentity(t *testing.T) {
-	ctx, _, err := serverAuth{authenticator: authenticatorFunc(func(context.Context, authn.TokenProvider) (types.AuthInfo, error) {
-		return nil, nil
-	})}.authenticate(metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-access-token", "valid")))
-	require.Nil(t, ctx)
+func TestServicesRejectUnauthenticatedRequests(t *testing.T) {
+	server := &authenticationTestServer{check: func(context.Context) error {
+		t.Fatal("the handler must not run")
+		return nil
+	}}
+	kind := &pluginv3.GroupVersionKind{}
+	kind.SetGroup(delegationGroup)
+	req := &pluginv3.AdmissionReviewRequest{}
+	req.SetKind(kind)
+	req.SetObjectBytes(delegationObject)
+
+	// A request that should have been verified, but reached the service
+	// without the plugin SDK's authentication, carries no identity.
+	authenticator := authenticatorFunc(func(context.Context, authn.TokenProvider) (types.AuthInfo, error) { return nil, nil })
+	plugins := ServeOpts{AdmissionServer: server, Authenticator: authenticator}.PluginSet()
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-access-token", "valid"))
+	_, err := plugins[pluginKeyAdmission].(*admissionGRPCPlugin).server.AdmissionReview(ctx, req)
 	require.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	plugins = ServeOpts{AdmissionServer: server}.PluginSet()
+	_, err = plugins[pluginKeyAdmission].(*admissionGRPCPlugin).server.AdmissionReview(ctx, req)
+	require.Equal(t, codes.FailedPrecondition, status.Code(err))
 }

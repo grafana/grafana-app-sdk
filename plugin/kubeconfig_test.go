@@ -70,11 +70,22 @@ func TestTokenExchangeAudiences(t *testing.T) {
 	}
 }
 
+// legacyAPIAccessEnvVars are the names the API access variables replace,
+// which the plugin SDK still reads when the new names are unset.
+var legacyAPIAccessEnvVars = map[string]string{ //nolint:gosec // variable names, not credentials
+	EnvVarAPIAccessRouterURL:        "API_ACCESS_ROUTER_URL",
+	EnvVarAPIAccessCAFile:           "API_ACCESS_CA_FILE",
+	EnvVarAPIAccessInsecureTLS:      "API_ACCESS_INSECURE_TLS",
+	EnvVarAPIAccessCAPToken:         "API_ACCESS_CAP_TOKEN",
+	EnvVarAPIAccessTokenExchangeURL: "API_ACCESS_TOKEN_EXCHANGE_URL",
+	EnvVarAPIAccessBearerToken:      "API_ACCESS_BEARER_TOKEN",
+}
+
 func setKubeConfigEnv(t *testing.T) {
 	t.Helper()
-	for _, key := range []string{EnvVarAPIAccessRouterURL, EnvVarAPIAccessCAPToken, EnvVarAPIAccessTokenExchangeURL, EnvVarAPIAccessBearerToken, EnvVarAPIAccessCAFile, EnvVarAPIAccessInsecureTLS} {
+	for key, legacy := range legacyAPIAccessEnvVars {
 		t.Setenv(key, "")
-		t.Setenv(legacyEnvVars[key], "")
+		t.Setenv(legacy, "")
 	}
 	t.Setenv(EnvVarAPIAccessRouterURL, "https://router.test")
 }

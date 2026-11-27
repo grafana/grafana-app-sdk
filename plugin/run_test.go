@@ -5,12 +5,15 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/grafana/authlib/authn"
 	goplugin "github.com/hashicorp/go-plugin"
 	"github.com/prometheus/client_golang/prometheus"
@@ -24,6 +27,7 @@ import (
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	backendapp "github.com/grafana/grafana-plugin-sdk-go/backend/app"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/auth"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/build/buildinfo"
 
@@ -156,16 +160,16 @@ func TestRun(t *testing.T) {
 		if len(call.opts.ExtraPlugins) == 0 {
 			t.Error("expected ExtraPlugins to be set by Run")
 		}
-		// The plugin v2 calls get their middleware through the serve options.
-		if call.opts.Licensing == nil {
-			t.Fatal("expected Run to add the plugin v2 middleware")
+		// The plugin v2 resource calls get the app settings middleware; the
+		// plugin SDK authenticates them with the resolved authentication.
+		if len(call.opts.HandlerMiddlewares) != 1 {
+			t.Errorf("expected 1 handler middleware, got %d", len(call.opts.HandlerMiddlewares))
 		}
-		serveOpts, err := call.opts.Licensing("my-app", backend.ServeOpts{})
-		if err != nil {
-			t.Fatalf("serve options decorator returned error: %v", err)
+		if !call.opts.Authentication.InsecureSkipAuthentication {
+			t.Error("expected Run to pass the plugin SDK its authentication settings")
 		}
-		if len(serveOpts.HandlerMiddlewares) != 1 {
-			t.Errorf("expected 1 handler middleware, got %d", len(serveOpts.HandlerMiddlewares))
+		if call.opts.Licensing != nil {
+			t.Error("expected Run to leave Licensing unset")
 		}
 	})
 
@@ -340,7 +344,7 @@ func TestRun(t *testing.T) {
 		stubManage(t, nil)
 		// BuildKubeConfig needs a router URL.
 		t.Setenv(EnvVarAPIAccessRouterURL, "")
-		t.Setenv(legacyEnvVars[EnvVarAPIAccessRouterURL], "")
+		t.Setenv(legacyAPIAccessEnvVars[EnvVarAPIAccessRouterURL], "")
 		p := newFakeProvider("my-app")
 		runner := p.app.runner.(*fakeRunner)
 
@@ -415,7 +419,7 @@ func TestRun(t *testing.T) {
 		if err := Run(newFakeProvider("my-app")); err != nil {
 			t.Fatalf("Run returned error: %v", err)
 		}
-		admission := serveAdmission(t, call.opts.ExtraPlugins)
+		admission := serveAdmission(t, call.opts)
 
 		for _, tt := range []struct {
 			audience string
@@ -477,7 +481,7 @@ func TestRun(t *testing.T) {
 				if err := Run(newFakeProvider("my-app")); err != nil {
 					t.Fatalf("Run returned error: %v", err)
 				}
-				admission := serveAdmission(t, call.opts.ExtraPlugins)
+				admission := serveAdmission(t, call.opts)
 
 				for _, md := range []metadata.MD{nil, metadata.Pairs("x-access-token", "token")} {
 					ctx := metadata.NewOutgoingContext(context.Background(), md)
@@ -566,13 +570,17 @@ func TestRun(t *testing.T) {
 	})
 }
 
-// serveAdmission serves the v3 plugins over an in-memory gRPC connection and
-// returns an admission client for them.
-func serveAdmission(t *testing.T, plugins goplugin.PluginSet) pluginv3.AdmissionServiceClient {
+// serveAdmission serves the v3 plugins over an in-memory gRPC connection,
+// authenticated as the plugin SDK does, and returns an admission client for them.
+func serveAdmission(t *testing.T, opts backendapp.ManageOpts) pluginv3.AdmissionServiceClient {
 	t.Helper()
 	listener := bufconn.Listen(1024 * 1024)
-	server := grpc.NewServer()
-	for name, p := range plugins {
+	authenticator := auth.NewRequestAuthenticator(opts.Authentication)
+	server := grpc.NewServer(
+		grpc.UnaryInterceptor(authenticator.UnaryServerInterceptor()),
+		grpc.StreamInterceptor(authenticator.StreamServerInterceptor()),
+	)
+	for name, p := range opts.ExtraPlugins {
 		if err := p.(goplugin.GRPCPlugin).GRPCServer(nil, server); err != nil {
 			t.Fatalf("register %s: %v", name, err)
 		}
@@ -586,4 +594,27 @@ func serveAdmission(t *testing.T, plugins goplugin.PluginSet) pluginv3.Admission
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 	return pluginv3.NewAdmissionServiceClient(conn)
+}
+
+func testJWKS(t *testing.T, keys ...jose.JSONWebKey) string {
+	t.Helper()
+	raw, err := json.Marshal(jose.JSONWebKeySet{Keys: keys})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(raw)
+}
+
+func signTestToken(t *testing.T, key *ecdsa.PrivateKey, keyID, audience string) string {
+	t.Helper()
+	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.ES256, Key: key}, (&jose.SignerOptions{}).WithType(jose.ContentType(authn.TokenTypeAccess)).WithHeader("kid", keyID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := jwt.Signed(signer).Claims(jwt.Claims{Subject: "access-policy:grafana", Audience: jwt.Audience{audience}, Expiry: jwt.NewNumericDate(time.Now().Add(time.Hour))}).
+		Claims(authn.AccessTokenClaims{Namespace: "stacks-1"}).Serialize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return token
 }
