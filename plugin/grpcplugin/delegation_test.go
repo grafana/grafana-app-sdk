@@ -24,6 +24,8 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
+	"github.com/grafana/grafana-plugin-sdk-go/backend/auth"
+
 	clientv3 "github.com/grafana/grafana-app-sdk/plugin/client/v3"
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
@@ -261,10 +263,16 @@ func callDelegationMethod(ctx context.Context, client clientv3.Client, method st
 	}
 }
 
+// delegationProtocol serves opts over an in-memory gRPC connection, with the
+// plugin SDK's authentication, as backend.Manage serves them.
 func delegationProtocol(t *testing.T, opts ServeOpts) *testClientProtocol {
 	t.Helper()
 	listener := bufconn.Listen(1024 * 1024)
-	server := grpc.NewServer()
+	authenticator := auth.NewRequestAuthenticator(auth.Settings{Authenticator: opts.Authenticator, InsecureSkipAuthentication: opts.InsecureSkipAuthentication})
+	server := grpc.NewServer(
+		grpc.UnaryInterceptor(authenticator.UnaryServerInterceptor()),
+		grpc.StreamInterceptor(authenticator.StreamServerInterceptor()),
+	)
 	for _, p := range opts.PluginSet() {
 		require.NoError(t, p.(plugin.GRPCPlugin).GRPCServer(nil, server))
 	}
