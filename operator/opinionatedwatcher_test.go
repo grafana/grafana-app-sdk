@@ -719,16 +719,18 @@ func (p *mockPatchClient) GetInto(ctx context.Context, identifier resource.Ident
 func TestOpinionatedWatcherRefreshesUnfinishedRelistObjects(t *testing.T) {
 	kind := resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{})
 	for _, tc := range []struct {
-		name       string
-		uid        string
-		generation int64
-		completed  bool
-		want       []string
+		name              string
+		uid               string
+		listedGeneration  int64
+		currentGeneration int64
+		completed         bool
+		want              []string
 	}{
-		{name: "already completed", uid: "original", generation: 1, completed: true},
-		{name: "already completed with a spec change", uid: "original", generation: 2, completed: true, want: []string{"update"}},
-		{name: "replacement", uid: "replacement", generation: 2},
-		{name: "unfinished with a spec change", uid: "original", generation: 2, want: []string{"protect", "add", "complete"}},
+		{name: "already completed", uid: "original", listedGeneration: 1, currentGeneration: 1, completed: true},
+		{name: "already completed with a spec change", uid: "original", listedGeneration: 2, currentGeneration: 2, completed: true, want: []string{"update"}},
+		{name: "spec changed after listing", uid: "original", listedGeneration: 1, currentGeneration: 2, completed: true, want: []string{"update"}},
+		{name: "replacement", uid: "replacement", listedGeneration: 2, currentGeneration: 2},
+		{name: "unfinished with a spec change", uid: "original", listedGeneration: 2, currentGeneration: 2, want: []string{"protect", "add", "complete"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			old := kind.ZeroValue()
@@ -739,7 +741,7 @@ func TestOpinionatedWatcherRefreshesUnfinishedRelistObjects(t *testing.T) {
 			old.SetGeneration(1)
 			listed := old.Copy()
 			listed.SetResourceVersion("11")
-			listed.SetGeneration(tc.generation)
+			listed.SetGeneration(tc.listedGeneration)
 			require.NoError(t, listed.SetSpec("listed"))
 
 			var calls []string
@@ -751,7 +753,7 @@ func TestOpinionatedWatcherRefreshesUnfinishedRelistObjects(t *testing.T) {
 				into.SetName(id.Name)
 				into.SetNamespace(id.Namespace)
 				into.SetUID(types.UID(tc.uid))
-				into.SetGeneration(tc.generation)
+				into.SetGeneration(tc.currentGeneration)
 				into.SetResourceVersion("12")
 				if tc.completed {
 					into.SetFinalizers([]string{watcher.finalizer})

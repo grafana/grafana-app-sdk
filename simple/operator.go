@@ -316,7 +316,7 @@ func (o *Operator) WatchKind(
 	kind resource.Kind, watcher SyncWatcher, options operator.ListWatchOptions, opts ...KindWatchOption,
 ) error {
 	kindStr := o.label(kind, options)
-	ow, err := operator.NewOpinionatedWatcher(kind, &watchPatcher{o.patcher.ForKind(kind.GroupVersionKind().GroupKind())}, operator.OpinionatedWatcherConfig{
+	ow, err := operator.NewOpinionatedWatcher(kind, newWatcherPatcher(o.patcher, o.clientGen, kind), operator.OpinionatedWatcherConfig{
 		Finalizer: func(sch resource.Schema) string {
 			if o.FinalizerGenerator != nil {
 				return o.FinalizerGenerator(sch)

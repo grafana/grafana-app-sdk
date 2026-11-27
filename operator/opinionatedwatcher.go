@@ -16,9 +16,16 @@ import (
 )
 
 // PatchClient is a Client capable of making PatchInto requests. This is used by OpinionatedWatch to update finalizers.
+// To refresh an object after a recovery LIST, OpinionatedWatcher uses Get if the client provides it.
+// Otherwise, GetInto must populate the entire object for that read.
 type PatchClient interface {
 	PatchInto(context.Context, resource.Identifier, resource.PatchRequest, resource.PatchOptions, resource.Object) error
 	GetInto(context.Context, resource.Identifier, resource.Object) error
+}
+
+// fullObjectReader returns a fresh object for a watcher callback.
+type fullObjectReader interface {
+	Get(context.Context, resource.Identifier) (resource.Object, error)
 }
 
 // FinalizerUpdater is an interface which describes a type which can manipulate finalizers for an object,
@@ -296,7 +303,6 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 	fromRelist := delivery == DeliveryRelist
 	deleting := tgt.GetDeletionTimestamp() != nil
 	pendingDeletion := deleting && busDeliveryNeedsCleanup(delivery, src)
-	sameGeneration := tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration()
 	newFinalizers := o.getFinalizers(tgt)
 	if fromRelist && !deleting && !slices.Contains(newFinalizers, o.finalizer) {
 		// Initialization may have finished while this LIST delivery was queued.
@@ -308,11 +314,10 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 		if current.GetDeletionTimestamp() != nil || !slices.Contains(newFinalizers, o.finalizer) {
 			return o.Add(ctx, current)
 		}
-		// If this delivery also carried a spec change, use the refreshed object
-		// for the update now that initialization is known to be complete.
+		// Use the refreshed object to decide whether the spec changed.
 		tgt = current
 	}
-	if !pendingDeletion && sameGeneration {
+	if !pendingDeletion && tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration() {
 		return nil
 	}
 	if !slices.Contains(newFinalizers, o.finalizer) && tgt.GetDeletionTimestamp() == nil {
@@ -408,15 +413,23 @@ func (o *OpinionatedWatcher) suppressFinalizerUpdate(delivery Delivery, old reso
 
 func (o *OpinionatedWatcher) refreshUnfinishedObject(ctx context.Context, listed resource.Object) (resource.Object, error) {
 	id := listed.GetStaticMetadata().Identifier()
-	current := o.schema.ZeroValue()
-	current.SetGroupVersionKind(listed.GroupVersionKind())
-	if err := o.finalizerUpdater.client.GetInto(ctx, id, current); err != nil {
+	client := o.finalizerUpdater.client
+	var current resource.Object
+	var err error
+	if reader, ok := client.(fullObjectReader); ok {
+		current, err = reader.Get(ctx, id)
+	} else {
+		current = o.schema.ZeroValue()
+		current.SetGroupVersionKind(listed.GroupVersionKind())
+		err = client.GetInto(ctx, id, current)
+	}
+	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("read unfinished object %s/%s: %w", id.Namespace, id.Name, err)
 	}
-	if current.GetStaticMetadata().Identifier() != id {
+	if current == nil || current.GetStaticMetadata().Identifier() != id {
 		return nil, fmt.Errorf("response does not match unfinished object %s/%s", id.Namespace, id.Name)
 	}
 	if uid := listed.GetUID(); uid != "" {
