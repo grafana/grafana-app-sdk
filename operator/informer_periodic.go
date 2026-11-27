@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -45,7 +46,7 @@ func periodicWatchOptions(detail WatchDetail) WatchOptions {
 
 func periodicOptions(opts InformerOptions, defaults PeriodicListOptions) PeriodicInformerOptions {
 	return PeriodicInformerOptions{ResyncInterval: resyncIntervalOr(opts, defaults.ResyncInterval), RetryInterval: defaults.RetryInterval,
-		EventTimeout: opts.EventTimeout, ErrorHandler: opts.ErrorHandler}
+		EventTimeout: opts.EventTimeout, ErrorHandler: opts.ErrorHandler, Metrics: opts.EventMetrics}
 }
 
 func resyncIntervalOr(opts InformerOptions, fallback time.Duration) time.Duration {
@@ -58,6 +59,7 @@ func resyncIntervalOr(opts InformerOptions, fallback time.Duration) time.Duratio
 // PeriodicInformerOptions configures a scheduled LIST. EventTimeout bounds each
 // handler's context. A handler must honor cancellation to stop early.
 type PeriodicInformerOptions struct {
+	Metrics        *InformerEventMetrics
 	ResyncInterval time.Duration
 	RetryInterval  time.Duration
 	EventTimeout   time.Duration
@@ -67,6 +69,7 @@ type PeriodicInformerOptions struct {
 // PeriodicInformer performs one complete LIST at a time and dispatches every
 // object through Add. Objects removed between sweeps generate no delete event.
 type PeriodicInformer struct {
+	record informerEventRecorder
 	kind   resource.Kind
 	lister ResourceLister
 	opts   PeriodicInformerOptions
@@ -102,7 +105,7 @@ func newPeriodicInformer(kind resource.Kind, lister ResourceLister, opts Periodi
 	if opts.ErrorHandler == nil {
 		opts.ErrorHandler = DefaultErrorHandler
 	}
-	return &PeriodicInformer{kind: kind, lister: lister, opts: opts, detail: detail,
+	return &PeriodicInformer{kind: kind, lister: lister, opts: opts, detail: detail, record: eventRecorder(opts.Metrics, kind),
 		synced: make(chan struct{}), stopped: make(chan struct{})}, nil
 }
 
@@ -140,6 +143,11 @@ func (p *PeriodicInformer) HasSynced() bool {
 	default:
 		return false
 	}
+}
+
+// PrometheusCollectors returns the event collectors shared by this informer.
+func (p *PeriodicInformer) PrometheusCollectors() []prometheus.Collector {
+	return p.opts.Metrics.PrometheusCollectors()
 }
 
 func (p *PeriodicInformer) HealthCheckName() string {
@@ -187,7 +195,8 @@ func (p *PeriodicInformer) Run(ctx context.Context) error {
 }
 
 func (p *PeriodicInformer) sweep(ctx context.Context) error {
-	objects, _, err := p.lister.List(ctx)
+	objects, _, err := p.lister.List(withListMetrics(ctx, p.opts.Metrics, p.kind))
+	p.record.listOutcome(err)
 	if err != nil {
 		return fmt.Errorf("periodic LIST: %w", err)
 	}
@@ -196,6 +205,12 @@ func (p *PeriodicInformer) sweep(ctx context.Context) error {
 		ctx = contextWithInitialList(ctx)
 	}
 	for _, obj := range objects {
+		if ctx.Err() != nil {
+			break
+		}
+		if len(p.handlers) > 0 {
+			p.record.delivery(DeliveryRelist, "add", "")
+		}
 		for _, handler := range p.handlers {
 			if err := ctx.Err(); err != nil {
 				return err

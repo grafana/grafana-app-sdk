@@ -18,11 +18,13 @@ func (b *BusInformerWithRecovery) applyLive(ctx context.Context, event resourceb
 	old := b.items[id]
 	version := numericVersion(event.ResourceVersion)
 	if version == 0 {
+		b.record.drop("invalid_version")
 		b.reportError(ctx, fmt.Errorf("bus recovery notification for %v has an invalid resource version %q", id, event.ResourceVersion))
 		return
 	}
 	if version <= b.listVersion || version <= b.deleted[id] ||
 		(old != nil && version <= numericVersion(old.GetResourceVersion())) {
+		b.record.drop("superseded")
 		return
 	}
 
@@ -31,6 +33,7 @@ func (b *BusInformerWithRecovery) applyLive(ctx context.Context, event resourceb
 		obj, err := b.liveObject(ctx, event, id)
 		if err != nil {
 			if ctx.Err() == nil {
+				b.record.drop("unreadable")
 				b.reportError(ctx, fmt.Errorf("read bus event %s/%s: %w", id.Namespace, id.Name, err))
 				b.requestRateLimitedRelist()
 			}
@@ -49,6 +52,7 @@ func (b *BusInformerWithRecovery) applyLive(ctx context.Context, event resourceb
 		if old == nil {
 			if b.getObject != nil {
 				// The object is gone and the informer never held a safe payload.
+				b.record.drop("unavailable_delete_payload")
 				return
 			}
 			old = b.kind.NewIdentityObject(id, event.ResourceVersion)
@@ -61,6 +65,7 @@ func (b *BusInformerWithRecovery) applyLive(ctx context.Context, event resourceb
 
 func (b *BusInformerWithRecovery) relist(ctx context.Context, trigger busRelistTrigger) error {
 	next, version, err := b.readSnapshot(ctx)
+	b.record.listOutcome(err)
 	if err != nil {
 		return err
 	}
@@ -69,7 +74,7 @@ func (b *BusInformerWithRecovery) relist(ctx context.Context, trigger busRelistT
 }
 
 func (b *BusInformerWithRecovery) readSnapshot(ctx context.Context) (map[resource.Identifier]resource.Object, int64, error) {
-	items, rv, err := b.lister.List(ctx)
+	items, rv, err := b.lister.List(withListMetrics(ctx, b.record.metrics, b.kind))
 	if err != nil {
 		return nil, 0, fmt.Errorf("bus recovery LIST: %w", err)
 	}

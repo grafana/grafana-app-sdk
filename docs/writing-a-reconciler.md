@@ -328,3 +328,11 @@ as a client-go tombstone.
 informers. Full-object delivery preserves native object types when the kind
 wraps them. Identity delivery preserves creation timestamps when the LIST
 supplies them, so age-based cleanup can still use them.
+
+### Informer event metrics
+
+Create one `operator.InformerEventMetrics` per application and pass it to
+the bus and periodic informers that share a registry. Supply a resource
+version timestamp decoder to measure delivery latency when supported by the
+backend. Listers that expose individual page requests can record them with
+`operator.RecordInformerListPage`.

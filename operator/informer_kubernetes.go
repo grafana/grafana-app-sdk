@@ -59,6 +59,8 @@ func (k *KubernetesBasedInformer) WatchOptions() WatchOptions {
 
 // InformerOptions are generic options for all Informer implementations.
 type InformerOptions struct {
+	// EventMetrics optionally shares event collectors with bus and periodic informers.
+	EventMetrics *InformerEventMetrics
 	// ListWatchOptions are the options for filtering the watch based on namespace and other compatible filters.
 	ListWatchOptions ListWatchOptions
 	// CacheResyncInterval is the interval at which the informer will emit CacheResync events for all resources in the cache.
