@@ -16,6 +16,8 @@ var (
 	_ metrics.Provider = &ConcurrentInformer{}
 )
 
+const defaultConcurrentInformerWorkers = 10
+
 // ConcurrentInformer implements the Informer interface, wrapping another Informer implementation
 // to provide concurrent handling of events.
 // Events will still be emitted sequentially, but the event handler methods on added ResourceWatchers
@@ -63,7 +65,7 @@ func NewConcurrentInformer(inf Informer, opts ConcurrentInformerOptions) (
 		errorHandler:         DefaultErrorHandler,
 		informer:             inf,
 		watchers:             make([]*concurrentWatcher, 0),
-		maxConcurrentWorkers: 10,
+		maxConcurrentWorkers: defaultConcurrentInformerWorkers,
 	}
 	if opts.ErrorHandler != nil {
 		ci.errorHandler = opts.ErrorHandler
@@ -90,7 +92,7 @@ func NewConcurrentInformerFromOptions(inf Informer, opts InformerOptions) (
 		errorHandler:         DefaultErrorHandler,
 		informer:             inf,
 		watchers:             make([]*concurrentWatcher, 0),
-		maxConcurrentWorkers: 10,
+		maxConcurrentWorkers: defaultConcurrentInformerWorkers,
 	}
 	if opts.ErrorHandler != nil {
 		ci.errorHandler = opts.ErrorHandler

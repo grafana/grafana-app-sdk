@@ -30,25 +30,27 @@ type ResourceKeyLister interface {
 // ErrProjectionUnsupported if the adapter cannot honor the namespace or selectors.
 type KeyListerFactory func(resource.Kind, ClientListerOptions) (ResourceKeyLister, error)
 
-// NewKeysPeriodicMechanism schedules LIST sweeps for handlers that use only
+// NewPeriodicKeysList schedules LIST sweeps for handlers that use only
 // identities. It falls back to full-object LIST and projects those results
 // when the keys route cannot serve the requested kind or query.
-func NewKeysPeriodicMechanism(factory KeyListerFactory, defaults PeriodicMechanismOptions) InformerMechanism {
+func NewPeriodicKeysList(factory KeyListerFactory, defaults PeriodicListOptions) InformerMechanism {
 	return NewInformerMechanism(periodicWatchOptions(WatchDetailIdentity), func(
 		kind resource.Kind, clients resource.ClientGenerator, opts InformerOptions,
 	) (Informer, error) {
-		full, err := periodicClientLister(kind, clients, opts, defaults.PageSize)
-		if err != nil {
-			return nil, err
-		}
-		lister, err := keysListerFor(kind, factory, full, ClientListerOptions{
-			ListWatchOptions: opts.ListWatchOptions, PageSize: listPageSize(opts, defaults.PageSize),
-		})
+		lister, err := identityClientLister(kind, clients, factory, listOptionsFor(opts, defaults.PageSize))
 		if err != nil {
 			return nil, err
 		}
 		return newPeriodicInformer(kind, lister, periodicOptions(opts, defaults), WatchDetailIdentity)
 	})
+}
+
+func identityClientLister(kind resource.Kind, clients resource.ClientGenerator, factory KeyListerFactory, opts ClientListerOptions) (ResourceLister, error) {
+	full, err := clientListerFor(kind, clients, opts)
+	if err != nil {
+		return nil, err
+	}
+	return keysListerFor(kind, factory, full, opts)
 }
 
 func keysListerFor(kind resource.Kind, factory KeyListerFactory, full ResourceLister, opts ClientListerOptions) (ResourceLister, error) {

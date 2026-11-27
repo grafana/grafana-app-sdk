@@ -71,7 +71,7 @@ func TestNotificationMechanismDeliversWithoutClient(t *testing.T) {
 		needs := WatchOptions{Live: &WatchLiveOptions{Detail: WatchDetailIdentity, Distribution: WatchDistributionShared}}
 		inf, err := BuildInformer(InformerRequest{
 			Kind:     notificationKind,
-			Supplier: NewSelectingInformerSupplier(nil, NewNotificationMechanism(bus, resourcebus.Group{Name: "workers"})),
+			Supplier: NewSelectingInformerSupplier(nil, NewBusNotifications(bus, resourcebus.Group{Name: "workers"})),
 			Options:  InformerOptions{WatchNeeds: needs, ListWatchOptions: ListWatchOptions{Namespace: "default"}},
 		})
 		require.NoError(t, err)
@@ -111,7 +111,7 @@ func TestNotificationMechanismSelectsLiveOnlyNeeds(t *testing.T) {
 	bus := busSubscribeFunc(func(context.Context, schema.GroupVersionResource, string, func(context.Context, resourcebus.Event), ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
 		return &testBusSubscription{}, nil
 	})
-	mechanism := NewNotificationMechanism(bus, resourcebus.Group{})
+	mechanism := NewBusNotifications(bus, resourcebus.Group{})
 	fallbackErr := errors.New("API watch selected")
 	supplier := NewSelectingInformerSupplier(func(resource.Kind, resource.ClientGenerator, InformerOptions) (Informer, error) {
 		return nil, fallbackErr
@@ -151,7 +151,7 @@ func TestNotificationInformerHealthChecks(t *testing.T) {
 				}
 			}}, nil
 		})
-		inf, err := newBusInformer(notificationKind, bus, resourcebus.Group{}, InformerOptions{})
+		inf, err := newBusInformer(notificationKind, bus, BusInformerOptions{})
 		require.NoError(t, err)
 		controller := NewInformerController(InformerControllerConfig{})
 		require.NoError(t, controller.AddInformer(inf, notificationKind.Kind()))
@@ -196,7 +196,7 @@ func TestNotificationInformerCancelsFailedSubscriptionBeforeRetry(t *testing.T) 
 			liveCtx, livePublish = ctx, handler
 			return live, nil
 		})
-		inf, err := newBusInformer(notificationKind, bus, resourcebus.Group{}, InformerOptions{
+		inf, err := newBusInformer(notificationKind, bus, BusInformerOptions{
 			ErrorHandler: func(context.Context, error) {},
 		})
 		require.NoError(t, err)
@@ -234,7 +234,7 @@ func TestConcurrentNotificationInformerStartsTimeoutInWorker(t *testing.T) {
 		})
 		const timeout = time.Second
 		opts := InformerOptions{EventTimeout: timeout, MaxConcurrentWorkers: 1}
-		base, err := newBusInformer(notificationKind, bus, resourcebus.Group{}, opts)
+		base, err := newBusInformer(notificationKind, bus, BusInformerOptions{EventTimeout: timeout})
 		require.NoError(t, err)
 		inf, err := NewConcurrentInformerFromOptions(base, opts)
 		require.NoError(t, err)
@@ -287,7 +287,7 @@ func TestNotificationMechanismFallbackAndSelectionErrors(t *testing.T) {
 		return nil, errors.New("fallback reached")
 	}
 	needs := WatchOptions{Live: &WatchLiveOptions{Detail: WatchDetailIdentity}}
-	supplier := NewSelectingInformerSupplier(fallback, NewNotificationMechanism(nil, resourcebus.Group{}))
+	supplier := NewSelectingInformerSupplier(fallback, NewBusNotifications(nil, resourcebus.Group{}))
 	_, err := supplier(notificationKind, nil, InformerOptions{WatchNeeds: needs})
 	require.ErrorContains(t, err, "fallback reached")
 	require.True(t, fallbackCalled)
@@ -296,7 +296,7 @@ func TestNotificationMechanismFallbackAndSelectionErrors(t *testing.T) {
 	bus := busSubscribeFunc(func(context.Context, schema.GroupVersionResource, string, func(context.Context, resourcebus.Event), ...resourcebus.SubscribeOption) (resourcebus.Subscription, error) {
 		return nil, resourcebus.ErrSubscriptionRejected
 	})
-	mechanism := NewNotificationMechanism(bus, resourcebus.Group{})
+	mechanism := NewBusNotifications(bus, resourcebus.Group{})
 	supplier = NewSelectingInformerSupplier(fallback, mechanism)
 	filtered := InformerOptions{WatchNeeds: needs, ListWatchOptions: ListWatchOptions{LabelFilters: []string{"a=b"}}}
 	_, err = supplier(notificationKind, nil, filtered)
