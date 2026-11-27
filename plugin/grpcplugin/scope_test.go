@@ -1,13 +1,11 @@
 package grpcplugin
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"fmt"
-	"log/slog"
 	"testing"
 	"time"
 
@@ -208,39 +206,23 @@ func TestServerConversionNamespaces(t *testing.T) {
 					called = true
 					return nil
 				}},
-				auth: serverAuth{authenticator: authenticatorFunc(func(context.Context, authn.TokenProvider) (types.AuthInfo, error) {
-					return authn.NewAccessTokenAuthInfo(authn.Claims[authn.AccessTokenClaims]{
-						Claims: jwt.Claims{Audience: jwt.Audience{delegationGroup}},
-						Rest:   authn.AccessTokenClaims{Namespace: tt.tokenNamespace},
-					}), nil
-				})},
+				auth: serverAuth{verifies: true},
 			}
 			req := pluginv3.ConvertObjectsRequest_builder{
 				Target:    pluginv3.GroupVersionKind_builder{Group: new(delegationGroup)}.Build(),
 				Namespace: new(tt.requestNamespace),
 				Objects:   tt.objects,
 			}.Build()
-			ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-access-token", "valid"))
+			// The plugin SDK's server has authenticated the caller.
+			ctx := types.WithAuthInfo(context.Background(), authn.NewAccessTokenAuthInfo(authn.Claims[authn.AccessTokenClaims]{
+				Claims: jwt.Claims{Audience: jwt.Audience{delegationGroup}},
+				Rest:   authn.AccessTokenClaims{Namespace: tt.tokenNamespace},
+			}))
 			_, err := server.ConvertObjects(ctx, req)
 			require.Equal(t, tt.want, status.Code(err))
 			require.Equal(t, tt.want == codes.OK, called)
 		})
 	}
-}
-
-func TestAuthenticatedAuthInfoRedactsAccessToken(t *testing.T) {
-	const token = "secret-access-token"
-	info := &authenticatedAuthInfo{
-		AuthInfo:    authn.NewAccessTokenAuthInfo(authn.Claims[authn.AccessTokenClaims]{Rest: authn.AccessTokenClaims{Namespace: "stacks-1"}}),
-		accessToken: token,
-	}
-	var logged bytes.Buffer
-	slog.New(slog.NewJSONHandler(&logged, nil)).Info("caller", "info", info)
-	for _, out := range []string{fmt.Sprint(info), fmt.Sprintf("%+v", info), fmt.Sprintf("%#v", info), logged.String()} {
-		require.NotContains(t, out, token)
-		require.Contains(t, out, "stacks-1")
-	}
-	require.Equal(t, token, info.GetAccessToken())
 }
 
 func TestServerPluginIDAudience(t *testing.T) {

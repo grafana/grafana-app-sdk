@@ -14,6 +14,7 @@ import (
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	backendapp "github.com/grafana/grafana-plugin-sdk-go/backend/app"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/auth"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	backendlog "github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-plugin-sdk-go/build/buildinfo"
@@ -26,9 +27,9 @@ import (
 // Run is a convinience entry point for plugin backends to use, when they have
 // implement App SDK functionality. It wraps plugin Manage().
 //
-// Plugin protocol v3 requests are authenticated with the authenticator from
-// WithAuthenticator or, without one, from GF_JWKS_URL or
-// GF_JWKS. Tokens must have the plugin ID or the manifest's
+// The plugin SDK authenticates plugin protocol v2 and v3 requests (see
+// backend.Manage) with the authenticator from WithAuthenticator or, without
+// one, from GF_JWKS_URL or GF_JWKS. Tokens must have the plugin ID or the manifest's
 // API group as an audience. If neither is available, every plugin protocol v3
 // request is rejected, unless authentication is skipped for local development
 // with WithInsecureSkipAuthentication or GF_PLUGIN_INSECURE_SKIP_AUTHENTICATION=true,
@@ -48,9 +49,9 @@ import (
 // authenticated with the same authenticator when they carry the caller's access
 // token (X-Access-Token): their handlers' clients then act on behalf of the
 // caller. A token that does not verify fails the call. A call without a token
-// is let through with no identity, acting as the plugin, and a warning is
-// logged. CallResource handlers also get the app instance settings as
-// resource.RouteRequestInfo (see resource.RouteRequestInfoFrom).
+// is let through with no identity, acting as the plugin. CallResource handlers
+// also get the app instance settings as resource.RouteRequestInfo (see
+// resource.RouteRequestInfoFrom).
 //
 // If the App needs to talk to the Kubernetes API server, the rest.Config
 // can be overridden via WithKubeConfig. Without one from WithKubeConfig or
@@ -89,8 +90,9 @@ import (
 //
 // WithManageOpts allows further customization of how the plugin backend is
 // managed, such as enabling GRPC settings or tracing opts. Note that
-// ManageOpts.ExtraPlugins is reserved for appadapter and cannot be set, and that
-// Run adds its plugin v2 middleware after a ManageOpts.Licensing decorator:
+// ManageOpts.ExtraPlugins is reserved for appadapter and cannot be set, that
+// Run sets ManageOpts.Authentication, and that it adds its settings middleware
+// after any ManageOpts.HandlerMiddlewares:
 //
 //	err := plugin.Run(
 //		myapp.Provider(),
@@ -136,11 +138,7 @@ func Run(provider app.Provider, opts ...RunOption) error {
 		return err
 	}
 
-	if os.Getenv(EnvVarInsecureSkipAuthentication) == "true" {
-		cfg.insecureSkipAuthentication = true
-	}
-
-	if err := cfg.resolveAuthenticator(manifestData); err != nil {
+	if err := cfg.resolveAuthentication(manifestData); err != nil {
 		return err
 	}
 
@@ -282,30 +280,25 @@ func startRunner(runner app.Runnable, cfg *runConfig) (stop func()) {
 	}
 }
 
-// resolveAuthenticator builds the authenticator from the environment when none was given,
-// logging a warning when requests cannot be verified.
-func (cfg *runConfig) resolveAuthenticator(manifestData *app.ManifestData) error {
-	if cfg.authenticator != nil {
-		return nil
-	}
-	authenticator, err := buildAuthenticator(cfg.pluginID, manifestData)
-	switch {
-	case err == nil:
-		cfg.authenticator = authenticator
-	case !errors.Is(err, ErrNoSigningKeys):
+// ErrNoSigningKeys is returned when neither EnvVarGrafanaJWKSURL nor
+// EnvVarGrafanaJWKS is set; Run then starts without an authenticator.
+var ErrNoSigningKeys = auth.ErrNoSigningKeys
+
+// resolveAuthentication resolves how requests are authenticated: with the
+// authenticator from WithAuthenticator or, without one, from GF_JWKS_URL or
+// GF_JWKS, accepting the plugin ID and the manifest's API group as audiences.
+// The plugin SDK serves the plugin with it, and logs a warning when requests
+// cannot be verified.
+func (cfg *runConfig) resolveAuthentication(manifestData *app.ManifestData) error {
+	settings, err := auth.Settings{
+		Authenticator:              cfg.authenticator,
+		Audiences:                  []string{manifestData.Group},
+		InsecureSkipAuthentication: cfg.insecureSkipAuthentication,
+	}.Resolve(cfg.pluginID)
+	if err != nil {
 		return err
-	case !cfg.insecureSkipAuthentication:
-		// Without an authenticator, the plugin v3 servers reject every request.
-		// Start anyway: hosts that never send plugin v3 requests, such as a
-		// Grafana that routes the App's API elsewhere, need not configure one.
-		logging.DefaultLogger.Warn("no authenticator configured: plugin protocol v3 requests will be rejected; set "+EnvVarGrafanaJWKSURL+" or "+EnvVarGrafanaJWKS+", or use WithAuthenticator; for local development, use WithInsecureSkipAuthentication or set "+EnvVarInsecureSkipAuthentication+"=true",
-			"pluginId", cfg.pluginID)
-	default:
-		// Authentication is explicitly skipped. Anything that can reach the
-		// plugin can then claim any identity, so make that visible.
-		logging.DefaultLogger.Warn("plugin protocol v3 requests are not verified: callers can claim any identity; use this only for local development",
-			"pluginId", cfg.pluginID)
 	}
+	cfg.authentication = settings
 	return nil
 }
 
@@ -354,16 +347,16 @@ func WithManageOpts(manageOpts backendapp.ManageOpts) RunOption {
 	}
 }
 
-// WithAuthenticator sets the authenticator that verifies the access token on
-// each plugin protocol v3 request (see grpcplugin.ServeOpts.Authenticator),
-// instead of building one from GF_JWKS_URL or GF_JWKS.
+// WithAuthenticator sets the authenticator that verifies the access token of
+// each plugin protocol v2 and v3 request (see auth.Settings.Authenticator in
+// the plugin SDK), instead of building one from GF_JWKS_URL or GF_JWKS.
 func WithAuthenticator(authenticator authn.Authenticator) RunOption {
 	return func(cfg *runConfig) {
 		cfg.authenticator = authenticator
 	}
 }
 
-// WithInsecureSkipAuthentication serves plugin protocol v3 requests without
+// WithInsecureSkipAuthentication serves plugin protocol v2 and v3 requests without
 // verifying them when no authenticator is set or configured by
 // GF_JWKS_URL or GF_JWKS. A request's access token is parsed without
 // checking its signature, so handlers get the identity it claims; requests
@@ -384,7 +377,10 @@ type runConfig struct {
 	manageOpts                 backendapp.ManageOpts
 	authenticator              authn.Authenticator
 	insecureSkipAuthentication bool
-	targets                    []string
+	// authentication is resolved from authenticator, insecureSkipAuthentication
+	// and the environment (see resolveAuthentication).
+	authentication auth.Settings
+	targets        []string
 }
 
 type stubInstance struct{}
@@ -402,35 +398,19 @@ func newStubAppInstance(_ context.Context, _ backend.AppInstanceSettings) (insta
 }
 
 // serve sets the manage options that serve a: ExtraPlugins for the plugin v3
-// interfaces, and a middleware that authenticates the plugin v2 calls the same
-// way, and gives resource handlers the app instance
-// settings as RouteRequestInfo.
+// interfaces, the resolved authentication, with which the plugin SDK
+// authenticates plugin v2 and v3 requests alike, and a middleware that gives
+// resource handlers the app instance settings as RouteRequestInfo.
 func (cfg *runConfig) serve(a app.App) error {
 	if len(cfg.manageOpts.ExtraPlugins) > 0 {
 		return errors.New("ExtraPlugins cannot be overridden")
 	}
 	serveOpts := appadapter.ServeOpts(a)
-	serveOpts.Authenticator = cfg.authenticator
+	serveOpts.Authenticator = cfg.authentication.Authenticator
 	serveOpts.PluginID = cfg.pluginID
-	serveOpts.InsecureSkipAuthentication = cfg.insecureSkipAuthentication
+	serveOpts.InsecureSkipAuthentication = cfg.authentication.InsecureSkipAuthentication
 	cfg.manageOpts.ExtraPlugins = serveOpts.PluginSet()
-	cfg.manageOpts.Licensing = withV2Middleware(cfg.manageOpts.Licensing, newV2Middleware(cfg.v2Auth()))
+	cfg.manageOpts.Authentication = cfg.authentication
+	cfg.manageOpts.HandlerMiddlewares = append(cfg.manageOpts.HandlerMiddlewares, newSettingsMiddleware())
 	return nil
-}
-
-// withV2Middleware returns a ServeOptsDecorator that applies decorate, if set,
-// and then adds middleware to the plugin v2 handlers. ManageOpts has no other
-// way to add a handler middleware; the plugin SDK runs it inside its default
-// middleware, next to the instance's handlers.
-func withV2Middleware(decorate backend.ServeOptsDecorator, middleware backend.HandlerMiddleware) backend.ServeOptsDecorator {
-	return func(pluginID string, opts backend.ServeOpts) (backend.ServeOpts, error) {
-		if decorate != nil {
-			var err error
-			if opts, err = decorate(pluginID, opts); err != nil {
-				return opts, err
-			}
-		}
-		opts.HandlerMiddlewares = append(opts.HandlerMiddlewares, middleware)
-		return opts, nil
-	}
 }
