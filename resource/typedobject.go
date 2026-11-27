@@ -582,7 +582,7 @@ func (t *TypedObject[Spec, Sub]) MarshalJSON() ([]byte, error) {
 		if js != "" {
 			jsv := strings.Split(js, ",")
 			fn = jsv[0]
-			if len(jsv) > 0 && jsv[1] == "omitempty" {
+			if len(jsv) > 1 && jsv[1] == "omitempty" {
 				continue
 			}
 		}

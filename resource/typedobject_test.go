@@ -207,3 +207,14 @@ func TestTypedObject_SetSubresource(t *testing.T) {
 		assert.Equal(t, fmt.Errorf("subresource map has an unassignable key type of 'int'"), o2.SetSubresource("1", "bar"))
 	})
 }
+
+func TestTypedObject_MarshalJSON_Subresources(t *testing.T) {
+	o := &TypedObject[any, TestCatalog]{
+		Subresources: TestCatalog{A: "foo", B: 2},
+	}
+	var b []byte
+	var err error
+	assert.NotPanics(t, func() { b, err = o.MarshalJSON() })
+	assert.NoError(t, err)
+	assert.JSONEq(t, `{"kind":"","apiVersion":"","metadata":{},"spec":null,"a":"foo","b":2}`, string(b))
+}
