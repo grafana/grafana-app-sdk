@@ -437,3 +437,84 @@ type tuple[T1, T2 any] struct {
 	first  T1
 	second T2
 }
+
+func TestListMap_RemoveDoesNotMutateRangeSnapshot(t *testing.T) {
+	t.Run("RemoveItemAt", func(t *testing.T) {
+		m := NewListMap[string]()
+		m.AddItem("foo", "a", "b", "c")
+		var seen []string
+		m.Range("foo", func(i int, v string) {
+			if i == 0 {
+				m.RemoveItemAt("foo", 1)
+			}
+			seen = append(seen, v)
+		})
+		assert.Equal(t, []string{"a", "b", "c"}, seen)
+		got := collectList(m, "foo")
+		assert.Equal(t, []string{"a", "c"}, got)
+	})
+
+	t.Run("RemoveItem", func(t *testing.T) {
+		m := NewListMap[string]()
+		m.AddItem("foo", "a", "b", "c")
+		var seen []string
+		m.Range("foo", func(i int, v string) {
+			if i == 0 {
+				m.RemoveItem("foo", func(s string) bool { return s == "a" || s == "b" })
+			}
+			seen = append(seen, v)
+		})
+		assert.Equal(t, []string{"a", "b", "c"}, seen)
+		assert.Equal(t, []string{"b", "c"}, collectList(m, "foo"))
+	})
+
+	t.Run("RemoveItems", func(t *testing.T) {
+		m := NewListMap[string]()
+		m.AddItem("foo", "a", "b", "c", "d")
+		var seen []string
+		m.Range("foo", func(i int, v string) {
+			if i == 0 {
+				assert.Equal(t, 2, m.RemoveItems("foo", func(s string) bool { return s == "b" || s == "c" }, 0))
+			}
+			seen = append(seen, v)
+		})
+		assert.Equal(t, []string{"a", "b", "c", "d"}, seen)
+		assert.Equal(t, []string{"a", "d"}, collectList(m, "foo"))
+	})
+}
+
+func TestListMap_RemoveItemAt_NegativeIndex(t *testing.T) {
+	m := NewListMap[string]()
+	m.AddItem("foo", "a", "b", "c")
+	assert.NotPanics(t, func() { m.RemoveItemAt("foo", -1) })
+	assert.Equal(t, []string{"a", "b", "c"}, collectList(m, "foo"))
+}
+
+func TestListMap_ConcurrentRangeAndRemove(t *testing.T) {
+	m := NewListMap[int]()
+	for i := 0; i < 100; i++ {
+		m.AddItem("foo", i)
+	}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			m.Range("foo", func(_ int, _ int) {})
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 50; i++ {
+			m.RemoveItemAt("foo", 10)
+		}
+	}()
+	wg.Wait()
+	assert.Equal(t, 50, m.KeySize("foo"))
+}
+
+func collectList(m *ListMap[string, string], key string) []string {
+	out := make([]string, 0)
+	m.Range(key, func(_ int, v string) { out = append(out, v) })
+	return out
+}
