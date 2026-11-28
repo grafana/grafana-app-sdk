@@ -28,6 +28,14 @@ jobs:
       with:
         go-version-file: 'go.mod'
         cache: false
+    # The release script tags logging/vX on the commit right before the release commit, so
+    # goreleaser would pick it as the "previous tag" and the changelog would only show that
+    # commit. Pin the previous tag to the prior plain vX.Y.Z release instead.
+    - name: Find previous release tag
+      run: |
+        PREV=$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -v -x -F "${GITHUB_REF_NAME}" | grep -v -- '-' | head -n1)
+        echo "Previous release tag: ${PREV}"
+        echo "GORELEASER_PREVIOUS_TAG=${PREV}" >> "$GITHUB_ENV"
     # Release
     - name: Create Release
       uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7
