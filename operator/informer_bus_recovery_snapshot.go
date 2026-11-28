@@ -13,6 +13,7 @@ func (b *BusInformerWithRecovery) applyLive(ctx context.Context, event resourceb
 	if !b.acceptEvent(event) {
 		return
 	}
+	ctx = ContextWithAnnouncedVersion(ContextWithDelivery(ctx, DeliveryLive), event.ResourceVersion)
 	id := resource.Identifier{Namespace: event.Namespace, Name: event.Name}
 	old := b.items[id]
 	version := numericVersion(event.ResourceVersion)
@@ -27,10 +28,17 @@ func (b *BusInformerWithRecovery) applyLive(ctx context.Context, event resourceb
 
 	switch event.Verb {
 	case resourcebus.VerbAdded, resourcebus.VerbModified:
-		obj := newIdentityObject(b.kind, id.Namespace, id.Name, event.ResourceVersion)
+		obj, err := b.liveObject(ctx, event, id)
+		if err != nil {
+			if ctx.Err() == nil {
+				b.reportError(ctx, fmt.Errorf("read bus event %s/%s: %w", id.Namespace, id.Name, err))
+				b.requestRateLimitedRelist()
+			}
+			return
+		}
 		b.items[id] = obj
 		delete(b.deleted, id)
-		if event.Verb == resourcebus.VerbAdded {
+		if event.Verb == resourcebus.VerbAdded && !busObjectReplaced(old, obj) {
 			// A recreate can reach this group member even if its delete did not.
 			old = nil
 		}
@@ -39,7 +47,11 @@ func (b *BusInformerWithRecovery) applyLive(ctx context.Context, event resourceb
 		delete(b.items, id)
 		b.deleted[id] = version
 		if old == nil {
-			old = newIdentityObject(b.kind, id.Namespace, id.Name, event.ResourceVersion)
+			if b.getObject != nil {
+				// The object is gone and the informer never held a safe payload.
+				return
+			}
+			old = b.kind.NewIdentityObject(id, event.ResourceVersion)
 		}
 		b.deliverChange(ctx, old, nil)
 	default:
@@ -73,6 +85,9 @@ func (b *BusInformerWithRecovery) readSnapshot(ctx context.Context) (map[resourc
 	}
 	next := make(map[resource.Identifier]resource.Object, len(items))
 	for _, item := range items {
+		if item != nil && b.namespace != "" && b.namespace != item.GetNamespace() {
+			continue
+		}
 		if item == nil || item.GetName() == "" {
 			return nil, 0, fmt.Errorf("bus recovery LIST at %q contains an item without identity", rv)
 		}
@@ -83,7 +98,7 @@ func (b *BusInformerWithRecovery) readSnapshot(ctx context.Context) (map[resourc
 		if _, duplicate := next[id]; duplicate {
 			return nil, 0, fmt.Errorf("bus recovery LIST at %q contains duplicate key %v", rv, id)
 		}
-		next[id] = newIdentityObject(b.kind, id.Namespace, id.Name, item.GetResourceVersion())
+		next[id] = b.snapshotObject(item)
 	}
 	return next, version, nil
 }

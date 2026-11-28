@@ -8,6 +8,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/codes"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
@@ -15,9 +16,16 @@ import (
 )
 
 // PatchClient is a Client capable of making PatchInto requests. This is used by OpinionatedWatch to update finalizers.
+// To refresh an object after a recovery LIST, OpinionatedWatcher uses Get if the client provides it.
+// Get must return a fresh object the watcher can modify. Otherwise, GetInto must populate the entire object for that read.
 type PatchClient interface {
 	PatchInto(context.Context, resource.Identifier, resource.PatchRequest, resource.PatchOptions, resource.Object) error
 	GetInto(context.Context, resource.Identifier, resource.Object) error
+}
+
+// fullObjectReader returns a fresh object for a watcher callback.
+type fullObjectReader interface {
+	Get(context.Context, resource.Identifier) (resource.Object, error)
 }
 
 // FinalizerUpdater is an interface which describes a type which can manipulate finalizers for an object,
@@ -272,7 +280,9 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 // and calls the underlying UpdateFunc or DeleteFunc based on internal logic.
 // If the new object has a non-nil ObjectMetadata.DeletionTimestamp in its metadata, DeleteFunc will be called,
 // and the object's finalizer will be removed to allow kubernetes to hard delete it.
-// Otherwise, UpdateFunc is called, provided the update is non-trivial (that is, the metadata.Generation has changed).
+// Bus notifications can deliver a deletion that starts without a generation change, and a recovery LIST can
+// retry cleanup or initialization. Updates with a changed or unknown generation can reach UpdateFunc.
+// For stock watch deliveries, an update that adds the watcher's finalizer is ignored.
 //
 //nolint:funlen
 func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tgt resource.Object) error {
@@ -289,14 +299,27 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 	logger := logging.FromContext(ctx).With("action", "update", "component", "OpinionatedWatcher", "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())
 	logger.Debug("Handling update")
 
-	// Only fire off Update if the generation has changed (so skip subresource updates)
-	if tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration() {
+	delivery := DeliveryFromContext(ctx)
+	fromRelist := delivery == DeliveryRelist
+	deleting := tgt.GetDeletionTimestamp() != nil
+	pendingDeletion := deleting && busDeliveryNeedsCleanup(delivery, src)
+	newFinalizers := o.getFinalizers(tgt)
+	if fromRelist && !deleting && !slices.Contains(newFinalizers, o.finalizer) {
+		// Initialization may have finished while this LIST delivery was queued.
+		current, err := o.refreshUnfinishedObject(ctx, tgt)
+		if current == nil {
+			return err
+		}
+		newFinalizers = o.getFinalizers(current)
+		if current.GetDeletionTimestamp() != nil || !slices.Contains(newFinalizers, o.finalizer) {
+			return o.Add(ctx, current)
+		}
+		// Use the refreshed object to decide whether the spec changed.
+		tgt = current
+	}
+	if !pendingDeletion && tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration() {
 		return nil
 	}
-
-	// TODO: finalizers part of object metadata?
-	oldFinalizers := o.getFinalizers(src)
-	newFinalizers := o.getFinalizers(tgt)
 	if !slices.Contains(newFinalizers, o.finalizer) && tgt.GetDeletionTimestamp() == nil {
 		// Either the add somehow snuck past us (unlikely), or the original AddFunc call failed, and should be retried.
 		// Either way, we need to try calling AddFunc
@@ -364,8 +387,7 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 		return nil
 	}
 
-	// Check if this was us adding our finalizer. If it was, we can ignore it.
-	if !slices.Contains(oldFinalizers, o.finalizer) && slices.Contains(newFinalizers, o.finalizer) {
+	if o.suppressFinalizerUpdate(delivery, src, newFinalizers) {
 		logger.Debug("Finalizer add update, ignoring")
 		return nil
 	}
@@ -376,6 +398,53 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 		return err
 	}
 	return nil
+}
+
+// A live event handles the start of deletion. A re-list can also retry unfinished cleanup.
+func busDeliveryNeedsCleanup(delivery Delivery, old resource.Object) bool {
+	return delivery == DeliveryRelist || (delivery == DeliveryLive && old.GetDeletionTimestamp() == nil)
+}
+
+// Stock watches keep suppressing updates that add the watcher's finalizer.
+func (o *OpinionatedWatcher) suppressFinalizerUpdate(delivery Delivery, old resource.Object, finalizers []string) bool {
+	return delivery != DeliveryLive && delivery != DeliveryRelist &&
+		slices.Contains(finalizers, o.finalizer) && !slices.Contains(o.getFinalizers(old), o.finalizer)
+}
+
+func (o *OpinionatedWatcher) refreshUnfinishedObject(ctx context.Context, listed resource.Object) (resource.Object, error) {
+	id := listed.GetStaticMetadata().Identifier()
+	client := o.finalizerUpdater.client
+	var current resource.Object
+	var err error
+	if reader, ok := client.(fullObjectReader); ok {
+		current, err = reader.Get(ctx, id)
+	} else {
+		current = o.schema.ZeroValue()
+		current.SetGroupVersionKind(listed.GroupVersionKind())
+		err = client.GetInto(ctx, id, current)
+	}
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read unfinished object %s/%s: %w", id.Namespace, id.Name, err)
+	}
+	if current == nil || current.GetStaticMetadata().Identifier() != id {
+		return nil, fmt.Errorf("response does not match unfinished object %s/%s", id.Namespace, id.Name)
+	}
+	if uid := listed.GetUID(); uid != "" {
+		if uid != current.GetUID() {
+			return nil, nil
+		}
+	} else if version := listed.GetResourceVersion(); version == "" || version != current.GetResourceVersion() {
+		// Without a UID, only an exact version can confirm this is the same object.
+		return nil, nil
+	}
+	gvk := current.GroupVersionKind()
+	if filled := withFallbackGVK(gvk, listed.GroupVersionKind()); filled != gvk {
+		current.SetGroupVersionKind(filled)
+	}
+	return current, nil
 }
 
 // Delete exists to implement ResourceWatcher,

@@ -571,6 +571,72 @@ func TestApp_ManageKind(t *testing.T) {
 	})
 }
 
+func TestApp_OpinionatedWatcherRefreshesUnfinishedRelist(t *testing.T) {
+	type object = resource.TypedSpecStatusObject[map[string]string, map[string]string]
+	kind := resource.Kind{
+		Schema: resource.NewSimpleSchema("foo", "v1", &object{}, &resource.TypedList[*object]{}, resource.WithKind("Bar"), resource.WithPlural("bars")),
+		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+	}
+	responses := map[string]string{
+		"/api":         `{"kind":"APIVersions","apiVersion":"v1","versions":["v1"]}`,
+		"/api/v1":      `{"kind":"APIResourceList","apiVersion":"v1","groupVersion":"v1","resources":[]}`,
+		"/apis":        `{"kind":"APIGroupList","apiVersion":"v1","groups":[{"name":"foo","versions":[{"groupVersion":"foo/v1","version":"v1"}],"preferredVersion":{"groupVersion":"foo/v1","version":"v1"}}]}`,
+		"/apis/foo/v1": `{"kind":"APIResourceList","apiVersion":"v1","groupVersion":"foo/v1","resources":[{"name":"bars","kind":"Bar","namespaced":true}]}`,
+		"/apis/foo/v1/namespaces/default/bars/item": `{
+			"metadata":{"name":"item","namespace":"default","uid":"original","resourceVersion":"12","generation":2,"finalizers":["bars-finalizer"]},
+			"spec":{"value":"current spec"}, "status":{"value":"current status"}
+		}`,
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, ok := responses[r.URL.Path]
+		if r.Method != http.MethodGet || !ok {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, body)
+	}))
+	t.Cleanup(server.Close)
+
+	var eventHandler operator.ResourceWatcher
+	var received resource.Object
+	a := createTestApp(t, AppConfig{
+		KubeConfig: rest.Config{Host: server.URL},
+		InformerConfig: AppInformerConfig{InformerSupplier: func(resource.Kind, resource.ClientGenerator, operator.InformerOptions) (operator.Informer, error) {
+			return &mockInformer{AddEventHandlerFunc: func(handler operator.ResourceWatcher) error {
+				eventHandler = handler
+				return nil
+			}}, nil
+		}},
+		UnmanagedKinds: []AppUnmanagedKind{{
+			Kind:             kind,
+			ReconcileOptions: UnmanagedKindReconcileOptions{UseOpinionated: true},
+			Watcher: &Watcher{UpdateFunc: func(_ context.Context, _, current resource.Object) error {
+				received = current
+				return nil
+			}},
+		}},
+	})
+	a.informerController.ErrorHandler = func(_ context.Context, err error) { t.Error(err) }
+	old := kind.ZeroValue()
+	old.SetGroupVersionKind(kind.GroupVersionKind())
+	old.SetName("item")
+	old.SetNamespace("default")
+	old.SetUID("original")
+	old.SetResourceVersion("10")
+	old.SetGeneration(1)
+	listed := old.Copy()
+	listed.SetResourceVersion("11")
+	require.NotNil(t, eventHandler)
+	require.NoError(t, eventHandler.Update(operator.ContextWithDelivery(t.Context(), operator.DeliveryRelist), old, listed))
+	current, ok := received.(*object)
+	require.True(t, ok, "expected a typed update, received %T", received)
+	assert.Equal(t, kind.GroupVersionKind(), current.GroupVersionKind())
+	assert.Equal(t, int64(2), current.GetGeneration())
+	assert.Equal(t, "current spec", current.Spec["value"])
+	assert.Equal(t, "current status", current.Status["value"])
+}
+
 func TestApp_Runner(t *testing.T) {
 	// TODO
 }

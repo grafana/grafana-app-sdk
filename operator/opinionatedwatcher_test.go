@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -490,8 +492,10 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 		assert.Equal(t, deleteErr, err)
 	})
 
-	t.Run("delete, patch error", func(t *testing.T) {
-		obj := schema.ZeroValue()
+	t.Run("delete with unchanged generation, patch error", func(t *testing.T) {
+		old := schema.ZeroValue()
+		old.SetGeneration(1)
+		obj := old.Copy()
 		dt := metav1.NewTime(time.Time{})
 		obj.SetDeletionTimestamp(&dt)
 		obj.SetFinalizers([]string{o.finalizer})
@@ -499,7 +503,9 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 			assert.Fail(t, "update should not be called")
 			return nil
 		}
+		deleted := false
 		o.DeleteFunc = func(c context.Context, object resource.Object) error {
+			deleted = true
 			assert.Equal(t, obj, object)
 			return nil
 		}
@@ -508,9 +514,32 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 			assert.Equal(t, resource.PatchOpReplace, request.Operations[0].Operation)
 			return patchErr
 		}
-		err := o.Update(context.TODO(), schema.ZeroValue(), obj)
+		require.NoError(t, o.Update(t.Context(), old, obj))
+		assert.False(t, deleted, "stock watch skips same-generation updates")
+		err := o.Update(ContextWithDelivery(t.Context(), DeliveryLive), old, obj)
+		assert.True(t, deleted)
 		expectedErr := NewFinalizerOperationError(patchErr, resource.PatchRequest{Operations: []resource.PatchOperation{{Path: "/metadata/finalizers", Operation: resource.PatchOpReplace, Value: []string{}}, {Path: "/metadata/resourceVersion", Operation: resource.PatchOpReplace, Value: obj.GetResourceVersion()}}})
 		assert.Equal(t, expectedErr, err)
+	})
+
+	t.Run("repeated deletion waits for LIST recovery", func(t *testing.T) {
+		obj := schema.ZeroValue()
+		obj.SetGeneration(1)
+		dt := metav1.Now()
+		obj.SetDeletionTimestamp(&dt)
+		obj.SetFinalizers([]string{o.finalizer})
+		deletes := 0
+		o.DeleteFunc = func(context.Context, resource.Object) error {
+			deletes++
+			return nil
+		}
+		client.PatchIntoFunc = func(context.Context, resource.Identifier, resource.PatchRequest, resource.PatchOptions, resource.Object) error {
+			return nil
+		}
+		require.NoError(t, o.Update(ContextWithDelivery(t.Context(), DeliveryLive), obj.Copy(), obj.Copy()))
+		require.Zero(t, deletes)
+		require.NoError(t, o.Update(ContextWithDelivery(t.Context(), DeliveryRelist), obj.Copy(), obj.Copy()))
+		require.Equal(t, 1, deletes)
 	})
 
 	t.Run("delete, patch RV mismatch", func(t *testing.T) {
@@ -546,21 +575,81 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 		assert.True(t, deleteCalled)
 	})
 
-	t.Run("finalizer update event", func(t *testing.T) {
-		obj := schema.ZeroValue()
-		obj.SetFinalizers([]string{o.finalizer})
+	for _, tc := range []struct {
+		name       string
+		before     int64
+		after      int64
+		wantUpdate bool
+	}{
+		{name: "finalizer added with unchanged generation", before: 1, after: 1},
+		{name: "finalizer added along with a spec update", before: 1, after: 2, wantUpdate: true},
+		{name: "finalizer added with unknown generations", wantUpdate: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			old := schema.ZeroValue()
+			old.SetGeneration(tc.before)
+			require.NoError(t, old.SetSpec("old spec"))
+			updated := old.Copy()
+			updated.SetGeneration(tc.after)
+			updated.SetFinalizers([]string{o.finalizer})
+			if tc.wantUpdate {
+				require.NoError(t, updated.SetSpec("new spec"))
+			}
+			called := false
+			o.UpdateFunc = func(_ context.Context, before, after resource.Object) error {
+				called = true
+				assert.Equal(t, "old spec", before.GetSpec())
+				assert.Equal(t, "new spec", after.GetSpec())
+				return nil
+			}
+			require.NoError(t, o.Update(t.Context(), old, updated))
+			require.False(t, called, "stock watch skips updates that add the finalizer")
+			require.NoError(t, o.Update(ContextWithDelivery(t.Context(), DeliveryLive), old, updated))
+			require.Equal(t, tc.wantUpdate, called)
+		})
+	}
 
-		o.UpdateFunc = func(ctx context.Context, old resource.Object, new resource.Object) error {
-			assert.Fail(t, "update should not be called")
+	t.Run("recovery LIST retries failed initialization", func(t *testing.T) {
+		item := schema.ZeroValue()
+		item.SetGeneration(1)
+		item.SetUID("original")
+		old := item.Copy()
+		client.PatchIntoFunc = func(_ context.Context, _ resource.Identifier, req resource.PatchRequest, _ resource.PatchOptions, obj resource.Object) error {
+			switch req.Operations[0].Operation {
+			case resource.PatchOpAdd:
+				obj.SetFinalizers([]string{o.addPendingFinalizer})
+			case resource.PatchOpReplace:
+				assert.Equal(t, o.finalizer, req.Operations[0].Value)
+				obj.SetFinalizers([]string{o.finalizer})
+			}
 			return nil
 		}
-		o.DeleteFunc = func(ctx context.Context, object resource.Object) error {
-			assert.Fail(t, "delete should not be called")
+		client.GetIntoFunc = func(_ context.Context, _ resource.Identifier, into resource.Object) error {
+			into.SetUID(item.GetUID())
+			into.SetGeneration(item.GetGeneration())
+			into.SetFinalizers(slices.Clone(item.GetFinalizers()))
+			return nil
+		}
+		attempts := 0
+		o.AddFunc = func(context.Context, resource.Object) error {
+			attempts++
+			if attempts == 1 {
+				return fmt.Errorf("initialization failed")
+			}
+			return nil
+		}
+		o.UpdateFunc = func(context.Context, resource.Object, resource.Object) error {
+			t.Error("initialization should use Add")
 			return nil
 		}
 
-		err := o.Update(context.TODO(), schema.ZeroValue(), obj)
-		assert.Nil(t, err)
+		require.ErrorContains(t, o.Add(t.Context(), item), "initialization failed")
+		require.Equal(t, []string{o.addPendingFinalizer}, item.GetFinalizers())
+		require.NoError(t, o.Update(t.Context(), old, item))
+		require.Equal(t, 1, attempts, "a live same-generation update should not retry Add")
+		require.NoError(t, o.Update(ContextWithDelivery(t.Context(), DeliveryRelist), old, item))
+		require.Equal(t, 2, attempts)
+		require.Equal(t, []string{o.addPendingFinalizer}, item.GetFinalizers(), "the LIST object stays unchanged")
 	})
 
 	t.Run("update", func(t *testing.T) {
@@ -625,4 +714,77 @@ func (p *mockPatchClient) GetInto(ctx context.Context, identifier resource.Ident
 		return p.GetIntoFunc(ctx, identifier, into)
 	}
 	return nil
+}
+
+func TestOpinionatedWatcherRefreshesUnfinishedRelistObjects(t *testing.T) {
+	kind := resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{})
+	for _, tc := range []struct {
+		name              string
+		uid               string
+		listedGeneration  int64
+		currentGeneration int64
+		completed         bool
+		want              []string
+	}{
+		{name: "already completed", uid: "original", listedGeneration: 1, currentGeneration: 1, completed: true},
+		{name: "already completed with a spec change", uid: "original", listedGeneration: 2, currentGeneration: 2, completed: true, want: []string{"update"}},
+		{name: "spec changed after listing", uid: "original", listedGeneration: 1, currentGeneration: 2, completed: true, want: []string{"update"}},
+		{name: "replacement", uid: "replacement", listedGeneration: 2, currentGeneration: 2},
+		{name: "unfinished with a spec change", uid: "original", listedGeneration: 2, currentGeneration: 2, want: []string{"protect", "add", "complete"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			old := kind.ZeroValue()
+			old.SetName("item")
+			old.SetNamespace("default")
+			old.SetUID("original")
+			old.SetResourceVersion("10")
+			old.SetGeneration(1)
+			listed := old.Copy()
+			listed.SetResourceVersion("11")
+			listed.SetGeneration(tc.listedGeneration)
+			require.NoError(t, listed.SetSpec("listed"))
+
+			var calls []string
+			client := &mockPatchClient{}
+			watcher, err := NewOpinionatedWatcher(kind, client, OpinionatedWatcherConfig{})
+			require.NoError(t, err)
+			client.GetIntoFunc = func(_ context.Context, id resource.Identifier, into resource.Object) error {
+				assert.Equal(t, listed.GetStaticMetadata().Identifier(), id)
+				into.SetName(id.Name)
+				into.SetNamespace(id.Namespace)
+				into.SetUID(types.UID(tc.uid))
+				into.SetGeneration(tc.currentGeneration)
+				into.SetResourceVersion("12")
+				if tc.completed {
+					into.SetFinalizers([]string{watcher.finalizer})
+				}
+				return into.SetSpec("current")
+			}
+			client.PatchIntoFunc = func(_ context.Context, _ resource.Identifier, req resource.PatchRequest, _ resource.PatchOptions, into resource.Object) error {
+				switch req.Operations[0].Operation {
+				case resource.PatchOpAdd:
+					calls = append(calls, "protect")
+					into.SetFinalizers([]string{watcher.addPendingFinalizer})
+				case resource.PatchOpReplace:
+					calls = append(calls, "complete")
+				}
+				return nil
+			}
+			watcher.AddFunc = func(_ context.Context, obj resource.Object) error {
+				calls = append(calls, "add")
+				assert.Equal(t, "current", obj.GetSpec())
+				assert.Contains(t, obj.GetFinalizers(), watcher.addPendingFinalizer)
+				return nil
+			}
+			watcher.UpdateFunc = func(_ context.Context, _, obj resource.Object) error {
+				calls = append(calls, "update")
+				assert.Equal(t, "current", obj.GetSpec())
+				return nil
+			}
+
+			require.NoError(t, watcher.Update(ContextWithDelivery(t.Context(), DeliveryRelist), old, listed))
+			assert.Equal(t, tc.want, calls)
+			assert.Empty(t, listed.GetFinalizers())
+		})
+	}
 }
