@@ -573,6 +573,46 @@ func TestListKeysConversion(t *testing.T) {
 	}
 }
 
+// The declaration survives both conversion directions, since a platform reads it off the stored manifest.
+func TestWatchMetadataRoundTrips(t *testing.T) {
+	data := app.ManifestData{
+		AppName: "watch-app",
+		Group:   "watchapp.ext.grafana.app",
+		Versions: []app.ManifestVersion{{Name: "v1", Kinds: []app.ManifestVersionKind{{
+			Kind:  "Foo",
+			Scope: "Namespaced",
+			Watch: &app.ManifestVersionKindWatch{
+				Metadata: &app.ManifestVersionKindWatchMetadata{
+					Labels:            []string{"app"},
+					Annotations:       []string{"watchapp.grafana.app/paused"},
+					Finalizers:        []string{"watchapp.grafana.app/finalizer"},
+					Generation:        true,
+					DeletionTimestamp: true,
+				},
+			},
+		}}}},
+	}
+
+	spec, err := SpecFromManifestData(data)
+	require.NoError(t, err)
+	require.NotNil(t, spec.Versions[0].Kinds[0].Watch)
+	require.NotNil(t, spec.Versions[0].Kinds[0].Watch.Metadata)
+	assert.Equal(t, []string{"app"}, spec.Versions[0].Kinds[0].Watch.Metadata.Labels)
+	assert.Equal(t, []string{"watchapp.grafana.app/paused"}, spec.Versions[0].Kinds[0].Watch.Metadata.Annotations)
+	assert.Equal(t, []string{"watchapp.grafana.app/finalizer"}, spec.Versions[0].Kinds[0].Watch.Metadata.Finalizers)
+	require.NotNil(t, spec.Versions[0].Kinds[0].Watch.Metadata.Generation)
+	assert.True(t, *spec.Versions[0].Kinds[0].Watch.Metadata.Generation)
+	require.NotNil(t, spec.Versions[0].Kinds[0].Watch.Metadata.DeletionTimestamp)
+	assert.True(t, *spec.Versions[0].Kinds[0].Watch.Metadata.DeletionTimestamp)
+
+	back, err := spec.ToManifestData()
+	require.NoError(t, err)
+	assert.Equal(t, data.Versions[0].Kinds[0].Watch, back.Versions[0].Kinds[0].Watch)
+
+	// A flag left unset must not come back as an explicit opt-out.
+	assert.Nil(t, spec.Versions[0].Kinds[0].Watch.Metadata.CreationTimestamp)
+}
+
 func TestFixedNamesConversion(t *testing.T) {
 	for _, tc := range []struct {
 		name  string

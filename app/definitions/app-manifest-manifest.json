@@ -928,6 +928,10 @@
                                         "default": false,
                                         "description": "userReadable controls whether end users may get/list cluster-scoped resources of this kind.\nOnly meaningful when scope is \"Cluster\"; for namespaced kinds the field is ignored.",
                                         "type": "boolean"
+                                    },
+                                    "watch": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindWatch",
+                                        "description": "watch declares what the platform should announce alongside each change to this kind."
                                     }
                                 },
                                 "required": [
@@ -1072,6 +1076,57 @@
                                     "listKeys": {
                                         "description": "listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.",
                                         "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            },
+                            "ManifestVersionKindWatch": {
+                                "additionalProperties": false,
+                                "description": "#ManifestVersionKindWatch declares what a kind's change notifications should carry.\nExperimental: this section may change in a minor release.",
+                                "properties": {
+                                    "metadata": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindWatchMetadata",
+                                        "description": "metadata declares the object metadata this kind's change notifications should carry."
+                                    }
+                                },
+                                "type": "object"
+                            },
+                            "ManifestVersionKindWatchMetadata": {
+                                "additionalProperties": false,
+                                "description": "#ManifestVersionKindWatchMetadata declares which parts of an object's metadata a kind's change\nnotifications should carry, for a platform which can announce changes out of band of the watch.",
+                                "properties": {
+                                    "annotations": {
+                                        "description": "annotations are the metadata.annotations keys to announce.",
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "creationTimestamp": {
+                                        "description": "creationTimestamp announces metadata.creationTimestamp.",
+                                        "type": "boolean"
+                                    },
+                                    "deletionTimestamp": {
+                                        "description": "deletionTimestamp announces metadata.deletionTimestamp.",
+                                        "type": "boolean"
+                                    },
+                                    "finalizers": {
+                                        "description": "finalizers are the metadata.finalizers values to announce.",
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "generation": {
+                                        "description": "generation announces metadata.generation.",
+                                        "type": "boolean"
+                                    },
+                                    "labels": {
+                                        "description": "labels are the metadata.labels keys to announce.",
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
                                     }
                                 },
                                 "type": "object"
