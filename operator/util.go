@@ -1,7 +1,6 @@
 package operator
 
 import (
-	"slices"
 	"sync"
 
 	"github.com/puzpuzpuz/xsync/v4"
@@ -155,7 +154,7 @@ func (l *ListMap[K, V]) RemoveItems(key K, match func(V) bool, limit int) int {
 		return 0
 	}
 	toRemove := make([]int, 0)
-	for i := 0; i < len(list); i++ {
+	for i := range list {
 		if match(list[i]) {
 			toRemove = append(toRemove, i)
 			if limit > 0 && len(toRemove) >= limit {
@@ -163,27 +162,31 @@ func (l *ListMap[K, V]) RemoveItems(key K, match func(V) bool, limit int) int {
 			}
 		}
 	}
-	// Traverse the toRemove list backwards, so we preserve indices as we delete from the list
-	for _, t := range slices.Backward(toRemove) {
-		list = l.remove(list, t)
+	if len(toRemove) == 0 {
+		return 0
 	}
-	l.internal.Store(key, list)
+	// Build a new slice rather than shifting in place, since Range readers may still hold the old one
+	out := make([]V, 0, len(list)-len(toRemove))
+	next := 0
+	for i := range list {
+		if next < len(toRemove) && toRemove[next] == i {
+			next++
+			continue
+		}
+		out = append(out, list[i])
+	}
+	l.internal.Store(key, out)
 	return len(toRemove)
 }
 
+// remove returns a new slice without the item at index i. The input slice is never modified,
+// as Range hands out the stored slice to readers that iterate without holding the lock.
+// An out-of-range index (including a negative one) returns the list unchanged.
 func (*ListMap[K, V]) remove(list []V, i int) []V {
-	if i > len(list)-1 {
+	if i < 0 || i > len(list)-1 {
 		return list
 	}
-	switch {
-	case i == 0:
-		if len(list) > 1 {
-			return list[1:]
-		}
-		return make([]V, 0)
-	case i == len(list)-1:
-		return list[:i]
-	default:
-		return append(list[:i], list[i+1:]...)
-	}
+	out := make([]V, 0, len(list)-1)
+	out = append(out, list[:i]...)
+	return append(out, list[i+1:]...)
 }

@@ -3,118 +3,56 @@ package grpcplugin
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"log/slog"
 	"slices"
 
-	"github.com/go-jose/go-jose/v4"
-	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/grafana/authlib/authn"
 	"github.com/grafana/authlib/types"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/auth"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
 
-// authenticate puts the caller's AuthInfo on ctx. It reports whether the token
-// was verified; the request's audience and namespaces are only checked then.
-func (a serverAuth) authenticate(ctx context.Context) (context.Context, bool, error) {
+// authenticated reports whether the request's AuthInfo was verified, which the
+// plugin SDK's server did before the request reached the service (see
+// auth.RequestAuthenticator.UnaryServerInterceptor): the request's audience and
+// namespaces are only checked then. A request that must be verified, but
+// reached the service without an identity, is rejected.
+func (a serverAuth) authenticated(ctx context.Context) (bool, error) {
+	if a.verifies {
+		if info, ok := types.AuthInfoFrom(ctx); !ok || info == nil {
+			return false, status.Error(codes.Unauthenticated, "request was not authenticated")
+		}
+		return true, nil
+	}
 	// Serving without authentication requires ServeOpts.InsecureSkipAuthentication.
-	if a.authenticator == nil {
-		return nil, false, status.Error(codes.FailedPrecondition, "plugin has no authenticator configured")
+	if !a.insecure {
+		return false, status.Error(codes.FailedPrecondition, "plugin has no authenticator configured")
 	}
-	md, _ := metadata.FromIncomingContext(ctx)
-	tokens := md.Get("x-access-token")
-	if a.insecure && len(tokens) == 0 && len(md.Get("x-id-token")) == 0 {
-		// Without verification, a request without a token has no identity.
-		return ctx, false, nil
-	}
-	// Delegation has one source of identity: the exchanged access token.
-	// Reject ambiguous credentials before invoking even a custom authenticator.
-	if len(tokens) != 1 || tokens[0] == "" || len(md.Get("x-id-token")) != 0 {
-		return nil, false, status.Error(codes.Unauthenticated, "a single access token and no separate ID token are required")
-	}
-	ctx, err := AuthenticateAccessToken(ctx, a.authenticator, tokens[0])
-	if err != nil {
-		return nil, false, err
-	}
-	return ctx, !a.insecure, nil
+	return false, nil
 }
 
-// AuthenticateAccessToken verifies an access token the host sent some other
-// way than plugin protocol v3 metadata, such as the X-Access-Token header of a
-// plugin protocol v2 call, the way a v3 request's token is verified. It
-// returns ctx carrying the caller's AuthInfo, which keeps the token, so that
-// clients made with k8s.NewTokenExchangeRestConfig act on behalf of the caller.
+// AuthenticateAccessToken verifies an access token, and returns ctx carrying
+// the caller's AuthInfo, which keeps the token.
 //
-// A token that does not verify is a codes.Unauthenticated status error; a
-// failure of the authenticator itself, such as fetching signing keys, is
-// codes.Internal.
+// Deprecated: the plugin SDK authenticates plugin protocol v2 and v3 requests
+// itself; use auth.AuthenticateAccessToken from the grafana-plugin-sdk-go
+// backend/auth package to verify a token some other way.
 func AuthenticateAccessToken(ctx context.Context, authenticator authn.Authenticator, token string) (context.Context, error) {
-	if authenticator == nil {
-		return nil, status.Error(codes.FailedPrecondition, "plugin has no authenticator configured")
-	}
-	if token == "" {
-		return nil, status.Error(codes.Unauthenticated, "an access token is required")
-	}
-	info, err := authenticator.Authenticate(ctx, authn.NewGRPCTokenProvider(metadata.Pairs("x-access-token", token)))
-	if err != nil {
-		if isInvalidTokenErr(err) {
-			return nil, status.Error(codes.Unauthenticated, "invalid access token")
-		}
-		return nil, status.Error(codes.Internal, "authentication failed")
-	}
-	if info == nil {
-		return nil, status.Error(codes.Unauthenticated, "authenticator returned no identity")
-	}
-	// authlib's AuthInfo does not retain the raw access token. Keep the token
-	// only after successful authentication so downstream clients can exchange
-	// it without losing the caller's identity or delegation chain.
-	return types.WithAuthInfo(ctx, &authenticatedAuthInfo{AuthInfo: info, accessToken: token}), nil
+	return auth.AuthenticateAccessToken(ctx, authenticator, token)
 }
 
-// invalidTokenErrs are errors about the token itself that authlib passes on
-// from go-jose without marking them as unauthenticated.
-var invalidTokenErrs = []error{
-	jose.ErrCryptoFailure, // Signature mismatch, including a key of the wrong type.
-	jwt.ErrNotValidYet,
-	jwt.ErrIssuedInTheFuture,
-	jwt.ErrExpired,
-	jwt.ErrInvalidAudience,
-	jwt.ErrInvalidIssuer,
-	jwt.ErrInvalidSubject,
-	jwt.ErrInvalidID,
-	jwt.ErrInvalidClaims,
-	jwt.ErrInvalidContentType,
-	jwt.ErrUnmarshalAudience,
-	jwt.ErrUnmarshalNumericDate,
-}
-
-// isInvalidTokenErr reports whether err is the caller's fault, rather than a
-// failure of the plugin such as fetching signing keys.
-func isInvalidTokenErr(err error) bool {
-	if authn.IsUnauthenticatedErr(err) {
-		return true
-	}
-	for _, target := range invalidTokenErrs {
-		if errors.Is(err, target) {
-			return true
-		}
-	}
-	return false
-}
-
-// serverAuth configures how the service wrappers authenticate requests.
+// serverAuth configures how the service wrappers check authenticated requests.
 type serverAuth struct {
-	authenticator authn.Authenticator
+	// verifies is set when the plugin SDK verifies tokens (ServeOpts.Authenticator).
+	verifies bool
 	// pluginID, if set, is an audience covering every API group the plugin serves.
 	pluginID string
-	// insecure parses tokens without verifying them, and serves requests
-	// without a token (see ServeOpts.InsecureSkipAuthentication).
+	// insecure serves requests the plugin SDK did not verify (see
+	// ServeOpts.InsecureSkipAuthentication).
 	insecure bool
 }
 
@@ -124,7 +62,7 @@ type authenticatedAdmissionServer struct {
 }
 
 func (s *authenticatedAdmissionServer) AdmissionReview(ctx context.Context, req *pluginv3.AdmissionReviewRequest) (*pluginv3.AdmissionReviewResponse, error) {
-	ctx, verified, err := s.auth.authenticate(ctx)
+	verified, err := s.auth.authenticated(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +83,7 @@ type authenticatedConversionServer struct {
 }
 
 func (s *authenticatedConversionServer) ConvertObjects(ctx context.Context, req *pluginv3.ConvertObjectsRequest) (*pluginv3.ConvertObjectsResponse, error) {
-	ctx, verified, err := s.auth.authenticate(ctx)
+	verified, err := s.auth.authenticated(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +106,8 @@ type authenticatedRouteServer struct {
 }
 
 func (s *authenticatedRouteServer) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
-	ctx, verified, err := s.auth.authenticate(stream.Context())
+	ctx := stream.Context()
+	verified, err := s.auth.authenticated(ctx)
 	if err != nil {
 		return err
 	}
@@ -180,39 +119,7 @@ func (s *authenticatedRouteServer) CallRoute(req *pluginv3.CallRouteRequest, str
 			return err
 		}
 	}
-	return s.RouteServiceServer.CallRoute(req, &authenticatedRouteStream{stream, ctx})
-}
-
-type authenticatedRouteStream struct {
-	grpc.ServerStreamingServer[pluginv3.CallRouteResponse]
-	ctx context.Context
-}
-
-func (s *authenticatedRouteStream) Context() context.Context {
-	return s.ctx
-}
-
-// authenticatedAuthInfo preserves the verified token for onward delegation.
-// Its formatting methods omit the token, so logging the identity is safe.
-type authenticatedAuthInfo struct {
-	types.AuthInfo
-	accessToken string
-}
-
-func (a *authenticatedAuthInfo) GetAccessToken() string {
-	return a.accessToken
-}
-
-func (a *authenticatedAuthInfo) String() string {
-	return fmt.Sprintf("AuthInfo{subject: %q, namespace: %q}", a.GetSubject(), a.GetNamespace())
-}
-
-func (a *authenticatedAuthInfo) GoString() string {
-	return a.String()
-}
-
-func (a *authenticatedAuthInfo) LogValue() slog.Value {
-	return slog.GroupValue(slog.String("subject", a.GetSubject()), slog.String("namespace", a.GetNamespace()))
+	return s.RouteServiceServer.CallRoute(req, stream)
 }
 
 // The verifier checks the service's configured audiences. Also bind the token
